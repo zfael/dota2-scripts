@@ -1,0 +1,372 @@
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs;
+use tracing::{info, warn};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerConfig {
+    #[serde(default = "default_port")]
+    pub port: u16,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KeybindingsConfig {
+    #[serde(default = "default_slot0")]
+    pub slot0: char,
+    #[serde(default = "default_slot1")]
+    pub slot1: char,
+    #[serde(default = "default_slot2")]
+    pub slot2: char,
+    #[serde(default = "default_slot3")]
+    pub slot3: char,
+    #[serde(default = "default_slot4")]
+    pub slot4: char,
+    #[serde(default = "default_slot5")]
+    pub slot5: char,
+    #[serde(default = "default_neutral")]
+    pub neutral0: char,
+    #[serde(default = "default_hotkey")]
+    pub combo_trigger: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoggingConfig {
+    #[serde(default = "default_log_level")]
+    pub level: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommonConfig {
+    #[serde(default = "default_survivability_threshold")]
+    pub survivability_hp_threshold: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HuskarConfig {
+    #[serde(default = "default_armlet_threshold")]
+    pub armlet_toggle_threshold: u32,
+    #[serde(default = "default_armlet_offset")]
+    pub armlet_predictive_offset: u32,
+    #[serde(default = "default_armlet_cooldown")]
+    pub armlet_toggle_cooldown_ms: u64,
+    #[serde(default = "default_berserker_blood_key")]
+    pub berserker_blood_key: char,
+    #[serde(default = "default_berserker_blood_delay")]
+    pub berserker_blood_delay_ms: u64,
+    #[serde(default = "default_standalone_key")]
+    pub standalone_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LegionCommanderConfig {
+    #[serde(default = "default_standalone_key")]
+    pub standalone_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShadowFiendConfig {
+    #[serde(default = "default_q_key")]
+    pub q_ability_key: char,
+    #[serde(default = "default_w_key")]
+    pub w_ability_key: char,
+    #[serde(default = "default_e_key")]
+    pub e_ability_key: char,
+    #[serde(default = "default_raze_delay")]
+    pub raze_delay_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TinyConfig {
+    #[serde(default = "default_standalone_key")]
+    pub standalone_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HeroesConfig {
+    #[serde(default)]
+    pub huskar: HuskarConfig,
+    #[serde(default)]
+    pub legion_commander: LegionCommanderConfig,
+    #[serde(default)]
+    pub shadow_fiend: ShadowFiendConfig,
+    #[serde(default)]
+    pub tiny: TinyConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Settings {
+    #[serde(default)]
+    pub server: ServerConfig,
+    #[serde(default)]
+    pub keybindings: KeybindingsConfig,
+    #[serde(default)]
+    pub logging: LoggingConfig,
+    #[serde(default)]
+    pub common: CommonConfig,
+    #[serde(default)]
+    pub heroes: HeroesConfig,
+}
+
+// Default functions
+fn default_port() -> u16 {
+    3000
+}
+
+fn default_slot0() -> char {
+    'z'
+}
+fn default_slot1() -> char {
+    'x'
+}
+fn default_slot2() -> char {
+    'c'
+}
+fn default_slot3() -> char {
+    'v'
+}
+fn default_slot4() -> char {
+    'b'
+}
+fn default_slot5() -> char {
+    'n'
+}
+fn default_neutral() -> char {
+    '0'
+}
+fn default_hotkey() -> String {
+    "Home".to_string()
+}
+fn default_log_level() -> String {
+    "info".to_string()
+}
+fn default_survivability_threshold() -> u32 {
+    30
+}
+fn default_armlet_threshold() -> u32 {
+    320
+}
+fn default_armlet_offset() -> u32 {
+    30
+}
+fn default_armlet_cooldown() -> u64 {
+    250
+}
+fn default_berserker_blood_key() -> char {
+    'e'
+}
+fn default_berserker_blood_delay() -> u64 {
+    300
+}
+fn default_standalone_key() -> String {
+    "Home".to_string()
+}
+fn default_q_key() -> char {
+    'l'
+}
+fn default_w_key() -> char {
+    'k'
+}
+fn default_e_key() -> char {
+    'j'
+}
+fn default_raze_delay() -> u64 {
+    100
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self {
+            port: default_port(),
+        }
+    }
+}
+
+impl Default for KeybindingsConfig {
+    fn default() -> Self {
+        Self {
+            slot0: default_slot0(),
+            slot1: default_slot1(),
+            slot2: default_slot2(),
+            slot3: default_slot3(),
+            slot4: default_slot4(),
+            slot5: default_slot5(),
+            neutral0: default_neutral(),
+            combo_trigger: default_hotkey(),
+        }
+    }
+}
+
+impl Default for LoggingConfig {
+    fn default() -> Self {
+        Self {
+            level: default_log_level(),
+        }
+    }
+}
+
+impl Default for CommonConfig {
+    fn default() -> Self {
+        Self {
+            survivability_hp_threshold: default_survivability_threshold(),
+        }
+    }
+}
+
+impl Default for HuskarConfig {
+    fn default() -> Self {
+        Self {
+            armlet_toggle_threshold: default_armlet_threshold(),
+            armlet_predictive_offset: default_armlet_offset(),
+            armlet_toggle_cooldown_ms: default_armlet_cooldown(),
+            berserker_blood_key: default_berserker_blood_key(),
+            berserker_blood_delay_ms: default_berserker_blood_delay(),
+            standalone_key: default_standalone_key(),
+        }
+    }
+}
+
+impl Default for LegionCommanderConfig {
+    fn default() -> Self {
+        Self {
+            standalone_key: default_standalone_key(),
+        }
+    }
+}
+
+impl Default for ShadowFiendConfig {
+    fn default() -> Self {
+        Self {
+            q_ability_key: default_q_key(),
+            w_ability_key: default_w_key(),
+            e_ability_key: default_e_key(),
+            raze_delay_ms: default_raze_delay(),
+        }
+    }
+}
+
+impl Default for TinyConfig {
+    fn default() -> Self {
+        Self {
+            standalone_key: default_standalone_key(),
+        }
+    }
+}
+
+impl Default for HeroesConfig {
+    fn default() -> Self {
+        Self {
+            huskar: HuskarConfig::default(),
+            legion_commander: LegionCommanderConfig::default(),
+            shadow_fiend: ShadowFiendConfig::default(),
+            tiny: TinyConfig::default(),
+        }
+    }
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            server: ServerConfig::default(),
+            keybindings: KeybindingsConfig::default(),
+            logging: LoggingConfig::default(),
+            common: CommonConfig::default(),
+            heroes: HeroesConfig::default(),
+        }
+    }
+}
+
+impl Settings {
+    pub fn load() -> Self {
+        let config_path = "config/config.toml";
+
+        match fs::read_to_string(config_path) {
+            Ok(contents) => match toml::from_str(&contents) {
+                Ok(settings) => {
+                    info!("Loaded configuration from {}", config_path);
+                    let settings: Settings = settings;
+                    settings.validate_keybindings();
+                    settings
+                }
+                Err(e) => {
+                    warn!(
+                        "Failed to parse {}: {}. Using default settings.",
+                        config_path, e
+                    );
+                    Settings::default()
+                }
+            },
+            Err(_) => {
+                info!(
+                    "Configuration file {} not found. Using default settings.",
+                    config_path
+                );
+                Settings::default()
+            }
+        }
+    }
+
+    fn validate_keybindings(&self) {
+        let mut key_map: HashMap<char, Vec<&str>> = HashMap::new();
+
+        key_map
+            .entry(self.keybindings.slot0)
+            .or_insert_with(Vec::new)
+            .push("slot0");
+        key_map
+            .entry(self.keybindings.slot1)
+            .or_insert_with(Vec::new)
+            .push("slot1");
+        key_map
+            .entry(self.keybindings.slot2)
+            .or_insert_with(Vec::new)
+            .push("slot2");
+        key_map
+            .entry(self.keybindings.slot3)
+            .or_insert_with(Vec::new)
+            .push("slot3");
+        key_map
+            .entry(self.keybindings.slot4)
+            .or_insert_with(Vec::new)
+            .push("slot4");
+        key_map
+            .entry(self.keybindings.slot5)
+            .or_insert_with(Vec::new)
+            .push("slot5");
+        key_map
+            .entry(self.keybindings.neutral0)
+            .or_insert_with(Vec::new)
+            .push("neutral0");
+
+        for (key, slots) in key_map.iter() {
+            if slots.len() > 1 {
+                warn!(
+                    "Keybinding conflict: Key '{}' is assigned to multiple slots: {:?}",
+                    key, slots
+                );
+            }
+        }
+    }
+
+    pub fn get_key_for_slot(&self, slot: &str) -> Option<char> {
+        match slot {
+            "slot0" => Some(self.keybindings.slot0),
+            "slot1" => Some(self.keybindings.slot1),
+            "slot2" => Some(self.keybindings.slot2),
+            "slot3" => Some(self.keybindings.slot3),
+            "slot4" => Some(self.keybindings.slot4),
+            "slot5" => Some(self.keybindings.slot5),
+            "neutral0" => Some(self.keybindings.neutral0),
+            _ => None,
+        }
+    }
+
+    pub fn get_standalone_key(&self, hero: &str) -> String {
+        match hero {
+            "huskar" => self.heroes.huskar.standalone_key.clone(),
+            "legion_commander" => self.heroes.legion_commander.standalone_key.clone(),
+            "shadow_fiend" => "q".to_string(), // SF uses Q/W/E interception
+            "tiny" => self.heroes.tiny.standalone_key.clone(),
+            _ => default_standalone_key(),
+        }
+    }
+}

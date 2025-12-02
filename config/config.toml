@@ -1,0 +1,38 @@
+[server]
+port = 3000
+
+[keybindings]
+slot0 = "z"
+slot1 = "x"
+slot2 = "c"
+slot3 = "v"
+slot4 = "b"
+slot5 = "n"
+neutral0 = "0"
+combo_trigger = "Home"
+
+[logging]
+level = "info"
+
+[common]
+survivability_hp_threshold = 30
+
+[heroes.huskar]
+armlet_toggle_threshold = 320
+armlet_predictive_offset = 30  # Triggers at threshold + offset for faster response
+armlet_toggle_cooldown_ms = 250  # Prevents rapid toggle spam from multiple attacks
+berserker_blood_key = "e"  # Key for Berserker Blood ability
+berserker_blood_delay_ms = 300  # Wait for multiple debuffs before cleansing
+standalone_key = "Home"  # Key to trigger Huskar combo manually
+
+[heroes.legion_commander]
+standalone_key = "Home"  # Key to trigger Legion Commander combo
+
+[heroes.shadow_fiend]
+q_ability_key = "l"  # Actual Q raze key (remapped from Q)
+w_ability_key = "k"  # Actual W raze key (remapped from W)
+e_ability_key = "j"  # Actual E raze key (remapped from E)
+raze_delay_ms = 100  # Delay between right-click and ability cast
+
+[heroes.tiny]
+standalone_key = "Home"  # Key to trigger Tiny combo manually

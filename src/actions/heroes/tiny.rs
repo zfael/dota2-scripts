@@ -1,0 +1,91 @@
+use crate::actions::heroes::traits::HeroScript;
+use crate::actions::common::find_item_slot;
+use crate::config::Settings;
+use crate::models::{GsiWebhookEvent, Hero, Item};
+use std::sync::Mutex;
+use std::thread;
+use std::time::Duration;
+use tracing::{info, warn};
+
+lazy_static::lazy_static! {
+    static ref LAST_GSI_EVENT: Mutex<Option<GsiWebhookEvent>> = Mutex::new(None);
+}
+
+pub struct TinyScript {
+    settings: Settings,
+}
+
+impl TinyScript {
+    pub fn new(settings: Settings) -> Self {
+        Self { settings }
+    }
+
+    pub fn execute_combo(&self, event: &GsiWebhookEvent) {
+        info!("Triggering Tiny combo sequence...");
+
+        // Find soul ring (x) dynamically
+        if let Some(soul_ring_key) = find_item_slot(event, &self.settings, Item::SoulRing) {
+            crate::input::press_key(soul_ring_key);
+        } else {
+            warn!("Soul ring not found in inventory");
+        }
+
+        // Find blink (z) dynamically
+        if let Some(blink_key) = find_item_slot(event, &self.settings, Item::Blink) {
+            crate::input::press_key(blink_key);
+        } else {
+            warn!("Blink dagger not found in inventory");
+        }
+        
+        thread::sleep(Duration::from_millis(200));
+
+        // w (3 times with delays) - Avalanche
+        crate::input::press_key('w');
+        thread::sleep(Duration::from_millis(30));
+        crate::input::press_key('w');
+        crate::input::press_key('w');
+        thread::sleep(Duration::from_millis(100));
+
+        // q (3 times with delays) - Toss
+        crate::input::press_key('q');
+        thread::sleep(Duration::from_millis(30));
+        crate::input::press_key('q');
+        crate::input::press_key('q');
+        thread::sleep(Duration::from_millis(1400));
+
+        // d (aghanim's) - Tree Grab
+        crate::input::press_key('d');
+
+        info!("Tiny combo sequence complete.");
+    }
+}
+
+impl HeroScript for TinyScript {
+    fn handle_gsi_event(&self, event: &GsiWebhookEvent) {
+        // Store latest GSI event for standalone trigger
+        if let Ok(mut last_event) = LAST_GSI_EVENT.try_lock() {
+            *last_event = Some(event.clone());
+        }
+        
+        // Tiny doesn't have custom GSI-based automations
+        // Will use default strategy (survivability + armlet) from dispatcher
+    }
+
+    fn handle_standalone_trigger(&self) {
+        if let Ok(last_event) = LAST_GSI_EVENT.try_lock() {
+            if let Some(event) = last_event.as_ref() {
+                self.execute_combo(event);
+            } else {
+                warn!("No GSI event received yet - Tiny combo needs item data");
+            }
+        }
+    }
+
+    fn hero_name(&self) -> &'static str {
+        Hero::Tiny.to_game_name()
+    }
+    
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
