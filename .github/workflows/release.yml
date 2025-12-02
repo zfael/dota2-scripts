@@ -27,23 +27,20 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      - name: Generate Cargo.lock
+        run: cargo generate-lockfile
 
-      - name: Cache cargo index
+      - name: Cache cargo registrycies
         uses: actions/cache@v4
         with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache target directory
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-${{ matrix.target }}-target-${{ hashFiles('**/Cargo.lock') }}
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-cargo-
 
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
@@ -88,12 +85,23 @@ jobs:
           body: |
             ## Dota2 Scripts ${{ github.ref_name }}
             
-            ⚠️ **WARNING**: Using macros may violate game Terms of Service and result in account bans. Use at your own risk!
+            ⚠️ **WARNING**: Using game automation scripts may violate Terms of Service and result in account bans. Use at your own risk!
             
             ### Downloads
-            - **Windows**: `dota2-scripts-${{ github.ref_name }}-windows-x64.exe` - Requires Administrator privileges and Interception driver
+            - **Windows**: `dota2-scripts-${{ github.ref_name }}-windows-x64.exe`
             
-            See [README.md](https://github.com/${{ github.repository }}/blob/main/README.md) for usage instructions.
+            ### Requirements
+            - Windows 10/11
+            - Administrator privileges (UAC prompt will appear on launch)
+            - Dota 2 with GSI configured
+            
+            ### Features
+            - Automatic armlet toggling
+            - Hero-specific combos (Huskar, Legion Commander, Shadow Fiend, Tiny)
+            - GSI event-based automation
+            - Standalone hotkey triggers
+            
+            See [README.md](https://github.com/${{ github.repository }}/blob/main/README.md) for setup and usage instructions.
           draft: false
           prerelease: false
         env:
