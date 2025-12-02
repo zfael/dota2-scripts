@@ -1,0 +1,165 @@
+{
+  "hero": {
+    "aghanims_scepter": true,
+    "aghanims_shard": false,
+    "alive": true,
+    "attributes_level": 3,
+    "break": false,
+    "buyback_cooldown": 0,
+    "buyback_cost": 450,
+    "disarmed": false,
+    "facet": 0,
+    "has_debuff": false,
+    "health": 1820,
+    "health_percent": 85,
+    "hexed": false,
+    "id": 19,
+    "level": 15,
+    "magicimmune": false,
+    "mana": 560,
+    "mana_percent": 62,
+    "max_health": 2140,
+    "max_mana": 900,
+    "muted": false,
+    "name": "npc_dota_hero_tiny",
+    "respawn_seconds": 0,
+    "silenced": false,
+    "smoked": false,
+    "stunned": false,
+    "talent_1": true,
+    "talent_2": false,
+    "talent_3": true,
+    "talent_4": false,
+    "talent_5": false,
+    "talent_6": false,
+    "talent_7": false,
+    "talent_8": false,
+    "xp": 12840,
+    "xpos": -850,
+    "ypos": 1920
+  },
+  "abilities": {
+    "ability0": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 4,
+      "name": "tiny_avalanche",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability1": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 4,
+      "name": "tiny_toss",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability2": {
+      "ability_active": false,
+      "can_cast": false,
+      "cooldown": 0,
+      "level": 4,
+      "name": "tiny_grow",
+      "passive": true,
+      "ultimate": true
+    },
+    "ability3": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 1,
+      "name": "tiny_tree_grab",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability4": {
+      "ability_active": false,
+      "can_cast": false,
+      "cooldown": 0,
+      "level": 0,
+      "name": "empty",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability5": {
+      "ability_active": false,
+      "can_cast": false,
+      "cooldown": 0,
+      "level": 0,
+      "name": "empty",
+      "passive": false,
+      "ultimate": false
+    }
+  },
+  "items": {
+    "neutral0": {
+      "name": "item_philosophers_stone"
+    },
+    "slot0": {
+      "name": "item_phase_boots",
+      "can_cast": true,
+      "cooldown": 0,
+      "passive": false
+    },
+    "slot1": {
+      "name": "item_blink",
+      "can_cast": true,
+      "cooldown": 0,
+      "passive": false
+    },
+    "slot2": {
+      "name": "item_echo_sabre",
+      "can_cast": false,
+      "passive": true
+    },
+    "slot3": {
+      "name": "item_aghanims_scepter",
+      "can_cast": false,
+      "passive": true
+    },
+    "slot4": {
+      "name": "empty"
+    },
+    "slot5": {
+      "name": "empty"
+    },
+    "slot6": {
+      "name": "empty"
+    },
+    "slot7": {
+      "name": "empty"
+    },
+    "slot8": {
+      "name": "empty"
+    },
+    "stash0": {
+      "name": "empty"
+    },
+    "stash1": {
+      "name": "empty"
+    },
+    "stash2": {
+      "name": "empty"
+    },
+    "stash3": {
+      "name": "empty"
+    },
+    "stash4": {
+      "name": "empty"
+    },
+    "stash5": {
+      "name": "empty"
+    },
+    "teleport0": {
+      "name": "item_tpscroll",
+      "can_cast": true,
+      "cooldown": 0
+    }
+  },
+  "map": {
+    "clock_time": 1245
+  }
+}

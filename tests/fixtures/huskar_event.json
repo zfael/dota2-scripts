@@ -1,0 +1,166 @@
+{
+  "hero": {
+    "aghanims_scepter": false,
+    "aghanims_shard": false,
+    "alive": true,
+    "attributes_level": 2,
+    "break": false,
+    "buyback_cooldown": 0,
+    "buyback_cost": 250,
+    "disarmed": false,
+    "facet": 0,
+    "has_debuff": false,
+    "health": 280,
+    "health_percent": 25,
+    "hexed": false,
+    "id": 59,
+    "level": 10,
+    "magicimmune": false,
+    "mana": 450,
+    "mana_percent": 75,
+    "max_health": 1120,
+    "max_mana": 600,
+    "muted": false,
+    "name": "npc_dota_hero_huskar",
+    "respawn_seconds": 0,
+    "silenced": false,
+    "smoked": false,
+    "stunned": false,
+    "talent_1": false,
+    "talent_2": true,
+    "talent_3": false,
+    "talent_4": false,
+    "talent_5": false,
+    "talent_6": false,
+    "talent_7": false,
+    "talent_8": false,
+    "xp": 5240,
+    "xpos": 1250,
+    "ypos": -2340
+  },
+  "abilities": {
+    "ability0": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 4,
+      "name": "huskar_inner_fire",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability1": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 4,
+      "name": "huskar_burning_spear",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability2": {
+      "ability_active": false,
+      "can_cast": false,
+      "cooldown": 0,
+      "level": 1,
+      "name": "huskar_berserkers_blood",
+      "passive": true,
+      "ultimate": false
+    },
+    "ability3": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 1,
+      "name": "huskar_life_break",
+      "passive": false,
+      "ultimate": true
+    },
+    "ability4": {
+      "ability_active": false,
+      "can_cast": false,
+      "cooldown": 0,
+      "level": 0,
+      "name": "empty",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability5": {
+      "ability_active": false,
+      "can_cast": false,
+      "cooldown": 0,
+      "level": 0,
+      "name": "empty",
+      "passive": false,
+      "ultimate": false
+    }
+  },
+  "items": {
+    "neutral0": {
+      "name": "empty"
+    },
+    "slot0": {
+      "name": "item_power_treads",
+      "can_cast": false,
+      "passive": true
+    },
+    "slot1": {
+      "name": "item_armlet",
+      "can_cast": true,
+      "cooldown": 0,
+      "passive": false
+    },
+    "slot2": {
+      "name": "item_magic_wand",
+      "can_cast": true,
+      "cooldown": 0,
+      "charges": 15
+    },
+    "slot3": {
+      "name": "item_tango",
+      "can_cast": true,
+      "cooldown": 0,
+      "charges": 2
+    },
+    "slot4": {
+      "name": "empty"
+    },
+    "slot5": {
+      "name": "empty"
+    },
+    "slot6": {
+      "name": "empty"
+    },
+    "slot7": {
+      "name": "empty"
+    },
+    "slot8": {
+      "name": "empty"
+    },
+    "stash0": {
+      "name": "empty"
+    },
+    "stash1": {
+      "name": "empty"
+    },
+    "stash2": {
+      "name": "empty"
+    },
+    "stash3": {
+      "name": "empty"
+    },
+    "stash4": {
+      "name": "empty"
+    },
+    "stash5": {
+      "name": "empty"
+    },
+    "teleport0": {
+      "name": "item_tpscroll",
+      "can_cast": true,
+      "cooldown": 0
+    }
+  },
+  "map": {
+    "clock_time": 650
+  }
+}
