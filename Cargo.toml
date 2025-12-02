@@ -52,6 +52,9 @@ windows = { version = "0.58", features = [
 [dev-dependencies]
 reqwest = { version = "0.12", features = ["json"] }
 
+[build-dependencies]
+embed-resource = "2.4"
+
 [profile.release]
 opt-level = 3
 lto = true
