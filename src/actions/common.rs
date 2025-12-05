@@ -69,6 +69,12 @@ pub fn armlet_toggle(event: &GsiWebhookEvent, settings: &Settings, config: &Arml
     }
 
     if health < trigger_point {
+        // Check for stun FIRST before any cooldown logic
+        if event.hero.is_stunned() {
+            debug!("Hero stunned, skipping armlet toggle (HP: {})", health);
+            return;
+        }
+
         if let Ok(mut last_toggle) = ARMLET_LAST_TOGGLE.try_lock() {
             // Check if enough time has passed since last toggle
             let can_toggle = match *last_toggle {
@@ -79,11 +85,6 @@ pub fn armlet_toggle(event: &GsiWebhookEvent, settings: &Settings, config: &Arml
             if !can_toggle {
                 debug!("Armlet toggle on cooldown ({}ms remaining)", 
                     cooldown_ms - last_toggle.unwrap().elapsed().as_millis() as u64);
-                return;
-            }
-
-            if event.hero.is_stunned() {
-                debug!("Hero stunned, not triggering armlet toggle");
                 return;
             }
 
