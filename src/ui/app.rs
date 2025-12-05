@@ -16,10 +16,10 @@ pub struct Dota2ScriptApp {
 }
 
 impl Dota2ScriptApp {
-    pub fn new(app_state: Arc<Mutex<AppState>>, settings: Settings) -> Self {
+    pub fn new(app_state: Arc<Mutex<AppState>>, settings: Arc<Mutex<Settings>>) -> Self {
         Self { 
             app_state,
-            settings: Arc::new(Mutex::new(settings)),
+            settings,
             selected_tab: Tab::Main,
         }
     }

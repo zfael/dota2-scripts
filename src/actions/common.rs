@@ -1,7 +1,7 @@
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Item};
 use lazy_static::lazy_static;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tracing::{debug, info, warn};
 
@@ -145,7 +145,7 @@ pub fn find_item_slot_by_name(event: &GsiWebhookEvent, settings: &Settings, item
 
 /// Common survivability actions that apply to all heroes
 pub struct SurvivabilityActions {
-    settings: Settings,
+    settings: Arc<Mutex<Settings>>,
 }
 
 // Ensure SurvivabilityActions can be shared across threads
@@ -153,14 +153,17 @@ unsafe impl Send for SurvivabilityActions {}
 unsafe impl Sync for SurvivabilityActions {}
 
 impl SurvivabilityActions {
-    pub fn new(settings: Settings) -> Self {
+    pub fn new(settings: Arc<Mutex<Settings>>) -> Self {
         Self { settings }
     }
 
     /// Execute default GSI strategy (survivability + armlet + danger detection)
     pub fn execute_default_strategy(&self, event: &GsiWebhookEvent) {
         // Update danger detection state
-        let _in_danger = crate::actions::danger_detector::update(event, &self.settings.danger_detection);
+        {
+            let settings = self.settings.lock().unwrap();
+            let _in_danger = crate::actions::danger_detector::update(event, &settings.danger_detection);
+        }
         
         // Always check survivability first
         self.check_and_use_healing_items(event);
@@ -180,10 +183,11 @@ impl SurvivabilityActions {
 
         // Determine threshold based on danger state
         let in_danger = crate::actions::danger_detector::is_in_danger();
-        let threshold = if in_danger && self.settings.danger_detection.enabled {
-            self.settings.danger_detection.healing_threshold_in_danger
+        let settings = self.settings.lock().unwrap();
+        let threshold = if in_danger && settings.danger_detection.enabled {
+            settings.danger_detection.healing_threshold_in_danger
         } else {
-            self.settings.common.survivability_hp_threshold
+            settings.common.survivability_hp_threshold
         };
 
         // Check if HP is below threshold
@@ -215,11 +219,12 @@ impl SurvivabilityActions {
             ]
         };
 
-        let max_items = if in_danger && self.settings.danger_detection.enabled {
-            self.settings.danger_detection.max_healing_items_per_danger
+        let max_items = if in_danger && settings.danger_detection.enabled {
+            settings.danger_detection.max_healing_items_per_danger
         } else {
             1 // Normal mode: only one item
         };
+        drop(settings); // Release lock
 
         let mut items_used = 0u32;
 
@@ -245,7 +250,8 @@ impl SurvivabilityActions {
     }
 
     fn use_item(&self, slot: &str, item_name: &str) {
-        if let Some(key) = self.settings.get_key_for_slot(slot) {
+        let settings = self.settings.lock().unwrap();
+        if let Some(key) = settings.get_key_for_slot(slot) {
             info!("Using {} in {} (key: {})", item_name, slot, key);
             
             // Items like Glimmer Cape need double-tap for self-cast
@@ -265,7 +271,8 @@ impl SurvivabilityActions {
     /// Use defensive items when in danger
     pub fn use_defensive_items_if_danger(&self, event: &GsiWebhookEvent) {
         // Reload settings to get latest config values (in case they were changed in UI)
-        let current_config = &self.settings.danger_detection;
+        let settings = self.settings.lock().unwrap();
+        let current_config = &settings.danger_detection;
         
         if !current_config.enabled {
             return;
@@ -324,6 +331,8 @@ impl SurvivabilityActions {
 
     /// Check and toggle armlet with default configuration
     fn check_and_toggle_armlet(&self, event: &GsiWebhookEvent) {
+        let settings = self.settings.lock().unwrap();
+        
         // Check if hero has armlet in inventory
         let has_armlet = event.items.all_slots()
             .iter()
@@ -340,6 +349,6 @@ impl SurvivabilityActions {
             toggle_cooldown_ms: 250,     // Cooldown between toggles
         };
         
-        armlet_toggle(event, &self.settings, &armlet_config);
+        armlet_toggle(event, &settings, &armlet_config);
     }
 }

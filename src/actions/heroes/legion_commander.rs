@@ -10,12 +10,12 @@ use std::time::Duration;
 use tracing::info;
 
 pub struct LegionCommanderScript {
-    settings: Settings,
+    settings: Arc<Mutex<Settings>>,
     last_event: Arc<Mutex<Option<GsiWebhookEvent>>>,
 }
 
 impl LegionCommanderScript {
-    pub fn new(settings: Settings) -> Self {
+    pub fn new(settings: Arc<Mutex<Settings>>) -> Self {
         Self {
             settings,
             last_event: Arc::new(Mutex::new(None)),
@@ -32,9 +32,10 @@ impl LegionCommanderScript {
         }
         
         let event = event.as_ref().unwrap();
+        let settings = self.settings.lock().unwrap();
         
         // 1. Soul Ring (always first if present)
-        if let Some(key) = find_item_slot(event, &self.settings, Item::SoulRing) {
+        if let Some(key) = find_item_slot(event, &settings, Item::SoulRing) {
             info!("Using Soul Ring ({})", key);
             press_key(key);
             thread::sleep(Duration::from_millis(50));
@@ -48,7 +49,7 @@ impl LegionCommanderScript {
         thread::sleep(Duration::from_millis(220));
         
         // 3. Blade Mail (if present) - double tap
-        if let Some(key) = find_item_slot(event, &self.settings, Item::BladeMail) {
+        if let Some(key) = find_item_slot(event, &settings, Item::BladeMail) {
             info!("Using Blade Mail ({})", key);
             press_key(key);
             thread::sleep(Duration::from_millis(30));
@@ -57,7 +58,7 @@ impl LegionCommanderScript {
         }
         
         // 4. Mjollnir (if present) - double tap
-        if let Some(key) = find_item_slot(event, &self.settings, Item::Mjollnir) {
+        if let Some(key) = find_item_slot(event, &settings, Item::Mjollnir) {
             info!("Using Mjollnir ({})", key);
             press_key(key);
             thread::sleep(Duration::from_millis(30));
@@ -66,7 +67,7 @@ impl LegionCommanderScript {
         }
         
         // 5. BKB (if present) - double tap
-        if let Some(key) = find_item_slot(event, &self.settings, Item::BlackKingBar) {
+        if let Some(key) = find_item_slot(event, &settings, Item::BlackKingBar) {
             info!("Using BKB ({})", key);
             press_key(key);
             thread::sleep(Duration::from_millis(30));
@@ -75,15 +76,15 @@ impl LegionCommanderScript {
         }
         
         // 6. Blink (single tap)
-        if let Some(key) = find_item_slot(event, &self.settings, Item::Blink) {
+        if let Some(key) = find_item_slot(event, &settings, Item::Blink) {
             info!("Using Blink ({})", key);
             press_key(key);
             thread::sleep(Duration::from_millis(100));
         }
         
         // 7. Orchid or Bloodthorn (spam 3-4 times to remove linkens)
-        if let Some(key) = find_item_slot(event, &self.settings, Item::Orchid)
-            .or_else(|| find_item_slot(event, &self.settings, Item::Bloodthorn))
+        if let Some(key) = find_item_slot(event, &settings, Item::Orchid)
+            .or_else(|| find_item_slot(event, &settings, Item::Bloodthorn))
         {
             info!("Using Orchid/Bloodthorn ({}) - spam for linkens", key);
             for _ in 0..10 {
@@ -118,7 +119,9 @@ impl HeroScript for LegionCommanderScript {
         
         // Use common survivability actions (danger detection, healing, defensive items)
         let survivability = SurvivabilityActions::new(self.settings.clone());
-        crate::actions::danger_detector::update(event, &self.settings.danger_detection);
+        let settings = self.settings.lock().unwrap();
+        crate::actions::danger_detector::update(event, &settings.danger_detection);
+        drop(settings);
         survivability.check_and_use_healing_items(event);
         survivability.use_defensive_items_if_danger(event);
     }

@@ -3,7 +3,7 @@ use crate::actions::common::{armlet_toggle, ArmletConfig, SurvivabilityActions};
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Hero};
 use lazy_static::lazy_static;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tracing::{debug, info};
 
@@ -12,11 +12,11 @@ lazy_static! {
 }
 
 pub struct HuskarScript {
-    settings: Settings,
+    settings: Arc<Mutex<Settings>>,
 }
 
 impl HuskarScript {
-    pub fn new(settings: Settings) -> Self {
+    pub fn new(settings: Arc<Mutex<Settings>>) -> Self {
         Self { settings }
     }
 
@@ -59,8 +59,10 @@ impl HuskarScript {
             return;
         }
 
-        let delay_ms = self.settings.heroes.huskar.berserker_blood_delay_ms;
-        let key = self.settings.heroes.huskar.berserker_blood_key;
+        let settings = self.settings.lock().unwrap();
+        let delay_ms = settings.heroes.huskar.berserker_blood_delay_ms;
+        let key = settings.heroes.huskar.berserker_blood_key;
+        drop(settings);
 
         if let Ok(mut debuff_time) = BERSERKER_BLOOD_DEBUFF_DETECTED.try_lock() {
             match *debuff_time {
@@ -93,7 +95,9 @@ impl HeroScript for HuskarScript {
         let survivability = SurvivabilityActions::new(self.settings.clone());
         
         // Update danger detection
-        crate::actions::danger_detector::update(event, &self.settings.danger_detection);
+        let settings = self.settings.lock().unwrap();
+        crate::actions::danger_detector::update(event, &settings.danger_detection);
+        drop(settings);
         
         // Check healing items (danger-aware)
         survivability.check_and_use_healing_items(event);
@@ -102,12 +106,14 @@ impl HeroScript for HuskarScript {
         survivability.use_defensive_items_if_danger(event);
         
         // Huskar-specific: armlet toggle
+        let settings = self.settings.lock().unwrap();
         let armlet_config = ArmletConfig {
-            toggle_threshold: self.settings.heroes.huskar.armlet_toggle_threshold,
-            predictive_offset: self.settings.heroes.huskar.armlet_predictive_offset,
-            toggle_cooldown_ms: self.settings.heroes.huskar.armlet_toggle_cooldown_ms,
+            toggle_threshold: settings.heroes.huskar.armlet_toggle_threshold,
+            predictive_offset: settings.heroes.huskar.armlet_predictive_offset,
+            toggle_cooldown_ms: settings.heroes.huskar.armlet_toggle_cooldown_ms,
         };
-        armlet_toggle(event, &self.settings, &armlet_config);
+        armlet_toggle(event, &settings, &armlet_config);
+        drop(settings);
         
         // Huskar-specific: berserker blood cleanse
         self.berserker_blood_cleanse(event);

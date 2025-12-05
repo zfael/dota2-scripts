@@ -3,7 +3,7 @@ use crate::models::GsiWebhookEvent;
 use lazy_static::lazy_static;
 use std::sync::Mutex;
 use std::time::Instant;
-use tracing::{debug, info};
+use tracing::info;
 
 lazy_static! {
     static ref HP_TRACKER: Mutex<HpTracker> = Mutex::new(HpTracker::default());
