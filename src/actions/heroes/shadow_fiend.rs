@@ -1,4 +1,5 @@
 use crate::actions::heroes::HeroScript;
+use crate::actions::common::SurvivabilityActions;
 use crate::config::Settings;
 use crate::input::simulation::{press_key, mouse_click};
 use crate::models::{GsiWebhookEvent, Hero};
@@ -59,9 +60,12 @@ impl ShadowFiendScript {
 }
 
 impl HeroScript for ShadowFiendScript {
-    fn handle_gsi_event(&self, _event: &GsiWebhookEvent) {
-        // Shadow Fiend doesn't have GSI-based automation
-        // All actions are triggered via keyboard interception
+    fn handle_gsi_event(&self, event: &GsiWebhookEvent) {
+        // Use common survivability actions (danger detection, healing, defensive items)
+        let survivability = SurvivabilityActions::new(self.settings.clone());
+        crate::actions::danger_detector::update(event, &self.settings.danger_detection);
+        survivability.check_and_use_healing_items(event);
+        survivability.use_defensive_items_if_danger(event);
     }
 
     fn handle_standalone_trigger(&self) {

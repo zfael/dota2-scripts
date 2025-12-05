@@ -94,6 +94,38 @@ pub struct HeroesConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DangerDetectionConfig {
+    #[serde(default = "default_danger_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_danger_hp_threshold")]
+    pub hp_threshold_percent: u32,
+    #[serde(default = "default_rapid_loss_hp")]
+    pub rapid_loss_hp: u32,
+    #[serde(default = "default_time_window_ms")]
+    pub time_window_ms: u64,
+    #[serde(default = "default_clear_delay_seconds")]
+    pub clear_delay_seconds: u64,
+    #[serde(default = "default_healing_threshold_in_danger")]
+    pub healing_threshold_in_danger: u32,
+    #[serde(default = "default_max_healing_items")]
+    pub max_healing_items_per_danger: u32,
+    #[serde(default = "default_auto_bkb")]
+    pub auto_bkb: bool,
+    #[serde(default = "default_auto_satanic")]
+    pub auto_satanic: bool,
+    #[serde(default = "default_satanic_hp_threshold")]
+    pub satanic_hp_threshold: u32,
+    #[serde(default = "default_auto_blade_mail")]
+    pub auto_blade_mail: bool,
+    #[serde(default = "default_auto_glimmer_cape")]
+    pub auto_glimmer_cape: bool,
+    #[serde(default = "default_auto_ghost_scepter")]
+    pub auto_ghost_scepter: bool,
+    #[serde(default = "default_auto_shivas_guard")]
+    pub auto_shivas_guard: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     #[serde(default)]
     pub server: ServerConfig,
@@ -105,6 +137,8 @@ pub struct Settings {
     pub common: CommonConfig,
     #[serde(default)]
     pub heroes: HeroesConfig,
+    #[serde(default)]
+    pub danger_detection: DangerDetectionConfig,
 }
 
 // Default functions
@@ -171,6 +205,49 @@ fn default_e_key() -> char {
 }
 fn default_raze_delay() -> u64 {
     100
+}
+
+fn default_danger_enabled() -> bool {
+    true
+}
+fn default_danger_hp_threshold() -> u32 {
+    70
+}
+fn default_rapid_loss_hp() -> u32 {
+    100
+}
+fn default_time_window_ms() -> u64 {
+    500
+}
+fn default_clear_delay_seconds() -> u64 {
+    3
+}
+fn default_healing_threshold_in_danger() -> u32 {
+    50
+}
+fn default_max_healing_items() -> u32 {
+    3
+}
+fn default_auto_bkb() -> bool {
+    false
+}
+fn default_auto_satanic() -> bool {
+    true
+}
+fn default_satanic_hp_threshold() -> u32 {
+    40
+}
+fn default_auto_blade_mail() -> bool {
+    true
+}
+fn default_auto_glimmer_cape() -> bool {
+    true
+}
+fn default_auto_ghost_scepter() -> bool {
+    true
+}
+fn default_auto_shivas_guard() -> bool {
+    true
 }
 
 impl Default for ServerConfig {
@@ -263,6 +340,27 @@ impl Default for HeroesConfig {
     }
 }
 
+impl Default for DangerDetectionConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_danger_enabled(),
+            hp_threshold_percent: default_danger_hp_threshold(),
+            rapid_loss_hp: default_rapid_loss_hp(),
+            time_window_ms: default_time_window_ms(),
+            clear_delay_seconds: default_clear_delay_seconds(),
+            healing_threshold_in_danger: default_healing_threshold_in_danger(),
+            max_healing_items_per_danger: default_max_healing_items(),
+            auto_bkb: default_auto_bkb(),
+            auto_satanic: default_auto_satanic(),
+            satanic_hp_threshold: default_satanic_hp_threshold(),
+            auto_blade_mail: default_auto_blade_mail(),
+            auto_glimmer_cape: default_auto_glimmer_cape(),
+            auto_ghost_scepter: default_auto_ghost_scepter(),
+            auto_shivas_guard: default_auto_shivas_guard(),
+        }
+    }
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -271,6 +369,7 @@ impl Default for Settings {
             logging: LoggingConfig::default(),
             common: CommonConfig::default(),
             heroes: HeroesConfig::default(),
+            danger_detection: DangerDetectionConfig::default(),
         }
     }
 }
@@ -368,5 +467,13 @@ impl Settings {
             "tiny" => self.heroes.tiny.standalone_key.clone(),
             _ => default_standalone_key(),
         }
+    }
+    
+    pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let config_path = "config/config.toml";
+        let toml_string = toml::to_string_pretty(self)?;
+        fs::write(config_path, toml_string)?;
+        info!("Settings saved to {}", config_path);
+        Ok(())
     }
 }

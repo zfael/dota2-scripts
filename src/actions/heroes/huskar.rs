@@ -1,5 +1,5 @@
 use crate::actions::heroes::traits::HeroScript;
-use crate::actions::common::{armlet_toggle, ArmletConfig};
+use crate::actions::common::{armlet_toggle, ArmletConfig, SurvivabilityActions};
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Hero};
 use lazy_static::lazy_static;
@@ -89,7 +89,19 @@ impl HuskarScript {
 
 impl HeroScript for HuskarScript {
     fn handle_gsi_event(&self, event: &GsiWebhookEvent) {
-        // Use common armlet toggle function
+        // Create survivability actions for danger detection and healing
+        let survivability = SurvivabilityActions::new(self.settings.clone());
+        
+        // Update danger detection
+        crate::actions::danger_detector::update(event, &self.settings.danger_detection);
+        
+        // Check healing items (danger-aware)
+        survivability.check_and_use_healing_items(event);
+        
+        // Use defensive items if in danger
+        survivability.use_defensive_items_if_danger(event);
+        
+        // Huskar-specific: armlet toggle
         let armlet_config = ArmletConfig {
             toggle_threshold: self.settings.heroes.huskar.armlet_toggle_threshold,
             predictive_offset: self.settings.heroes.huskar.armlet_predictive_offset,
@@ -97,6 +109,7 @@ impl HeroScript for HuskarScript {
         };
         armlet_toggle(event, &self.settings, &armlet_config);
         
+        // Huskar-specific: berserker blood cleanse
         self.berserker_blood_cleanse(event);
     }
 

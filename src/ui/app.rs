@@ -3,14 +3,25 @@ use crate::config::Settings;
 use eframe::egui;
 use std::sync::{Arc, Mutex};
 
+#[derive(PartialEq)]
+enum Tab {
+    Main,
+    DangerDetection,
+}
+
 pub struct Dota2ScriptApp {
     app_state: Arc<Mutex<AppState>>,
-    settings: Settings,
+    settings: Arc<Mutex<Settings>>,
+    selected_tab: Tab,
 }
 
 impl Dota2ScriptApp {
     pub fn new(app_state: Arc<Mutex<AppState>>, settings: Settings) -> Self {
-        Self { app_state, settings }
+        Self { 
+            app_state,
+            settings: Arc::new(Mutex::new(settings)),
+            selected_tab: Tab::Main,
+        }
     }
 }
 
@@ -22,6 +33,31 @@ impl eframe::App for Dota2ScriptApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Dota 2 Script Automation");
             ui.separator();
+
+            // Tab selection
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut self.selected_tab, Tab::Main, "Main");
+                ui.selectable_value(&mut self.selected_tab, Tab::DangerDetection, "Danger Detection");
+            });
+            
+            ui.separator();
+            
+            // Add scroll area for all content
+            egui::ScrollArea::vertical()
+                .auto_shrink([false; 2])
+                .show(ui, |ui| {
+                    match self.selected_tab {
+                        Tab::Main => self.render_main_tab(ui),
+                        Tab::DangerDetection => self.render_danger_detection_tab(ui),
+                    }
+                });
+        });
+    }
+}
+
+impl Dota2ScriptApp {
+    fn render_main_tab(&mut self, ui: &mut egui::Ui) {
+        let settings = self.settings.lock().unwrap();
 
             // Hero Selection Section
             ui.heading("Hero Selection");
@@ -89,7 +125,7 @@ impl eframe::App for Dota2ScriptApp {
                             HeroType::ShadowFiend => "shadow_fiend",
                             HeroType::Tiny => "tiny",
                         };
-                        let new_key = self.settings.get_standalone_key(
+                        let new_key = settings.get_standalone_key(
                             match hero_type {
                                 HeroType::Huskar => "huskar",
                                 HeroType::LegionCommander => "legion_commander",
@@ -191,6 +227,11 @@ impl eframe::App for Dota2ScriptApp {
                     if event.hero.silenced {
                         ui.colored_label(egui::Color32::YELLOW, "🔇 Silenced");
                     }
+                    
+                    // Danger indicator
+                    if crate::actions::danger_detector::is_in_danger() {
+                        ui.colored_label(egui::Color32::RED, "⚠️ IN DANGER");
+                    }
                 } else {
                     ui.label("No GSI events received yet");
                 }
@@ -217,6 +258,111 @@ impl eframe::App for Dota2ScriptApp {
             ui.label("• Hero-specific actions are based on the detected hero");
             ui.label("• Press HOME key to trigger standalone combo (if enabled)");
             ui.label("• Auto-selection: Hero is selected automatically from GSI events");
+    }
+    
+    fn render_danger_detection_tab(&mut self, ui: &mut egui::Ui) {
+        let mut settings = self.settings.lock().unwrap();
+        let config = &mut settings.danger_detection;
+        
+        ui.heading("Danger Detection Settings");
+        ui.separator();
+        
+        ui.checkbox(&mut config.enabled, "Enable Danger Detection");
+        ui.label("Detects when hero takes rapid damage or HP drops below threshold");
+        
+        ui.add_space(10.0);
+        
+        // Detection Thresholds
+        ui.heading("Detection Thresholds");
+        
+        ui.horizontal(|ui| {
+            ui.label("HP Threshold:");
+            ui.add(egui::Slider::new(&mut config.hp_threshold_percent, 30..=90).suffix("%"));
         });
+        ui.label("Danger detected when HP drops below this percentage");
+        
+        ui.horizontal(|ui| {
+            ui.label("Rapid Loss Threshold:");
+            ui.add(egui::Slider::new(&mut config.rapid_loss_hp, 50..=300).suffix(" HP"));
+        });
+        ui.label("HP loss amount to trigger danger detection");
+        
+        ui.horizontal(|ui| {
+            ui.label("Time Window:");
+            ui.add(egui::Slider::new(&mut config.time_window_ms, 200..=1000).suffix(" ms"));
+        });
+        ui.label("Time window to measure HP loss rate");
+        
+        ui.horizontal(|ui| {
+            ui.label("Clear Delay:");
+            ui.add(egui::Slider::new(&mut config.clear_delay_seconds, 1..=10).suffix(" s"));
+        });
+        ui.label("Time before danger state clears after HP stabilizes");
+        
+        ui.add_space(10.0);
+        ui.separator();
+        
+        // Healing Configuration
+        ui.heading("Healing in Danger");
+        
+        ui.horizontal(|ui| {
+            ui.label("HP Threshold (in danger):");
+            ui.add(egui::Slider::new(&mut config.healing_threshold_in_danger, 30..=80).suffix("%"));
+        });
+        ui.label("Use healing items when HP below this % (when in danger)");
+        
+        ui.horizontal(|ui| {
+            ui.label("Max Healing Items:");
+            ui.add(egui::Slider::new(&mut config.max_healing_items_per_danger, 1..=5));
+        });
+        ui.label("Maximum number of healing items to use per danger event");
+        
+        ui.add_space(10.0);
+        ui.separator();
+        
+        // Defensive Items
+        ui.heading("Auto-Trigger Defensive Items");
+        ui.label("Automatically use defensive items when danger is detected");
+        
+        ui.add_space(5.0);
+        
+        egui::CollapsingHeader::new("Defensive Item Configuration")
+            .default_open(true)
+            .show(ui, |ui| {
+                ui.checkbox(&mut config.auto_bkb, "Black King Bar (BKB)");
+                ui.label("  Grants magic immunity");
+                
+                ui.checkbox(&mut config.auto_satanic, "Satanic");
+                ui.label("  Active lifesteal for healing");
+                if config.auto_satanic {
+                    ui.add(egui::Slider::new(&mut config.satanic_hp_threshold, 10..=80)
+                        .text("Satanic HP Threshold %"));
+                    ui.label("  Use Satanic when HP drops below this percentage");
+                }
+                
+                ui.checkbox(&mut config.auto_blade_mail, "Blade Mail");
+                ui.label("  Reflects damage back to attackers");
+                
+                ui.checkbox(&mut config.auto_glimmer_cape, "Glimmer Cape");
+                ui.label("  Magic resistance and invisibility");
+                
+                ui.checkbox(&mut config.auto_ghost_scepter, "Ghost Scepter");
+                ui.label("  Physical immunity (ethereal form)");
+                
+                ui.checkbox(&mut config.auto_shivas_guard, "Shiva's Guard");
+                ui.label("  AoE damage and armor");
+            });
+        
+        ui.add_space(10.0);
+        ui.separator();
+        
+        // Save button
+        if ui.button("Save Configuration").clicked() {
+            if let Err(e) = settings.save() {
+                tracing::error!("Failed to save settings: {}", e);
+            } else {
+                tracing::info!("Danger detection settings saved");
+            }
+        }
     }
 }

@@ -20,16 +20,17 @@ use tracing_subscriber;
 
 #[tokio::main]
 async fn main() {
-    // Initialize logging
-    let log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
+    // Load settings first to get log level
+    let settings = Settings::load();
+    
+    // Initialize logging with config level or environment variable
+    let log_level = std::env::var("RUST_LOG")
+        .unwrap_or_else(|_| settings.logging.level.clone());
     tracing_subscriber::fmt()
         .with_env_filter(log_level)
         .init();
 
     info!("Starting Dota 2 Script Automation...");
-
-    // Load settings
-    let settings = Settings::load();
     info!("Server port: {}", settings.server.port);
 
     // Initialize shared state

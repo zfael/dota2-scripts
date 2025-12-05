@@ -3,7 +3,7 @@ use crate::state::AppState;
 use axum::{extract::State, http::StatusCode, Json};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 pub type GsiEventSender = mpsc::Sender<GsiWebhookEvent>;
 

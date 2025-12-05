@@ -157,10 +157,16 @@ impl SurvivabilityActions {
         Self { settings }
     }
 
-    /// Execute default GSI strategy (survivability + armlet)
+    /// Execute default GSI strategy (survivability + armlet + danger detection)
     pub fn execute_default_strategy(&self, event: &GsiWebhookEvent) {
+        // Update danger detection state
+        let _in_danger = crate::actions::danger_detector::update(event, &self.settings.danger_detection);
+        
         // Always check survivability first
         self.check_and_use_healing_items(event);
+        
+        // Use defensive items if in danger
+        self.use_defensive_items_if_danger(event);
         
         // Check for armlet and toggle if needed
         self.check_and_toggle_armlet(event);
@@ -172,33 +178,66 @@ impl SurvivabilityActions {
             return;
         }
 
+        // Determine threshold based on danger state
+        let in_danger = crate::actions::danger_detector::is_in_danger();
+        let threshold = if in_danger && self.settings.danger_detection.enabled {
+            self.settings.danger_detection.healing_threshold_in_danger
+        } else {
+            self.settings.common.survivability_hp_threshold
+        };
+
         // Check if HP is below threshold
-        if event.hero.health_percent >= self.settings.common.survivability_hp_threshold {
+        if event.hero.health_percent >= threshold {
             return;
         }
 
         debug!(
-            "HP below threshold: {}% < {}%",
-            event.hero.health_percent, self.settings.common.survivability_hp_threshold
+            "HP below threshold: {}% < {}% (in_danger: {})",
+            event.hero.health_percent, threshold, in_danger
         );
 
-        // Priority order for healing items
-        let healing_items = vec![
-            "item_cheese",
-            "item_faerie_fire",
-            "item_magic_wand",
-            "item_enchanted_mango",
-            "item_greater_faerie_fire",
-        ];
+        // Priority order - high value first when in danger, low value first otherwise
+        let healing_items = if in_danger {
+            vec![
+                ("item_cheese", 2000u32),
+                ("item_greater_faerie_fire", 350u32),
+                ("item_enchanted_mango", 175u32),
+                ("item_magic_wand", 100u32), // Approximate (15 per charge)
+                ("item_faerie_fire", 85u32),
+            ]
+        } else {
+            vec![
+                ("item_cheese", 2000u32),
+                ("item_faerie_fire", 85u32),
+                ("item_magic_wand", 100u32),
+                ("item_enchanted_mango", 175u32),
+                ("item_greater_faerie_fire", 350u32),
+            ]
+        };
+
+        let max_items = if in_danger && self.settings.danger_detection.enabled {
+            self.settings.danger_detection.max_healing_items_per_danger
+        } else {
+            1 // Normal mode: only one item
+        };
+
+        let mut items_used = 0u32;
 
         // Search for healing items in inventory
-        for (slot, item) in event.items.all_slots() {
-            if healing_items.contains(&item.name.as_str()) {
-                // Check if item can be cast
-                if let Some(can_cast) = item.can_cast {
-                    if can_cast {
-                        self.use_item(slot, &item.name);
-                        return; // Only use one healing item per check
+        for (item_name, _heal_amount) in healing_items {
+            if items_used >= max_items {
+                break;
+            }
+
+            for (slot, item) in event.items.all_slots() {
+                if item.name == item_name {
+                    // Check if item can be cast
+                    if let Some(can_cast) = item.can_cast {
+                        if can_cast {
+                            self.use_item(slot, &item.name);
+                            items_used += 1;
+                            break; // Move to next item type
+                        }
                     }
                 }
             }
@@ -208,8 +247,78 @@ impl SurvivabilityActions {
     fn use_item(&self, slot: &str, item_name: &str) {
         if let Some(key) = self.settings.get_key_for_slot(slot) {
             info!("Using {} in {} (key: {})", item_name, slot, key);
-            // The actual key press will be handled by input simulation
+            
+            // Items like Glimmer Cape need double-tap for self-cast
+            let needs_double_tap = matches!(item_name, "item_glimmer_cape");
+            
             crate::input::press_key(key);
+            
+            if needs_double_tap {
+                // Small delay between presses for self-cast
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                crate::input::press_key(key);
+                info!("Double-tapped {} for self-cast", item_name);
+            }
+        }
+    }
+
+    /// Use defensive items when in danger
+    pub fn use_defensive_items_if_danger(&self, event: &GsiWebhookEvent) {
+        // Reload settings to get latest config values (in case they were changed in UI)
+        let current_config = &self.settings.danger_detection;
+        
+        if !current_config.enabled {
+            return;
+        }
+
+        if !crate::actions::danger_detector::is_in_danger() {
+            return;
+        }
+
+        if !event.hero.is_alive() {
+            return;
+        }
+
+        debug!("In danger - checking defensive items");
+
+        // Priority order: BKB first (prevent disables), then healing (Satanic),
+        // then damage reflection (Blade Mail), then escape items
+        let defensive_items = vec![
+            ("item_black_king_bar", current_config.auto_bkb),
+            ("item_satanic", current_config.auto_satanic),
+            ("item_blade_mail", current_config.auto_blade_mail),
+            ("item_glimmer_cape", current_config.auto_glimmer_cape),
+            ("item_ghost", current_config.auto_ghost_scepter),
+            ("item_shivas_guard", current_config.auto_shivas_guard),
+        ];
+
+        // Try to activate all enabled items that are ready
+        for (item_name, enabled) in defensive_items {
+            if !enabled {
+                continue;
+            }
+
+            // Satanic has its own HP threshold check
+            if item_name == "item_satanic" {
+                let hp_percent = (event.hero.health * 100) / event.hero.max_health;
+                if hp_percent > current_config.satanic_hp_threshold {
+                    debug!("Satanic not used: HP {}% > threshold {}%", hp_percent, current_config.satanic_hp_threshold);
+                    continue;
+                }
+            }
+
+            for (slot, item) in event.items.all_slots() {
+                if item.name == item_name {
+                    // Check if item can be cast (not on cooldown)
+                    if let Some(can_cast) = item.can_cast {
+                        if can_cast {
+                            debug!("Activating defensive item: {}", item_name);
+                            self.use_item(slot, &item.name);
+                            break; // Move to next item type
+                        }
+                    }
+                }
+            }
         }
     }
 

@@ -1,5 +1,5 @@
 use crate::actions::heroes::HeroScript;
-use crate::actions::common::find_item_slot;
+use crate::actions::common::{find_item_slot, SurvivabilityActions};
 use crate::config::Settings;
 use crate::input::simulation::press_key;
 use crate::models::{GsiWebhookEvent, Hero, Item};
@@ -115,6 +115,12 @@ impl HeroScript for LegionCommanderScript {
     fn handle_gsi_event(&self, event: &GsiWebhookEvent) {
         // Store the latest event for combo execution
         *self.last_event.lock().unwrap() = Some(event.clone());
+        
+        // Use common survivability actions (danger detection, healing, defensive items)
+        let survivability = SurvivabilityActions::new(self.settings.clone());
+        crate::actions::danger_detector::update(event, &self.settings.danger_detection);
+        survivability.check_and_use_healing_items(event);
+        survivability.use_defensive_items_if_danger(event);
     }
 
     fn handle_standalone_trigger(&self) {

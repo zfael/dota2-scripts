@@ -1,5 +1,5 @@
 use crate::actions::heroes::traits::HeroScript;
-use crate::actions::common::find_item_slot;
+use crate::actions::common::{find_item_slot, SurvivabilityActions};
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Hero, Item};
 use std::sync::Mutex;
@@ -67,8 +67,11 @@ impl HeroScript for TinyScript {
             *last_event = Some(event.clone());
         }
         
-        // Tiny doesn't have custom GSI-based automations
-        // Will use default strategy (survivability + armlet) from dispatcher
+        // Use common survivability actions (danger detection, healing, defensive items)
+        let survivability = SurvivabilityActions::new(self.settings.clone());
+        crate::actions::danger_detector::update(event, &self.settings.danger_detection);
+        survivability.check_and_use_healing_items(event);
+        survivability.use_defensive_items_if_danger(event);
     }
 
     fn handle_standalone_trigger(&self) {
