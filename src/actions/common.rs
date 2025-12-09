@@ -270,37 +270,40 @@ impl SurvivabilityActions {
 
     /// Use defensive items when in danger
     pub fn use_defensive_items_if_danger(&self, event: &GsiWebhookEvent) {
-        // Reload settings to get latest config values (in case they were changed in UI)
-        let settings = self.settings.lock().unwrap();
-        let current_config = &settings.danger_detection;
-        
-        if !current_config.enabled {
-            return;
-        }
+        // Check danger state and gather config - release lock before item usage
+        let (enabled, satanic_threshold, defensive_items_config) = {
+            let settings = self.settings.lock().unwrap();
+            let current_config = &settings.danger_detection;
+            
+            if !current_config.enabled {
+                return;
+            }
 
-        if !crate::actions::danger_detector::is_in_danger() {
-            return;
-        }
+            if !crate::actions::danger_detector::is_in_danger() {
+                return;
+            }
 
-        if !event.hero.is_alive() {
-            return;
-        }
+            if !event.hero.is_alive() {
+                return;
+            }
 
-        debug!("In danger - checking defensive items");
+            debug!("In danger - checking defensive items");
 
-        // Priority order: BKB first (prevent disables), then healing (Satanic),
-        // then damage reflection (Blade Mail), then escape items
-        let defensive_items = vec![
-            ("item_black_king_bar", current_config.auto_bkb),
-            ("item_satanic", current_config.auto_satanic),
-            ("item_blade_mail", current_config.auto_blade_mail),
-            ("item_glimmer_cape", current_config.auto_glimmer_cape),
-            ("item_ghost", current_config.auto_ghost_scepter),
-            ("item_shivas_guard", current_config.auto_shivas_guard),
-        ];
+            // Gather config before releasing lock
+            let defensive_items = vec![
+                ("item_black_king_bar", current_config.auto_bkb),
+                ("item_satanic", current_config.auto_satanic),
+                ("item_blade_mail", current_config.auto_blade_mail),
+                ("item_glimmer_cape", current_config.auto_glimmer_cape),
+                ("item_ghost", current_config.auto_ghost_scepter),
+                ("item_shivas_guard", current_config.auto_shivas_guard),
+            ];
+            
+            (true, current_config.satanic_hp_threshold, defensive_items)
+        }; // Lock released here
 
         // Try to activate all enabled items that are ready
-        for (item_name, enabled) in defensive_items {
+        for (item_name, enabled) in defensive_items_config {
             if !enabled {
                 continue;
             }
@@ -308,8 +311,8 @@ impl SurvivabilityActions {
             // Satanic has its own HP threshold check
             if item_name == "item_satanic" {
                 let hp_percent = (event.hero.health * 100) / event.hero.max_health;
-                if hp_percent > current_config.satanic_hp_threshold {
-                    debug!("Satanic not used: HP {}% > threshold {}%", hp_percent, current_config.satanic_hp_threshold);
+                if hp_percent > satanic_threshold {
+                    debug!("Satanic not used: HP {}% > threshold {}%", hp_percent, satanic_threshold);
                     continue;
                 }
             }
