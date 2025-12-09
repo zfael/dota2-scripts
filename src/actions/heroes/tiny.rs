@@ -1,8 +1,8 @@
 use crate::actions::heroes::traits::HeroScript;
-use crate::actions::common::find_item_slot;
+use crate::actions::common::{find_item_slot, SurvivabilityActions};
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Hero, Item};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use tracing::{info, warn};
@@ -12,31 +12,34 @@ lazy_static::lazy_static! {
 }
 
 pub struct TinyScript {
-    settings: Settings,
+    settings: Arc<Mutex<Settings>>,
 }
 
 impl TinyScript {
-    pub fn new(settings: Settings) -> Self {
+    pub fn new(settings: Arc<Mutex<Settings>>) -> Self {
         Self { settings }
     }
 
     pub fn execute_combo(&self, event: &GsiWebhookEvent) {
         info!("Triggering Tiny combo sequence...");
 
+        let settings = self.settings.lock().unwrap();
+        
         // Find soul ring (x) dynamically
-        if let Some(soul_ring_key) = find_item_slot(event, &self.settings, Item::SoulRing) {
+        if let Some(soul_ring_key) = find_item_slot(event, &settings, Item::SoulRing) {
             crate::input::press_key(soul_ring_key);
         } else {
             warn!("Soul ring not found in inventory");
         }
 
         // Find blink (z) dynamically
-        if let Some(blink_key) = find_item_slot(event, &self.settings, Item::Blink) {
+        if let Some(blink_key) = find_item_slot(event, &settings, Item::Blink) {
             crate::input::press_key(blink_key);
         } else {
             warn!("Blink dagger not found in inventory");
         }
         
+        drop(settings);
         thread::sleep(Duration::from_millis(200));
 
         // w (3 times with delays) - Avalanche
@@ -67,8 +70,13 @@ impl HeroScript for TinyScript {
             *last_event = Some(event.clone());
         }
         
-        // Tiny doesn't have custom GSI-based automations
-        // Will use default strategy (survivability + armlet) from dispatcher
+        // Use common survivability actions (danger detection, healing, defensive items)
+        let survivability = SurvivabilityActions::new(self.settings.clone());
+        let settings = self.settings.lock().unwrap();
+        crate::actions::danger_detector::update(event, &settings.danger_detection);
+        drop(settings);
+        survivability.check_and_use_healing_items(event);
+        survivability.use_defensive_items_if_danger(event);
     }
 
     fn handle_standalone_trigger(&self) {

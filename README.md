@@ -14,6 +14,12 @@ A Rust-based automation tool for Dota 2 that provides two main features:
   - item_magic_wand
   - item_enchanted_mango
   - item_greater_faerie_fire
+- **Danger Detection**: Monitors HP changes to detect combat situations
+  - Automatically triggers defensive items (Satanic, Blade Mail, BKB, etc.)
+  - Uses multiple healing items when in danger
+  - Higher HP threshold when danger detected
+  - Configurable detection thresholds and item preferences
+
 ### Hero-Specific Actions:
   - **Huskar**: Automatic armlet toggling at low HP, Berserker Blood debuff cleansing
   - **Shadow Fiend**: Q/W/E interception with auto right-click for raze accuracy
@@ -28,7 +34,8 @@ A Rust-based automation tool for Dota 2 that provides two main features:
 - Hero selection (Huskar, Shadow Fiend, Tiny, or None)
 - Toggle GSI automation on/off
 - Toggle standalone scripts on/off
-- Real-time status display (HP, Mana, Hero status)
+- Real-time status display (HP, Mana, Hero status, Danger indicator)
+- Danger Detection configuration tab with item toggles
 - Per-hero keybinding display
 - Debug metrics (events processed, queue depth)
 - Auto-selection of hero based on GSI events
@@ -116,7 +123,50 @@ raze_delay_ms = 100  # Delay between right-click and ability cast
 
 [heroes.tiny]
 standalone_key = "Home"
+
+[danger_detection]
+enabled = true
+hp_threshold_percent = 70          # Danger detected below this HP %
+rapid_loss_hp = 100                # HP loss to trigger danger
+time_window_ms = 500               # Time window for HP loss measurement
+clear_delay_seconds = 3            # Delay before clearing danger state
+healing_threshold_in_danger = 50   # HP % to use healing when in danger
+max_healing_items_per_danger = 3   # Max healing items per danger event
+auto_bkb = false                   # Auto Black King Bar (opt-in)
+auto_satanic = true                # Auto Satanic
+auto_blade_mail = true             # Auto Blade Mail
+auto_glimmer_cape = true           # Auto Glimmer Cape
+auto_ghost_scepter = true          # Auto Ghost Scepter
+auto_shivas_guard = true           # Auto Shiva's Guard
 ```
+
+### Danger Detection Feature
+
+The Danger Detection system monitors HP changes to identify combat situations and automatically responds:
+
+**How it works:**
+- Tracks HP every ~100ms (via GSI events)
+- Triggers when HP drops rapidly (100+ HP in 500ms) OR HP below 70% with active loss
+- Clears after HP stabilizes for 3 seconds
+
+**When in danger:**
+- Uses healing items at 50% HP (vs 30% normally)
+- Can use multiple healing items (up to 3) per danger event
+- High-value priority: cheese → greater faerie fire → mango → wand → faerie fire
+- Auto-activates defensive items (if enabled and off cooldown):
+  - **BKB**: Magic immunity (opt-in, default: false)
+  - **Satanic**: Active lifesteal
+  - **Blade Mail**: Damage reflection
+  - **Glimmer Cape**: Magic resistance + invisibility
+  - **Ghost Scepter**: Physical immunity
+  - **Shiva's Guard**: AoE damage + armor
+
+**Configuration:**
+- Use the "Danger Detection" tab in the GUI to adjust thresholds
+- Configure which items auto-trigger via checkboxes
+- Save configuration to persist settings
+
+**See `.copilot/1_in_danger_implementation.md` for detailed implementation docs**
 
 ### Configuring Shadow Fiend
 Shadow Fiend uses **key interception** instead of a standalone combo trigger. When enabled:
@@ -159,7 +209,8 @@ cargo run --release
 ```
 src/
 ├── actions/         # Action handlers
-│   ├── common.rs    # Survivability logic
+│   ├── common.rs    # Survivability & armlet logic
+│   ├── danger_detector.rs  # Danger detection system
 │   ├── dispatcher.rs # Strategy pattern dispatcher
 │   └── heroes/      # Hero-specific scripts
 │       ├── huskar.rs
@@ -170,7 +221,7 @@ src/
 ├── input/           # Keyboard simulation & listening
 ├── models/          # GSI event data models
 ├── state/           # Application state
-├── ui/              # GUI implementation
+├── ui/              # GUI implementation (with Danger Detection tab)
 └── main.rs          # Entry point
 ```
 

@@ -14,23 +14,24 @@ use crate::gsi::start_gsi_server;
 use crate::input::keyboard::start_keyboard_listener;
 use crate::state::AppState;
 use crate::ui::Dota2ScriptApp;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tracing::info;
 use tracing_subscriber;
 
 #[tokio::main]
 async fn main() {
-    // Initialize logging
-    let log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
+    // Load settings first to get log level
+    let settings = Arc::new(Mutex::new(Settings::load()));
+    
+    // Initialize logging with config level or environment variable
+    let log_level = std::env::var("RUST_LOG")
+        .unwrap_or_else(|_| settings.lock().unwrap().logging.level.clone());
     tracing_subscriber::fmt()
         .with_env_filter(log_level)
         .init();
 
     info!("Starting Dota 2 Script Automation...");
-
-    // Load settings
-    let settings = Settings::load();
-    info!("Server port: {}", settings.server.port);
+    info!("Server port: {}", settings.lock().unwrap().server.port);
 
     // Initialize shared state
     let app_state = AppState::new();
@@ -50,7 +51,7 @@ async fn main() {
     let hotkey_rx = start_keyboard_listener(keyboard_config);
 
     // Start GSI server in background
-    let port = settings.server.port;
+    let port = settings.lock().unwrap().server.port;
     let app_state_clone = app_state.clone();
     let dispatcher_clone = dispatcher.clone();
     tokio::spawn(async move {

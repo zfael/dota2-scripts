@@ -3,7 +3,7 @@ use crate::actions::heroes::{HeroScript, HuskarScript, LegionCommanderScript, Sh
 use crate::config::Settings;
 use crate::models::GsiWebhookEvent;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tracing::debug;
 
 pub struct ActionDispatcher {
@@ -16,7 +16,7 @@ unsafe impl Send for ActionDispatcher {}
 unsafe impl Sync for ActionDispatcher {}
 
 impl ActionDispatcher {
-    pub fn new(settings: Settings) -> Self {
+    pub fn new(settings: Arc<Mutex<Settings>>) -> Self {
         let mut hero_scripts: HashMap<String, Arc<dyn HeroScript>> = HashMap::new();
 
         // Register hero scripts

@@ -36,3 +36,18 @@ raze_delay_ms = 100  # Delay between right-click and ability cast
 
 [heroes.tiny]
 standalone_key = "Home"  # Key to trigger Tiny combo manually
+
+[danger_detection]
+enabled = true
+hp_threshold_percent = 70
+rapid_loss_hp = 100
+time_window_ms = 500
+clear_delay_seconds = 3
+healing_threshold_in_danger = 50
+max_healing_items_per_danger = 3
+auto_bkb = true
+auto_satanic = true
+auto_blade_mail = true
+auto_glimmer_cape = true
+auto_ghost_scepter = true
+auto_shivas_guard = true
