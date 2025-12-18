@@ -159,20 +159,43 @@ impl SurvivabilityActions {
 
     /// Execute default GSI strategy (survivability + armlet + danger detection)
     pub fn execute_default_strategy(&self, event: &GsiWebhookEvent) {
-        // Update danger detection state
+        // PRIORITY 1: Check for armlet and toggle if needed (non-blocking)
+        // Clone event for thread safety
+        let event_clone = event.clone();
+        let settings_clone = self.settings.clone();
+        std::thread::spawn(move || {
+            let settings = settings_clone.lock().unwrap();
+            
+            // Check if hero has armlet in inventory
+            let has_armlet = event_clone.items.all_slots()
+                .iter()
+                .any(|(_, item)| item.name == "item_armlet");
+            
+            if !has_armlet {
+                return;
+            }
+            
+            // Use default armlet configuration (suitable for most strength heroes)
+            let armlet_config = ArmletConfig {
+                toggle_threshold: 320,      // HP threshold
+                predictive_offset: 30,       // Predictive offset
+                toggle_cooldown_ms: 250,     // Cooldown between toggles
+            };
+            
+            armlet_toggle(&event_clone, &settings, &armlet_config);
+        });
+        
+        // PRIORITY 2: Update danger detection state
         {
             let settings = self.settings.lock().unwrap();
             let _in_danger = crate::actions::danger_detector::update(event, &settings.danger_detection);
         }
         
-        // Always check survivability first
+        // PRIORITY 3: Always check survivability first
         self.check_and_use_healing_items(event);
         
-        // Use defensive items if in danger
+        // PRIORITY 4: Use defensive items if in danger
         self.use_defensive_items_if_danger(event);
-        
-        // Check for armlet and toggle if needed
-        self.check_and_toggle_armlet(event);
     }
 
     /// Check if hero needs healing and use appropriate items
