@@ -2,9 +2,73 @@ use crate::actions::common::SurvivabilityActions;
 use crate::actions::heroes::{HeroScript, HuskarScript, LegionCommanderScript, ShadowFiendScript, TinyScript};
 use crate::config::Settings;
 use crate::models::GsiWebhookEvent;
-use std::collections::HashMap;
+use lazy_static::lazy_static;
+use std::collections::{HashMap, HashSet};
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::sync::{Arc, Mutex};
-use tracing::debug;
+use tracing::{debug, warn};
+
+lazy_static! {
+    static ref DISCOVERED_NEUTRAL_ITEMS: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
+}
+
+fn log_neutral_item_discovery(event: &GsiWebhookEvent, settings: &Settings) {
+    // Skip if logging is disabled
+    if !settings.neutral_items.log_discoveries {
+        return;
+    }
+
+    let neutral_item = &event.items.neutral0;
+    
+    // Skip empty slots
+    if neutral_item.name == "empty" {
+        return;
+    }
+
+    // Check if we've already logged this item
+    let mut discovered = DISCOVERED_NEUTRAL_ITEMS.lock().unwrap();
+    if discovered.contains(&neutral_item.name) {
+        return;
+    }
+
+    // Add to discovered set
+    discovered.insert(neutral_item.name.clone());
+
+    // Create logs directory if it doesn't exist
+    if let Err(e) = fs::create_dir_all("logs") {
+        warn!("Failed to create logs directory: {}", e);
+        return;
+    }
+
+    // Append to log file
+    let log_path = "logs/neutral_items_discovered.txt";
+    match OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path)
+    {
+        Ok(mut file) => {
+            let can_cast = neutral_item.can_cast.unwrap_or(false);
+            let passive = neutral_item.passive.unwrap_or(false);
+            let cooldown = neutral_item.cooldown.unwrap_or(0);
+            
+            let log_entry = format!(
+                "{} | can_cast: {} | passive: {} | cooldown: {}\n",
+                neutral_item.name, can_cast, passive, cooldown
+            );
+            
+            if let Err(e) = file.write_all(log_entry.as_bytes()) {
+                warn!("Failed to write to neutral items log: {}", e);
+            } else {
+                debug!("Discovered neutral item: {}", neutral_item.name);
+            }
+        }
+        Err(e) => {
+            warn!("Failed to open neutral items log file: {}", e);
+        }
+    }
+}
 
 pub struct ActionDispatcher {
     pub hero_scripts: HashMap<String, Arc<dyn HeroScript>>,
@@ -39,6 +103,11 @@ impl ActionDispatcher {
     }
 
     pub fn dispatch_gsi_event(&self, event: &GsiWebhookEvent) {
+        // Log neutral item discovery
+        let settings = self.survivability.settings.lock().unwrap();
+        log_neutral_item_discovery(event, &settings);
+        drop(settings); // Release lock before further processing
+        
         // Check if hero has a custom handler
         if let Some(hero_script) = self.hero_scripts.get(&event.hero.name) {
             // Hero has custom handler, use it

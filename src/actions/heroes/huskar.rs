@@ -119,6 +119,9 @@ impl HeroScript for HuskarScript {
         // Use defensive items if in danger
         survivability.use_defensive_items_if_danger(event);
         
+        // Use neutral items if in danger
+        survivability.use_neutral_item_if_danger(event);
+        
         // PRIORITY 4: Huskar-specific berserker blood cleanse
         self.berserker_blood_cleanse(event);
     }

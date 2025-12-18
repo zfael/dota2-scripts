@@ -126,6 +126,22 @@ pub struct DangerDetectionConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NeutralItemConfig {
+    #[serde(default = "default_neutral_items_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_self_cast_key")]
+    pub self_cast_key: char,
+    #[serde(default = "default_log_discoveries")]
+    pub log_discoveries: bool,
+    #[serde(default = "default_use_in_danger")]
+    pub use_in_danger: bool,
+    #[serde(default = "default_neutral_hp_threshold")]
+    pub hp_threshold: u32,
+    #[serde(default = "default_allowed_items")]
+    pub allowed_items: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     #[serde(default)]
     pub server: ServerConfig,
@@ -139,6 +155,8 @@ pub struct Settings {
     pub heroes: HeroesConfig,
     #[serde(default)]
     pub danger_detection: DangerDetectionConfig,
+    #[serde(default)]
+    pub neutral_items: NeutralItemConfig,
 }
 
 // Default functions
@@ -248,6 +266,25 @@ fn default_auto_ghost_scepter() -> bool {
 }
 fn default_auto_shivas_guard() -> bool {
     true
+}
+
+fn default_neutral_items_enabled() -> bool {
+    false
+}
+fn default_self_cast_key() -> char {
+    ' '
+}
+fn default_log_discoveries() -> bool {
+    true
+}
+fn default_use_in_danger() -> bool {
+    true
+}
+fn default_neutral_hp_threshold() -> u32 {
+    50
+}
+fn default_allowed_items() -> Vec<String> {
+    Vec::new()
 }
 
 impl Default for ServerConfig {
@@ -361,6 +398,19 @@ impl Default for DangerDetectionConfig {
     }
 }
 
+impl Default for NeutralItemConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_neutral_items_enabled(),
+            self_cast_key: default_self_cast_key(),
+            log_discoveries: default_log_discoveries(),
+            use_in_danger: default_use_in_danger(),
+            hp_threshold: default_neutral_hp_threshold(),
+            allowed_items: default_allowed_items(),
+        }
+    }
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -370,6 +420,7 @@ impl Default for Settings {
             common: CommonConfig::default(),
             heroes: HeroesConfig::default(),
             danger_detection: DangerDetectionConfig::default(),
+            neutral_items: NeutralItemConfig::default(),
         }
     }
 }
