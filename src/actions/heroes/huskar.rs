@@ -91,13 +91,27 @@ impl HuskarScript {
 
 impl HeroScript for HuskarScript {
     fn handle_gsi_event(&self, event: &GsiWebhookEvent) {
-        // Create survivability actions for danger detection and healing
-        let survivability = SurvivabilityActions::new(self.settings.clone());
+        // PRIORITY 1: Armlet toggle (Huskar-specific) - run in separate thread immediately
+        // This is critical for Huskar survival and must not be blocked by other actions
+        let settings_clone = self.settings.clone();
+        let event_clone = event.clone();
+        std::thread::spawn(move || {
+            let settings = settings_clone.lock().unwrap();
+            let armlet_config = ArmletConfig {
+                toggle_threshold: settings.heroes.huskar.armlet_toggle_threshold,
+                predictive_offset: settings.heroes.huskar.armlet_predictive_offset,
+                toggle_cooldown_ms: settings.heroes.huskar.armlet_toggle_cooldown_ms,
+            };
+            armlet_toggle(&event_clone, &settings, &armlet_config);
+        });
         
-        // Update danger detection
+        // PRIORITY 2: Update danger detection state
         let settings = self.settings.lock().unwrap();
         crate::actions::danger_detector::update(event, &settings.danger_detection);
         drop(settings);
+        
+        // PRIORITY 3: Create survivability actions for healing and defensive items
+        let survivability = SurvivabilityActions::new(self.settings.clone());
         
         // Check healing items (danger-aware)
         survivability.check_and_use_healing_items(event);
@@ -105,17 +119,10 @@ impl HeroScript for HuskarScript {
         // Use defensive items if in danger
         survivability.use_defensive_items_if_danger(event);
         
-        // Huskar-specific: armlet toggle
-        let settings = self.settings.lock().unwrap();
-        let armlet_config = ArmletConfig {
-            toggle_threshold: settings.heroes.huskar.armlet_toggle_threshold,
-            predictive_offset: settings.heroes.huskar.armlet_predictive_offset,
-            toggle_cooldown_ms: settings.heroes.huskar.armlet_toggle_cooldown_ms,
-        };
-        armlet_toggle(event, &settings, &armlet_config);
-        drop(settings);
+        // Use neutral items if in danger
+        survivability.use_neutral_item_if_danger(event);
         
-        // Huskar-specific: berserker blood cleanse
+        // PRIORITY 4: Huskar-specific berserker blood cleanse
         self.berserker_blood_cleanse(event);
     }
 

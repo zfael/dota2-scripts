@@ -145,7 +145,7 @@ pub fn find_item_slot_by_name(event: &GsiWebhookEvent, settings: &Settings, item
 
 /// Common survivability actions that apply to all heroes
 pub struct SurvivabilityActions {
-    settings: Arc<Mutex<Settings>>,
+    pub(crate) settings: Arc<Mutex<Settings>>,
 }
 
 // Ensure SurvivabilityActions can be shared across threads
@@ -159,20 +159,46 @@ impl SurvivabilityActions {
 
     /// Execute default GSI strategy (survivability + armlet + danger detection)
     pub fn execute_default_strategy(&self, event: &GsiWebhookEvent) {
-        // Update danger detection state
+        // PRIORITY 1: Check for armlet and toggle if needed (non-blocking)
+        // Clone event for thread safety
+        let event_clone = event.clone();
+        let settings_clone = self.settings.clone();
+        std::thread::spawn(move || {
+            let settings = settings_clone.lock().unwrap();
+            
+            // Check if hero has armlet in inventory
+            let has_armlet = event_clone.items.all_slots()
+                .iter()
+                .any(|(_, item)| item.name == "item_armlet");
+            
+            if !has_armlet {
+                return;
+            }
+            
+            // Use default armlet configuration (suitable for most strength heroes)
+            let armlet_config = ArmletConfig {
+                toggle_threshold: 320,      // HP threshold
+                predictive_offset: 30,       // Predictive offset
+                toggle_cooldown_ms: 250,     // Cooldown between toggles
+            };
+            
+            armlet_toggle(&event_clone, &settings, &armlet_config);
+        });
+        
+        // PRIORITY 2: Update danger detection state
         {
             let settings = self.settings.lock().unwrap();
             let _in_danger = crate::actions::danger_detector::update(event, &settings.danger_detection);
         }
         
-        // Always check survivability first
+        // PRIORITY 3: Always check survivability first
         self.check_and_use_healing_items(event);
         
-        // Use defensive items if in danger
+        // PRIORITY 4: Use defensive items if in danger
         self.use_defensive_items_if_danger(event);
         
-        // Check for armlet and toggle if needed
-        self.check_and_toggle_armlet(event);
+        // PRIORITY 5: Use neutral items if in danger
+        self.use_neutral_item_if_danger(event);
     }
 
     /// Check if hero needs healing and use appropriate items
@@ -270,37 +296,40 @@ impl SurvivabilityActions {
 
     /// Use defensive items when in danger
     pub fn use_defensive_items_if_danger(&self, event: &GsiWebhookEvent) {
-        // Reload settings to get latest config values (in case they were changed in UI)
-        let settings = self.settings.lock().unwrap();
-        let current_config = &settings.danger_detection;
-        
-        if !current_config.enabled {
-            return;
-        }
+        // Check danger state and gather config - release lock before item usage
+        let (_enabled, satanic_threshold, defensive_items_config) = {
+            let settings = self.settings.lock().unwrap();
+            let current_config = &settings.danger_detection;
+            
+            if !current_config.enabled {
+                return;
+            }
 
-        if !crate::actions::danger_detector::is_in_danger() {
-            return;
-        }
+            if !crate::actions::danger_detector::is_in_danger() {
+                return;
+            }
 
-        if !event.hero.is_alive() {
-            return;
-        }
+            if !event.hero.is_alive() {
+                return;
+            }
 
-        debug!("In danger - checking defensive items");
+            debug!("In danger - checking defensive items");
 
-        // Priority order: BKB first (prevent disables), then healing (Satanic),
-        // then damage reflection (Blade Mail), then escape items
-        let defensive_items = vec![
-            ("item_black_king_bar", current_config.auto_bkb),
-            ("item_satanic", current_config.auto_satanic),
-            ("item_blade_mail", current_config.auto_blade_mail),
-            ("item_glimmer_cape", current_config.auto_glimmer_cape),
-            ("item_ghost", current_config.auto_ghost_scepter),
-            ("item_shivas_guard", current_config.auto_shivas_guard),
-        ];
+            // Gather config before releasing lock
+            let defensive_items = vec![
+                ("item_black_king_bar", current_config.auto_bkb),
+                ("item_satanic", current_config.auto_satanic),
+                ("item_blade_mail", current_config.auto_blade_mail),
+                ("item_glimmer_cape", current_config.auto_glimmer_cape),
+                ("item_ghost", current_config.auto_ghost_scepter),
+                ("item_shivas_guard", current_config.auto_shivas_guard),
+            ];
+            
+            (true, current_config.satanic_hp_threshold, defensive_items)
+        }; // Lock released here
 
         // Try to activate all enabled items that are ready
-        for (item_name, enabled) in defensive_items {
+        for (item_name, enabled) in defensive_items_config {
             if !enabled {
                 continue;
             }
@@ -308,8 +337,8 @@ impl SurvivabilityActions {
             // Satanic has its own HP threshold check
             if item_name == "item_satanic" {
                 let hp_percent = (event.hero.health * 100) / event.hero.max_health;
-                if hp_percent > current_config.satanic_hp_threshold {
-                    debug!("Satanic not used: HP {}% > threshold {}%", hp_percent, current_config.satanic_hp_threshold);
+                if hp_percent > satanic_threshold {
+                    debug!("Satanic not used: HP {}% > threshold {}%", hp_percent, satanic_threshold);
                     continue;
                 }
             }
@@ -329,7 +358,83 @@ impl SurvivabilityActions {
         }
     }
 
+    /// Use neutral items when in danger
+    pub fn use_neutral_item_if_danger(&self, event: &GsiWebhookEvent) {
+        if !event.hero.is_alive() {
+            return;
+        }
+
+        let settings = self.settings.lock().unwrap();
+        
+        // Check if neutral item usage is enabled
+        if !settings.neutral_items.enabled {
+            return;
+        }
+
+        // Check if use_in_danger is enabled
+        if !settings.neutral_items.use_in_danger {
+            return;
+        }
+
+        // Check if we're in danger
+        let in_danger = crate::actions::danger_detector::is_in_danger();
+        if !in_danger {
+            return;
+        }
+
+        // Check if HP is below threshold
+        if event.hero.health_percent >= settings.neutral_items.hp_threshold {
+            return;
+        }
+
+        let neutral_item = &event.items.neutral0;
+        
+        // Check if neutral slot is not empty
+        if neutral_item.name == "empty" {
+            return;
+        }
+
+        // Check if item is in allowed list (exact match)
+        if !settings.neutral_items.allowed_items.contains(&neutral_item.name) {
+            debug!("Neutral item {} not in allowed list", neutral_item.name);
+            return;
+        }
+
+        // Check if item can be cast (not on cooldown)
+        if let Some(can_cast) = neutral_item.can_cast {
+            if !can_cast {
+                debug!("Neutral item on cooldown: {}", neutral_item.name);
+                return;
+            }
+        } else {
+            debug!("Neutral item can_cast is None: {}", neutral_item.name);
+            return;
+        }
+
+        // Get keybindings
+        let neutral_key = settings.keybindings.neutral0;
+        let self_cast_key = settings.neutral_items.self_cast_key;
+        
+        info!(
+            "⚡ Using neutral item in danger: {} (HP: {}%)",
+            neutral_item.name, event.hero.health_percent
+        );
+
+        // Release lock before input simulation
+        drop(settings);
+
+        // Press neutral item key
+        crate::input::press_key(neutral_key);
+
+        // Small delay before self-cast
+        std::thread::sleep(Duration::from_millis(50));
+
+        // Press self-cast key
+        crate::input::press_key(self_cast_key);
+    }
+
     /// Check and toggle armlet with default configuration
+    #[allow(dead_code)]
     fn check_and_toggle_armlet(&self, event: &GsiWebhookEvent) {
         let settings = self.settings.lock().unwrap();
         

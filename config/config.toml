@@ -51,3 +51,26 @@ auto_blade_mail = true
 auto_glimmer_cape = true
 auto_ghost_scepter = true
 auto_shivas_guard = true
+
+[neutral_items]
+enabled = true
+self_cast_key = " "
+log_discoveries = false
+use_in_danger = true
+hp_threshold = 50
+allowed_items = [
+    "item_essence_ring",
+    "item_minotaur_horn",
+    "item_jidi_pollen_bag",
+    "item_metamorphic_mandible",
+    "item_riftshadow_prism",
+    "item_kobold_cup",
+    "item_polliwog_charm",
+    "item_ash_legion_shield",
+    "item_mana_draught",
+    "item_pogo_stick",
+    "item_psychic_headband",
+    "item_crippling_crossbow",
+    "item_idol_of_screeauk",
+    "item_flayers_bota"
+]

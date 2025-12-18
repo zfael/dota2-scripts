@@ -77,6 +77,7 @@ impl HeroScript for TinyScript {
         drop(settings);
         survivability.check_and_use_healing_items(event);
         survivability.use_defensive_items_if_danger(event);
+        survivability.use_neutral_item_if_danger(event);
     }
 
     fn handle_standalone_trigger(&self) {

@@ -20,6 +20,7 @@ pub fn press_key(key_char: char) {
 }
 
 /// Press a key down (hold)
+#[allow(dead_code)]
 pub fn key_down(key_char: char) {
     let mut enigo = ENIGO.lock().unwrap();
     if let Err(e) = enigo.key(Key::Unicode(key_char), enigo::Direction::Press) {
@@ -28,6 +29,7 @@ pub fn key_down(key_char: char) {
 }
 
 /// Release a key
+#[allow(dead_code)]
 pub fn key_up(key_char: char) {
     let mut enigo = ENIGO.lock().unwrap();
     if let Err(e) = enigo.key(Key::Unicode(key_char), enigo::Direction::Release) {
