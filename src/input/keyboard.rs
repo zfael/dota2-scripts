@@ -9,6 +9,10 @@ pub enum HotkeyEvent {
     ShadowFiendQ,
     ShadowFiendW,
     ShadowFiendE,
+    LargoQ,
+    LargoW,
+    LargoE,
+    LargoR,
 }
 
 pub struct KeyboardListenerConfig {
@@ -104,6 +108,23 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                         }
                         _ => {}
                     }
+                }
+
+                // Check for Largo Q/W/E/R keys (always enabled for Largo)
+                match key {
+                    Key::KeyQ => {
+                        let _ = event_tx.send(HotkeyEvent::LargoQ);
+                    }
+                    Key::KeyW => {
+                        let _ = event_tx.send(HotkeyEvent::LargoW);
+                    }
+                    Key::KeyE => {
+                        let _ = event_tx.send(HotkeyEvent::LargoE);
+                    }
+                    Key::KeyR => {
+                        let _ = event_tx.send(HotkeyEvent::LargoR);
+                    }
+                    _ => {}
                 }
                 
                 // Check for combo trigger key

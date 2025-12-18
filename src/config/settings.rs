@@ -82,6 +82,28 @@ pub struct TinyConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LargoConfig {
+    #[serde(default = "default_amphibian_enabled")]
+    pub amphibian_rhapsody_enabled: bool,
+    #[serde(default = "default_auto_toggle_on_danger")]
+    pub auto_toggle_on_danger: bool,
+    #[serde(default = "default_largo_mana_threshold")]
+    pub mana_threshold_percent: u32,
+    #[serde(default = "default_largo_heal_threshold")]
+    pub heal_hp_threshold: u32,
+    #[serde(default = "default_largo_q_key")]
+    pub q_ability_key: char,
+    #[serde(default = "default_largo_w_key")]
+    pub w_ability_key: char,
+    #[serde(default = "default_largo_e_key")]
+    pub e_ability_key: char,
+    #[serde(default = "default_largo_r_key")]
+    pub r_ability_key: char,
+    #[serde(default = "default_standalone_key")]
+    pub standalone_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HeroesConfig {
     #[serde(default)]
     pub huskar: HuskarConfig,
@@ -91,6 +113,8 @@ pub struct HeroesConfig {
     pub shadow_fiend: ShadowFiendConfig,
     #[serde(default)]
     pub tiny: TinyConfig,
+    #[serde(default)]
+    pub largo: LargoConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -223,6 +247,31 @@ fn default_e_key() -> char {
 }
 fn default_raze_delay() -> u64 {
     100
+}
+
+fn default_amphibian_enabled() -> bool {
+    true
+}
+fn default_auto_toggle_on_danger() -> bool {
+    true
+}
+fn default_largo_mana_threshold() -> u32 {
+    20
+}
+fn default_largo_heal_threshold() -> u32 {
+    50
+}
+fn default_largo_q_key() -> char {
+    'q'
+}
+fn default_largo_w_key() -> char {
+    'w'
+}
+fn default_largo_e_key() -> char {
+    'e'
+}
+fn default_largo_r_key() -> char {
+    'r'
 }
 
 fn default_danger_enabled() -> bool {
@@ -366,6 +415,22 @@ impl Default for TinyConfig {
     }
 }
 
+impl Default for LargoConfig {
+    fn default() -> Self {
+        Self {
+            amphibian_rhapsody_enabled: default_amphibian_enabled(),
+            auto_toggle_on_danger: default_auto_toggle_on_danger(),
+            mana_threshold_percent: default_largo_mana_threshold(),
+            heal_hp_threshold: default_largo_heal_threshold(),
+            q_ability_key: default_largo_q_key(),
+            w_ability_key: default_largo_w_key(),
+            e_ability_key: default_largo_e_key(),
+            r_ability_key: default_largo_r_key(),
+            standalone_key: default_standalone_key(),
+        }
+    }
+}
+
 impl Default for HeroesConfig {
     fn default() -> Self {
         Self {
@@ -373,6 +438,7 @@ impl Default for HeroesConfig {
             legion_commander: LegionCommanderConfig::default(),
             shadow_fiend: ShadowFiendConfig::default(),
             tiny: TinyConfig::default(),
+            largo: LargoConfig::default(),
         }
     }
 }

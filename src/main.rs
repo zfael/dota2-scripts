@@ -117,6 +117,34 @@ async fn main() {
                         }
                     }
                 }
+                input::keyboard::HotkeyEvent::LargoQ => {
+                    if let Some(script) = dispatcher_clone2.hero_scripts.get(models::Hero::Largo.to_game_name()) {
+                        if let Some(largo_script) = script.as_any().downcast_ref::<crate::actions::heroes::LargoScript>() {
+                            largo_script.select_song_manually(crate::actions::heroes::largo::Song::Bullbelly);
+                        }
+                    }
+                }
+                input::keyboard::HotkeyEvent::LargoW => {
+                    if let Some(script) = dispatcher_clone2.hero_scripts.get(models::Hero::Largo.to_game_name()) {
+                        if let Some(largo_script) = script.as_any().downcast_ref::<crate::actions::heroes::LargoScript>() {
+                            largo_script.select_song_manually(crate::actions::heroes::largo::Song::Hotfeet);
+                        }
+                    }
+                }
+                input::keyboard::HotkeyEvent::LargoE => {
+                    if let Some(script) = dispatcher_clone2.hero_scripts.get(models::Hero::Largo.to_game_name()) {
+                        if let Some(largo_script) = script.as_any().downcast_ref::<crate::actions::heroes::LargoScript>() {
+                            largo_script.select_song_manually(crate::actions::heroes::largo::Song::IslandElixir);
+                        }
+                    }
+                }
+                input::keyboard::HotkeyEvent::LargoR => {
+                    if let Some(script) = dispatcher_clone2.hero_scripts.get(models::Hero::Largo.to_game_name()) {
+                        if let Some(largo_script) = script.as_any().downcast_ref::<crate::actions::heroes::LargoScript>() {
+                            largo_script.activate_ultimate();
+                        }
+                    }
+                }
             }
         }
     });

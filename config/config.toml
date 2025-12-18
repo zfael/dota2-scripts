@@ -37,6 +37,17 @@ raze_delay_ms = 100  # Delay between right-click and ability cast
 [heroes.tiny]
 standalone_key = "Home"  # Key to trigger Tiny combo manually
 
+[heroes.largo]
+amphibian_rhapsody_enabled = true
+auto_toggle_on_danger = true
+mana_threshold_percent = 20  # Auto-disable ultimate below this mana
+heal_hp_threshold = 50  # Switch to Island Elixir when HP below this
+q_ability_key = "q"  # Bullbelly Blitz (damage)
+w_ability_key = "w"  # Hotfeet Hustle (movement)
+e_ability_key = "e"  # Island Elixir (healing)
+r_ability_key = "r"  # Amphibian Rhapsody toggle
+standalone_key = "Home"  # Manual ultimate activation
+
 [danger_detection]
 enabled = true
 hp_threshold_percent = 70

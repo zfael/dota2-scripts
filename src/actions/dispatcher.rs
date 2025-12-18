@@ -1,5 +1,5 @@
 use crate::actions::common::SurvivabilityActions;
-use crate::actions::heroes::{HeroScript, HuskarScript, LegionCommanderScript, ShadowFiendScript, TinyScript};
+use crate::actions::heroes::{HeroScript, HuskarScript, LargoScript, LegionCommanderScript, ShadowFiendScript, TinyScript};
 use crate::config::Settings;
 use crate::models::GsiWebhookEvent;
 use lazy_static::lazy_static;
@@ -86,6 +86,9 @@ impl ActionDispatcher {
         // Register hero scripts
         let huskar = Arc::new(HuskarScript::new(settings.clone()));
         hero_scripts.insert(huskar.hero_name().to_string(), huskar);
+
+        let largo = Arc::new(LargoScript::new(settings.clone()));
+        hero_scripts.insert(largo.hero_name().to_string(), largo);
 
         let legion = Arc::new(LegionCommanderScript::new(settings.clone()));
         hero_scripts.insert(legion.hero_name().to_string(), legion);
