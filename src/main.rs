@@ -54,8 +54,9 @@ async fn main() {
     let port = settings.lock().unwrap().server.port;
     let app_state_clone = app_state.clone();
     let dispatcher_clone = dispatcher.clone();
+    let settings_clone = settings.clone();
     tokio::spawn(async move {
-        start_gsi_server(port, app_state_clone, dispatcher_clone).await;
+        start_gsi_server(port, app_state_clone, dispatcher_clone, settings_clone).await;
     });
 
     // Start hotkey event handler in background

@@ -166,6 +166,23 @@ pub struct NeutralItemConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GsiLoggingConfig {
+    #[serde(default = "default_gsi_logging_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_gsi_logging_dir")]
+    pub output_dir: String,
+}
+
+impl Default for GsiLoggingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_gsi_logging_enabled(),
+            output_dir: default_gsi_logging_dir(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     #[serde(default)]
     pub server: ServerConfig,
@@ -181,6 +198,8 @@ pub struct Settings {
     pub danger_detection: DangerDetectionConfig,
     #[serde(default)]
     pub neutral_items: NeutralItemConfig,
+    #[serde(default)]
+    pub gsi_logging: GsiLoggingConfig,
 }
 
 // Default functions
@@ -335,6 +354,12 @@ fn default_neutral_hp_threshold() -> u32 {
 fn default_allowed_items() -> Vec<String> {
     Vec::new()
 }
+fn default_gsi_logging_enabled() -> bool {
+    false
+}
+fn default_gsi_logging_dir() -> String {
+    "logs/gsi_events".to_string()
+}
 
 impl Default for ServerConfig {
     fn default() -> Self {
@@ -487,6 +512,7 @@ impl Default for Settings {
             heroes: HeroesConfig::default(),
             danger_detection: DangerDetectionConfig::default(),
             neutral_items: NeutralItemConfig::default(),
+            gsi_logging: GsiLoggingConfig::default(),
         }
     }
 }
