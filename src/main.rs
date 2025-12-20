@@ -87,39 +87,6 @@ async fn main() {
                         info!("Standalone scripts disabled");
                     }
                 }
-                input::keyboard::HotkeyEvent::ShadowFiendQ => {
-                    let state = app_state_clone2.lock().unwrap();
-                    if state.standalone_enabled && state.selected_hero == Some(state::HeroType::ShadowFiend) {
-                        drop(state);
-                        if let Some(script) = dispatcher_clone2.hero_scripts.get(models::Hero::Nevermore.to_game_name()) {
-                            if let Some(sf_script) = script.as_any().downcast_ref::<crate::actions::heroes::ShadowFiendScript>() {
-                                sf_script.execute_q_raze();
-                            }
-                        }
-                    }
-                }
-                input::keyboard::HotkeyEvent::ShadowFiendW => {
-                    let state = app_state_clone2.lock().unwrap();
-                    if state.standalone_enabled && state.selected_hero == Some(state::HeroType::ShadowFiend) {
-                        drop(state);
-                        if let Some(script) = dispatcher_clone2.hero_scripts.get(models::Hero::Nevermore.to_game_name()) {
-                            if let Some(sf_script) = script.as_any().downcast_ref::<crate::actions::heroes::ShadowFiendScript>() {
-                                sf_script.execute_w_raze();
-                            }
-                        }
-                    }
-                }
-                input::keyboard::HotkeyEvent::ShadowFiendE => {
-                    let state = app_state_clone2.lock().unwrap();
-                    if state.standalone_enabled && state.selected_hero == Some(state::HeroType::ShadowFiend) {
-                        drop(state);
-                        if let Some(script) = dispatcher_clone2.hero_scripts.get(models::Hero::Nevermore.to_game_name()) {
-                            if let Some(sf_script) = script.as_any().downcast_ref::<crate::actions::heroes::ShadowFiendScript>() {
-                                sf_script.execute_e_raze();
-                            }
-                        }
-                    }
-                }
                 input::keyboard::HotkeyEvent::LargoQ => {
                     let state = app_state_clone2.lock().unwrap();
                     if state.standalone_enabled && state.selected_hero == Some(state::HeroType::Largo) {

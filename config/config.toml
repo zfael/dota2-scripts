@@ -29,9 +29,9 @@ standalone_key = "Home"
 standalone_key = "Home"
 
 [heroes.shadow_fiend]
-q_ability_key = "l"
-w_ability_key = "k"
-e_ability_key = "j"
+# Enable raze interception (ALT + right-click before Q/W/E)
+raze_intercept_enabled = true
+# Delay between right-click and raze key press (ms)
 raze_delay_ms = 100
 
 [heroes.tiny]

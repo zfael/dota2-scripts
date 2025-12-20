@@ -6,15 +6,13 @@ use std::thread;
 use std::time::Duration;
 use tracing::{debug, error, info, warn};
 
+use crate::actions::heroes::shadow_fiend::ShadowFiendState;
 use crate::actions::SOUL_RING_STATE;
 use crate::config::Settings;
 use crate::input::simulation::SIMULATING_KEYS;
 
 pub enum HotkeyEvent {
     ComboTrigger,
-    ShadowFiendQ,
-    ShadowFiendW,
-    ShadowFiendE,
     LargoQ,
     LargoW,
     LargoE,
@@ -58,7 +56,7 @@ fn parse_key(key_str: &str) -> Option<Key> {
 }
 
 /// Convert a char to rdev::Key
-fn char_to_key(ch: char) -> Option<Key> {
+pub fn char_to_key(ch: char) -> Option<Key> {
     match ch.to_ascii_lowercase() {
         'a' => Some(Key::KeyA),
         'b' => Some(Key::KeyB),
@@ -145,7 +143,7 @@ fn key_to_char(key: Key) -> Option<char> {
 
 /// Simulate a key press using rdev (must be called from a non-grab thread)
 /// Sets SIMULATING_KEYS flag to prevent re-interception
-fn simulate_key(key: Key) {
+pub fn simulate_key(key: Key) {
     SIMULATING_KEYS.store(true, Ordering::SeqCst);
     
     if let Err(e) = simulate(&EventType::KeyPress(key)) {
@@ -193,27 +191,6 @@ fn spawn_soul_ring_then_key(original_key: Key, settings: Settings) {
     });
 }
 
-/// Spawn just Soul Ring trigger (without simulating original key - for SF which handles its own keys)
-fn spawn_soul_ring_only(settings: Settings) {
-    thread::spawn(move || {
-        let mut soul_ring_state = SOUL_RING_STATE.lock().unwrap();
-        
-        if soul_ring_state.should_trigger(&settings) {
-            if let Some(sr_key) = soul_ring_state.slot_key {
-                // Mark as triggered to start cooldown lockout
-                soul_ring_state.mark_triggered();
-                drop(soul_ring_state);
-                
-                // Simulate Soul Ring key press
-                if let Some(sr_rdev_key) = char_to_key(sr_key) {
-                    debug!("💍 Pressing Soul Ring key: {}", sr_key);
-                    simulate_key(sr_rdev_key);
-                }
-            }
-        }
-    });
-}
-
 /// Start keyboard listener in a separate thread with key interception (grab)
 /// This intercepts keys and can block/modify them before they reach the game
 pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<HotkeyEvent> {
@@ -252,39 +229,19 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                     false
                 };
 
-                // Handle Shadow Fiend Q/W/E keys (when SF is selected)
-                if sf_enabled {
+                // Handle Shadow Fiend Q/W/E keys (when SF is selected AND raze interception is enabled in config)
+                let sf_raze_enabled_in_config = settings.heroes.shadow_fiend.raze_intercept_enabled;
+                let sf_raze_active = sf_enabled && sf_raze_enabled_in_config;
+                if sf_raze_active {
                     match key {
-                        Key::KeyQ => {
-                            info!("Q key pressed - SF raze");
-                            let _ = event_tx.send(HotkeyEvent::ShadowFiendQ);
+                        Key::KeyQ | Key::KeyW | Key::KeyE => {
+                            let raze_key = key_to_char(key).unwrap();
+                            info!("{} key pressed - SF raze", raze_key.to_ascii_uppercase());
                             
-                            // Trigger Soul Ring if applicable (spawned), SF handler does the remap
-                            if should_intercept_for_soul_ring {
-                                spawn_soul_ring_only(settings.clone());
-                            }
+                            // Delegate to ShadowFiendState for raze execution
+                            ShadowFiendState::execute_raze(raze_key, &settings);
                             
-                            // Block original key - SF handler will simulate the remapped key
-                            return None;
-                        }
-                        Key::KeyW => {
-                            info!("W key pressed - SF raze");
-                            let _ = event_tx.send(HotkeyEvent::ShadowFiendW);
-                            
-                            if should_intercept_for_soul_ring {
-                                spawn_soul_ring_only(settings.clone());
-                            }
-                            
-                            return None;
-                        }
-                        Key::KeyE => {
-                            info!("E key pressed - SF raze");
-                            let _ = event_tx.send(HotkeyEvent::ShadowFiendE);
-                            
-                            if should_intercept_for_soul_ring {
-                                spawn_soul_ring_only(settings.clone());
-                            }
-                            
+                            // Block original key
                             return None;
                         }
                         _ => {}

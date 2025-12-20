@@ -56,3 +56,23 @@ pub fn mouse_click() {
         warn!("Failed to perform right click: {}", e);
     }
 }
+
+/// Hold ALT key down
+pub fn alt_down() {
+    SIMULATING_KEYS.store(true, Ordering::SeqCst);
+    let mut enigo = ENIGO.lock().unwrap();
+    if let Err(e) = enigo.key(Key::Alt, enigo::Direction::Press) {
+        warn!("Failed to press ALT down: {}", e);
+    }
+}
+
+/// Release ALT key
+pub fn alt_up() {
+    let mut enigo = ENIGO.lock().unwrap();
+    if let Err(e) = enigo.key(Key::Alt, enigo::Direction::Release) {
+        warn!("Failed to release ALT: {}", e);
+    }
+    drop(enigo);
+    std::thread::sleep(std::time::Duration::from_millis(10));
+    SIMULATING_KEYS.store(false, Ordering::SeqCst);
+}
