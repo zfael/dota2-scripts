@@ -172,6 +172,38 @@ pub struct NeutralItemConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SoulRingConfig {
+    #[serde(default = "default_soul_ring_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_soul_ring_min_mana_percent")]
+    pub min_mana_percent: u32,
+    #[serde(default = "default_soul_ring_min_health_percent")]
+    pub min_health_percent: u32,
+    #[serde(default = "default_soul_ring_delay_ms")]
+    pub delay_before_ability_ms: u64,
+    #[serde(default = "default_soul_ring_cooldown_ms")]
+    pub trigger_cooldown_ms: u64,
+    #[serde(default = "default_soul_ring_ability_keys")]
+    pub ability_keys: Vec<String>,
+    #[serde(default = "default_soul_ring_intercept_items")]
+    pub intercept_item_keys: bool,
+}
+
+impl Default for SoulRingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_soul_ring_enabled(),
+            min_mana_percent: default_soul_ring_min_mana_percent(),
+            min_health_percent: default_soul_ring_min_health_percent(),
+            delay_before_ability_ms: default_soul_ring_delay_ms(),
+            trigger_cooldown_ms: default_soul_ring_cooldown_ms(),
+            ability_keys: default_soul_ring_ability_keys(),
+            intercept_item_keys: default_soul_ring_intercept_items(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GsiLoggingConfig {
     #[serde(default = "default_gsi_logging_enabled")]
     pub enabled: bool,
@@ -204,6 +236,8 @@ pub struct Settings {
     pub danger_detection: DangerDetectionConfig,
     #[serde(default)]
     pub neutral_items: NeutralItemConfig,
+    #[serde(default)]
+    pub soul_ring: SoulRingConfig,
     #[serde(default)]
     pub gsi_logging: GsiLoggingConfig,
 }
@@ -376,6 +410,29 @@ fn default_gsi_logging_dir() -> String {
     "logs/gsi_events".to_string()
 }
 
+// Soul Ring defaults
+fn default_soul_ring_enabled() -> bool {
+    true
+}
+fn default_soul_ring_min_mana_percent() -> u32 {
+    90
+}
+fn default_soul_ring_min_health_percent() -> u32 {
+    20
+}
+fn default_soul_ring_delay_ms() -> u64 {
+    30
+}
+fn default_soul_ring_cooldown_ms() -> u64 {
+    500
+}
+fn default_soul_ring_ability_keys() -> Vec<String> {
+    vec!["q".to_string(), "w".to_string(), "e".to_string(), "r".to_string(), "d".to_string(), "f".to_string()]
+}
+fn default_soul_ring_intercept_items() -> bool {
+    true
+}
+
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
@@ -530,6 +587,7 @@ impl Default for Settings {
             heroes: HeroesConfig::default(),
             danger_detection: DangerDetectionConfig::default(),
             neutral_items: NeutralItemConfig::default(),
+            soul_ring: SoulRingConfig::default(),
             gsi_logging: GsiLoggingConfig::default(),
         }
     }

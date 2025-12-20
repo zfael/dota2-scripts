@@ -93,3 +93,19 @@ standalone_key = "Home"  # Manual ultimate activation
 [gsi_logging]
 enabled = false
 output_dir = "logs/gsi_events"
+
+[soul_ring]
+# Master toggle for Soul Ring automation
+enabled = true
+# Only trigger Soul Ring if mana percent is below this threshold
+min_mana_percent = 90
+# Safety threshold - don't use Soul Ring if health percent is at or below this (avoid suicide)
+min_health_percent = 20
+# Delay in milliseconds between Soul Ring press and ability press
+delay_before_ability_ms = 30
+# Cooldown lockout in milliseconds to prevent double-fire on double-tap
+trigger_cooldown_ms = 500
+# Ability keys to intercept for Soul Ring triggering
+ability_keys = ["q", "w", "e", "r", "d", "f"]
+# Also trigger Soul Ring before item key presses (items that cost mana)
+intercept_item_keys = true
