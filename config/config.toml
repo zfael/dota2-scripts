@@ -19,34 +19,23 @@ survivability_hp_threshold = 30
 
 [heroes.huskar]
 armlet_toggle_threshold = 320
-armlet_predictive_offset = 30  # Triggers at threshold + offset for faster response
-armlet_toggle_cooldown_ms = 250  # Prevents rapid toggle spam from multiple attacks
-berserker_blood_key = "e"  # Key for Berserker Blood ability
-berserker_blood_delay_ms = 300  # Wait for multiple debuffs before cleansing
-standalone_key = "Home"  # Key to trigger Huskar combo manually
+armlet_predictive_offset = 30
+armlet_toggle_cooldown_ms = 250
+berserker_blood_key = "e"
+berserker_blood_delay_ms = 300
+standalone_key = "Home"
 
 [heroes.legion_commander]
-standalone_key = "Home"  # Key to trigger Legion Commander combo
+standalone_key = "Home"
 
 [heroes.shadow_fiend]
-q_ability_key = "l"  # Actual Q raze key (remapped from Q)
-w_ability_key = "k"  # Actual W raze key (remapped from W)
-e_ability_key = "j"  # Actual E raze key (remapped from E)
-raze_delay_ms = 100  # Delay between right-click and ability cast
+q_ability_key = "l"
+w_ability_key = "k"
+e_ability_key = "j"
+raze_delay_ms = 100
 
 [heroes.tiny]
-standalone_key = "Home"  # Key to trigger Tiny combo manually
-
-[heroes.largo]
-amphibian_rhapsody_enabled = true
-auto_toggle_on_danger = true
-mana_threshold_percent = 20  # Auto-disable ultimate below this mana
-heal_hp_threshold = 50  # Switch to Island Elixir when HP below this
-q_ability_key = "q"  # Bullbelly Blitz (damage)
-w_ability_key = "w"  # Hotfeet Hustle (movement)
-e_ability_key = "e"  # Island Elixir (healing)
-r_ability_key = "r"  # Amphibian Rhapsody toggle
-standalone_key = "Home"  # Manual ultimate activation
+standalone_key = "Home"
 
 [danger_detection]
 enabled = true
@@ -56,8 +45,9 @@ time_window_ms = 500
 clear_delay_seconds = 3
 healing_threshold_in_danger = 50
 max_healing_items_per_danger = 3
-auto_bkb = true
+auto_bkb = false
 auto_satanic = true
+satanic_hp_threshold = 40
 auto_blade_mail = true
 auto_glimmer_cape = true
 auto_ghost_scepter = true
@@ -65,7 +55,7 @@ auto_shivas_guard = true
 
 [neutral_items]
 enabled = true
-self_cast_key = " "
+self_cast_key = "0"
 log_discoveries = false
 use_in_danger = true
 hp_threshold = 50
@@ -85,3 +75,14 @@ allowed_items = [
     "item_idol_of_screeauk",
     "item_flayers_bota"
 ]
+
+[heroes.largo]
+amphibian_rhapsody_enabled = true
+auto_toggle_on_danger = true
+mana_threshold_percent = 20  # Auto-disable ultimate below this mana
+heal_hp_threshold = 50  # Switch to Island Elixir when HP below this
+q_ability_key = "q"  # Bullbelly Blitz (damage)
+w_ability_key = "w"  # Hotfeet Hustle (movement)
+e_ability_key = "e"  # Island Elixir (healing)
+r_ability_key = "r"  # Amphibian Rhapsody toggle
+standalone_key = "Home"  # Manual ultimate activation
