@@ -81,6 +81,9 @@ amphibian_rhapsody_enabled = true
 auto_toggle_on_danger = true
 mana_threshold_percent = 20  # Auto-disable ultimate below this mana
 heal_hp_threshold = 50  # Switch to Island Elixir when HP below this
+beat_interval_ms = 995  # Beat timing in milliseconds (990-1000)
+beat_correction_ms = 30  # Correction to apply every N beats (negative = speed up, positive = slow down)
+beat_correction_every_n_beats = 5  # Apply correction every N beats (0 = disabled)
 q_ability_key = "q"  # Bullbelly Blitz (damage)
 w_ability_key = "w"  # Hotfeet Hustle (movement)
 e_ability_key = "e"  # Island Elixir (healing)
