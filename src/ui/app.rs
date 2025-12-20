@@ -61,67 +61,44 @@ impl Dota2ScriptApp {
 
             // Hero Selection Section
             ui.heading("Hero Selection");
-            ui.horizontal(|ui| {
+            {
                 let mut state = self.app_state.lock().unwrap();
-                
                 let prev_hero = state.selected_hero;
                 
-                if ui
-                    .radio(state.selected_hero.is_none(), "None")
-                    .clicked()
-                {
-                    state.selected_hero = None;
-                }
+                // Show current hero prominently
+                ui.horizontal(|ui| {
+                    ui.label("Active Hero:");
+                    let hero_display = match state.selected_hero {
+                        Some(hero) => hero.to_display_name(),
+                        None => "None (waiting for GSI)",
+                    };
+                    ui.strong(hero_display);
+                });
                 
-                if ui
-                    .radio(
-                        state.selected_hero == Some(HeroType::Huskar),
-                        "Huskar",
-                    )
-                    .clicked()
-                {
-                    state.selected_hero = Some(HeroType::Huskar);
-                }
-                
-                if ui
-                    .radio(
-                        state.selected_hero == Some(HeroType::Largo),
-                        "Largo",
-                    )
-                    .clicked()
-                {
-                    state.selected_hero = Some(HeroType::Largo);
-                }
-                
-                if ui
-                    .radio(
-                        state.selected_hero == Some(HeroType::LegionCommander),
-                        "Legion Commander",
-                    )
-                    .clicked()
-                {
-                    state.selected_hero = Some(HeroType::LegionCommander);
-                }
-                
-                if ui
-                    .radio(
-                        state.selected_hero == Some(HeroType::ShadowFiend),
-                        "Shadow Fiend",
-                    )
-                    .clicked()
-                {
-                    state.selected_hero = Some(HeroType::ShadowFiend);
-                }
-                
-                if ui
-                    .radio(
-                        state.selected_hero == Some(HeroType::Tiny),
-                        "Tiny",
-                    )
-                    .clicked()
-                {
-                    state.selected_hero = Some(HeroType::Tiny);
-                }
+                // Collapsible manual override section
+                ui.collapsing("Manual Override", |ui| {
+                    ui.label("Hero is auto-detected from game. Override if needed:");
+                    ui.horizontal_wrapped(|ui| {
+                        if ui.selectable_label(state.selected_hero.is_none(), "None").clicked() {
+                            state.selected_hero = None;
+                        }
+                        if ui.selectable_label(state.selected_hero == Some(HeroType::Huskar), "Huskar").clicked() {
+                            state.selected_hero = Some(HeroType::Huskar);
+                        }
+                        if ui.selectable_label(state.selected_hero == Some(HeroType::Largo), "Largo").clicked() {
+                            state.selected_hero = Some(HeroType::Largo);
+                        }
+                        if ui.selectable_label(state.selected_hero == Some(HeroType::LegionCommander), "Legion Commander").clicked() {
+                            state.selected_hero = Some(HeroType::LegionCommander);
+                        }
+                        if ui.selectable_label(state.selected_hero == Some(HeroType::ShadowFiend), "Shadow Fiend").clicked() {
+                            state.selected_hero = Some(HeroType::ShadowFiend);
+                        }
+                        if ui.selectable_label(state.selected_hero == Some(HeroType::Tiny), "Tiny").clicked() {
+                            state.selected_hero = Some(HeroType::Tiny);
+                        }
+                    });
+                });
                 
                 // Update trigger key when hero changes
                 if state.selected_hero != prev_hero {
@@ -148,7 +125,7 @@ impl Dota2ScriptApp {
                         *state.trigger_key.lock().unwrap() = new_key;
                     }
                 }
-            });
+            }
             
             ui.add_space(10.0);
             
