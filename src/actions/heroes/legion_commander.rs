@@ -1,5 +1,6 @@
 use crate::actions::heroes::HeroScript;
 use crate::actions::common::{find_item_slot, SurvivabilityActions};
+use crate::actions::soul_ring::press_ability_with_soul_ring;
 use crate::config::Settings;
 use crate::input::simulation::press_key;
 use crate::models::{GsiWebhookEvent, Hero, Item};
@@ -34,16 +35,9 @@ impl LegionCommanderScript {
         let event = event.as_ref().unwrap();
         let settings = self.settings.lock().unwrap();
         
-        // 1. Soul Ring (always first if present)
-        if let Some(key) = find_item_slot(event, &settings, Item::SoulRing) {
-            info!("Using Soul Ring ({})", key);
-            press_key(key);
-            thread::sleep(Duration::from_millis(50));
-        }
-        
-        // 2. Press The Attack (W) - double tap
+        // 1. Press The Attack (W) - with Soul Ring on first press, then double tap
         info!("Using Press The Attack (W)");
-        press_key('w');
+        press_ability_with_soul_ring('w', &settings);
         thread::sleep(Duration::from_millis(30));
         press_key('w');
         thread::sleep(Duration::from_millis(220));
