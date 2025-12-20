@@ -1,5 +1,6 @@
 use crate::actions::common::SurvivabilityActions;
 use crate::actions::heroes::{HeroScript, HuskarScript, LargoScript, LegionCommanderScript, ShadowFiendScript, TinyScript};
+use crate::actions::soul_ring;
 use crate::config::Settings;
 use crate::models::GsiWebhookEvent;
 use lazy_static::lazy_static;
@@ -109,6 +110,10 @@ impl ActionDispatcher {
         // Log neutral item discovery
         let settings = self.survivability.settings.lock().unwrap();
         log_neutral_item_discovery(event, &settings);
+        
+        // Update Soul Ring state from GSI event
+        soul_ring::update_from_gsi(&event.items, &event.hero, &settings);
+        
         drop(settings); // Release lock before further processing
         
         // Check if hero has a custom handler

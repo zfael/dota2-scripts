@@ -47,6 +47,7 @@ async fn main() {
     let keyboard_config = input::keyboard::KeyboardListenerConfig {
         trigger_key: trigger_key.clone(),
         sf_enabled: sf_enabled.clone(),
+        settings: settings.clone(),
     };
     let hotkey_rx = start_keyboard_listener(keyboard_config);
 

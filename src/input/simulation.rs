@@ -1,5 +1,6 @@
 use enigo::{Enigo, Key, Keyboard, Mouse, Button, Direction, Settings};
 use lazy_static::lazy_static;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tracing::warn;
 
@@ -11,12 +12,23 @@ lazy_static! {
     };
 }
 
-/// Press a single key
+/// Global flag to indicate we're simulating keys - prevents keyboard grab re-interception
+pub static SIMULATING_KEYS: AtomicBool = AtomicBool::new(false);
+
+/// Press a single key (sets SIMULATING_KEYS flag to prevent re-interception)
 pub fn press_key(key_char: char) {
+    // Set flag before simulating
+    SIMULATING_KEYS.store(true, Ordering::SeqCst);
+    
     let mut enigo = ENIGO.lock().unwrap();
     if let Err(e) = enigo.key(Key::Unicode(key_char), enigo::Direction::Click) {
         warn!("Failed to press key '{}': {}", key_char, e);
     }
+    drop(enigo);
+    
+    // Small delay then clear flag
+    std::thread::sleep(std::time::Duration::from_millis(10));
+    SIMULATING_KEYS.store(false, Ordering::SeqCst);
 }
 
 /// Press a key down (hold)

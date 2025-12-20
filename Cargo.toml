@@ -36,8 +36,8 @@ eframe = { version = "0.29", features = ["default"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Global hotkeys
-rdev = "0.5"
+# Global hotkeys with grab support for key interception
+rdev = { version = "0.5", features = ["unstable_grab"] }
 
 # Utilities
 lazy_static = "1.4"
