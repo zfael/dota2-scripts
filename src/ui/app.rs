@@ -85,6 +85,16 @@ impl Dota2ScriptApp {
                 
                 if ui
                     .radio(
+                        state.selected_hero == Some(HeroType::Largo),
+                        "Largo",
+                    )
+                    .clicked()
+                {
+                    state.selected_hero = Some(HeroType::Largo);
+                }
+                
+                if ui
+                    .radio(
                         state.selected_hero == Some(HeroType::LegionCommander),
                         "Legion Commander",
                     )
@@ -121,6 +131,7 @@ impl Dota2ScriptApp {
                     if let Some(hero_type) = state.selected_hero {
                         let _hero_name = match hero_type {
                             HeroType::Huskar => "huskar",
+                            HeroType::Largo => "largo",
                             HeroType::LegionCommander => "legion_commander",
                             HeroType::ShadowFiend => "shadow_fiend",
                             HeroType::Tiny => "tiny",
@@ -128,6 +139,7 @@ impl Dota2ScriptApp {
                         let new_key = settings.get_standalone_key(
                             match hero_type {
                                 HeroType::Huskar => "huskar",
+                                HeroType::Largo => "largo",
                                 HeroType::LegionCommander => "legion_commander",
                                 HeroType::ShadowFiend => "shadow_fiend",
                                 HeroType::Tiny => "tiny",

@@ -104,7 +104,7 @@ impl LargoScript {
                 };
                 drop(settings_guard);
                 
-                if let Some(prev_key) = previous_key {
+                if let Some(_prev_key) = previous_key {
                     debug!("🎸 Strumming {:?} + {:?} on beat (stack: {}) [Aggs]", state.previous_song, current_song, state.groovin_stacks);
                 } else {
                     debug!("🎸 Strumming {:?} on beat (stack: {})", current_song, state.groovin_stacks);
@@ -126,6 +126,7 @@ impl LargoScript {
         });
     }
 
+    #[allow(dead_code)]
     fn should_toggle_ultimate_on(&self, event: &GsiWebhookEvent) -> bool {
         if !event.hero.is_alive() {
             return false;
@@ -152,6 +153,7 @@ impl LargoScript {
         false
     }
 
+    #[allow(dead_code)]
     fn should_toggle_ultimate_off(&self, event: &GsiWebhookEvent) -> bool {
         let settings = self.settings.lock().unwrap();
         

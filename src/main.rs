@@ -70,6 +70,7 @@ async fn main() {
                         if let Some(hero_type) = state.selected_hero {
                             let hero_name = match hero_type {
                                 state::HeroType::Huskar => models::Hero::Huskar.to_game_name(),
+                                state::HeroType::Largo => models::Hero::Largo.to_game_name(),
                                 state::HeroType::LegionCommander => models::Hero::LegionCommander.to_game_name(),
                                 state::HeroType::ShadowFiend => models::Hero::Nevermore.to_game_name(),
                                 state::HeroType::Tiny => models::Hero::Tiny.to_game_name(),
@@ -118,30 +119,46 @@ async fn main() {
                     }
                 }
                 input::keyboard::HotkeyEvent::LargoQ => {
-                    if let Some(script) = dispatcher_clone2.hero_scripts.get(models::Hero::Largo.to_game_name()) {
-                        if let Some(largo_script) = script.as_any().downcast_ref::<crate::actions::heroes::LargoScript>() {
-                            largo_script.select_song_manually(crate::actions::heroes::largo::Song::Bullbelly);
+                    let state = app_state_clone2.lock().unwrap();
+                    if state.standalone_enabled && state.selected_hero == Some(state::HeroType::Largo) {
+                        drop(state);
+                        if let Some(script) = dispatcher_clone2.hero_scripts.get(models::Hero::Largo.to_game_name()) {
+                            if let Some(largo_script) = script.as_any().downcast_ref::<crate::actions::heroes::LargoScript>() {
+                                largo_script.select_song_manually(crate::actions::heroes::largo::Song::Bullbelly);
+                            }
                         }
                     }
                 }
                 input::keyboard::HotkeyEvent::LargoW => {
-                    if let Some(script) = dispatcher_clone2.hero_scripts.get(models::Hero::Largo.to_game_name()) {
-                        if let Some(largo_script) = script.as_any().downcast_ref::<crate::actions::heroes::LargoScript>() {
-                            largo_script.select_song_manually(crate::actions::heroes::largo::Song::Hotfeet);
+                    let state = app_state_clone2.lock().unwrap();
+                    if state.standalone_enabled && state.selected_hero == Some(state::HeroType::Largo) {
+                        drop(state);
+                        if let Some(script) = dispatcher_clone2.hero_scripts.get(models::Hero::Largo.to_game_name()) {
+                            if let Some(largo_script) = script.as_any().downcast_ref::<crate::actions::heroes::LargoScript>() {
+                                largo_script.select_song_manually(crate::actions::heroes::largo::Song::Hotfeet);
+                            }
                         }
                     }
                 }
                 input::keyboard::HotkeyEvent::LargoE => {
-                    if let Some(script) = dispatcher_clone2.hero_scripts.get(models::Hero::Largo.to_game_name()) {
-                        if let Some(largo_script) = script.as_any().downcast_ref::<crate::actions::heroes::LargoScript>() {
-                            largo_script.select_song_manually(crate::actions::heroes::largo::Song::IslandElixir);
+                    let state = app_state_clone2.lock().unwrap();
+                    if state.standalone_enabled && state.selected_hero == Some(state::HeroType::Largo) {
+                        drop(state);
+                        if let Some(script) = dispatcher_clone2.hero_scripts.get(models::Hero::Largo.to_game_name()) {
+                            if let Some(largo_script) = script.as_any().downcast_ref::<crate::actions::heroes::LargoScript>() {
+                                largo_script.select_song_manually(crate::actions::heroes::largo::Song::IslandElixir);
+                            }
                         }
                     }
                 }
                 input::keyboard::HotkeyEvent::LargoR => {
-                    if let Some(script) = dispatcher_clone2.hero_scripts.get(models::Hero::Largo.to_game_name()) {
-                        if let Some(largo_script) = script.as_any().downcast_ref::<crate::actions::heroes::LargoScript>() {
-                            largo_script.activate_ultimate();
+                    let state = app_state_clone2.lock().unwrap();
+                    if state.standalone_enabled && state.selected_hero == Some(state::HeroType::Largo) {
+                        drop(state);
+                        if let Some(script) = dispatcher_clone2.hero_scripts.get(models::Hero::Largo.to_game_name()) {
+                            if let Some(largo_script) = script.as_any().downcast_ref::<crate::actions::heroes::LargoScript>() {
+                                largo_script.activate_ultimate();
+                            }
                         }
                     }
                 }

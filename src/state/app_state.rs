@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HeroType {
     Huskar,
+    Largo,
     LegionCommander,
     ShadowFiend,
     Tiny,
@@ -13,6 +14,7 @@ impl HeroType {
     pub fn from_hero_name(name: &str) -> Option<Self> {
         match name {
             name if name == Hero::Huskar.to_game_name() => Some(HeroType::Huskar),
+            name if name == Hero::Largo.to_game_name() => Some(HeroType::Largo),
             name if name == Hero::LegionCommander.to_game_name() => Some(HeroType::LegionCommander),
             name if name == Hero::Nevermore.to_game_name() => Some(HeroType::ShadowFiend),
             name if name == Hero::Tiny.to_game_name() => Some(HeroType::Tiny),
@@ -23,6 +25,7 @@ impl HeroType {
     pub fn to_display_name(&self) -> &'static str {
         match self {
             HeroType::Huskar => "Huskar",
+            HeroType::Largo => "Largo",
             HeroType::LegionCommander => "Legion Commander",
             HeroType::ShadowFiend => "Shadow Fiend",
             HeroType::Tiny => "Tiny",
@@ -78,9 +81,9 @@ impl AppState {
     }
 
     pub fn update_from_gsi(&mut self, event: GsiWebhookEvent) {
-        // Auto-select hero if not manually selected
-        if self.selected_hero.is_none() {
-            if let Some(hero_type) = HeroType::from_hero_name(&event.hero.name) {
+        // Update hero selection based on the GSI event if it changed
+        if let Some(hero_type) = HeroType::from_hero_name(&event.hero.name) {
+            if self.selected_hero != Some(hero_type) {
                 self.selected_hero = Some(hero_type);
             }
         }
