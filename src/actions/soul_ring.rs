@@ -161,6 +161,32 @@ impl SoulRingState {
 pub static SOUL_RING_STATE: std::sync::LazyLock<Arc<Mutex<SoulRingState>>> =
     std::sync::LazyLock::new(|| Arc::new(Mutex::new(SoulRingState::new())));
 
+/// Press an ability key with automatic Soul Ring triggering (for use in combos)
+/// This is the programmatic equivalent of the keyboard interception
+pub fn press_ability_with_soul_ring(key: char, settings: &Settings) {
+    let mut state = SOUL_RING_STATE.lock().unwrap();
+    
+    if state.should_trigger(settings) && state.is_ability_key(key, settings) {
+        if let Some(sr_key) = state.slot_key {
+            state.mark_triggered();
+            drop(state); // Release lock before sleeping
+            
+            info!("💍 Soul Ring before ability '{}'", key);
+            crate::input::simulation::press_key(sr_key);
+            std::thread::sleep(std::time::Duration::from_millis(
+                settings.soul_ring.delay_before_ability_ms,
+            ));
+        } else {
+            drop(state);
+        }
+    } else {
+        drop(state);
+    }
+    
+    // Press the ability key
+    crate::input::simulation::press_key(key);
+}
+
 /// Update Soul Ring state from GSI event
 pub fn update_from_gsi(
     items: &crate::models::gsi_event::Items,

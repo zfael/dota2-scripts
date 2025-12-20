@@ -1,5 +1,6 @@
 use crate::actions::heroes::traits::HeroScript;
 use crate::actions::common::{find_item_slot, SurvivabilityActions};
+use crate::actions::soul_ring::press_ability_with_soul_ring;
 use crate::config::Settings;
 use crate::input::simulation::press_key;
 use crate::models::{GsiWebhookEvent, Hero, Item};
@@ -35,15 +36,16 @@ impl TinyScript {
             warn!("Blink dagger not found in inventory");
         }
         
-        drop(settings);
-
-        // 2. Avalanche (W) - spam to ensure cast
+        // 2. Avalanche (W) - with Soul Ring on first press, then spam
         info!("Using Avalanche (W)");
-        for _ in 0..4 {
-            press_key('w');
+        press_ability_with_soul_ring('w', &settings);
+        for _ in 0..3 {
             thread::sleep(Duration::from_millis(30));
+            press_key('w');
         }
         thread::sleep(Duration::from_millis(50));
+        
+        drop(settings); // Release settings lock after using it
 
         // 3. Toss (Q) - spam to ensure cast
         info!("Using Toss (Q)");
