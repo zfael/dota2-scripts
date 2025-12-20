@@ -153,12 +153,14 @@ async fn main() {
                     }
                 }
                 input::keyboard::HotkeyEvent::LargoR => {
+                    // R key pressed - immediately stop the beat loop to prevent stale key presses
+                    // GSI will confirm the state change shortly after
                     let state = app_state_clone2.lock().unwrap();
                     if state.standalone_enabled && state.selected_hero == Some(state::HeroType::Largo) {
                         drop(state);
                         if let Some(script) = dispatcher_clone2.hero_scripts.get(models::Hero::Largo.to_game_name()) {
                             if let Some(largo_script) = script.as_any().downcast_ref::<crate::actions::heroes::LargoScript>() {
-                                largo_script.activate_ultimate();
+                                largo_script.deactivate_ultimate();
                             }
                         }
                     }

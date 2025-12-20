@@ -91,6 +91,12 @@ pub struct LargoConfig {
     pub mana_threshold_percent: u32,
     #[serde(default = "default_largo_heal_threshold")]
     pub heal_hp_threshold: u32,
+    #[serde(default = "default_beat_interval_ms")]
+    pub beat_interval_ms: u32,
+    #[serde(default = "default_beat_correction_ms")]
+    pub beat_correction_ms: i32,  // Correction to apply (can be negative)
+    #[serde(default = "default_beat_correction_every_n_beats")]
+    pub beat_correction_every_n_beats: u32,  // Apply correction every N beats (0 = disabled)
     #[serde(default = "default_largo_q_key")]
     pub q_ability_key: char,
     #[serde(default = "default_largo_w_key")]
@@ -280,6 +286,15 @@ fn default_largo_mana_threshold() -> u32 {
 fn default_largo_heal_threshold() -> u32 {
     50
 }
+fn default_beat_interval_ms() -> u32 {
+    995
+}
+fn default_beat_correction_ms() -> i32 {
+    -10  // Subtract 10ms every N beats (speeds up to compensate for delay)
+}
+fn default_beat_correction_every_n_beats() -> u32 {
+    5  // Apply correction every 5 beats
+}
 fn default_largo_q_key() -> char {
     'q'
 }
@@ -447,6 +462,9 @@ impl Default for LargoConfig {
             auto_toggle_on_danger: default_auto_toggle_on_danger(),
             mana_threshold_percent: default_largo_mana_threshold(),
             heal_hp_threshold: default_largo_heal_threshold(),
+            beat_interval_ms: default_beat_interval_ms(),
+            beat_correction_ms: default_beat_correction_ms(),
+            beat_correction_every_n_beats: default_beat_correction_every_n_beats(),
             q_ability_key: default_largo_q_key(),
             w_ability_key: default_largo_w_key(),
             e_ability_key: default_largo_e_key(),
