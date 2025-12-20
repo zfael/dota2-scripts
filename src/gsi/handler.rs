@@ -1,9 +1,14 @@
+use crate::config::Settings;
 use crate::models::GsiWebhookEvent;
 use crate::state::AppState;
 use axum::{extract::State, http::StatusCode, Json};
+use chrono::Local;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 pub type GsiEventSender = mpsc::Sender<GsiWebhookEvent>;
 
@@ -30,8 +35,39 @@ pub async fn process_gsi_events(
     mut rx: mpsc::Receiver<GsiWebhookEvent>,
     app_state: Arc<Mutex<AppState>>,
     dispatcher: Arc<crate::actions::ActionDispatcher>,
+    settings: Arc<Mutex<Settings>>,
 ) {
+    // Generate session filename once at startup
+    let session_file: Option<PathBuf> = {
+        let settings = settings.lock().unwrap();
+        if settings.gsi_logging.enabled {
+            let output_dir = PathBuf::from(&settings.gsi_logging.output_dir);
+            if let Err(e) = fs::create_dir_all(&output_dir) {
+                warn!("Failed to create GSI log directory: {}", e);
+                None
+            } else {
+                let filename = output_dir.join(format!(
+                    "gsi_events_{}.jsonl",
+                    Local::now().format("%Y-%m-%d_%H-%M-%S")
+                ));
+                info!("GSI event logging enabled, writing to: {:?}", filename);
+                Some(filename)
+            }
+        } else {
+            None
+        }
+    };
+
     while let Some(event) = rx.recv().await {
+        // Log event to file if enabled
+        if let Some(ref filename) = session_file {
+            if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(filename) {
+                if let Ok(json) = serde_json::to_string(&event) {
+                    let _ = writeln!(file, "{}", json);
+                }
+            }
+        }
+
         // Update app state
         {
             let mut state = app_state.lock().unwrap();

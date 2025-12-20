@@ -1,3 +1,4 @@
+use crate::config::Settings;
 use crate::gsi::handler::{gsi_webhook_handler, process_gsi_events};
 use crate::models::GsiWebhookEvent;
 use crate::state::AppState;
@@ -12,14 +13,16 @@ pub async fn start_gsi_server(
     port: u16,
     app_state: Arc<Mutex<AppState>>,
     dispatcher: Arc<crate::actions::ActionDispatcher>,
+    settings: Arc<Mutex<Settings>>,
 ) {
     let (tx, rx) = mpsc::channel::<GsiWebhookEvent>(EVENT_QUEUE_CAPACITY);
 
     // Spawn event processor
     let app_state_clone = app_state.clone();
     let dispatcher_clone = dispatcher.clone();
+    let settings_clone = settings.clone();
     tokio::spawn(async move {
-        process_gsi_events(rx, app_state_clone, dispatcher_clone).await;
+        process_gsi_events(rx, app_state_clone, dispatcher_clone, settings_clone).await;
     });
 
     // Build router

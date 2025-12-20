@@ -86,3 +86,7 @@ w_ability_key = "w"  # Hotfeet Hustle (movement)
 e_ability_key = "e"  # Island Elixir (healing)
 r_ability_key = "r"  # Amphibian Rhapsody toggle
 standalone_key = "Home"  # Manual ultimate activation
+
+[gsi_logging]
+enabled = false
+output_dir = "logs/gsi_events"
