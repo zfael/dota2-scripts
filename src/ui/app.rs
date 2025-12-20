@@ -102,7 +102,7 @@ impl Dota2ScriptApp {
                 
                 // Update trigger key when hero changes
                 if state.selected_hero != prev_hero {
-                    // Update SF enabled flag
+                    // Update SF enabled flag for keyboard listener
                     *state.sf_enabled.lock().unwrap() = state.selected_hero == Some(HeroType::ShadowFiend);
                     
                     if let Some(hero_type) = state.selected_hero {

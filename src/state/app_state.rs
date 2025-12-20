@@ -85,6 +85,8 @@ impl AppState {
         if let Some(hero_type) = HeroType::from_hero_name(&event.hero.name) {
             if self.selected_hero != Some(hero_type) {
                 self.selected_hero = Some(hero_type);
+                // Update sf_enabled flag when hero changes via GSI
+                *self.sf_enabled.lock().unwrap() = hero_type == HeroType::ShadowFiend;
             }
         }
 

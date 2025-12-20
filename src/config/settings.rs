@@ -65,12 +65,8 @@ pub struct LegionCommanderConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShadowFiendConfig {
-    #[serde(default = "default_q_key")]
-    pub q_ability_key: char,
-    #[serde(default = "default_w_key")]
-    pub w_ability_key: char,
-    #[serde(default = "default_e_key")]
-    pub e_ability_key: char,
+    #[serde(default = "default_sf_raze_enabled")]
+    pub raze_intercept_enabled: bool,
     #[serde(default = "default_raze_delay")]
     pub raze_delay_ms: u64,
 }
@@ -295,14 +291,8 @@ fn default_berserker_blood_delay() -> u64 {
 fn default_standalone_key() -> String {
     "Home".to_string()
 }
-fn default_q_key() -> char {
-    'l'
-}
-fn default_w_key() -> char {
-    'k'
-}
-fn default_e_key() -> char {
-    'j'
+fn default_sf_raze_enabled() -> bool {
+    true
 }
 fn default_raze_delay() -> u64 {
     100
@@ -496,9 +486,7 @@ impl Default for LegionCommanderConfig {
 impl Default for ShadowFiendConfig {
     fn default() -> Self {
         Self {
-            q_ability_key: default_q_key(),
-            w_ability_key: default_w_key(),
-            e_ability_key: default_e_key(),
+            raze_intercept_enabled: default_sf_raze_enabled(),
             raze_delay_ms: default_raze_delay(),
         }
     }
