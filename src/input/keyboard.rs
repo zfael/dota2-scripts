@@ -1,4 +1,5 @@
 use rdev::{grab, simulate, Event, EventType, Key};
+use std::sync::atomic::Ordering;
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -7,6 +8,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::actions::SOUL_RING_STATE;
 use crate::config::Settings;
+use crate::input::simulation::SIMULATING_KEYS;
 
 pub enum HotkeyEvent {
     ComboTrigger,
@@ -141,8 +143,11 @@ fn key_to_char(key: Key) -> Option<char> {
     }
 }
 
-/// Simulate a key press using rdev
+/// Simulate a key press using rdev (must be called from a non-grab thread)
+/// Sets SIMULATING_KEYS flag to prevent re-interception
 fn simulate_key(key: Key) {
+    SIMULATING_KEYS.store(true, Ordering::SeqCst);
+    
     if let Err(e) = simulate(&EventType::KeyPress(key)) {
         warn!("Failed to simulate key press: {:?}", e);
     }
@@ -150,39 +155,63 @@ fn simulate_key(key: Key) {
     if let Err(e) = simulate(&EventType::KeyRelease(key)) {
         warn!("Failed to simulate key release: {:?}", e);
     }
+    
+    thread::sleep(Duration::from_millis(5));
+    SIMULATING_KEYS.store(false, Ordering::SeqCst);
 }
 
-/// Trigger Soul Ring before an ability/item key
-/// Returns the key that should be simulated after Soul Ring (may be remapped for SF)
-fn trigger_soul_ring_and_get_final_key(
-    original_key: Key,
-    settings: &Settings,
-) -> Option<Key> {
-    let mut soul_ring_state = SOUL_RING_STATE.lock().unwrap();
-    
-    if soul_ring_state.should_trigger(settings) {
-        if let Some(sr_key) = soul_ring_state.slot_key {
-            // Mark as triggered to start cooldown lockout
-            soul_ring_state.mark_triggered();
-            drop(soul_ring_state); // Release lock before sleeping
-            
-            // Simulate Soul Ring key press
-            if let Some(sr_rdev_key) = char_to_key(sr_key) {
-                debug!("💍 Pressing Soul Ring key: {}", sr_key);
-                simulate_key(sr_rdev_key);
+/// Spawn Soul Ring trigger + ability key simulation in a separate thread
+/// This is necessary because grab() callback must return quickly
+fn spawn_soul_ring_then_key(original_key: Key, settings: Settings) {
+    thread::spawn(move || {
+        let mut soul_ring_state = SOUL_RING_STATE.lock().unwrap();
+        
+        if soul_ring_state.should_trigger(&settings) {
+            if let Some(sr_key) = soul_ring_state.slot_key {
+                // Mark as triggered to start cooldown lockout
+                soul_ring_state.mark_triggered();
+                drop(soul_ring_state); // Release lock before sleeping
                 
-                // Wait configured delay before ability
-                let delay = settings.soul_ring.delay_before_ability_ms;
-                thread::sleep(Duration::from_millis(delay));
+                // Simulate Soul Ring key press
+                if let Some(sr_rdev_key) = char_to_key(sr_key) {
+                    debug!("💍 Pressing Soul Ring key: {}", sr_key);
+                    simulate_key(sr_rdev_key);
+                    
+                    // Wait configured delay before ability
+                    let delay = settings.soul_ring.delay_before_ability_ms;
+                    thread::sleep(Duration::from_millis(delay));
+                }
+            } else {
+                drop(soul_ring_state);
             }
         } else {
             drop(soul_ring_state);
         }
-    } else {
-        drop(soul_ring_state);
-    }
-    
-    Some(original_key)
+        
+        // Simulate the original ability/item key
+        simulate_key(original_key);
+    });
+}
+
+/// Spawn just Soul Ring trigger (without simulating original key - for SF which handles its own keys)
+fn spawn_soul_ring_only(settings: Settings) {
+    thread::spawn(move || {
+        let mut soul_ring_state = SOUL_RING_STATE.lock().unwrap();
+        
+        if soul_ring_state.should_trigger(&settings) {
+            if let Some(sr_key) = soul_ring_state.slot_key {
+                // Mark as triggered to start cooldown lockout
+                soul_ring_state.mark_triggered();
+                drop(soul_ring_state);
+                
+                // Simulate Soul Ring key press
+                if let Some(sr_rdev_key) = char_to_key(sr_key) {
+                    debug!("💍 Pressing Soul Ring key: {}", sr_key);
+                    simulate_key(sr_rdev_key);
+                }
+            }
+        }
+    });
 }
 
 /// Start keyboard listener in a separate thread with key interception (grab)
@@ -194,6 +223,12 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
         info!("Starting keyboard listener with key interception (grab)...");
 
         let callback = move |event: Event| -> Option<Event> {
+            // Pass through all events while we're simulating keys
+            // This prevents re-interception of our own simulated keypresses
+            if SIMULATING_KEYS.load(Ordering::SeqCst) {
+                return Some(event);
+            }
+            
             if let EventType::KeyPress(key) = event.event_type {
                 let settings = config.settings.lock().unwrap().clone();
                 let sf_enabled = *config.sf_enabled.lock().unwrap();
@@ -224,9 +259,9 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                             info!("Q key pressed - SF raze");
                             let _ = event_tx.send(HotkeyEvent::ShadowFiendQ);
                             
-                            // Trigger Soul Ring if applicable, then let SF handler do the remap
+                            // Trigger Soul Ring if applicable (spawned), SF handler does the remap
                             if should_intercept_for_soul_ring {
-                                trigger_soul_ring_and_get_final_key(key, &settings);
+                                spawn_soul_ring_only(settings.clone());
                             }
                             
                             // Block original key - SF handler will simulate the remapped key
@@ -237,7 +272,7 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                             let _ = event_tx.send(HotkeyEvent::ShadowFiendW);
                             
                             if should_intercept_for_soul_ring {
-                                trigger_soul_ring_and_get_final_key(key, &settings);
+                                spawn_soul_ring_only(settings.clone());
                             }
                             
                             return None;
@@ -247,7 +282,7 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                             let _ = event_tx.send(HotkeyEvent::ShadowFiendE);
                             
                             if should_intercept_for_soul_ring {
-                                trigger_soul_ring_and_get_final_key(key, &settings);
+                                spawn_soul_ring_only(settings.clone());
                             }
                             
                             return None;
@@ -268,11 +303,9 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                             _ => {}
                         }
                         
-                        // If Soul Ring should trigger, intercept and handle
+                        // If Soul Ring should trigger, spawn handler and block original
                         if should_intercept_for_soul_ring {
-                            trigger_soul_ring_and_get_final_key(key, &settings);
-                            // Simulate the original ability key after Soul Ring
-                            simulate_key(key);
+                            spawn_soul_ring_then_key(key, settings.clone());
                             return None; // Block original
                         }
                         
@@ -287,9 +320,7 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                     let soul_ring_state = SOUL_RING_STATE.lock().unwrap();
                     if soul_ring_state.is_item_key(ch, &settings) && soul_ring_state.should_trigger(&settings) {
                         drop(soul_ring_state);
-                        trigger_soul_ring_and_get_final_key(key, &settings);
-                        // Simulate the original item key after Soul Ring
-                        simulate_key(key);
+                        spawn_soul_ring_then_key(key, settings.clone());
                         return None; // Block original
                     }
                 }

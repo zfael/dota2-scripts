@@ -66,8 +66,10 @@ impl SoulRingState {
             return false;
         }
 
-        // Mana must be below threshold
-        if self.hero_mana_percent >= settings.soul_ring.min_mana_percent {
+        // Mana must be below threshold (100 = always trigger)
+        if settings.soul_ring.min_mana_percent < 100 
+            && self.hero_mana_percent >= settings.soul_ring.min_mana_percent 
+        {
             debug!(
                 "💍 Soul Ring: mana {}% >= threshold {}%, skipping",
                 self.hero_mana_percent, settings.soul_ring.min_mana_percent

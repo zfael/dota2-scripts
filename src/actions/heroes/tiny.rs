@@ -1,6 +1,7 @@
 use crate::actions::heroes::traits::HeroScript;
 use crate::actions::common::{find_item_slot, SurvivabilityActions};
 use crate::config::Settings;
+use crate::input::simulation::press_key;
 use crate::models::{GsiWebhookEvent, Hero, Item};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -21,43 +22,43 @@ impl TinyScript {
     }
 
     pub fn execute_combo(&self, event: &GsiWebhookEvent) {
-        info!("Triggering Tiny combo sequence...");
+        info!("Executing Tiny combo sequence...");
 
         let settings = self.settings.lock().unwrap();
         
-        // Find soul ring (x) dynamically
-        if let Some(soul_ring_key) = find_item_slot(event, &settings, Item::SoulRing) {
-            crate::input::press_key(soul_ring_key);
-        } else {
-            warn!("Soul ring not found in inventory");
-        }
-
-        // Find blink (z) dynamically
-        if let Some(blink_key) = find_item_slot(event, &settings, Item::Blink) {
-            crate::input::press_key(blink_key);
+        // 1. Blink Dagger
+        if let Some(key) = find_item_slot(event, &settings, Item::Blink) {
+            info!("Using Blink ({})", key);
+            press_key(key);
+            thread::sleep(Duration::from_millis(100));
         } else {
             warn!("Blink dagger not found in inventory");
         }
         
         drop(settings);
-        thread::sleep(Duration::from_millis(200));
 
-        // w (3 times with delays) - Avalanche
-        crate::input::press_key('w');
-        thread::sleep(Duration::from_millis(30));
-        crate::input::press_key('w');
-        crate::input::press_key('w');
-        thread::sleep(Duration::from_millis(100));
+        // 2. Avalanche (W) - spam to ensure cast
+        info!("Using Avalanche (W)");
+        for _ in 0..4 {
+            press_key('w');
+            thread::sleep(Duration::from_millis(30));
+        }
+        thread::sleep(Duration::from_millis(50));
 
-        // q (3 times with delays) - Toss
-        crate::input::press_key('q');
-        thread::sleep(Duration::from_millis(30));
-        crate::input::press_key('q');
-        crate::input::press_key('q');
+        // 3. Toss (Q) - spam to ensure cast
+        info!("Using Toss (Q)");
+        for _ in 0..4 {
+            press_key('q');
+            thread::sleep(Duration::from_millis(30));
+        }
         thread::sleep(Duration::from_millis(1400));
 
-        // d (aghanim's) - Tree Grab
-        crate::input::press_key('d');
+        // 4. Tree Grab (D) - Aghanim's ability
+        info!("Using Tree Grab (D)");
+        for _ in 0..3 {
+            press_key('d');
+            thread::sleep(Duration::from_millis(30));
+        }
 
         info!("Tiny combo sequence complete.");
     }
