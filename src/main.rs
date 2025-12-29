@@ -75,6 +75,7 @@ async fn main() {
                                 state::HeroType::Largo => models::Hero::Largo.to_game_name(),
                                 state::HeroType::LegionCommander => models::Hero::LegionCommander.to_game_name(),
                                 state::HeroType::ShadowFiend => models::Hero::Nevermore.to_game_name(),
+                                state::HeroType::Tinker => models::Hero::Tinker.to_game_name(),
                                 state::HeroType::Tiny => models::Hero::Tiny.to_game_name(),
                             };
                             info!("Triggering standalone combo for {}", hero_name);

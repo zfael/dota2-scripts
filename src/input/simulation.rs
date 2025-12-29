@@ -57,6 +57,14 @@ pub fn mouse_click() {
     }
 }
 
+/// Perform a left mouse click
+pub fn left_click() {
+    let mut enigo = ENIGO.lock().unwrap();
+    if let Err(e) = enigo.button(Button::Left, Direction::Click) {
+        warn!("Failed to perform left click: {}", e);
+    }
+}
+
 /// Hold ALT key down
 pub fn alt_down() {
     SIMULATING_KEYS.store(true, Ordering::SeqCst);

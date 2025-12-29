@@ -111,6 +111,7 @@ impl Dota2ScriptApp {
                             HeroType::Largo => "largo",
                             HeroType::LegionCommander => "legion_commander",
                             HeroType::ShadowFiend => "shadow_fiend",
+                            HeroType::Tinker => "tinker",
                             HeroType::Tiny => "tiny",
                         };
                         let new_key = settings.get_standalone_key(
@@ -119,6 +120,7 @@ impl Dota2ScriptApp {
                                 HeroType::Largo => "largo",
                                 HeroType::LegionCommander => "legion_commander",
                                 HeroType::ShadowFiend => "shadow_fiend",
+                                HeroType::Tinker => "tinker",
                                 HeroType::Tiny => "tiny",
                             }
                         );

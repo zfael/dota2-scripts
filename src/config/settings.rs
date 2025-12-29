@@ -106,6 +106,30 @@ pub struct LargoConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TinkerConfig {
+    #[serde(default = "default_tinker_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_tinker_auto_matrix")]
+    pub auto_matrix_enabled: bool,
+    #[serde(default = "default_tinker_matrix_threshold")]
+    pub auto_matrix_hp_threshold: u32,
+    #[serde(default = "default_tinker_rearm_retry")]
+    pub rearm_retry_on_interrupt: bool,
+    #[serde(default = "default_tinker_combo_priority")]
+    pub combo_priority: Vec<String>,
+    #[serde(default = "default_tinker_laser_key")]
+    pub laser_key: char,
+    #[serde(default = "default_tinker_matrix_key")]
+    pub matrix_key: char,
+    #[serde(default = "default_tinker_warp_key")]
+    pub warp_flare_key: char,
+    #[serde(default = "default_tinker_rearm_key")]
+    pub rearm_key: char,
+    #[serde(default = "default_standalone_key")]
+    pub standalone_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HeroesConfig {
     #[serde(default)]
     pub huskar: HuskarConfig,
@@ -117,6 +141,8 @@ pub struct HeroesConfig {
     pub tiny: TinyConfig,
     #[serde(default)]
     pub largo: LargoConfig,
+    #[serde(default)]
+    pub tinker: TinkerConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -296,6 +322,42 @@ fn default_sf_raze_enabled() -> bool {
 }
 fn default_raze_delay() -> u64 {
     100
+}
+
+// Tinker defaults
+fn default_tinker_enabled() -> bool {
+    true
+}
+fn default_tinker_auto_matrix() -> bool {
+    true
+}
+fn default_tinker_matrix_threshold() -> u32 {
+    50
+}
+fn default_tinker_rearm_retry() -> bool {
+    true
+}
+fn default_tinker_combo_priority() -> Vec<String> {
+    vec![
+        "item_sheepstick".to_string(),
+        "item_ethereal_blade".to_string(),
+        "laser".to_string(),
+        "item_dagon".to_string(),
+        "item_shivas_guard".to_string(),
+        "warp_flare".to_string(),
+    ]
+}
+fn default_tinker_laser_key() -> char {
+    'q'
+}
+fn default_tinker_matrix_key() -> char {
+    'e'
+}
+fn default_tinker_warp_key() -> char {
+    'd'
+}
+fn default_tinker_rearm_key() -> char {
+    'r'
 }
 
 fn default_amphibian_enabled() -> bool {
@@ -519,6 +581,23 @@ impl Default for LargoConfig {
     }
 }
 
+impl Default for TinkerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_tinker_enabled(),
+            auto_matrix_enabled: default_tinker_auto_matrix(),
+            auto_matrix_hp_threshold: default_tinker_matrix_threshold(),
+            rearm_retry_on_interrupt: default_tinker_rearm_retry(),
+            combo_priority: default_tinker_combo_priority(),
+            laser_key: default_tinker_laser_key(),
+            matrix_key: default_tinker_matrix_key(),
+            warp_flare_key: default_tinker_warp_key(),
+            rearm_key: default_tinker_rearm_key(),
+            standalone_key: default_standalone_key(),
+        }
+    }
+}
+
 impl Default for HeroesConfig {
     fn default() -> Self {
         Self {
@@ -527,6 +606,7 @@ impl Default for HeroesConfig {
             shadow_fiend: ShadowFiendConfig::default(),
             tiny: TinyConfig::default(),
             largo: LargoConfig::default(),
+            tinker: TinkerConfig::default(),
         }
     }
 }

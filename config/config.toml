@@ -90,6 +90,26 @@ e_ability_key = "e"  # Island Elixir (healing)
 r_ability_key = "r"  # Amphibian Rhapsody toggle
 standalone_key = "Home"  # Manual ultimate activation
 
+[heroes.tinker]
+enabled = true
+auto_matrix_enabled = true  # Auto-cast Defense Matrix when in danger
+auto_matrix_hp_threshold = 50  # HP% threshold for auto matrix
+rearm_retry_on_interrupt = true  # Re-attempt Rearm if interrupted
+# Priority order for combo (casts first available)
+combo_priority = [
+    "item_sheepstick",      # Hex - highest priority
+    "item_ethereal_blade",  # E-Blade
+    "laser",                # Laser
+    "item_dagon",           # Dagon (any level)
+    "item_shivas_guard",    # Shiva's Guard
+    "warp_flare"            # Warp Flare (D)
+]
+laser_key = "q"
+matrix_key = "e"
+warp_flare_key = "d"
+rearm_key = "r"
+standalone_key = "Home"  # Toggle combo on/off
+
 [gsi_logging]
 enabled = false
 output_dir = "logs/gsi_events"

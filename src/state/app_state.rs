@@ -7,6 +7,7 @@ pub enum HeroType {
     Largo,
     LegionCommander,
     ShadowFiend,
+    Tinker,
     Tiny,
 }
 
@@ -17,6 +18,7 @@ impl HeroType {
             name if name == Hero::Largo.to_game_name() => Some(HeroType::Largo),
             name if name == Hero::LegionCommander.to_game_name() => Some(HeroType::LegionCommander),
             name if name == Hero::Nevermore.to_game_name() => Some(HeroType::ShadowFiend),
+            name if name == Hero::Tinker.to_game_name() => Some(HeroType::Tinker),
             name if name == Hero::Tiny.to_game_name() => Some(HeroType::Tiny),
             _ => None,
         }
@@ -28,6 +30,7 @@ impl HeroType {
             HeroType::Largo => "Largo",
             HeroType::LegionCommander => "Legion Commander",
             HeroType::ShadowFiend => "Shadow Fiend",
+            HeroType::Tinker => "Tinker",
             HeroType::Tiny => "Tiny",
         }
     }
