@@ -9,6 +9,8 @@ use tracing::{debug, info};
 
 lazy_static! {
     static ref BERSERKER_BLOOD_DEBUFF_DETECTED: Mutex<Option<Instant>> = Mutex::new(None);
+    /// Guard to prevent multiple armlet toggle threads from running simultaneously
+    static ref ARMLET_THREAD_GUARD: Mutex<()> = Mutex::new(());
 }
 
 pub struct HuskarScript {
@@ -91,11 +93,17 @@ impl HuskarScript {
 
 impl HeroScript for HuskarScript {
     fn handle_gsi_event(&self, event: &GsiWebhookEvent) {
-        // PRIORITY 1: Armlet toggle (Huskar-specific) - run in separate thread immediately
-        // This is critical for Huskar survival and must not be blocked by other actions
+        // PRIORITY 1: Armlet toggle in separate thread (critical for Huskar survival)
+        // Uses try_lock guard to prevent race conditions - if another toggle is in progress, skip
         let settings_clone = self.settings.clone();
         let event_clone = event.clone();
         std::thread::spawn(move || {
+            // Try to acquire the guard - if another thread holds it, skip this iteration
+            let Ok(_guard) = ARMLET_THREAD_GUARD.try_lock() else {
+                debug!("Armlet toggle already in progress, skipping");
+                return;
+            };
+            
             let settings = settings_clone.lock().unwrap();
             let armlet_config = ArmletConfig {
                 toggle_threshold: settings.heroes.huskar.armlet_toggle_threshold,
@@ -103,25 +111,26 @@ impl HeroScript for HuskarScript {
                 toggle_cooldown_ms: settings.heroes.huskar.armlet_toggle_cooldown_ms,
             };
             armlet_toggle(&event_clone, &settings, &armlet_config);
+            // _guard is dropped here, releasing the lock
         });
-        
+
         // PRIORITY 2: Update danger detection state
         let settings = self.settings.lock().unwrap();
         crate::actions::danger_detector::update(event, &settings.danger_detection);
         drop(settings);
-        
+
         // PRIORITY 3: Create survivability actions for healing and defensive items
         let survivability = SurvivabilityActions::new(self.settings.clone());
         
         // Check healing items (danger-aware)
         survivability.check_and_use_healing_items(event);
-        
+
         // Use defensive items if in danger
         survivability.use_defensive_items_if_danger(event);
-        
+
         // Use neutral items if in danger
         survivability.use_neutral_item_if_danger(event);
-        
+
         // PRIORITY 4: Huskar-specific berserker blood cleanse
         self.berserker_blood_cleanse(event);
     }
