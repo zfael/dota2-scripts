@@ -46,27 +46,27 @@ pub fn armlet_toggle(event: &GsiWebhookEvent, settings: &Settings, config: &Arml
     let trigger_point = threshold + offset;
 
     // Check for critical HP situation (armlet stayed on, hero not selected)
-    if let Ok(mut critical_hp) = ARMLET_CRITICAL_HP.try_lock() {
-        if let Some(last_critical) = *critical_hp {
-            // If HP is still critically low after toggle attempt, force another toggle
-            if health < threshold / 2 && health <= last_critical {
-                warn!("Critical HP detected! HP: {} (likely armlet stuck on). Forcing emergency toggle.", health);
-                
-                // Force toggle regardless of cooldown
-                crate::input::press_key(key);
-                crate::input::press_key(key);
-                
-                // Reset critical HP tracker
-                *critical_hp = None;
-                
-                // Update last toggle time
-                if let Ok(mut last_toggle) = ARMLET_LAST_TOGGLE.try_lock() {
-                    *last_toggle = Some(Instant::now());
-                }
-                return;
-            }
+    // Use blocking lock to prevent race conditions
+    let mut critical_hp = ARMLET_CRITICAL_HP.lock().unwrap();
+    if let Some(last_critical) = *critical_hp {
+        // If HP is still critically low after toggle attempt, force another toggle
+        if health < threshold / 2 && health <= last_critical {
+            warn!("🚨 Critical HP detected! HP: {} (likely armlet stuck on). Forcing emergency toggle.", health);
+            
+            // Force toggle regardless of cooldown
+            crate::input::press_key(key);
+            crate::input::press_key(key);
+            
+            // Reset critical HP tracker
+            *critical_hp = None;
+            
+            // Update last toggle time with blocking lock
+            let mut last_toggle = ARMLET_LAST_TOGGLE.lock().unwrap();
+            *last_toggle = Some(Instant::now());
+            return;
         }
     }
+    drop(critical_hp); // Release lock before continuing
 
     if health < trigger_point {
         // Check for stun FIRST before any cooldown logic
@@ -75,28 +75,30 @@ pub fn armlet_toggle(event: &GsiWebhookEvent, settings: &Settings, config: &Arml
             return;
         }
 
-        if let Ok(mut last_toggle) = ARMLET_LAST_TOGGLE.try_lock() {
-            // Check if enough time has passed since last toggle
-            let can_toggle = match *last_toggle {
-                Some(last_time) => last_time.elapsed() >= Duration::from_millis(cooldown_ms),
-                None => true,
-            };
+        // Use blocking lock for cooldown check - this is critical for preventing race conditions
+        let mut last_toggle = ARMLET_LAST_TOGGLE.lock().unwrap();
+        
+        // Check if enough time has passed since last toggle
+        let can_toggle = match *last_toggle {
+            Some(last_time) => last_time.elapsed() >= Duration::from_millis(cooldown_ms),
+            None => true,
+        };
 
-            if !can_toggle {
-                debug!("Armlet toggle on cooldown ({}ms remaining)", 
-                    cooldown_ms - last_toggle.unwrap().elapsed().as_millis() as u64);
-                return;
-            }
-
-            info!("Triggering armlet toggle (HP: {} < trigger: {}, base: {})", health, trigger_point, threshold);
-
-            // Double tap to toggle armlet off then on (no delay needed)
-            crate::input::press_key(key);
-            crate::input::press_key(key);
-
-            // Update last toggle time
-            *last_toggle = Some(Instant::now());
+        if !can_toggle {
+            let remaining = cooldown_ms.saturating_sub(last_toggle.unwrap().elapsed().as_millis() as u64);
+            debug!("Armlet toggle on cooldown ({}ms remaining)", remaining);
+            return;
         }
+
+        info!("Triggering armlet toggle (HP: {} < trigger: {}, base: {}, cooldown: {}ms)", 
+            health, trigger_point, threshold, cooldown_ms);
+
+        // Double tap to toggle armlet off then on (no delay needed)
+        crate::input::press_key(key);
+        crate::input::press_key(key);
+
+        // Update last toggle time
+        *last_toggle = Some(Instant::now());
     } else {
         // Reset critical HP tracker when HP is safe
         if let Ok(mut critical_hp) = ARMLET_CRITICAL_HP.try_lock() {
@@ -177,7 +179,7 @@ impl SurvivabilityActions {
             
             // Use default armlet configuration (suitable for most strength heroes)
             let armlet_config = ArmletConfig {
-                toggle_threshold: 320,      // HP threshold
+                toggle_threshold: 320,       // HP threshold
                 predictive_offset: 30,       // Predictive offset
                 toggle_cooldown_ms: 250,     // Cooldown between toggles
             };
@@ -449,7 +451,7 @@ impl SurvivabilityActions {
         
         // Use default armlet configuration (suitable for most strength heroes)
         let armlet_config = ArmletConfig {
-            toggle_threshold: 320,      // HP threshold
+            toggle_threshold: 320,       // HP threshold
             predictive_offset: 30,       // Predictive offset
             toggle_cooldown_ms: 250,     // Cooldown between toggles
         };

@@ -3,12 +3,18 @@ use crate::models::GsiWebhookEvent;
 use crate::state::AppState;
 use axum::{extract::State, http::StatusCode, Json};
 use chrono::Local;
+use lazy_static::lazy_static;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
+
+lazy_static! {
+    /// Track if hero was alive in the previous GSI event (to detect death transitions)
+    static ref WAS_ALIVE: Mutex<bool> = Mutex::new(true);
+}
 
 pub type GsiEventSender = mpsc::Sender<GsiWebhookEvent>;
 
@@ -73,6 +79,19 @@ pub async fn process_gsi_events(
             let mut state = app_state.lock().unwrap();
             state.update_from_gsi(event.clone());
             state.metrics.current_queue_depth = rx.len();
+        }
+
+        // Detect hero death (transition from alive to dead)
+        {
+            let is_alive = event.hero.is_alive();
+            if let Ok(mut was_alive) = WAS_ALIVE.try_lock() {
+                if *was_alive && !is_alive {
+                    info!("💀 Hero died! (HP: {})", event.hero.health);
+                } else if !*was_alive && is_alive {
+                    info!("🔄 Hero respawned! (HP: {})", event.hero.health);
+                }
+                *was_alive = is_alive;
+            }
         }
 
         // Check if GSI automation is enabled

@@ -18,9 +18,9 @@ level = "info"
 survivability_hp_threshold = 30
 
 [heroes.huskar]
-armlet_toggle_threshold = 320
-armlet_predictive_offset = 10
-armlet_toggle_cooldown_ms = 150
+armlet_toggle_threshold = 120
+armlet_predictive_offset = 150
+armlet_toggle_cooldown_ms = 300
 berserker_blood_key = "e"
 berserker_blood_delay_ms = 300
 standalone_key = "Home"
