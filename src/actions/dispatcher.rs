@@ -1,5 +1,6 @@
 use crate::actions::common::SurvivabilityActions;
 use crate::actions::heroes::{HeroScript, HuskarScript, LargoScript, LegionCommanderScript, ShadowFiendScript, TinyScript};
+use crate::actions::power_treads;
 use crate::actions::soul_ring;
 use crate::config::Settings;
 use crate::models::GsiWebhookEvent;
@@ -113,6 +114,9 @@ impl ActionDispatcher {
         
         // Update Soul Ring state from GSI event
         soul_ring::update_from_gsi(&event.items, &event.hero, &settings);
+        
+        // Update Power Treads state from GSI event
+        power_treads::update_from_gsi(&event.items, &event.hero, &settings);
         
         drop(settings); // Release lock before further processing
         

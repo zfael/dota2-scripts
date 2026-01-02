@@ -7,6 +7,7 @@ use std::time::Duration;
 use tracing::{debug, error, info, warn};
 
 use crate::actions::heroes::shadow_fiend::ShadowFiendState;
+use crate::actions::power_treads::{POWER_TREADS_STATE, CACHED_ITEMS, Stat};
 use crate::actions::SOUL_RING_STATE;
 use crate::config::Settings;
 use crate::input::simulation::SIMULATING_KEYS;
@@ -191,6 +192,64 @@ fn spawn_soul_ring_then_key(original_key: Key, settings: Settings) {
     });
 }
 
+/// Spawn Power Treads toggle + original key + toggle back in a separate thread
+/// Switches to target stat, presses original key, then switches back to original stat
+fn spawn_power_treads_then_key(original_key: Key, target_stat: Stat, settings: Settings) {
+    thread::spawn(move || {
+        let mut pt_state = POWER_TREADS_STATE.lock().unwrap();
+        
+        if let Some(treads_key) = pt_state.slot_key {
+            let original_stat = pt_state.current_stat;
+            let presses_to_target = Stat::presses_to_reach(original_stat, target_stat);
+            
+            if presses_to_target > 0 {
+                // Mark as toggled
+                pt_state.mark_toggled(target_stat);
+                drop(pt_state); // Release lock before sleeping
+                
+                // Toggle to target stat
+                if let Some(treads_rdev_key) = char_to_key(treads_key) {
+                    for i in 0..presses_to_target {
+                        debug!("👟 Power Treads toggle {} of {} to {:?}", i + 1, presses_to_target, target_stat);
+                        simulate_key(treads_rdev_key);
+                        thread::sleep(Duration::from_millis(15));
+                    }
+                    
+                    // Wait delay after switch
+                    thread::sleep(Duration::from_millis(settings.power_treads.delay_after_switch_ms));
+                    
+                    // Press the original key
+                    simulate_key(original_key);
+                    
+                    // Wait delay before switching back
+                    thread::sleep(Duration::from_millis(settings.power_treads.switch_back_delay_ms));
+                    
+                    // Toggle back to original stat
+                    let presses_back = Stat::presses_to_reach(target_stat, original_stat);
+                    for i in 0..presses_back {
+                        debug!("👟 Power Treads toggle back {} of {} to {:?}", i + 1, presses_back, original_stat);
+                        simulate_key(treads_rdev_key);
+                        thread::sleep(Duration::from_millis(15));
+                    }
+                    
+                    // Update state back to original
+                    let mut pt_state = POWER_TREADS_STATE.lock().unwrap();
+                    pt_state.current_stat = original_stat;
+                    debug!("👟 Power Treads restored to {:?}", original_stat);
+                }
+            } else {
+                drop(pt_state);
+                // Already on target stat, just press original key
+                simulate_key(original_key);
+            }
+        } else {
+            drop(pt_state);
+            // No treads key, just press original key
+            simulate_key(original_key);
+        }
+    });
+}
+
 /// Start keyboard listener in a separate thread with key interception (grab)
 /// This intercepts keys and can block/modify them before they reach the game
 pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<HotkeyEvent> {
@@ -229,6 +288,51 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                     false
                 };
 
+                // Check if this is a key we should intercept for Power Treads
+                let power_treads_target_stat: Option<Stat> = if let Some(ch) = key_char {
+                    let pt_state = POWER_TREADS_STATE.lock().unwrap();
+                    
+                    // Check if user manually pressed Power Treads key (update state tracking)
+                    if pt_state.is_treads_key(ch) && pt_state.available {
+                        drop(pt_state);
+                        let mut pt_state_mut = POWER_TREADS_STATE.lock().unwrap();
+                        pt_state_mut.advance_stat();
+                        None // Don't intercept, just track
+                    } else if pt_state.available {
+                        // Check for ability key -> INT
+                        if pt_state.is_ability_key(ch, &settings) {
+                            let target = Stat::Int;
+                            if pt_state.should_toggle(target, &settings) {
+                                debug!("👟 Key '{}': ability key, target={:?}", ch, target);
+                                Some(target)
+                            } else {
+                                None
+                            }
+                        } else {
+                            // Check for item key -> AGI/INT based on item type
+                            let cached_items = CACHED_ITEMS.lock().unwrap();
+                            if let Some(ref items) = *cached_items {
+                                if let Some(target) = pt_state.get_target_stat_for_key(ch, items, &settings) {
+                                    if pt_state.should_toggle(target, &settings) {
+                                        debug!("👟 Key '{}': item key, target={:?}", ch, target);
+                                        Some(target)
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
                 // Handle Shadow Fiend Q/W/E keys (when SF is selected AND raze interception is enabled in config)
                 let sf_raze_enabled_in_config = settings.heroes.shadow_fiend.raze_intercept_enabled;
                 let sf_raze_active = sf_enabled && sf_raze_enabled_in_config;
@@ -248,7 +352,7 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                     }
                 }
 
-                // Handle Largo Q/W/E/R keys and other ability keys with Soul Ring
+                // Handle Largo Q/W/E/R keys and other ability keys with Soul Ring and Power Treads
                 match key {
                     Key::KeyQ | Key::KeyW | Key::KeyE | Key::KeyR | Key::KeyD | Key::KeyF => {
                         // Send Largo events for beat timing
@@ -261,23 +365,37 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                         }
                         
                         // If Soul Ring should trigger, spawn handler and block original
+                        // (Soul Ring takes priority as it has its own key simulation)
                         if should_intercept_for_soul_ring {
                             spawn_soul_ring_then_key(key, settings.clone());
                             return None; // Block original
                         }
                         
-                        // Pass through if not intercepting for Soul Ring
+                        // If Power Treads should toggle (and Soul Ring didn't trigger)
+                        if let Some(target_stat) = power_treads_target_stat {
+                            spawn_power_treads_then_key(key, target_stat, settings.clone());
+                            return None; // Block original
+                        }
+                        
+                        // Pass through if not intercepting
                         return Some(event);
                     }
                     _ => {}
                 }
                 
-                // Check for item slot keys (for Soul Ring triggering)
+                // Check for item slot keys (for Soul Ring and Power Treads triggering)
                 if let Some(ch) = key_char {
                     let soul_ring_state = SOUL_RING_STATE.lock().unwrap();
                     if soul_ring_state.is_item_key(ch, &settings) && soul_ring_state.should_trigger(&settings) {
                         drop(soul_ring_state);
                         spawn_soul_ring_then_key(key, settings.clone());
+                        return None; // Block original
+                    }
+                    drop(soul_ring_state);
+                    
+                    // Check for Power Treads toggle on item keys (healing/mana items)
+                    if let Some(target_stat) = power_treads_target_stat {
+                        spawn_power_treads_then_key(key, target_stat, settings.clone());
                         return None; // Block original
                     }
                 }

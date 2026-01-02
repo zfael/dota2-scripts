@@ -2,6 +2,7 @@ pub mod common;
 pub mod danger_detector;
 pub mod dispatcher;
 pub mod heroes;
+pub mod power_treads;
 pub mod soul_ring;
 
 pub use dispatcher::ActionDispatcher;

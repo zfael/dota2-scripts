@@ -200,6 +200,38 @@ impl Default for SoulRingConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PowerTreadsConfig {
+    #[serde(default = "default_power_treads_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_power_treads_toggle_for_abilities")]
+    pub toggle_for_abilities: bool,
+    #[serde(default = "default_power_treads_toggle_for_items")]
+    pub toggle_for_items: bool,
+    #[serde(default = "default_power_treads_ability_keys")]
+    pub ability_keys: Vec<String>,
+    #[serde(default = "default_power_treads_delay_after_switch_ms")]
+    pub delay_after_switch_ms: u64,
+    #[serde(default = "default_power_treads_switch_back_delay_ms")]
+    pub switch_back_delay_ms: u64,
+    #[serde(default = "default_power_treads_toggle_cooldown_ms")]
+    pub toggle_cooldown_ms: u64,
+}
+
+impl Default for PowerTreadsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_power_treads_enabled(),
+            toggle_for_abilities: default_power_treads_toggle_for_abilities(),
+            toggle_for_items: default_power_treads_toggle_for_items(),
+            ability_keys: default_power_treads_ability_keys(),
+            delay_after_switch_ms: default_power_treads_delay_after_switch_ms(),
+            switch_back_delay_ms: default_power_treads_switch_back_delay_ms(),
+            toggle_cooldown_ms: default_power_treads_toggle_cooldown_ms(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GsiLoggingConfig {
     #[serde(default = "default_gsi_logging_enabled")]
     pub enabled: bool,
@@ -234,6 +266,8 @@ pub struct Settings {
     pub neutral_items: NeutralItemConfig,
     #[serde(default)]
     pub soul_ring: SoulRingConfig,
+    #[serde(default)]
+    pub power_treads: PowerTreadsConfig,
     #[serde(default)]
     pub gsi_logging: GsiLoggingConfig,
 }
@@ -423,6 +457,29 @@ fn default_soul_ring_intercept_items() -> bool {
     true
 }
 
+// Power Treads defaults
+fn default_power_treads_enabled() -> bool {
+    true
+}
+fn default_power_treads_toggle_for_abilities() -> bool {
+    true
+}
+fn default_power_treads_toggle_for_items() -> bool {
+    true
+}
+fn default_power_treads_ability_keys() -> Vec<String> {
+    vec!["q".to_string(), "w".to_string(), "e".to_string(), "r".to_string(), "d".to_string(), "f".to_string()]
+}
+fn default_power_treads_delay_after_switch_ms() -> u64 {
+    35
+}
+fn default_power_treads_switch_back_delay_ms() -> u64 {
+    50
+}
+fn default_power_treads_toggle_cooldown_ms() -> u64 {
+    100
+}
+
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
@@ -576,6 +633,7 @@ impl Default for Settings {
             danger_detection: DangerDetectionConfig::default(),
             neutral_items: NeutralItemConfig::default(),
             soul_ring: SoulRingConfig::default(),
+            power_treads: PowerTreadsConfig::default(),
             gsi_logging: GsiLoggingConfig::default(),
         }
     }

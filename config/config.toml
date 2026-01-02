@@ -109,3 +109,19 @@ trigger_cooldown_ms = 10
 ability_keys = ["q", "w", "e", "r", "d", "f"]
 # Also trigger Soul Ring before item key presses (items that cost mana)
 intercept_item_keys = true
+
+[power_treads]
+# Master toggle for Power Treads automation
+enabled = true
+# Toggle to INT before ability casts (mana efficiency)
+toggle_for_abilities = true
+# Toggle to AGI/INT before healing/mana item usage (HP/mana efficiency)
+toggle_for_items = true
+# Ability keys to intercept for INT toggle
+ability_keys = ["q", "w", "e", "r", "d", "f"]
+# Delay in milliseconds after switching treads before pressing ability/item
+delay_after_switch_ms = 35
+# Delay in milliseconds after ability/item before switching back
+switch_back_delay_ms = 50
+# Cooldown lockout in milliseconds to prevent rapid toggling
+toggle_cooldown_ms = 100
