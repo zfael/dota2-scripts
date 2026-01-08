@@ -5,11 +5,51 @@
 //! - Hero mana is below configured threshold
 //! - Hero health is above safety threshold
 //! - Cooldown lockout has elapsed (prevents double-fire)
+//! - Item being used costs mana (skip list items like Blink, Phase Boots are excluded)
 
 use crate::config::Settings;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tracing::{debug, info};
+
+/// Items that should NOT trigger Soul Ring (no mana cost or special behavior)
+/// These items are free to use and don't benefit from the extra mana
+pub static SOUL_RING_SKIP_ITEMS: &[&str] = &[
+    // Mobility items (no mana cost)
+    "item_blink",
+    "item_overwhelming_blink",
+    "item_swift_blink",
+    "item_arcane_blink",
+    "item_phase_boots",
+    "item_travel_boots",
+    "item_travel_boots_2",
+    // Consumables
+    "item_bottle",
+    "item_tpscroll",
+    "item_flask",              // Healing Salve
+    "item_clarity",
+    "item_enchanted_mango",
+    "item_faerie_fire",
+    "item_tango",
+    "item_tango_single",
+    "item_smoke_of_deceit",
+    "item_dust",
+    "item_ward_observer",
+    "item_ward_sentry",
+    "item_tome_of_knowledge",
+    "item_cheese",
+    // Toggle/no-mana items
+    "item_armlet",
+    "item_power_treads",
+    "item_soul_ring",          // Soul Ring itself
+    // Shadow/invis items (no mana)
+    "item_shadow_amulet",
+    // Other no-mana actives
+    "item_satanic",
+    "item_hand_of_midas",
+    "item_guardian_greaves",   // Greaves restores mana, would be wasteful
+];
 
 /// Shared state for Soul Ring automation, updated by GSI events
 #[derive(Debug)]
@@ -28,6 +68,8 @@ pub struct SoulRingState {
     pub hero_alive: bool,
     /// Last time Soul Ring was triggered (for cooldown lockout)
     pub last_triggered: Option<Instant>,
+    /// Maps slot keys to item names (for skip-list checking)
+    pub slot_items: HashMap<char, String>,
 }
 
 impl Default for SoulRingState {
@@ -40,6 +82,7 @@ impl Default for SoulRingState {
             hero_health_percent: 100,
             hero_alive: false,
             last_triggered: None,
+            slot_items: HashMap::new(),
         }
     }
 }
@@ -121,6 +164,17 @@ impl SoulRingState {
             .any(|k| k.to_lowercase() == key_str)
     }
 
+    /// Get the item name for a given slot key (if any)
+    pub fn get_item_for_key(&self, key_char: char) -> Option<&String> {
+        let key_lower = key_char.to_ascii_lowercase();
+        self.slot_items.get(&key_lower)
+    }
+
+    /// Check if an item should be skipped (no mana cost)
+    pub fn should_skip_item(&self, item_name: &str) -> bool {
+        SOUL_RING_SKIP_ITEMS.contains(&item_name)
+    }
+
     /// Check if a key is an item key that should trigger Soul Ring
     pub fn is_item_key(&self, key_char: char, settings: &Settings) -> bool {
         if !settings.soul_ring.intercept_item_keys {
@@ -146,9 +200,27 @@ impl SoulRingState {
             }
         }
 
-        item_keys
+        // Check if this key corresponds to an item slot
+        let is_item_slot = item_keys
             .iter()
-            .any(|k| k.to_ascii_lowercase() == key_lower)
+            .any(|k| k.to_ascii_lowercase() == key_lower);
+
+        if !is_item_slot {
+            return false;
+        }
+
+        // Check if the item in this slot should be skipped (no mana cost)
+        if let Some(item_name) = self.get_item_for_key(key_char) {
+            if self.should_skip_item(item_name) {
+                debug!(
+                    "💍 Soul Ring: skipping no-mana item '{}' on key '{}'",
+                    item_name, key_char
+                );
+                return false;
+            }
+        }
+
+        true
     }
 
     /// Check if a key should trigger Soul Ring (ability or item key)
@@ -200,9 +272,20 @@ pub fn update_from_gsi(
     state.hero_health_percent = hero.health_percent;
     state.hero_alive = hero.alive;
 
-    // Search for Soul Ring in inventory
+    // Clear and rebuild slot_items mapping
+    state.slot_items.clear();
+
+    // Search for Soul Ring in inventory and build slot->item mapping
     let mut found = false;
     for (slot_name, item) in items.all_slots() {
+        // Build slot key -> item name mapping for skip-list checking
+        if let Some(slot_key) = settings.get_key_for_slot(slot_name) {
+            if !item.name.is_empty() && item.name != "empty" {
+                state.slot_items.insert(slot_key.to_ascii_lowercase(), item.name.clone());
+            }
+        }
+
+        // Check for Soul Ring
         if item.name == "item_soul_ring" {
             found = true;
             state.available = true;
@@ -213,7 +296,6 @@ pub fn update_from_gsi(
                 "💍 Soul Ring found in {}: can_cast={}, key={:?}",
                 slot_name, state.can_cast, state.slot_key
             );
-            break;
         }
     }
 
