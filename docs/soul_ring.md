@@ -143,6 +143,7 @@ By default, these keys are intercepted:
 When `intercept_item_keys = true`, item slot keys are also intercepted:
 - Slot keys from `[keybindings]` config (default: Z, X, C, V, B, N)
 - Excludes Soul Ring's own slot (to prevent infinite loop)
+- **Excludes items that don't cost mana** (see Skip List below)
 
 This is useful for mana-costing items like:
 - Shiva's Guard
@@ -150,6 +151,22 @@ This is useful for mana-costing items like:
 - Orchid Malevolence
 - Dagon
 - etc.
+
+### Item Skip List
+
+The following items are **excluded** from triggering Soul Ring because they don't cost mana or would be wasteful:
+
+| Category | Items |
+|----------|-------|
+| **Blink Daggers** | Blink Dagger, Overwhelming Blink, Swift Blink, Arcane Blink |
+| **Boots** | Phase Boots, Power Treads, Boots of Travel (1 & 2) |
+| **Consumables** | Bottle, TP Scroll, Salve, Clarity, Mango, Faerie Fire, Tango, Smoke, Dust, Wards, Tome, Cheese |
+| **Toggle Items** | Armlet, BKB, Blade Mail, Mask of Madness |
+| **Shadow/Invis** | Shadow Amulet, Shadow Blade, Silver Edge |
+| **Other Free Actives** | Satanic, Moon Shard, Hand of Midas, Helm of the Dominator/Overlord, Buckler, Basilius, Assault Cuirass, Vladmir's |
+| **Special Cases** | Manta Style (free for melee), Guardian Greaves (restores mana), Pipe of Insight |
+
+The skip list is defined in `src/actions/soul_ring.rs` as `SOUL_RING_SKIP_ITEMS`.
 
 ## Integration with Hero Scripts
 
@@ -178,6 +195,7 @@ With `level = "debug"`, additional diagnostics:
 ```
 💍 Key 'q': intercept=true, trigger=true, available=true, can_cast=true, mana=45%, health=80%
 💍 Pressing Soul Ring key: c
+💍 Soul Ring: skipping no-mana item 'item_blink' on key 'z'
 ```
 
 ## Technical Details
