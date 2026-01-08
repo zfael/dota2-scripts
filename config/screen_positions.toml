@@ -1,0 +1,20 @@
+# Screen positions captured by capture_coords tool
+# These positions are used for bottle optimization item dragging
+# Re-run the capture tool if you change resolution or monitor setup
+
+[screen_layout]
+resolution = "1920x1080"
+
+[inventory_positions]
+slot0 = { x = 1169, y = 962 }
+slot1 = { x = 1228, y = 962 }
+slot2 = { x = 1298, y = 967 }
+slot3 = { x = 1169, y = 1016 }
+slot4 = { x = 1234, y = 1018 }
+slot5 = { x = 1297, y = 1014 }
+
+[stash_positions]
+stash0 = { x = 1166, y = 1058 }
+stash1 = { x = 1234, y = 1054 }
+stash2 = { x = 1299, y = 1055 }
+

@@ -1,6 +1,7 @@
 use crate::actions::common::SurvivabilityActions;
 use crate::actions::heroes::{HeroScript, HuskarScript, LargoScript, LegionCommanderScript, ShadowFiendScript, TinyScript};
 use crate::actions::soul_ring;
+use crate::actions::bottle_optimization;
 use crate::config::Settings;
 use crate::models::GsiWebhookEvent;
 use lazy_static::lazy_static;
@@ -113,6 +114,9 @@ impl ActionDispatcher {
         
         // Update Soul Ring state from GSI event
         soul_ring::update_from_gsi(&event.items, &event.hero, &settings);
+        
+        // Update Bottle Optimization state from GSI event
+        bottle_optimization::update_from_gsi(&event.items, &event.hero, &event.map, &settings);
         
         drop(settings); // Release lock before further processing
         

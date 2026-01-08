@@ -3,6 +3,190 @@ use std::collections::HashMap;
 use std::fs;
 use tracing::{info, warn};
 
+// ============================================================================
+// Screen Position Types (for bottle optimization mouse operations)
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ScreenPosition {
+    pub x: i32,
+    pub y: i32,
+}
+
+impl ScreenPosition {
+    pub fn new(x: i32, y: i32) -> Self {
+        Self { x, y }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InventoryPositions {
+    #[serde(default = "default_inv_slot0")]
+    pub slot0: ScreenPosition,
+    #[serde(default = "default_inv_slot1")]
+    pub slot1: ScreenPosition,
+    #[serde(default = "default_inv_slot2")]
+    pub slot2: ScreenPosition,
+    #[serde(default = "default_inv_slot3")]
+    pub slot3: ScreenPosition,
+    #[serde(default = "default_inv_slot4")]
+    pub slot4: ScreenPosition,
+    #[serde(default = "default_inv_slot5")]
+    pub slot5: ScreenPosition,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StashPositions {
+    #[serde(default = "default_stash_slot0")]
+    pub stash0: ScreenPosition,
+    #[serde(default = "default_stash_slot1")]
+    pub stash1: ScreenPosition,
+    #[serde(default = "default_stash_slot2")]
+    pub stash2: ScreenPosition,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScreenPositionsConfig {
+    #[serde(default = "default_resolution")]
+    pub resolution: String,
+    #[serde(default)]
+    pub inventory_positions: InventoryPositions,
+    #[serde(default)]
+    pub stash_positions: StashPositions,
+}
+
+// Default screen positions for 1920x1080 resolution
+// These are placeholder values - user should run capture_coords tool to get accurate positions
+fn default_inv_slot0() -> ScreenPosition { ScreenPosition::new(1298, 942) }
+fn default_inv_slot1() -> ScreenPosition { ScreenPosition::new(1347, 942) }
+fn default_inv_slot2() -> ScreenPosition { ScreenPosition::new(1396, 942) }
+fn default_inv_slot3() -> ScreenPosition { ScreenPosition::new(1298, 990) }
+fn default_inv_slot4() -> ScreenPosition { ScreenPosition::new(1347, 990) }
+fn default_inv_slot5() -> ScreenPosition { ScreenPosition::new(1396, 990) }
+
+fn default_stash_slot0() -> ScreenPosition { ScreenPosition::new(376, 496) }
+fn default_stash_slot1() -> ScreenPosition { ScreenPosition::new(424, 496) }
+fn default_stash_slot2() -> ScreenPosition { ScreenPosition::new(472, 496) }
+
+fn default_resolution() -> String { "1920x1080".to_string() }
+
+impl Default for InventoryPositions {
+    fn default() -> Self {
+        Self {
+            slot0: default_inv_slot0(),
+            slot1: default_inv_slot1(),
+            slot2: default_inv_slot2(),
+            slot3: default_inv_slot3(),
+            slot4: default_inv_slot4(),
+            slot5: default_inv_slot5(),
+        }
+    }
+}
+
+impl Default for StashPositions {
+    fn default() -> Self {
+        Self {
+            stash0: default_stash_slot0(),
+            stash1: default_stash_slot1(),
+            stash2: default_stash_slot2(),
+        }
+    }
+}
+
+impl Default for ScreenPositionsConfig {
+    fn default() -> Self {
+        Self {
+            resolution: default_resolution(),
+            inventory_positions: InventoryPositions::default(),
+            stash_positions: StashPositions::default(),
+        }
+    }
+}
+
+impl InventoryPositions {
+    /// Get position for a slot by index (0-5)
+    pub fn get_slot(&self, index: usize) -> Option<&ScreenPosition> {
+        match index {
+            0 => Some(&self.slot0),
+            1 => Some(&self.slot1),
+            2 => Some(&self.slot2),
+            3 => Some(&self.slot3),
+            4 => Some(&self.slot4),
+            5 => Some(&self.slot5),
+            _ => None,
+        }
+    }
+}
+
+impl StashPositions {
+    /// Get position for a backpack slot by index (0-2)
+    pub fn get_slot(&self, index: usize) -> Option<&ScreenPosition> {
+        match index {
+            0 => Some(&self.stash0),
+            1 => Some(&self.stash1),
+            2 => Some(&self.stash2),
+            _ => None,
+        }
+    }
+}
+
+// ============================================================================
+// Bottle Optimization Config
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BottleOptimizationConfig {
+    /// Master toggle for bottle optimization
+    #[serde(default = "default_bottle_opt_enabled")]
+    pub enabled: bool,
+    /// Only trigger before this game time (in seconds). 600 = 10 minutes
+    #[serde(default = "default_bottle_max_game_time")]
+    pub max_game_time_seconds: i32,
+    /// Items to move to stash before bottle usage (for stat reduction)
+    #[serde(default = "default_bottle_target_items")]
+    pub target_items: Vec<String>,
+    /// Restore mouse position after dragging items
+    #[serde(default = "default_bottle_restore_mouse")]
+    pub restore_mouse_position: bool,
+    /// Base delay between mouse operations (ms)
+    #[serde(default = "default_bottle_drag_delay")]
+    pub delay_between_drags_ms: u64,
+    /// Jitter amount for mouse movement (pixels)
+    #[serde(default = "default_bottle_jitter")]
+    pub mouse_jitter_px: i32,
+    /// Cooldown between bottle optimization triggers (ms)
+    #[serde(default = "default_bottle_cooldown")]
+    pub trigger_cooldown_ms: u64,
+}
+
+fn default_bottle_opt_enabled() -> bool { true }
+fn default_bottle_max_game_time() -> i32 { 600 } // 10 minutes
+fn default_bottle_target_items() -> Vec<String> { 
+    vec!["item_branches".to_string()] 
+}
+fn default_bottle_restore_mouse() -> bool { true }
+fn default_bottle_drag_delay() -> u64 { 75 }
+fn default_bottle_jitter() -> i32 { 4 }
+fn default_bottle_cooldown() -> u64 { 500 }
+
+impl Default for BottleOptimizationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_bottle_opt_enabled(),
+            max_game_time_seconds: default_bottle_max_game_time(),
+            target_items: default_bottle_target_items(),
+            restore_mouse_position: default_bottle_restore_mouse(),
+            delay_between_drags_ms: default_bottle_drag_delay(),
+            mouse_jitter_px: default_bottle_jitter(),
+            trigger_cooldown_ms: default_bottle_cooldown(),
+        }
+    }
+}
+
+// ============================================================================
+// Original Config Structs
+// ============================================================================
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
     #[serde(default = "default_port")]
@@ -236,6 +420,10 @@ pub struct Settings {
     pub soul_ring: SoulRingConfig,
     #[serde(default)]
     pub gsi_logging: GsiLoggingConfig,
+    #[serde(default)]
+    pub bottle_optimization: BottleOptimizationConfig,
+    #[serde(default)]
+    pub screen_positions: ScreenPositionsConfig,
 }
 
 // Default functions
@@ -577,6 +765,8 @@ impl Default for Settings {
             neutral_items: NeutralItemConfig::default(),
             soul_ring: SoulRingConfig::default(),
             gsi_logging: GsiLoggingConfig::default(),
+            bottle_optimization: BottleOptimizationConfig::default(),
+            screen_positions: ScreenPositionsConfig::default(),
         }
     }
 }
