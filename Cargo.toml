@@ -11,6 +11,10 @@ path = "src/lib.rs"
 name = "dota2-scripts"
 path = "src/main.rs"
 
+[[bin]]
+name = "capture_coords"
+path = "src/bin/capture_coords.rs"
+
 [dependencies]
 # Web server
 axum = "0.7"
@@ -49,7 +53,11 @@ windows = { version = "0.58", features = [
     "Win32_Foundation",
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
 ] }
+
+# Random number generation for jitter
+rand = "0.8"
 
 [dev-dependencies]
 reqwest = { version = "0.12", features = ["json"] }

@@ -109,3 +109,39 @@ trigger_cooldown_ms = 10
 ability_keys = ["q", "w", "e", "r", "d", "f"]
 # Also trigger Soul Ring before item key presses (items that cost mana)
 intercept_item_keys = true
+
+[bottle_optimization]
+# Master toggle for bottle optimization (swap stat items before bottle use)
+enabled = false
+# Only trigger before this game time in seconds (600 = 10 minutes)
+max_game_time_seconds = 600
+# Items to swap to stash before bottle use (for reduced max HP/mana = better % healing)
+target_items = ["item_branches"]
+# Restore mouse position after item swapping
+restore_mouse_position = true
+# Base delay between mouse drag operations (ms)
+delay_between_drags_ms = 75
+# Random pixel offset for mouse movement (humanization)
+mouse_jitter_px = 4
+# Cooldown between triggers (ms)
+trigger_cooldown_ms = 500
+
+[screen_positions]
+# Screen layout for mouse-based item dragging
+# Run `cargo run --bin capture_coords` to capture accurate positions for your setup
+resolution = "1920x1080"
+
+[screen_positions.inventory_positions]
+# Inventory slot screen positions (adjust for your resolution/UI scale)
+slot0 = { x = 1169, y = 962 }
+slot1 = { x = 1228, y = 962 }
+slot2 = { x = 1298, y = 967 }
+slot3 = { x = 1169, y = 1016 }
+slot4 = { x = 1234, y = 1018 }
+slot5 = { x = 1297, y = 1014 }
+
+[screen_positions.stash_positions]
+# Stash slot screen positions (visible when near fountain/shop)
+stash0 = { x = 1166, y = 1058 }
+stash1 = { x = 1234, y = 1054 }
+stash2 = { x = 1299, y = 1055 }

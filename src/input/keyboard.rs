@@ -8,6 +8,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::actions::heroes::shadow_fiend::ShadowFiendState;
 use crate::actions::SOUL_RING_STATE;
+use crate::actions::BOTTLE_OPT_STATE;
 use crate::config::Settings;
 use crate::input::simulation::SIMULATING_KEYS;
 
@@ -191,6 +192,14 @@ fn spawn_soul_ring_then_key(original_key: Key, settings: Settings) {
     });
 }
 
+/// Spawn bottle optimization sequence in a separate thread
+/// Moves stat items to stash and back before using bottle
+fn spawn_bottle_optimization(bottle_key: char, settings: Settings) {
+    thread::spawn(move || {
+        crate::actions::bottle_optimization::execute_bottle_optimization(bottle_key, settings);
+    });
+}
+
 /// Start keyboard listener in a separate thread with key interception (grab)
 /// This intercepts keys and can block/modify them before they reach the game
 pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<HotkeyEvent> {
@@ -272,8 +281,22 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                     _ => {}
                 }
                 
-                // Check for item slot keys (for Soul Ring triggering)
+                // Check for item slot keys (for Soul Ring triggering or Bottle optimization)
                 if let Some(ch) = key_char {
+                    // Check for bottle optimization first (intercepts bottle key)
+                    let bottle_opt_state = BOTTLE_OPT_STATE.lock().unwrap();
+                    if bottle_opt_state.should_intercept_key(ch, &settings) 
+                        && bottle_opt_state.should_trigger(&settings) 
+                    {
+                        let bottle_key = ch;
+                        drop(bottle_opt_state);
+                        info!("🍾 Intercepting bottle key '{}' for optimization", bottle_key);
+                        spawn_bottle_optimization(bottle_key, settings.clone());
+                        return None; // Block original
+                    }
+                    drop(bottle_opt_state);
+                    
+                    // Check for Soul Ring triggering on item keys
                     let soul_ring_state = SOUL_RING_STATE.lock().unwrap();
                     if soul_ring_state.is_item_key(ch, &settings) && soul_ring_state.should_trigger(&settings) {
                         drop(soul_ring_state);
