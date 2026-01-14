@@ -1,5 +1,5 @@
 use crate::actions::common::SurvivabilityActions;
-use crate::actions::heroes::{HeroScript, HuskarScript, LargoScript, LegionCommanderScript, ShadowFiendScript, TinyScript};
+use crate::actions::heroes::{BroodmotherScript, HeroScript, HuskarScript, LargoScript, LegionCommanderScript, ShadowFiendScript, TinyScript};
 use crate::actions::soul_ring;
 use crate::config::Settings;
 use crate::models::GsiWebhookEvent;
@@ -99,6 +99,9 @@ impl ActionDispatcher {
 
         let tiny = Arc::new(TinyScript::new(settings.clone()));
         hero_scripts.insert(tiny.hero_name().to_string(), tiny);
+
+        let broodmother = Arc::new(BroodmotherScript::new(settings.clone()));
+        hero_scripts.insert(broodmother.hero_name().to_string(), broodmother);
 
         Self {
             hero_scripts,

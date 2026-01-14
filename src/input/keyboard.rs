@@ -1,4 +1,4 @@
-use rdev::{grab, simulate, Event, EventType, Key};
+use rdev::{grab, simulate, Button, Event, EventType, Key};
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex};
@@ -6,6 +6,7 @@ use std::thread;
 use std::time::Duration;
 use tracing::{debug, error, info, warn};
 
+use crate::actions::heroes::broodmother::BROODMOTHER_ACTIVE;
 use crate::actions::heroes::shadow_fiend::ShadowFiendState;
 use crate::actions::SOUL_RING_STATE;
 use crate::config::Settings;
@@ -17,12 +18,43 @@ pub enum HotkeyEvent {
     LargoW,
     LargoE,
     LargoR,
+    BroodmotherSpiderAttack,
 }
 
 pub struct KeyboardListenerConfig {
     pub trigger_key: Arc<Mutex<String>>,
     pub sf_enabled: Arc<Mutex<bool>>,
     pub settings: Arc<Mutex<Settings>>,
+}
+
+/// Parse key string to rdev::Key (public version)
+pub fn parse_key_string(key_str: &str) -> Option<Key> {
+    match key_str.to_lowercase().as_str() {
+        "home" => Some(Key::Home),
+        "end" => Some(Key::End),
+        "insert" => Some(Key::Insert),
+        "delete" => Some(Key::Delete),
+        "pageup" => Some(Key::PageUp),
+        "pagedown" => Some(Key::PageDown),
+        "f1" => Some(Key::F1),
+        "f2" => Some(Key::F2),
+        "f3" => Some(Key::F3),
+        "f4" => Some(Key::F4),
+        "f5" => Some(Key::F5),
+        "f6" => Some(Key::F6),
+        "f7" => Some(Key::F7),
+        "f8" => Some(Key::F8),
+        "f9" => Some(Key::F9),
+        "f10" => Some(Key::F10),
+        "f11" => Some(Key::F11),
+        "f12" => Some(Key::F12),
+        // Single char keys
+        s if s.len() == 1 => {
+            let ch = s.chars().next().unwrap();
+            char_to_key(ch)
+        }
+        _ => None,
+    }
 }
 
 /// Parse key string to rdev::Key
@@ -204,6 +236,24 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
             // This prevents re-interception of our own simulated keypresses
             if SIMULATING_KEYS.load(Ordering::SeqCst) {
                 return Some(event);
+            }
+            
+            // Handle Mouse5 (Button::Unknown(5)) for Broodmother spider micro
+            if let EventType::ButtonPress(button) = event.event_type {
+                // Mouse5 is typically Button::Unknown(5) on macOS
+                let is_mouse5 = matches!(button, Button::Unknown(5) | Button::Unknown(4));
+                if is_mouse5 && BROODMOTHER_ACTIVE.load(Ordering::SeqCst) {
+                    let settings = config.settings.lock().unwrap().clone();
+                    if settings.heroes.broodmother.spider_micro_enabled {
+                        info!("🕷️ Mouse5 pressed - Broodmother spider attack-move");
+                        let _ = event_tx.send(HotkeyEvent::BroodmotherSpiderAttack);
+                        // Spawn in thread to not block the grab callback
+                        thread::spawn(move || {
+                            crate::actions::heroes::broodmother::BroodmotherScript::execute_spider_attack_move(&settings);
+                        });
+                        return None; // Block the original mouse button
+                    }
+                }
             }
             
             if let EventType::KeyPress(key) = event.event_type {
