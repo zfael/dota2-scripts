@@ -51,18 +51,26 @@ pub fn key_up(key_char: char) {
 
 /// Perform a right mouse click
 pub fn mouse_click() {
+    SIMULATING_KEYS.store(true, Ordering::SeqCst);
     let mut enigo = ENIGO.lock().unwrap();
     if let Err(e) = enigo.button(Button::Right, Direction::Click) {
         warn!("Failed to perform right click: {}", e);
     }
+    drop(enigo);
+    std::thread::sleep(std::time::Duration::from_millis(10));
+    SIMULATING_KEYS.store(false, Ordering::SeqCst);
 }
 
 /// Perform a left mouse click
 pub fn left_click() {
+    SIMULATING_KEYS.store(true, Ordering::SeqCst);
     let mut enigo = ENIGO.lock().unwrap();
     if let Err(e) = enigo.button(Button::Left, Direction::Click) {
         warn!("Failed to perform left click: {}", e);
     }
+    drop(enigo);
+    std::thread::sleep(std::time::Duration::from_millis(10));
+    SIMULATING_KEYS.store(false, Ordering::SeqCst);
 }
 
 /// Hold ALT key down

@@ -87,6 +87,18 @@ pub struct BroodmotherConfig {
     pub reselect_hero_key: String,
     #[serde(default = "default_broodmother_attack_key")]
     pub attack_key: char,
+    #[serde(default = "default_auto_items_enabled")]
+    pub auto_items_enabled: bool,
+    #[serde(default = "default_auto_items_modifier")]
+    pub auto_items_modifier: String,
+    #[serde(default = "default_auto_items")]
+    pub auto_items: Vec<String>,
+    #[serde(default = "default_auto_ult_enabled")]
+    pub auto_ult_enabled: bool,
+    #[serde(default = "default_auto_q_enabled")]
+    pub auto_q_enabled: bool,
+    #[serde(default = "default_auto_q_hp_threshold")]
+    pub auto_q_hp_threshold: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -325,6 +337,25 @@ fn default_broodmother_attack_key() -> char {
     'a'
 }
 
+fn default_auto_items_enabled() -> bool {
+    false
+}
+fn default_auto_items_modifier() -> String {
+    "Space".to_string()
+}
+fn default_auto_items() -> Vec<String> {
+    vec![]
+}
+fn default_auto_ult_enabled() -> bool {
+    false
+}
+fn default_auto_q_enabled() -> bool {
+    false
+}
+fn default_auto_q_hp_threshold() -> u32 {
+    50  // Use Q when HP below 50%
+}
+
 fn default_amphibian_enabled() -> bool {
     true
 }
@@ -526,6 +557,12 @@ impl Default for BroodmotherConfig {
             spider_control_group_key: default_broodmother_spider_control_group(),
             reselect_hero_key: default_broodmother_reselect_hero_key(),
             attack_key: default_broodmother_attack_key(),
+            auto_items_enabled: default_auto_items_enabled(),
+            auto_items_modifier: default_auto_items_modifier(),
+            auto_items: default_auto_items(),
+            auto_ult_enabled: default_auto_ult_enabled(),
+            auto_q_enabled: default_auto_q_enabled(),
+            auto_q_hp_threshold: default_auto_q_hp_threshold(),
         }
     }
 }

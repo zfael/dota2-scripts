@@ -91,11 +91,18 @@ r_ability_key = "r"  # Amphibian Rhapsody toggle
 standalone_key = "Home"  # Manual ultimate activation
 
 [heroes.broodmother]
-# Spider micro: Mouse5 triggers select spiders → A-click → reselect hero
+# Spider micro: Middle Mouse triggers select spiders → right-click → reselect hero
 spider_micro_enabled = true
-spider_control_group_key = "F2"  # Key to select spiderlings
-reselect_hero_key = "F1"         # Key to reselect hero after command
-attack_key = "a"                 # Attack-move command key
+spider_control_group_key = "F3"  # Use "Select All Other Units" hotkey (bind in Dota 2 settings)
+reselect_hero_key = "1"          # Key to reselect hero after command
+attack_key = "a"                 # Not used (right-click move instead)
+# Auto-items: Hold modifier + right-click to use items then attack
+auto_items_enabled = true
+auto_items_modifier = "Space"    # Hold this key + right-click
+auto_items = ["orchid", "bloodthorn", "diffusal", "disperser", "nullifier", "abyssal_blade"]
+auto_ult_enabled = true          # Also press R (ultimate) during combo
+auto_q_enabled = true            # Use Q when HP below threshold
+auto_q_hp_threshold = 80         # HP% threshold for auto-Q
 
 [gsi_logging]
 enabled = false

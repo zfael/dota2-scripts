@@ -6,6 +6,7 @@ use std::thread;
 use std::time::Duration;
 use tracing::{debug, error, info, warn};
 
+use crate::actions::auto_items::MODIFIER_KEY_HELD;
 use crate::actions::heroes::broodmother::BROODMOTHER_ACTIVE;
 use crate::actions::heroes::shadow_fiend::ShadowFiendState;
 use crate::actions::SOUL_RING_STATE;
@@ -238,11 +239,39 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                 return Some(event);
             }
             
-            // Handle Mouse5 (Button::Unknown(5)) for Broodmother spider micro
+            // Track Space key (modifier for auto-items)
+            match event.event_type {
+                EventType::KeyPress(Key::Space) => {
+                    MODIFIER_KEY_HELD.store(true, Ordering::SeqCst);
+                }
+                EventType::KeyRelease(Key::Space) => {
+                    MODIFIER_KEY_HELD.store(false, Ordering::SeqCst);
+                }
+                _ => {}
+            }
+            
+            // Handle Space + Right-click for Broodmother auto-items
+            if let EventType::ButtonPress(Button::Right) = event.event_type {
+                if MODIFIER_KEY_HELD.load(Ordering::SeqCst) && BROODMOTHER_ACTIVE.load(Ordering::SeqCst) {
+                    let settings = config.settings.lock().unwrap().clone();
+                    if settings.heroes.broodmother.auto_items_enabled {
+                        let items = settings.heroes.broodmother.auto_items.clone();
+                        let use_ult = settings.heroes.broodmother.auto_ult_enabled;
+                        let use_q = settings.heroes.broodmother.auto_q_enabled;
+                        let q_threshold = settings.heroes.broodmother.auto_q_hp_threshold;
+                        debug!("🎯 Space+Right-click - Broodmother auto-items");
+                        thread::spawn(move || {
+                            crate::actions::auto_items::execute_auto_items(&settings, &items, use_ult, use_q, q_threshold);
+                        });
+                        return None; // Block original right-click
+                    }
+                }
+            }
+            
+            // Handle Middle Mouse button for Broodmother spider micro
             if let EventType::ButtonPress(button) = event.event_type {
-                // Mouse5 is typically Button::Unknown(5) on macOS
-                let is_mouse5 = matches!(button, Button::Unknown(5) | Button::Unknown(4));
-                if is_mouse5 && BROODMOTHER_ACTIVE.load(Ordering::SeqCst) {
+                let is_spider_micro_button = matches!(button, Button::Middle);
+                if is_spider_micro_button && BROODMOTHER_ACTIVE.load(Ordering::SeqCst) {
                     let settings = config.settings.lock().unwrap().clone();
                     if settings.heroes.broodmother.spider_micro_enabled {
                         info!("🕷️ Mouse5 pressed - Broodmother spider attack-move");
