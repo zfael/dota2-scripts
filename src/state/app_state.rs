@@ -82,12 +82,13 @@ impl AppState {
 
     pub fn update_from_gsi(&mut self, event: GsiWebhookEvent) {
         // Update hero selection based on the GSI event if it changed
-        if let Some(hero_type) = HeroType::from_hero_name(&event.hero.name) {
-            if self.selected_hero != Some(hero_type) {
-                self.selected_hero = Some(hero_type);
-                // Update sf_enabled flag when hero changes via GSI
-                *self.sf_enabled.lock().unwrap() = hero_type == HeroType::ShadowFiend;
-            }
+        let hero_type = HeroType::from_hero_name(&event.hero.name);
+        
+        if self.selected_hero != hero_type {
+            self.selected_hero = hero_type;
+            // Update sf_enabled flag when hero changes via GSI
+            // Must be explicitly set to false when not SF to avoid stale state
+            *self.sf_enabled.lock().unwrap() = hero_type == Some(HeroType::ShadowFiend);
         }
 
         self.last_event = Some(event);
