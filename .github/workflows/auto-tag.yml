@@ -17,6 +17,12 @@ jobs:
           fetch-depth: 0  # Fetch all history for accurate version detection
           token: ${{ secrets.PAT_TOKEN }}
 
+      - name: Fetch all tags
+        run: |
+          git fetch --tags --force
+          echo "Available tags:"
+          git tag -l 'v*' | head -20
+
       - name: Get latest stable tag
         id: get_latest_tag
         run: |
@@ -57,7 +63,18 @@ jobs:
           
           # Remove 'v' prefix for version manipulation
           VERSION=${LATEST_STABLE#v}
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+          
+          # Parse version components using cut (more reliable than IFS)
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          PATCH=$(echo "$VERSION" | cut -d. -f3)
+          
+          # Default to 0 if empty
+          MAJOR=${MAJOR:-0}
+          MINOR=${MINOR:-0}
+          PATCH=${PATCH:-0}
+          
+          echo "Parsed version: MAJOR=$MAJOR, MINOR=$MINOR, PATCH=$PATCH"
           
           # Get commit messages since last STABLE tag
           if [ "$LATEST_STABLE" = "v0.0.0" ]; then
