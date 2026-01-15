@@ -1,4 +1,4 @@
-name: Auto Tag
+name: Auto Tag (RC)
 
 on:
   push:
@@ -17,53 +17,56 @@ jobs:
           fetch-depth: 0  # Fetch all history for accurate version detection
           token: ${{ secrets.PAT_TOKEN }}
 
-      - name: Get latest tag
+      - name: Get latest stable tag
         id: get_latest_tag
         run: |
-          # Get the latest tag, default to v0.0.0 if no tags exist
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
-          echo "Latest tag: $LATEST_TAG"
+          # Get the latest STABLE tag (no -rc suffix), default to v0.0.0 if none exist
+          LATEST_STABLE=$(git tag -l 'v*' | grep -v '\-rc' | sort -V | tail -n1 || echo "")
+          if [ -z "$LATEST_STABLE" ]; then
+            LATEST_STABLE="v0.0.0"
+          fi
+          echo "latest_stable=$LATEST_STABLE" >> $GITHUB_OUTPUT
+          echo "Latest stable tag: $LATEST_STABLE"
 
-      - name: Check for new commits
+      - name: Check for new commits since stable
         id: check_commits
         run: |
-          LATEST_TAG="${{ steps.get_latest_tag.outputs.latest_tag }}"
+          LATEST_STABLE="${{ steps.get_latest_tag.outputs.latest_stable }}"
           
-          if [ "$LATEST_TAG" = "v0.0.0" ]; then
+          if [ "$LATEST_STABLE" = "v0.0.0" ]; then
             COMMIT_COUNT=$(git rev-list --count HEAD)
           else
-            COMMIT_COUNT=$(git rev-list --count ${LATEST_TAG}..HEAD)
+            COMMIT_COUNT=$(git rev-list --count ${LATEST_STABLE}..HEAD)
           fi
           
           echo "commit_count=$COMMIT_COUNT" >> $GITHUB_OUTPUT
           
           if [ "$COMMIT_COUNT" -eq 0 ]; then
             echo "has_new_commits=false" >> $GITHUB_OUTPUT
-            echo "ℹ️  No new commits since $LATEST_TAG, skipping tag creation"
+            echo "ℹ️  No new commits since $LATEST_STABLE, skipping tag creation"
           else
             echo "has_new_commits=true" >> $GITHUB_OUTPUT
-            echo "📝 Found $COMMIT_COUNT new commit(s) since $LATEST_TAG"
+            echo "📝 Found $COMMIT_COUNT new commit(s) since $LATEST_STABLE"
           fi
 
       - name: Determine version bump
         if: steps.check_commits.outputs.has_new_commits == 'true'
         id: version_bump
         run: |
-          LATEST_TAG="${{ steps.get_latest_tag.outputs.latest_tag }}"
+          LATEST_STABLE="${{ steps.get_latest_tag.outputs.latest_stable }}"
           
           # Remove 'v' prefix for version manipulation
-          VERSION=${LATEST_TAG#v}
+          VERSION=${LATEST_STABLE#v}
           IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
           
-          # Get commit messages since last tag
-          if [ "$LATEST_TAG" = "v0.0.0" ]; then
+          # Get commit messages since last STABLE tag
+          if [ "$LATEST_STABLE" = "v0.0.0" ]; then
             COMMITS=$(git log --pretty=format:"%s" HEAD)
           else
-            COMMITS=$(git log --pretty=format:"%s" ${LATEST_TAG}..HEAD)
+            COMMITS=$(git log --pretty=format:"%s" ${LATEST_STABLE}..HEAD)
           fi
           
-          echo "Analyzing commits:"
+          echo "Analyzing commits since stable:"
           echo "$COMMITS"
           
           # Determine bump type based on conventional commits
@@ -83,7 +86,7 @@ jobs:
             echo "🐛 Patch/fix detected"
           fi
           
-          # Calculate new version
+          # Calculate new base version
           case "$BUMP_TYPE" in
             major)
               MAJOR=$((MAJOR + 1))
@@ -99,16 +102,46 @@ jobs:
               ;;
           esac
           
+          BASE_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          echo "base_version=$BASE_VERSION" >> $GITHUB_OUTPUT
+          echo "bump_type=$BUMP_TYPE" >> $GITHUB_OUTPUT
+          echo "Base version will be: $BASE_VERSION"
+
+      - name: Determine RC number
+        if: steps.check_commits.outputs.has_new_commits == 'true'
+        id: rc_number
+        run: |
+          BASE_VERSION="${{ steps.version_bump.outputs.base_version }}"
+          
+          # Find existing RC tags for this base version
+          EXISTING_RCS=$(git tag -l "v${BASE_VERSION}-rc.*" | sort -V)
+          
+          if [ -z "$EXISTING_RCS" ]; then
+            RC_NUM=1
+            echo "No existing RCs for v${BASE_VERSION}, starting at rc.1"
+          else
+            # Get the highest RC number
+            LAST_RC=$(echo "$EXISTING_RCS" | tail -n1)
+            LAST_RC_NUM=$(echo "$LAST_RC" | sed "s/v${BASE_VERSION}-rc\.//")
+            RC_NUM=$((LAST_RC_NUM + 1))
+            echo "Found existing RCs, incrementing to rc.${RC_NUM}"
+          fi
+          
+          NEW_VERSION="v${BASE_VERSION}-rc.${RC_NUM}"
+          echo "rc_num=$RC_NUM" >> $GITHUB_OUTPUT
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "New RC version will be: $NEW_VERSION"
+          
           NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
           echo "bump_type=$BUMP_TYPE" >> $GITHUB_OUTPUT
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "New version will be: $NEW_VERSION"
 
-      - name: Check if version already exists
+      - name: Check if RC tag already exists
         if: steps.check_commits.outputs.has_new_commits == 'true'
         id: check_tag
         run: |
-          NEW_VERSION="${{ steps.version_bump.outputs.new_version }}"
+          NEW_VERSION="${{ steps.rc_number.outputs.new_version }}"
           if git rev-parse "$NEW_VERSION" >/dev/null 2>&1; then
             echo "tag_exists=true" >> $GITHUB_OUTPUT
             echo "⚠️  Tag $NEW_VERSION already exists, skipping"
@@ -117,10 +150,10 @@ jobs:
             echo "✅ Tag $NEW_VERSION is new"
           fi
 
-      - name: Create and push tag
+      - name: Create and push RC tag
         if: steps.check_commits.outputs.has_new_commits == 'true' && steps.check_tag.outputs.tag_exists == 'false'
         run: |
-          NEW_VERSION="${{ steps.version_bump.outputs.new_version }}"
+          NEW_VERSION="${{ steps.rc_number.outputs.new_version }}"
           BUMP_TYPE="${{ steps.version_bump.outputs.bump_type }}"
           
           # Configure git with PAT token
@@ -128,9 +161,11 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
           # Create annotated tag with message
-          git tag -a "$NEW_VERSION" -m "Auto-tagged $NEW_VERSION ($BUMP_TYPE bump)
+          git tag -a "$NEW_VERSION" -m "Release Candidate $NEW_VERSION ($BUMP_TYPE bump)
           
-          Generated by GitHub Actions from commit ${{ github.sha }}"
+          Generated by GitHub Actions from commit ${{ github.sha }}
+          
+          This is a pre-release version. Use 'Promote Release' workflow to create stable release."
           
           # Push tag (token is already configured in checkout action)
           echo "Pushing tag $NEW_VERSION..."
@@ -139,15 +174,17 @@ jobs:
             exit 1
           }
           
-          echo "🎉 Created and pushed tag: $NEW_VERSION"
+          echo "🎉 Created and pushed RC tag: $NEW_VERSION"
 
       - name: Summary
         if: steps.check_commits.outputs.has_new_commits == 'true' && steps.check_tag.outputs.tag_exists == 'false'
         run: |
-          echo "## 🏷️ Auto-Tagging Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## 🏷️ Auto-Tagging Summary (Release Candidate)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Previous Version:** ${{ steps.get_latest_tag.outputs.latest_tag }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **New Version:** ${{ steps.version_bump.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Latest Stable:** ${{ steps.get_latest_tag.outputs.latest_stable }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **New RC Version:** ${{ steps.rc_number.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Bump Type:** ${{ steps.version_bump.outputs.bump_type }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "The release workflow will now build and create a GitHub release automatically." >> $GITHUB_STEP_SUMMARY
+          echo "The release workflow will now build and create a **pre-release** on GitHub." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "To promote this to a stable release, run the **Promote Release** workflow." >> $GITHUB_STEP_SUMMARY

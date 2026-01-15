@@ -85,6 +85,8 @@ jobs:
           body: |
             ## Dota2 Scripts ${{ github.ref_name }}
             
+            ${{ contains(github.ref, '-rc') && '⚠️ **This is a Release Candidate** - Not recommended for production use. Please test and report issues.' || '' }}
+            
             ⚠️ **WARNING**: Using game automation scripts may violate Terms of Service and result in account bans. Use at your own risk!
             
             ### Downloads
@@ -103,6 +105,6 @@ jobs:
             
             See [README.md](https://github.com/${{ github.repository }}/blob/main/README.md) for setup and usage instructions.
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref, '-rc') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
