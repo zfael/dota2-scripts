@@ -148,11 +148,6 @@ jobs:
           echo "rc_num=$RC_NUM" >> $GITHUB_OUTPUT
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "New RC version will be: $NEW_VERSION"
-          
-          NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
-          echo "bump_type=$BUMP_TYPE" >> $GITHUB_OUTPUT
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "New version will be: $NEW_VERSION"
 
       - name: Check if RC tag already exists
         if: steps.check_commits.outputs.has_new_commits == 'true'
