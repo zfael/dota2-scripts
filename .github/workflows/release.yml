@@ -68,6 +68,88 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch all tags
+        run: git fetch --tags --force
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          CURRENT_TAG="${{ github.ref_name }}"
+          echo "Current tag: $CURRENT_TAG"
+          
+          # Determine comparison tag based on version type
+          if [[ "$CURRENT_TAG" =~ -rc\.([0-9]+)$ ]]; then
+            # This is an RC release
+            RC_NUM="${BASH_REMATCH[1]}"
+            BASE_VERSION=$(echo "$CURRENT_TAG" | sed 's/-rc\.[0-9]*$//')
+            
+            if [ "$RC_NUM" -eq 1 ]; then
+              # First RC: compare with previous stable
+              COMPARE_TAG=$(git tag -l 'v*' | grep -v '\-rc' | sort -V | tail -n1)
+              COMPARE_TYPE="stable release"
+            else
+              # Subsequent RC: compare with previous RC
+              PREV_RC=$((RC_NUM - 1))
+              COMPARE_TAG="${BASE_VERSION}-rc.${PREV_RC}"
+              COMPARE_TYPE="previous RC"
+            fi
+          else
+            # This is a stable release: compare with previous stable
+            COMPARE_TAG=$(git tag -l 'v*' | grep -v '\-rc' | grep -v "^${CURRENT_TAG}$" | sort -V | tail -n1)
+            COMPARE_TYPE="stable release"
+          fi
+          
+          echo "Comparing with: $COMPARE_TAG ($COMPARE_TYPE)"
+          echo "compare_tag=$COMPARE_TAG" >> $GITHUB_OUTPUT
+          echo "compare_type=$COMPARE_TYPE" >> $GITHUB_OUTPUT
+          
+          # Generate changelog
+          if [ -n "$COMPARE_TAG" ] && git rev-parse "$COMPARE_TAG" >/dev/null 2>&1; then
+            echo "Generating changelog from $COMPARE_TAG to $CURRENT_TAG"
+            
+            # Get commits grouped by type
+            FEATURES=$(git log ${COMPARE_TAG}..${CURRENT_TAG} --pretty=format:"- %s" --grep="^feat" --extended-regexp | head -20)
+            FIXES=$(git log ${COMPARE_TAG}..${CURRENT_TAG} --pretty=format:"- %s" --grep="^fix" --extended-regexp | head -20)
+            OTHER=$(git log ${COMPARE_TAG}..${CURRENT_TAG} --pretty=format:"- %s" --grep="^\(chore\|docs\|refactor\|perf\|test\|build\|ci\|style\)" --extended-regexp | head -10)
+            
+            # Build changelog markdown
+            CHANGELOG=""
+            
+            if [ -n "$FEATURES" ]; then
+              CHANGELOG="${CHANGELOG}#### ✨ New Features\n${FEATURES}\n\n"
+            fi
+            
+            if [ -n "$FIXES" ]; then
+              CHANGELOG="${CHANGELOG}#### 🐛 Bug Fixes\n${FIXES}\n\n"
+            fi
+            
+            if [ -n "$OTHER" ]; then
+              CHANGELOG="${CHANGELOG}#### 🔧 Other Changes\n${OTHER}\n\n"
+            fi
+            
+            if [ -z "$CHANGELOG" ]; then
+              # Fallback: show all commits if no conventional commits found
+              ALL_COMMITS=$(git log ${COMPARE_TAG}..${CURRENT_TAG} --pretty=format:"- %s" | head -20)
+              if [ -n "$ALL_COMMITS" ]; then
+                CHANGELOG="#### 📝 Changes\n${ALL_COMMITS}\n\n"
+              else
+                CHANGELOG="No changes detected.\n"
+              fi
+            fi
+            
+            # Add comparison link
+            CHANGELOG="${CHANGELOG}**Full Changelog**: https://github.com/${{ github.repository }}/compare/${COMPARE_TAG}...${CURRENT_TAG}"
+          else
+            CHANGELOG="Initial release.\n\n**Full Changelog**: https://github.com/${{ github.repository }}/commits/${CURRENT_TAG}"
+          fi
+          
+          # Save to file (handles multiline)
+          echo -e "$CHANGELOG" > changelog.md
+          echo "Changelog generated:"
+          cat changelog.md
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -77,33 +159,51 @@ jobs:
       - name: Display structure of downloaded files
         run: ls -R artifacts
 
+      - name: Prepare release body
+        run: |
+          cat << 'HEADER' > release_body.md
+          ## Dota2 Scripts ${{ github.ref_name }}
+          
+          ${{ contains(github.ref, '-rc') && '⚠️ **This is a Release Candidate** - Not recommended for production use. Please test and report issues.' || '' }}
+          
+          ### 📋 Changelog (compared to ${{ steps.changelog.outputs.compare_tag }})
+          
+          HEADER
+          
+          cat changelog.md >> release_body.md
+          
+          cat << 'FOOTER' >> release_body.md
+          
+          ---
+          
+          ⚠️ **WARNING**: Using game automation scripts may violate Terms of Service and result in account bans. Use at your own risk!
+          
+          ### 📥 Downloads
+          - **Windows**: `dota2-scripts-${{ github.ref_name }}-windows-x64.exe`
+          
+          ### 📋 Requirements
+          - Windows 10/11
+          - Administrator privileges (UAC prompt will appear on launch)
+          - Dota 2 with GSI configured
+          
+          ### ⚡ Features
+          - Automatic armlet toggling
+          - Hero-specific combos (Huskar, Legion Commander, Shadow Fiend, Tiny)
+          - GSI event-based automation
+          - Standalone hotkey triggers
+          
+          See [README.md](https://github.com/${{ github.repository }}/blob/main/README.md) for setup and usage instructions.
+          FOOTER
+          
+          echo "Final release body:"
+          cat release_body.md
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
             artifacts/dota2-scripts-${{ github.ref_name }}-windows-x64/dota2-scripts-${{ github.ref_name }}-windows-x64.exe
-          body: |
-            ## Dota2 Scripts ${{ github.ref_name }}
-            
-            ${{ contains(github.ref, '-rc') && '⚠️ **This is a Release Candidate** - Not recommended for production use. Please test and report issues.' || '' }}
-            
-            ⚠️ **WARNING**: Using game automation scripts may violate Terms of Service and result in account bans. Use at your own risk!
-            
-            ### Downloads
-            - **Windows**: `dota2-scripts-${{ github.ref_name }}-windows-x64.exe`
-            
-            ### Requirements
-            - Windows 10/11
-            - Administrator privileges (UAC prompt will appear on launch)
-            - Dota 2 with GSI configured
-            
-            ### Features
-            - Automatic armlet toggling
-            - Hero-specific combos (Huskar, Legion Commander, Shadow Fiend, Tiny)
-            - GSI event-based automation
-            - Standalone hotkey triggers
-            
-            See [README.md](https://github.com/${{ github.repository }}/blob/main/README.md) for setup and usage instructions.
+          body_path: release_body.md
           draft: false
           prerelease: ${{ contains(github.ref, '-rc') }}
         env:
