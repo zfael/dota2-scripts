@@ -133,6 +133,14 @@ async fn main() {
                         }
                     }
                 }
+                input::keyboard::HotkeyEvent::BroodmotherSpiderAttack => {
+                    // Mouse5 triggers spider attack-move macro when Broodmother is active
+                    if crate::actions::heroes::broodmother::BROODMOTHER_ACTIVE.load(std::sync::atomic::Ordering::SeqCst) {
+                        if let Some(script) = dispatcher_clone2.hero_scripts.get(models::Hero::Broodmother.to_game_name()) {
+                            script.handle_standalone_trigger();
+                        }
+                    }
+                }
             }
         }
     });

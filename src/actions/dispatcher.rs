@@ -1,12 +1,14 @@
 use crate::actions::common::SurvivabilityActions;
-use crate::actions::heroes::{HeroScript, HuskarScript, LargoScript, LegionCommanderScript, ShadowFiendScript, TinyScript};
+use crate::actions::heroes::broodmother::BROODMOTHER_ACTIVE;
+use crate::actions::heroes::{BroodmotherScript, HeroScript, HuskarScript, LargoScript, LegionCommanderScript, ShadowFiendScript, TinyScript};
 use crate::actions::soul_ring;
 use crate::config::Settings;
-use crate::models::GsiWebhookEvent;
+use crate::models::{GsiWebhookEvent, Hero};
 use lazy_static::lazy_static;
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use tracing::{debug, warn};
 
@@ -100,6 +102,9 @@ impl ActionDispatcher {
         let tiny = Arc::new(TinyScript::new(settings.clone()));
         hero_scripts.insert(tiny.hero_name().to_string(), tiny);
 
+        let broodmother = Arc::new(BroodmotherScript::new(settings.clone()));
+        hero_scripts.insert(broodmother.hero_name().to_string(), broodmother);
+
         Self {
             hero_scripts,
             survivability: SurvivabilityActions::new(settings),
@@ -115,6 +120,13 @@ impl ActionDispatcher {
         soul_ring::update_from_gsi(&event.items, &event.hero, &settings);
         
         drop(settings); // Release lock before further processing
+        
+        // Update Broodmother active state for all GSI events (enables/disables Mouse5 interception)
+        let is_broodmother = event.hero.name == Hero::Broodmother.to_game_name();
+        BROODMOTHER_ACTIVE.store(is_broodmother, Ordering::SeqCst);
+        
+        // Update auto-items GSI cache (for item availability checking)
+        crate::actions::auto_items::update_gsi_state(event);
         
         // Check if hero has a custom handler
         if let Some(hero_script) = self.hero_scripts.get(&event.hero.name) {

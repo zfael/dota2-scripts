@@ -78,6 +78,30 @@ pub struct TinyConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BroodmotherConfig {
+    #[serde(default = "default_broodmother_enabled")]
+    pub spider_micro_enabled: bool,
+    #[serde(default = "default_broodmother_spider_control_group")]
+    pub spider_control_group_key: String,
+    #[serde(default = "default_broodmother_reselect_hero_key")]
+    pub reselect_hero_key: String,
+    #[serde(default = "default_broodmother_attack_key")]
+    pub attack_key: char,
+    #[serde(default = "default_auto_items_enabled")]
+    pub auto_items_enabled: bool,
+    #[serde(default = "default_auto_items_modifier")]
+    pub auto_items_modifier: String,
+    #[serde(default = "default_auto_items")]
+    pub auto_items: Vec<String>,
+    #[serde(default = "default_auto_ult_enabled")]
+    pub auto_ult_enabled: bool,
+    #[serde(default = "default_auto_q_enabled")]
+    pub auto_q_enabled: bool,
+    #[serde(default = "default_auto_q_hp_threshold")]
+    pub auto_q_hp_threshold: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LargoConfig {
     #[serde(default = "default_amphibian_enabled")]
     pub amphibian_rhapsody_enabled: bool,
@@ -117,6 +141,8 @@ pub struct HeroesConfig {
     pub tiny: TinyConfig,
     #[serde(default)]
     pub largo: LargoConfig,
+    #[serde(default)]
+    pub broodmother: BroodmotherConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -296,6 +322,38 @@ fn default_sf_raze_enabled() -> bool {
 }
 fn default_raze_delay() -> u64 {
     100
+}
+
+fn default_broodmother_enabled() -> bool {
+    true
+}
+fn default_broodmother_spider_control_group() -> String {
+    "F2".to_string()
+}
+fn default_broodmother_reselect_hero_key() -> String {
+    "F1".to_string()
+}
+fn default_broodmother_attack_key() -> char {
+    'a'
+}
+
+fn default_auto_items_enabled() -> bool {
+    false
+}
+fn default_auto_items_modifier() -> String {
+    "Space".to_string()
+}
+fn default_auto_items() -> Vec<String> {
+    vec![]
+}
+fn default_auto_ult_enabled() -> bool {
+    false
+}
+fn default_auto_q_enabled() -> bool {
+    false
+}
+fn default_auto_q_hp_threshold() -> u32 {
+    50  // Use Q when HP below 50%
 }
 
 fn default_amphibian_enabled() -> bool {
@@ -492,6 +550,23 @@ impl Default for ShadowFiendConfig {
     }
 }
 
+impl Default for BroodmotherConfig {
+    fn default() -> Self {
+        Self {
+            spider_micro_enabled: default_broodmother_enabled(),
+            spider_control_group_key: default_broodmother_spider_control_group(),
+            reselect_hero_key: default_broodmother_reselect_hero_key(),
+            attack_key: default_broodmother_attack_key(),
+            auto_items_enabled: default_auto_items_enabled(),
+            auto_items_modifier: default_auto_items_modifier(),
+            auto_items: default_auto_items(),
+            auto_ult_enabled: default_auto_ult_enabled(),
+            auto_q_enabled: default_auto_q_enabled(),
+            auto_q_hp_threshold: default_auto_q_hp_threshold(),
+        }
+    }
+}
+
 impl Default for TinyConfig {
     fn default() -> Self {
         Self {
@@ -527,6 +602,7 @@ impl Default for HeroesConfig {
             shadow_fiend: ShadowFiendConfig::default(),
             tiny: TinyConfig::default(),
             largo: LargoConfig::default(),
+            broodmother: BroodmotherConfig::default(),
         }
     }
 }
