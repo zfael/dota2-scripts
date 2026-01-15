@@ -52,6 +52,8 @@ auto_blade_mail = true
 auto_glimmer_cape = true
 auto_ghost_scepter = true
 auto_shivas_guard = true
+# Auto-use Manta Style when silenced (independent of danger detection)
+auto_manta_on_silence = true
 
 [neutral_items]
 enabled = true

@@ -119,6 +119,9 @@ impl ActionDispatcher {
         // Update Soul Ring state from GSI event
         soul_ring::update_from_gsi(&event.items, &event.hero, &settings);
         
+        // Check for silence dispel with Manta Style
+        crate::actions::dispel::check_and_dispel_silence(event, &settings);
+        
         drop(settings); // Release lock before further processing
         
         // Update Broodmother active state for all GSI events (enables/disables Mouse5 interception)
