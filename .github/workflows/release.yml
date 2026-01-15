@@ -45,18 +45,31 @@ jobs:
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Rename artifact
-        shell: bash
+      - name: Package artifact with config
+        shell: pwsh
         run: |
-          mkdir -p artifacts
-          VERSION="${GITHUB_REF#refs/tags/}"
-          cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} artifacts/dota2-scripts-${VERSION}-windows-x64.exe
+          $VERSION = "${{ github.ref_name }}"
+          $PACKAGE_DIR = "artifacts/dota2-scripts-${VERSION}-windows-x64"
+          
+          # Create package directory structure
+          New-Item -ItemType Directory -Force -Path $PACKAGE_DIR
+          New-Item -ItemType Directory -Force -Path "$PACKAGE_DIR/config"
+          
+          # Copy executable and config
+          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" -Destination "$PACKAGE_DIR/dota2-scripts.exe"
+          Copy-Item "config/config.toml" -Destination "$PACKAGE_DIR/config/config.toml"
+          
+          # Create ZIP archive
+          Compress-Archive -Path "$PACKAGE_DIR/*" -DestinationPath "artifacts/dota2-scripts-${VERSION}-windows-x64.zip" -Force
+          
+          Write-Host "Package contents:"
+          Get-ChildItem -Recurse $PACKAGE_DIR
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: dota2-scripts-${{ github.ref_name }}-windows-x64
-          path: artifacts/dota2-scripts-${{ github.ref_name }}-windows-x64.exe
+          path: artifacts/dota2-scripts-${{ github.ref_name }}-windows-x64.zip
 
   release:
     name: Create Release
@@ -179,7 +192,7 @@ jobs:
           ⚠️ **WARNING**: Using game automation scripts may violate Terms of Service and result in account bans. Use at your own risk!
           
           ### 📥 Downloads
-          - **Windows**: `dota2-scripts-${{ github.ref_name }}-windows-x64.exe`
+          - **Windows**: `dota2-scripts-${{ github.ref_name }}-windows-x64.zip` (includes exe + config)
           
           ### 📋 Requirements
           - Windows 10/11
@@ -202,7 +215,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/dota2-scripts-${{ github.ref_name }}-windows-x64/dota2-scripts-${{ github.ref_name }}-windows-x64.exe
+            artifacts/dota2-scripts-${{ github.ref_name }}-windows-x64/dota2-scripts-${{ github.ref_name }}-windows-x64.zip
           body_path: release_body.md
           draft: false
           prerelease: ${{ contains(github.ref, '-rc') }}
