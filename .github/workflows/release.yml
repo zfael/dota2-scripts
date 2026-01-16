@@ -36,19 +36,37 @@ jobs:
           
           Write-Host "Syncing Cargo.toml version to: $VERSION"
           
-          # Read Cargo.toml and update version
-          $cargo = Get-Content "Cargo.toml" -Raw
-          $cargo = $cargo -replace 'version = "[^"]*"', "version = `"$VERSION`""
-          Set-Content "Cargo.toml" -Value $cargo -NoNewline
+          # Read Cargo.toml and update ONLY the package version (first occurrence after [package])
+          $lines = Get-Content "Cargo.toml"
+          $inPackage = $false
+          $versionUpdated = $false
           
-          # Verify the change
-          $newVersion = (Select-String -Path "Cargo.toml" -Pattern 'version = "([^"]*)"' | Select-Object -First 1).Matches.Groups[1].Value
-          Write-Host "Cargo.toml version is now: $newVersion"
+          for ($i = 0; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -match '^\[package\]') {
+              $inPackage = $true
+            }
+            elseif ($lines[$i] -match '^\[' -and $inPackage) {
+              # Hit another section, stop looking
+              break
+            }
+            elseif ($inPackage -and -not $versionUpdated -and $lines[$i] -match '^version\s*=') {
+              $lines[$i] = "version = `"$VERSION`""
+              $versionUpdated = $true
+              Write-Host "Updated line $($i + 1): $($lines[$i])"
+            }
+          }
           
-          if ($newVersion -ne $VERSION) {
-            Write-Error "Version mismatch! Expected $VERSION but got $newVersion"
+          if (-not $versionUpdated) {
+            Write-Error "Failed to find version in [package] section"
             exit 1
           }
+          
+          # Write back
+          $lines | Set-Content "Cargo.toml"
+          
+          # Verify the change
+          Write-Host "Cargo.toml [package] section:"
+          Get-Content "Cargo.toml" | Select-Object -First 10
 
       - name: Generate Cargo.lock
         run: cargo generate-lockfile
