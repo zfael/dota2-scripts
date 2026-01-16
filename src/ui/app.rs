@@ -396,13 +396,15 @@ impl Dota2ScriptApp {
                         if let Some(ref notes) = release_notes {
                             if !notes.is_empty() {
                                 ui.collapsing("Release Notes", |ui| {
-                                    // Truncate long release notes
-                                    let display_notes: String = if notes.len() > 500 {
-                                        format!("{}...", &notes[..500])
-                                    } else {
-                                        notes.clone()
-                                    };
-                                    ui.label(display_notes);
+                                    // Clean up markdown for display
+                                    let cleaned = Self::clean_release_notes(notes);
+                                    
+                                    egui::ScrollArea::vertical()
+                                        .max_height(150.0)
+                                        .show(ui, |ui| {
+                                            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+                                            ui.label(egui::RichText::new(cleaned).size(12.0));
+                                        });
                                 });
                             }
                         }
@@ -465,6 +467,43 @@ impl Dota2ScriptApp {
                 }
             }
         });
+    }
+
+    /// Clean up markdown release notes for plain text display
+    fn clean_release_notes(notes: &str) -> String {
+        notes
+            .lines()
+            .map(|line| {
+                let trimmed = line.trim();
+                // Convert markdown headers to plain text with emoji indicators
+                if trimmed.starts_with("####") {
+                    format!("  {}", trimmed.trim_start_matches('#').trim())
+                } else if trimmed.starts_with("###") {
+                    format!("\n{}", trimmed.trim_start_matches('#').trim())
+                } else if trimmed.starts_with("##") {
+                    trimmed.trim_start_matches('#').trim().to_string()
+                } else if trimmed.starts_with('#') {
+                    trimmed.trim_start_matches('#').trim().to_string()
+                } else if trimmed.starts_with("- ") {
+                    // Keep list items but clean them up
+                    format!("  • {}", trimmed.trim_start_matches("- "))
+                } else if trimmed.starts_with("* ") {
+                    format!("  • {}", trimmed.trim_start_matches("* "))
+                } else if trimmed.starts_with("**") && trimmed.ends_with("**") {
+                    // Bold text - just remove the markers
+                    trimmed.trim_matches('*').to_string()
+                } else {
+                    line.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+            // Remove excessive blank lines
+            .replace("\n\n\n", "\n\n")
+            // Truncate if too long
+            .chars()
+            .take(1000)
+            .collect()
     }
 
     fn retry_update_check(&self) {

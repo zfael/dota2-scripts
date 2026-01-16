@@ -12,7 +12,7 @@ use std::process::Command;
 use tracing::{error, info, warn};
 
 /// GitHub repository owner
-const REPO_OWNER: &str = "GabrielMajworr";
+const REPO_OWNER: &str = "zfael";
 /// GitHub repository name
 const REPO_NAME: &str = "dota2-scripts";
 
