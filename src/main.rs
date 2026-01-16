@@ -7,13 +7,15 @@ mod input;
 mod models;
 mod state;
 mod ui;
+mod update;
 
 use crate::actions::ActionDispatcher;
 use crate::config::Settings;
 use crate::gsi::start_gsi_server;
 use crate::input::keyboard::start_keyboard_listener;
-use crate::state::AppState;
+use crate::state::{AppState, UpdateCheckState};
 use crate::ui::Dota2ScriptApp;
+use crate::update::{check_for_update, UpdateCheckResult};
 use std::sync::{Arc, Mutex};
 use tracing::info;
 use tracing_subscriber;
@@ -59,6 +61,36 @@ async fn main() {
     tokio::spawn(async move {
         start_gsi_server(port, app_state_clone, dispatcher_clone, settings_clone).await;
     });
+
+    // Start update check in background (if enabled)
+    {
+        let settings_guard = settings.lock().unwrap();
+        let check_on_startup = settings_guard.updates.check_on_startup;
+        let include_prereleases = settings_guard.updates.include_prereleases;
+        drop(settings_guard);
+
+        if check_on_startup {
+            let update_state = app_state.lock().unwrap().update_state.clone();
+            *update_state.lock().unwrap() = UpdateCheckState::Checking;
+
+            tokio::task::spawn_blocking(move || {
+                match check_for_update(include_prereleases) {
+                    UpdateCheckResult::Available(info) => {
+                        *update_state.lock().unwrap() = UpdateCheckState::Available {
+                            version: info.version,
+                            release_notes: info.release_notes,
+                        };
+                    }
+                    UpdateCheckResult::UpToDate => {
+                        *update_state.lock().unwrap() = UpdateCheckState::UpToDate;
+                    }
+                    UpdateCheckResult::Error(msg) => {
+                        *update_state.lock().unwrap() = UpdateCheckState::Error(msg);
+                    }
+                }
+            });
+        }
+    }
 
     // Start hotkey event handler in background
     let app_state_clone2 = app_state.clone();

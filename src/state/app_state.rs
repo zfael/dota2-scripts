@@ -10,6 +10,26 @@ pub enum HeroType {
     Tiny,
 }
 
+/// Represents the current state of the auto-update check
+#[derive(Debug, Clone)]
+pub enum UpdateCheckState {
+    /// No update check has been performed
+    Idle,
+    /// Currently checking for updates
+    Checking,
+    /// An update is available
+    Available {
+        version: String,
+        release_notes: Option<String>,
+    },
+    /// Currently downloading the update
+    Downloading,
+    /// Update check or download failed
+    Error(String),
+    /// Already running the latest version
+    UpToDate,
+}
+
 impl HeroType {
     pub fn from_hero_name(name: &str) -> Option<Self> {
         match name {
@@ -59,6 +79,7 @@ pub struct AppState {
     pub metrics: QueueMetrics,
     pub trigger_key: Arc<Mutex<String>>,
     pub sf_enabled: Arc<Mutex<bool>>,
+    pub update_state: Arc<Mutex<UpdateCheckState>>,
 }
 
 impl Default for AppState {
@@ -71,6 +92,7 @@ impl Default for AppState {
             metrics: QueueMetrics::default(),
             trigger_key: Arc::new(Mutex::new("Home".to_string())),
             sf_enabled: Arc::new(Mutex::new(false)),
+            update_state: Arc::new(Mutex::new(UpdateCheckState::Idle)),
         }
     }
 }

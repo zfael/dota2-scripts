@@ -5,3 +5,4 @@ pub mod input;
 pub mod models;
 pub mod state;
 pub mod ui;
+pub mod update;

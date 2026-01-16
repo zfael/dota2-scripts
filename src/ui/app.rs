@@ -1,5 +1,6 @@
-use crate::state::{AppState, HeroType};
+use crate::state::{AppState, HeroType, UpdateCheckState};
 use crate::config::Settings;
+use crate::update::{apply_update, restart_application, ApplyUpdateResult};
 use eframe::egui;
 use std::sync::{Arc, Mutex};
 
@@ -7,12 +8,14 @@ use std::sync::{Arc, Mutex};
 enum Tab {
     Main,
     DangerDetection,
+    Settings,
 }
 
 pub struct Dota2ScriptApp {
     app_state: Arc<Mutex<AppState>>,
     settings: Arc<Mutex<Settings>>,
     selected_tab: Tab,
+    update_dismissed: bool,
 }
 
 impl Dota2ScriptApp {
@@ -21,6 +24,7 @@ impl Dota2ScriptApp {
             app_state,
             settings,
             selected_tab: Tab::Main,
+            update_dismissed: false,
         }
     }
 }
@@ -32,12 +36,17 @@ impl eframe::App for Dota2ScriptApp {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Dota 2 Script Automation");
+            
+            // Update notification banner
+            self.render_update_banner(ui);
+            
             ui.separator();
 
             // Tab selection
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.selected_tab, Tab::Main, "Main");
                 ui.selectable_value(&mut self.selected_tab, Tab::DangerDetection, "Danger Detection");
+                ui.selectable_value(&mut self.selected_tab, Tab::Settings, "Settings");
             });
             
             ui.separator();
@@ -49,6 +58,7 @@ impl eframe::App for Dota2ScriptApp {
                     match self.selected_tab {
                         Tab::Main => self.render_main_tab(ui),
                         Tab::DangerDetection => self.render_danger_detection_tab(ui),
+                        Tab::Settings => self.render_settings_tab(ui),
                     }
                 });
         });
@@ -351,6 +361,191 @@ impl Dota2ScriptApp {
                 tracing::error!("Failed to save settings: {}", e);
             } else {
                 tracing::info!("Danger detection settings saved");
+            }
+        }
+    }
+
+    fn render_update_banner(&mut self, ui: &mut egui::Ui) {
+        let update_state = self.app_state.lock().unwrap().update_state.clone();
+        let state = update_state.lock().unwrap().clone();
+
+        match state {
+            UpdateCheckState::Checking => {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label("Checking for updates...");
+                });
+            }
+            UpdateCheckState::Available { ref version, ref release_notes } if !self.update_dismissed => {
+                egui::Frame::none()
+                    .fill(egui::Color32::from_rgb(50, 80, 50))
+                    .inner_margin(8.0)
+                    .rounding(4.0)
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.colored_label(egui::Color32::GREEN, format!("✨ Update available: v{}", version));
+                            
+                            if ui.button("Update Now").clicked() {
+                                self.start_update();
+                            }
+                            if ui.button("Later").clicked() {
+                                self.update_dismissed = true;
+                            }
+                        });
+                        
+                        if let Some(ref notes) = release_notes {
+                            if !notes.is_empty() {
+                                ui.collapsing("Release Notes", |ui| {
+                                    // Truncate long release notes
+                                    let display_notes: String = if notes.len() > 500 {
+                                        format!("{}...", &notes[..500])
+                                    } else {
+                                        notes.clone()
+                                    };
+                                    ui.label(display_notes);
+                                });
+                            }
+                        }
+                    });
+            }
+            UpdateCheckState::Downloading => {
+                egui::Frame::none()
+                    .fill(egui::Color32::from_rgb(50, 60, 80))
+                    .inner_margin(8.0)
+                    .rounding(4.0)
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.spinner();
+                            ui.label("Downloading update...");
+                        });
+                    });
+            }
+            UpdateCheckState::Error(ref msg) => {
+                egui::Frame::none()
+                    .fill(egui::Color32::from_rgb(80, 50, 50))
+                    .inner_margin(8.0)
+                    .rounding(4.0)
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.colored_label(egui::Color32::RED, format!("❌ Update error: {}", msg));
+                            if ui.button("Retry").clicked() {
+                                self.retry_update_check();
+                            }
+                            if ui.button("Dismiss").clicked() {
+                                let update_state = self.app_state.lock().unwrap().update_state.clone();
+                                *update_state.lock().unwrap() = UpdateCheckState::Idle;
+                            }
+                        });
+                    });
+            }
+            _ => {} // Idle, UpToDate - don't show anything
+        }
+    }
+
+    fn start_update(&self) {
+        let update_state = self.app_state.lock().unwrap().update_state.clone();
+        *update_state.lock().unwrap() = UpdateCheckState::Downloading;
+
+        let update_state_clone = update_state.clone();
+        std::thread::spawn(move || {
+            match apply_update() {
+                ApplyUpdateResult::Success { new_version } => {
+                    tracing::info!("Update to v{} successful, restarting...", new_version);
+                    if let Err(e) = restart_application() {
+                        *update_state_clone.lock().unwrap() = UpdateCheckState::Error(
+                            format!("Update applied but restart failed: {}. Please restart manually.", e)
+                        );
+                    }
+                }
+                ApplyUpdateResult::UpToDate => {
+                    *update_state_clone.lock().unwrap() = UpdateCheckState::UpToDate;
+                }
+                ApplyUpdateResult::Error(msg) => {
+                    *update_state_clone.lock().unwrap() = UpdateCheckState::Error(msg);
+                }
+            }
+        });
+    }
+
+    fn retry_update_check(&self) {
+        let update_state = self.app_state.lock().unwrap().update_state.clone();
+        let include_prereleases = self.settings.lock().unwrap().updates.include_prereleases;
+        
+        *update_state.lock().unwrap() = UpdateCheckState::Checking;
+
+        let update_state_clone = update_state.clone();
+        std::thread::spawn(move || {
+            match crate::update::check_for_update(include_prereleases) {
+                crate::update::UpdateCheckResult::Available(info) => {
+                    *update_state_clone.lock().unwrap() = UpdateCheckState::Available {
+                        version: info.version,
+                        release_notes: info.release_notes,
+                    };
+                }
+                crate::update::UpdateCheckResult::UpToDate => {
+                    *update_state_clone.lock().unwrap() = UpdateCheckState::UpToDate;
+                }
+                crate::update::UpdateCheckResult::Error(msg) => {
+                    *update_state_clone.lock().unwrap() = UpdateCheckState::Error(msg);
+                }
+            }
+        });
+    }
+
+    fn render_settings_tab(&mut self, ui: &mut egui::Ui) {
+        let mut settings = self.settings.lock().unwrap();
+        
+        ui.heading("Application Settings");
+        ui.separator();
+        
+        // Update Settings
+        ui.heading("Auto-Update");
+        ui.add_space(5.0);
+        
+        ui.checkbox(&mut settings.updates.check_on_startup, "Check for updates on startup");
+        ui.label("Automatically check for new versions when the application starts");
+        
+        ui.add_space(5.0);
+        
+        ui.checkbox(&mut settings.updates.include_prereleases, "Include pre-releases");
+        ui.label("Include release candidates (RC), alpha, and beta versions");
+        
+        ui.add_space(10.0);
+        
+        // Current version info
+        ui.horizontal(|ui| {
+            ui.label("Current version:");
+            ui.strong(format!("v{}", env!("CARGO_PKG_VERSION")));
+        });
+        
+        // Manual update check button
+        ui.add_space(5.0);
+        if ui.button("Check for Updates Now").clicked() {
+            self.retry_update_check();
+        }
+        
+        // Show current update state
+        let update_state = self.app_state.lock().unwrap().update_state.clone();
+        let state = update_state.lock().unwrap().clone();
+        match state {
+            UpdateCheckState::UpToDate => {
+                ui.colored_label(egui::Color32::GREEN, "✅ You're running the latest version");
+            }
+            UpdateCheckState::Available { version, .. } => {
+                ui.colored_label(egui::Color32::YELLOW, format!("✨ Update available: v{}", version));
+            }
+            _ => {}
+        }
+        
+        ui.add_space(20.0);
+        ui.separator();
+        
+        // Save button
+        if ui.button("Save Settings").clicked() {
+            if let Err(e) = settings.save() {
+                tracing::error!("Failed to save settings: {}", e);
+            } else {
+                tracing::info!("Settings saved");
             }
         }
     }

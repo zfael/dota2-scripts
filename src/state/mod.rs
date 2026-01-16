@@ -1,3 +1,3 @@
 pub mod app_state;
 
-pub use app_state::{AppState, HeroType};
+pub use app_state::{AppState, HeroType, UpdateCheckState};

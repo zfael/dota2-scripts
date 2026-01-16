@@ -4,6 +4,31 @@ use std::fs;
 use tracing::{info, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateConfig {
+    #[serde(default = "default_check_on_startup")]
+    pub check_on_startup: bool,
+    #[serde(default = "default_include_prereleases")]
+    pub include_prereleases: bool,
+}
+
+impl Default for UpdateConfig {
+    fn default() -> Self {
+        Self {
+            check_on_startup: default_check_on_startup(),
+            include_prereleases: default_include_prereleases(),
+        }
+    }
+}
+
+fn default_check_on_startup() -> bool {
+    true
+}
+
+fn default_include_prereleases() -> bool {
+    false
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
     #[serde(default = "default_port")]
     pub port: u16,
@@ -264,6 +289,8 @@ pub struct Settings {
     pub soul_ring: SoulRingConfig,
     #[serde(default)]
     pub gsi_logging: GsiLoggingConfig,
+    #[serde(default)]
+    pub updates: UpdateConfig,
 }
 
 // Default functions
@@ -659,6 +686,7 @@ impl Default for Settings {
             neutral_items: NeutralItemConfig::default(),
             soul_ring: SoulRingConfig::default(),
             gsi_logging: GsiLoggingConfig::default(),
+            updates: UpdateConfig::default(),
         }
     }
 }

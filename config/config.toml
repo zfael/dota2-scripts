@@ -1,6 +1,13 @@
 [server]
 port = 3000
 
+# Auto-update settings
+[updates]
+# Check for updates when the application starts
+check_on_startup = true
+# Include pre-release versions (RC, alpha, beta)
+include_prereleases = false
+
 [keybindings]
 slot0 = "z"
 slot1 = "x"

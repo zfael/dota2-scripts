@@ -27,6 +27,29 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Sync Cargo.toml version with git tag
+        shell: pwsh
+        run: |
+          $TAG = "${{ github.ref_name }}"
+          # Strip 'v' prefix from tag to get semver (v1.0.0 -> 1.0.0)
+          $VERSION = $TAG -replace '^v', ''
+          
+          Write-Host "Syncing Cargo.toml version to: $VERSION"
+          
+          # Read Cargo.toml and update version
+          $cargo = Get-Content "Cargo.toml" -Raw
+          $cargo = $cargo -replace 'version = "[^"]*"', "version = `"$VERSION`""
+          Set-Content "Cargo.toml" -Value $cargo -NoNewline
+          
+          # Verify the change
+          $newVersion = (Select-String -Path "Cargo.toml" -Pattern 'version = "([^"]*)"' | Select-Object -First 1).Matches.Groups[1].Value
+          Write-Host "Cargo.toml version is now: $newVersion"
+          
+          if ($newVersion -ne $VERSION) {
+            Write-Error "Version mismatch! Expected $VERSION but got $newVersion"
+            exit 1
+          }
+
       - name: Generate Cargo.lock
         run: cargo generate-lockfile
 
@@ -49,7 +72,8 @@ jobs:
         shell: pwsh
         run: |
           $VERSION = "${{ github.ref_name }}"
-          $PACKAGE_DIR = "artifacts/dota2-scripts-${VERSION}-windows-x64"
+          $TARGET = "${{ matrix.target }}"
+          $PACKAGE_DIR = "artifacts/dota2-scripts-${VERSION}-${TARGET}"
           
           # Create package directory structure
           New-Item -ItemType Directory -Force -Path $PACKAGE_DIR
@@ -57,10 +81,10 @@ jobs:
           
           # Copy executable and config
           Copy-Item "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" -Destination "$PACKAGE_DIR/dota2-scripts.exe"
-          Copy-Item "config/config.toml" -Destination "$PACKAGE_DIR/config/config.toml"
+          Copy-Item "config/config.toml" -Destination "$PACKAGE_DIR/config/config.example.toml"
           
-          # Create ZIP archive
-          Compress-Archive -Path "$PACKAGE_DIR/*" -DestinationPath "artifacts/dota2-scripts-${VERSION}-windows-x64.zip" -Force
+          # Create ZIP archive with target triple in name for self_update compatibility
+          Compress-Archive -Path "$PACKAGE_DIR/*" -DestinationPath "artifacts/dota2-scripts-${VERSION}-${TARGET}.zip" -Force
           
           Write-Host "Package contents:"
           Get-ChildItem -Recurse $PACKAGE_DIR
@@ -68,8 +92,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dota2-scripts-${{ github.ref_name }}-windows-x64
-          path: artifacts/dota2-scripts-${{ github.ref_name }}-windows-x64.zip
+          name: dota2-scripts-${{ github.ref_name }}-${{ matrix.target }}
+          path: artifacts/dota2-scripts-${{ github.ref_name }}-${{ matrix.target }}.zip
 
   release:
     name: Create Release
@@ -192,7 +216,7 @@ jobs:
           ⚠️ **WARNING**: Using game automation scripts may violate Terms of Service and result in account bans. Use at your own risk!
           
           ### 📥 Downloads
-          - **Windows**: `dota2-scripts-${{ github.ref_name }}-windows-x64.zip` (includes exe + config)
+          - **Windows**: `dota2-scripts-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip` (includes exe + example config)
           
           ### 📋 Requirements
           - Windows 10/11
@@ -215,7 +239,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/dota2-scripts-${{ github.ref_name }}-windows-x64/dota2-scripts-${{ github.ref_name }}-windows-x64.zip
+            artifacts/dota2-scripts-${{ github.ref_name }}-x86_64-pc-windows-msvc/dota2-scripts-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip
           body_path: release_body.md
           draft: false
           prerelease: ${{ contains(github.ref, '-rc') }}
