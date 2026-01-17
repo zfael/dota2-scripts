@@ -84,6 +84,21 @@ pub struct Abilities {
     pub ability5: Ability,
 }
 
+impl Abilities {
+    /// Get ability by index (0-5)
+    pub fn get_by_index(&self, index: u8) -> Option<&Ability> {
+        match index {
+            0 => Some(&self.ability0),
+            1 => Some(&self.ability1),
+            2 => Some(&self.ability2),
+            3 => Some(&self.ability3),
+            4 => Some(&self.ability4),
+            5 => Some(&self.ability5),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Hero {
     pub aghanims_scepter: bool,

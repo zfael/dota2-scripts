@@ -1,13 +1,14 @@
 //! Auto-items on attack trigger
 //!
-//! Common module for automatically using targeted items when attacking.
-//! Enabled per-hero with configurable modifier key and item list.
+//! Common module for automatically using targeted items and abilities when attacking.
+//! Enabled per-hero with configurable modifier key, item list, and ability list.
 //!
 //! Usage: Hold modifier key (e.g., Space) + Right-click to:
 //! 1. Use all configured items that are off cooldown
-//! 2. Right-click the target
+//! 2. Use all configured abilities (with optional HP threshold)
+//! 3. Right-click the target
 
-use crate::config::Settings;
+use crate::config::{AutoAbilityConfig, Settings};
 use crate::input::simulation::{mouse_click, press_key};
 use crate::models::GsiWebhookEvent;
 use lazy_static::lazy_static;
@@ -67,13 +68,18 @@ fn find_item_key(event: &GsiWebhookEvent, settings: &Settings, item_name: &str) 
     None
 }
 
-/// Execute auto-items sequence: use configured items, optionally ult/Q, then right-click
+/// Execute auto-items sequence: use configured items and abilities, then right-click
+///
+/// # Arguments
+/// * `settings` - Global settings for keybindings
+/// * `item_names` - List of item names to try using
+/// * `auto_abilities` - List of abilities to auto-cast with optional HP thresholds
+/// * `abilities_first` - If true, cast abilities before items; if false, items first
 pub fn execute_auto_items(
     settings: &Settings,
     item_names: &[String],
-    use_ult: bool,
-    use_q: bool,
-    q_hp_threshold: u32,
+    auto_abilities: &[AutoAbilityConfig],
+    abilities_first: bool,
 ) {
     // Get cached GSI state
     let cached = LATEST_GSI_EVENT.lock().unwrap();
@@ -89,40 +95,70 @@ pub fn execute_auto_items(
     drop(cached);
     
     let mut items_used = 0;
+    let mut abilities_used = 0;
     
-    // Try to use each configured item
-    for item_name in item_names {
-        if let Some(key) = find_item_key(&event, settings, item_name) {
-            info!("🎯 Using item '{}' (key: {})", item_name, key);
-            press_key(key);
-            items_used += 1;
-            thread::sleep(Duration::from_millis(30));
+    // Helper closure to use items
+    let use_items = |items_used: &mut u32| {
+        for item_name in item_names {
+            if let Some(key) = find_item_key(&event, settings, item_name) {
+                info!("🎯 Using item '{}' (key: {})", item_name, key);
+                press_key(key);
+                *items_used += 1;
+                thread::sleep(Duration::from_millis(30));
+            }
         }
-    }
+    };
     
-    // Press Q if enabled and HP below threshold
-    if use_q && event.hero.health_percent < q_hp_threshold {
-        let q_ready = event.abilities.ability0.can_cast && event.abilities.ability0.cooldown == 0;
-        if q_ready {
-            info!("🎯 Using Q (HP {}% < {}%)", event.hero.health_percent, q_hp_threshold);
-            press_key('q');
-            thread::sleep(Duration::from_millis(30));
+    // Helper closure to use abilities
+    let use_abilities = |abilities_used: &mut u32| {
+        for ability_config in auto_abilities {
+            // Check HP threshold if configured
+            if let Some(threshold) = ability_config.hp_threshold {
+                if event.hero.health_percent >= threshold {
+                    debug!(
+                        "🎯 Skipping ability {} (HP {}% >= {}%)",
+                        ability_config.index, event.hero.health_percent, threshold
+                    );
+                    continue;
+                }
+            }
+            
+            // Get ability by index and check if castable
+            if let Some(ability) = event.abilities.get_by_index(ability_config.index) {
+                if ability.can_cast && ability.cooldown == 0 && ability.level > 0 {
+                    if let Some(threshold) = ability_config.hp_threshold {
+                        info!(
+                            "🎯 Using ability {} key '{}' (HP {}% < {}%)",
+                            ability_config.index, ability_config.key, event.hero.health_percent, threshold
+                        );
+                    } else {
+                        info!("🎯 Using ability {} key '{}'", ability_config.index, ability_config.key);
+                    }
+                    press_key(ability_config.key);
+                    *abilities_used += 1;
+                    thread::sleep(Duration::from_millis(30));
+                } else {
+                    debug!(
+                        "🎯 Ability {} not castable (can_cast={}, cd={}, level={})",
+                        ability_config.index, ability.can_cast, ability.cooldown, ability.level
+                    );
+                }
+            }
         }
-    }
+    };
     
-    // Press ultimate (R) if enabled
-    if use_ult {
-        let ult_ready = event.abilities.ability3.can_cast && event.abilities.ability3.cooldown == 0;
-        if ult_ready {
-            info!("🎯 Using ultimate (R)");
-            press_key('r');
-            thread::sleep(Duration::from_millis(30));
-        }
+    // Execute in configured order
+    if abilities_first {
+        use_abilities(&mut abilities_used);
+        use_items(&mut items_used);
+    } else {
+        use_items(&mut items_used);
+        use_abilities(&mut abilities_used);
     }
     
     // Always right-click at the end (attack the target)
-    if items_used > 0 || use_ult {
-        info!("🎯 Auto-items complete ({} items), attacking", items_used);
+    if items_used > 0 || abilities_used > 0 {
+        info!("🎯 Auto-combo complete ({} items, {} abilities), attacking", items_used, abilities_used);
     }
     mouse_click();
 }

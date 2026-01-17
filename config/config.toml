@@ -109,9 +109,16 @@ attack_key = "a"                 # Not used (right-click move instead)
 auto_items_enabled = true
 auto_items_modifier = "Space"    # Hold this key + right-click
 auto_items = ["orchid", "bloodthorn", "diffusal", "disperser", "nullifier", "abyssal_blade"]
-auto_ult_enabled = true          # Also press R (ultimate) during combo
-auto_q_enabled = true            # Use Q when HP below threshold
-auto_q_hp_threshold = 80         # HP% threshold for auto-Q
+# Auto-abilities: Cast abilities during Space+Right-click combo
+# Each entry: index (ability0-5), key to press, optional hp_threshold (only cast if HP% below)
+# Broodmother abilities: 0=Insatiable Hunger(Q), 1=Spin Web(W), 2=Incapacitating Bite(E), 
+#                        3=Spider's Milk(D), 4=Spawn Spiderlings(R-ult)
+auto_abilities = [
+    { index = 0, key = "q", hp_threshold = 80 },  # Insatiable Hunger when HP < 80%
+    { index = 4, key = "r" },                      # Spawn Spiderlings (ultimate) - always
+]
+# Execution order: false = items first (default), true = abilities first
+auto_abilities_first = false
 
 [gsi_logging]
 enabled = false

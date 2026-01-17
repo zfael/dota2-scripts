@@ -1,4 +1,4 @@
 pub mod constants;
 pub mod settings;
 
-pub use settings::{DangerDetectionConfig, Settings};
+pub use settings::{AutoAbilityConfig, DangerDetectionConfig, Settings};

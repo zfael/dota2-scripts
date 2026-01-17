@@ -256,12 +256,11 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                     let settings = config.settings.lock().unwrap().clone();
                     if settings.heroes.broodmother.auto_items_enabled {
                         let items = settings.heroes.broodmother.auto_items.clone();
-                        let use_ult = settings.heroes.broodmother.auto_ult_enabled;
-                        let use_q = settings.heroes.broodmother.auto_q_enabled;
-                        let q_threshold = settings.heroes.broodmother.auto_q_hp_threshold;
+                        let auto_abilities = settings.heroes.broodmother.auto_abilities.clone();
+                        let abilities_first = settings.heroes.broodmother.auto_abilities_first;
                         debug!("🎯 Space+Right-click - Broodmother auto-items");
                         thread::spawn(move || {
-                            crate::actions::auto_items::execute_auto_items(&settings, &items, use_ult, use_q, q_threshold);
+                            crate::actions::auto_items::execute_auto_items(&settings, &items, &auto_abilities, abilities_first);
                         });
                         return None; // Block original right-click
                     }

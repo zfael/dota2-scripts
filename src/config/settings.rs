@@ -102,6 +102,19 @@ pub struct TinyConfig {
     pub standalone_key: String,
 }
 
+/// Configuration for auto-casting an ability during Space+Right-click combo
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutoAbilityConfig {
+    /// Ability slot index (0-5, corresponds to ability0-ability5 in GSI)
+    pub index: u8,
+    /// Key to press for this ability ('q', 'w', 'e', 'r', 'd', 'f')
+    pub key: char,
+    /// Optional HP threshold - only cast if HP% is below this value
+    /// If None/null, always cast when off cooldown
+    #[serde(default)]
+    pub hp_threshold: Option<u32>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BroodmotherConfig {
     #[serde(default = "default_broodmother_enabled")]
@@ -118,12 +131,10 @@ pub struct BroodmotherConfig {
     pub auto_items_modifier: String,
     #[serde(default = "default_auto_items")]
     pub auto_items: Vec<String>,
-    #[serde(default = "default_auto_ult_enabled")]
-    pub auto_ult_enabled: bool,
-    #[serde(default = "default_auto_q_enabled")]
-    pub auto_q_enabled: bool,
-    #[serde(default = "default_auto_q_hp_threshold")]
-    pub auto_q_hp_threshold: u32,
+    #[serde(default = "default_auto_abilities")]
+    pub auto_abilities: Vec<AutoAbilityConfig>,
+    #[serde(default = "default_auto_abilities_first")]
+    pub auto_abilities_first: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -375,14 +386,11 @@ fn default_auto_items_modifier() -> String {
 fn default_auto_items() -> Vec<String> {
     vec![]
 }
-fn default_auto_ult_enabled() -> bool {
-    false
+fn default_auto_abilities() -> Vec<AutoAbilityConfig> {
+    vec![]
 }
-fn default_auto_q_enabled() -> bool {
-    false
-}
-fn default_auto_q_hp_threshold() -> u32 {
-    50  // Use Q when HP below 50%
+fn default_auto_abilities_first() -> bool {
+    false  // Items first by default
 }
 
 fn default_amphibian_enabled() -> bool {
@@ -592,9 +600,8 @@ impl Default for BroodmotherConfig {
             auto_items_enabled: default_auto_items_enabled(),
             auto_items_modifier: default_auto_items_modifier(),
             auto_items: default_auto_items(),
-            auto_ult_enabled: default_auto_ult_enabled(),
-            auto_q_enabled: default_auto_q_enabled(),
-            auto_q_hp_threshold: default_auto_q_hp_threshold(),
+            auto_abilities: default_auto_abilities(),
+            auto_abilities_first: default_auto_abilities_first(),
         }
     }
 }
