@@ -69,6 +69,8 @@ auto_ghost_scepter = true
 auto_shivas_guard = true
 # Auto-use Manta Style when silenced (independent of danger detection)
 auto_manta_on_silence = true
+# Auto-use Lotus Orb when silenced (self-cast, independent of danger detection)
+auto_lotus_on_silence = true
 
 [neutral_items]
 enabled = true

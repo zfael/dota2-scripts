@@ -222,6 +222,8 @@ pub struct DangerDetectionConfig {
     pub auto_shivas_guard: bool,
     #[serde(default = "default_auto_manta_on_silence")]
     pub auto_manta_on_silence: bool,
+    #[serde(default = "default_auto_lotus_on_silence")]
+    pub auto_lotus_on_silence: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -487,6 +489,9 @@ fn default_auto_shivas_guard() -> bool {
 fn default_auto_manta_on_silence() -> bool {
     true
 }
+fn default_auto_lotus_on_silence() -> bool {
+    true
+}
 
 fn default_neutral_items_enabled() -> bool {
     false
@@ -682,6 +687,7 @@ impl Default for DangerDetectionConfig {
             auto_ghost_scepter: default_auto_ghost_scepter(),
             auto_shivas_guard: default_auto_shivas_guard(),
             auto_manta_on_silence: default_auto_manta_on_silence(),
+            auto_lotus_on_silence: default_auto_lotus_on_silence(),
         }
     }
 }
