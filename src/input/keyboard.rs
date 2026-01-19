@@ -326,6 +326,18 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                     }
                 }
 
+                // Handle Shadow Fiend R key for auto-BKB on ultimate
+                let sf_auto_bkb_enabled = settings.heroes.shadow_fiend.auto_bkb_on_ultimate;
+                if sf_enabled && sf_auto_bkb_enabled && key == Key::KeyR {
+                    info!("R key pressed - SF auto-BKB ultimate combo");
+                    
+                    // Delegate to ShadowFiendState for ultimate combo execution
+                    ShadowFiendState::execute_ultimate_combo(&settings);
+                    
+                    // Block original key (will be pressed by execute_ultimate_combo)
+                    return None;
+                }
+
                 // Handle Largo Q/W/E/R keys and other ability keys with Soul Ring
                 match key {
                     Key::KeyQ | Key::KeyW | Key::KeyE | Key::KeyR | Key::KeyD | Key::KeyF => {

@@ -1,6 +1,6 @@
 # Shadow Fiend (Nevermore) Automation
 
-This document describes the Shadow Fiend hero automation features, primarily focused on the Shadowraze direction-facing helper.
+This document describes the Shadow Fiend hero automation features, including the Shadowraze direction-facing helper and automatic BKB on ultimate.
 
 ## Overview
 
@@ -26,6 +26,21 @@ When you press Q, W, or E with Shadow Fiend selected:
 5. After a short delay, the raze key is pressed
 
 This happens in ~150-200ms total, making it feel nearly instant.
+
+### Auto-BKB on Ultimate
+
+When enabled, pressing R to cast Requiem of Souls will automatically:
+
+1. **Check for BKB** in your inventory (if `auto_bkb_on_ultimate` is enabled)
+2. **Use BKB** (double-tap for self-cast) if available and off cooldown
+3. **Press D** (Aghanim's ability) if `auto_d_on_ultimate` is enabled
+4. **Cast Requiem of Souls** (R)
+
+This ensures you're protected by magic immunity during the channel without needing to manually activate BKB first.
+
+**Sequence:** BKB (double-tap) → D (optional) → R
+
+**Behavior when BKB is not present or on cooldown:** The script will skip BKB activation and proceed with D (if enabled) and R. If `auto_bkb_on_ultimate` is disabled entirely, pressing R will just press R normally with no interception.
 
 ### Dota 2 Console Variable
 
@@ -65,6 +80,11 @@ While playing SF, the script also provides common survivability features:
 raze_intercept_enabled = true
 # Delay between right-click and raze key press (ms)
 raze_delay_ms = 100
+# Automatically use BKB before ultimate (Requiem of Souls) when pressing R
+# Sequence: BKB (double-tap) → D (if enabled) → R
+auto_bkb_on_ultimate = false
+# Automatically press D (Aghanim's ability) before ultimate
+auto_d_on_ultimate = false
 ```
 
 ### Configuration Options
@@ -73,6 +93,8 @@ raze_delay_ms = 100
 |--------|------|---------|-------------|
 | `raze_intercept_enabled` | bool | `true` | Master toggle for raze interception |
 | `raze_delay_ms` | u64 | `100` | Delay in milliseconds between facing and razing |
+| `auto_bkb_on_ultimate` | bool | `false` | Auto-use BKB before Requiem of Souls |
+| `auto_d_on_ultimate` | bool | `false` | Auto-press D (Aghanim's ability) before ultimate |
 
 ### Tuning `raze_delay_ms`
 

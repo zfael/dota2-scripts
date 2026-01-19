@@ -39,7 +39,12 @@ standalone_key = "Home"
 # Enable raze interception (ALT + right-click before Q/W/E)
 raze_intercept_enabled = true
 # Delay between right-click and raze key press (ms)
-raze_delay_ms = 100
+raze_delay_ms = 10
+# Automatically use BKB before ultimate (Requiem of Souls) when pressing R
+# Sequence: BKB (double-tap) → D (if enabled) → R
+auto_bkb_on_ultimate = true
+# Automatically press D (Aghanim's ability) before ultimate
+auto_d_on_ultimate = true
 
 [heroes.tiny]
 standalone_key = "Home"

@@ -94,6 +94,12 @@ pub struct ShadowFiendConfig {
     pub raze_intercept_enabled: bool,
     #[serde(default = "default_raze_delay")]
     pub raze_delay_ms: u64,
+    /// Automatically use BKB before ultimate (Requiem of Souls)
+    #[serde(default = "default_sf_auto_bkb_on_ultimate")]
+    pub auto_bkb_on_ultimate: bool,
+    /// Automatically press D (Aghanim's ability) before ultimate
+    #[serde(default = "default_sf_auto_d_on_ultimate")]
+    pub auto_d_on_ultimate: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -363,6 +369,12 @@ fn default_sf_raze_enabled() -> bool {
 fn default_raze_delay() -> u64 {
     100
 }
+fn default_sf_auto_bkb_on_ultimate() -> bool {
+    false
+}
+fn default_sf_auto_d_on_ultimate() -> bool {
+    false
+}
 
 fn default_broodmother_enabled() -> bool {
     true
@@ -586,6 +598,8 @@ impl Default for ShadowFiendConfig {
         Self {
             raze_intercept_enabled: default_sf_raze_enabled(),
             raze_delay_ms: default_raze_delay(),
+            auto_bkb_on_ultimate: default_sf_auto_bkb_on_ultimate(),
+            auto_d_on_ultimate: default_sf_auto_d_on_ultimate(),
         }
     }
 }
