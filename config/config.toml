@@ -45,6 +45,9 @@ raze_delay_ms = 10
 auto_bkb_on_ultimate = true
 # Automatically press D (Aghanim's ability) before ultimate
 auto_d_on_ultimate = true
+# Standalone combo key: Blink + Ultimate (only executes if Blink is off cooldown)
+# Sequence: Blink → BKB (if enabled) → D (if enabled) → R
+standalone_key = "Home"
 
 [heroes.tiny]
 standalone_key = "Home"

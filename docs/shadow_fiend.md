@@ -42,6 +42,22 @@ This ensures you're protected by magic immunity during the channel without needi
 
 **Behavior when BKB is not present or on cooldown:** The script will skip BKB activation and proceed with D (if enabled) and R. If `auto_bkb_on_ultimate` is disabled entirely, pressing R will just press R normally with no interception.
 
+### Standalone Combo (Blink + Ultimate)
+
+When you press the standalone key (default: Home), the script will:
+
+1. **Check if Blink is available** (not on cooldown)
+2. If Blink is on cooldown → **Skip the combo entirely** (no action taken)
+3. If Blink is available:
+   - **Blink** to cursor position
+   - **BKB** (double-tap, if `auto_bkb_on_ultimate` enabled and available)
+   - **D ability** (if `auto_d_on_ultimate` enabled)
+   - **R** (Requiem of Souls)
+
+This allows you to execute the full initiation combo with a single key press, but only when Blink is ready.
+
+**Sequence:** Blink → BKB (optional) → D (optional) → R
+
 ### Dota 2 Console Variable
 
 The automation relies on this Dota 2 console variable:
@@ -85,6 +101,8 @@ raze_delay_ms = 100
 auto_bkb_on_ultimate = false
 # Automatically press D (Aghanim's ability) before ultimate
 auto_d_on_ultimate = false
+# Standalone combo key: Blink + Ultimate (only executes if Blink is off cooldown)
+standalone_key = "Home"
 ```
 
 ### Configuration Options
@@ -95,6 +113,7 @@ auto_d_on_ultimate = false
 | `raze_delay_ms` | u64 | `100` | Delay in milliseconds between facing and razing |
 | `auto_bkb_on_ultimate` | bool | `false` | Auto-use BKB before Requiem of Souls |
 | `auto_d_on_ultimate` | bool | `false` | Auto-press D (Aghanim's ability) before ultimate |
+| `standalone_key` | string | `"Home"` | Key to trigger Blink + Ultimate combo |
 
 ### Tuning `raze_delay_ms`
 

@@ -100,6 +100,9 @@ pub struct ShadowFiendConfig {
     /// Automatically press D (Aghanim's ability) before ultimate
     #[serde(default = "default_sf_auto_d_on_ultimate")]
     pub auto_d_on_ultimate: bool,
+    /// Standalone combo trigger key (Blink + Ultimate combo)
+    #[serde(default = "default_standalone_key")]
+    pub standalone_key: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -600,6 +603,7 @@ impl Default for ShadowFiendConfig {
             raze_delay_ms: default_raze_delay(),
             auto_bkb_on_ultimate: default_sf_auto_bkb_on_ultimate(),
             auto_d_on_ultimate: default_sf_auto_d_on_ultimate(),
+            standalone_key: default_standalone_key(),
         }
     }
 }

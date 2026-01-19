@@ -115,6 +115,97 @@ impl ShadowFiendState {
             press_key('r');
         });
     }
+
+    /// Execute standalone combo: Blink + Ultimate (with BKB/D if configured)
+    /// Only executes if Blink AND Ultimate are available (not on cooldown)
+    pub fn execute_standalone_combo(settings: &Settings) {
+        let sf_config = &settings.heroes.shadow_fiend;
+        let auto_bkb = sf_config.auto_bkb_on_ultimate;
+        let auto_d = sf_config.auto_d_on_ultimate;
+        
+        thread::spawn(move || {
+            // Get last GSI event to check for Blink and Ultimate
+            let event_guard = SF_LAST_EVENT.lock().unwrap();
+            
+            if let Some(event) = event_guard.as_ref() {
+                // Check if Ultimate (R) is ready - ability5 is usually the ultimate
+                // Shadow Fiend's ultimate is "nevermore_requiem"
+                let ult_ready = event.abilities.ability5.can_cast;
+                if !ult_ready {
+                    info!("👻 SF Standalone: Ultimate on cooldown, skipping combo");
+                    return;
+                }
+                
+                // Check for Blink Dagger in inventory (must be off cooldown)
+                let blink_slot = event.items.all_slots().iter()
+                    .find(|(_, item)| item.name.contains("blink") && item.can_cast == Some(true))
+                    .map(|(slot, _)| *slot);
+                
+                if blink_slot.is_none() {
+                    info!("👻 SF Standalone: Blink not found or on cooldown, skipping combo");
+                    return;
+                }
+                
+                let blink_key = blink_slot.and_then(|slot| match slot {
+                    "slot0" => Some('z'),
+                    "slot1" => Some('x'),
+                    "slot2" => Some('c'),
+                    "slot3" => Some('v'),
+                    "slot4" => Some('b'),
+                    "slot5" => Some('n'),
+                    _ => None,
+                });
+                
+                // Check for BKB if enabled
+                let bkb_key = if auto_bkb {
+                    event.items.all_slots().iter()
+                        .find(|(_, item)| item.name.contains("black_king_bar") && item.can_cast == Some(true))
+                        .and_then(|(slot, _)| match *slot {
+                            "slot0" => Some('z'),
+                            "slot1" => Some('x'),
+                            "slot2" => Some('c'),
+                            "slot3" => Some('v'),
+                            "slot4" => Some('b'),
+                            "slot5" => Some('n'),
+                            _ => None,
+                        })
+                } else {
+                    None
+                };
+                
+                drop(event_guard); // Release lock before sleeping
+                
+                // Execute combo: Blink → BKB (if available) → D (if enabled) → R
+                if let Some(key) = blink_key {
+                    info!("👻 SF Standalone: Using Blink ({})", key);
+                    press_key(key);
+                    thread::sleep(Duration::from_millis(50));
+                }
+                
+                // Use BKB if available
+                if let Some(key) = bkb_key {
+                    info!("👻 SF Standalone: Using BKB ({})", key);
+                    press_key(key);
+                    thread::sleep(Duration::from_millis(30));
+                    press_key(key); // Double-tap for self-cast
+                    thread::sleep(Duration::from_millis(50));
+                }
+                
+                // Press D if enabled
+                if auto_d {
+                    info!("👻 SF Standalone: Using D ability");
+                    press_key('d');
+                    thread::sleep(Duration::from_millis(50));
+                }
+                
+                // Press R for ultimate
+                info!("👻 SF Standalone: Casting Requiem of Souls (R)");
+                press_key('r');
+            } else {
+                info!("👻 SF Standalone: No GSI event available, cannot check Blink");
+            }
+        });
+    }
 }
 
 /// Shadow Fiend script
@@ -166,8 +257,9 @@ impl HeroScript for ShadowFiendScript {
     }
 
     fn handle_standalone_trigger(&self) {
-        // Standalone trigger not used for SF - uses Q/W/E interception instead
-        info!("Shadow Fiend uses Q/W/E interception, not standalone combo trigger");
+        info!("👻 Shadow Fiend standalone combo triggered");
+        let settings = self.settings.lock().unwrap();
+        ShadowFiendState::execute_standalone_combo(&settings);
     }
 
     fn hero_name(&self) -> &'static str {
