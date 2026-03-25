@@ -1,0 +1,167 @@
+# File Index
+
+**Purpose**: Repo-wide file and directory map for agents and contributors. Use this when you need to answer two questions quickly:
+
+1. where does this behavior live?
+2. which doc also needs to change?
+
+> **Maintenance contract**: add a row here whenever you add a new source file or a new durable doc entry point.
+
+---
+
+## Repo map
+
+| Path | What lives there | Read next |
+|---|---|---|
+| `src/actions/` | Shared action orchestration, survivability, hero dispatch, Soul Ring, auto-items | `docs/architecture/state-and-dispatch.md` |
+| `src/actions/heroes/` | Per-hero automation scripts and the `HeroScript` trait | `docs/workflows/adding-a-hero.md`, `docs/heroes/` |
+| `src/gsi/` | HTTP listener, queueing, GSI processing | `docs/reference/gsi-schema-and-usage.md`, `docs/architecture/runtime-flow.md` |
+| `src/input/` | Global interception and synthetic replay | `docs/features/keyboard-interception.md` |
+| `src/config/` | Runtime config types, defaults, helpers | `docs/reference/configuration.md` |
+| `src/state/` | Shared app/UI/runtime state | `docs/architecture/state-and-dispatch.md` |
+| `src/ui/` | egui app, status, settings, manual hero selection | `docs/architecture/overview.md` |
+| `src/models/` | GSI model types plus shared enums | `docs/reference/gsi-schema-and-usage.md` |
+| `assets/` | Application icon and packaged visual assets | `src/main.rs` |
+| `examples/` | Small standalone binaries for local input/debug experiments | `docs/workflows/testing-and-debugging.md` |
+| `tests/` | Fixture-backed tests | `docs/workflows/testing-and-debugging.md` |
+| `docs/` | Architecture, features, heroes, reference, workflows | `AGENTS.md` |
+| `docs/superpowers/` | Design specs and implementation plans created during AI-driven work | `AGENTS.md` |
+
+---
+
+## Entry points and top-level files
+
+| File | Purpose | Linked Doc |
+|---|---|---|
+| `src/main.rs` | Boot order, runtime wiring, keyboard listener, GSI server, update checks, egui launch | `docs/architecture/overview.md`, `docs/architecture/runtime-flow.md`, `docs/features/updates.md` |
+| `config/config.toml` | Checked-in runtime config | `docs/reference/configuration.md` |
+| `AGENTS.md` | Agent / contributor navigation hub | — |
+| `README.md` | User-facing overview and setup | — |
+| `Cargo.toml` | Crate manifest | — |
+| `Cargo.lock` | Locked dependency graph for reproducible builds | — |
+| `build.rs` | Windows resource embedding hook used during build | — |
+| `app.rc` | Windows resource script compiled by `build.rs` | `build.rs` |
+| `app.manifest` | Windows application manifest bundled with the binary | `build.rs` |
+| `src/lib.rs` | Library exports | — |
+
+---
+
+## `src/actions/`
+
+| File | Purpose | Linked Doc |
+|---|---|---|
+| `src/actions/mod.rs` | Module re-exports | — |
+| `src/actions/dispatcher.rs` | Pre-dispatch hooks plus hero/common routing for every GSI event | `docs/architecture/state-and-dispatch.md`, `docs/reference/gsi-schema-and-usage.md` |
+| `src/actions/common.rs` | Shared survivability pipeline: healing, defensive items, neutral items, armlet helper | `docs/features/survivability.md`, `docs/features/danger-detection.md`, `docs/reference/gsi-schema-and-usage.md` |
+| `src/actions/danger_detector.rs` | HP-loss heuristic and global danger state | `docs/features/danger-detection.md` |
+| `src/actions/auto_items.rs` | Cached GSI item state and Broodmother item/ability combo execution | `docs/features/survivability.md`, `docs/reference/gsi-schema-and-usage.md` |
+| `src/actions/dispel.rs` | Silence dispel logic (Manta / Lotus) | `docs/features/survivability.md`, `docs/reference/gsi-schema-and-usage.md` |
+| `src/actions/soul_ring.rs` | Soul Ring shared state, gating rules, and replay helpers | `docs/features/soul-ring.md`, `docs/features/keyboard-interception.md`, `docs/reference/gsi-schema-and-usage.md` |
+
+## `src/actions/heroes/`
+
+| File | Purpose | Linked Doc |
+|---|---|---|
+| `src/actions/heroes/mod.rs` | Hero module registration and re-exports | `docs/workflows/adding-a-hero.md` |
+| `src/actions/heroes/traits.rs` | `HeroScript` trait contract | `docs/architecture/state-and-dispatch.md`, `docs/workflows/adding-a-hero.md` |
+| `src/actions/heroes/broodmother.rs` | Broodmother spider micro and auto-items/abilities | `docs/heroes/broodmother.md` |
+| `src/actions/heroes/huskar.rs` | Huskar armlet automation and Berserker Blood cleanse | `docs/heroes/huskar.md` |
+| `src/actions/heroes/largo.rs` | Largo ultimate state, beat timing, manual song hooks | `docs/heroes/largo.md` |
+| `src/actions/heroes/legion_commander.rs` | Legion Commander combo automation | `docs/heroes/legion_commander.md` |
+| `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend raze / ultimate / standalone combo logic | `docs/heroes/shadow_fiend.md`, `docs/features/keyboard-interception.md` |
+| `src/actions/heroes/tiny.rs` | Tiny standalone combo | `docs/heroes/tiny.md` |
+
+## `src/gsi/`
+
+| File | Purpose | Linked Doc |
+|---|---|---|
+| `src/gsi/server.rs` | Axum HTTP server on `127.0.0.1:<port>` plus bounded queue setup | `docs/architecture/runtime-flow.md`, `docs/reference/gsi-schema-and-usage.md` |
+| `src/gsi/handler.rs` | Deserialize `GsiWebhookEvent`, log JSONL, update `AppState`, and dispatch | `docs/architecture/runtime-flow.md`, `docs/reference/gsi-schema-and-usage.md` |
+| `src/gsi/mod.rs` | Module re-exports | — |
+
+## `src/input/`
+
+| File | Purpose | Linked Doc |
+|---|---|---|
+| `src/input/keyboard.rs` | Global `rdev::grab` hook and the interception decision tree | `docs/features/keyboard-interception.md`, `docs/workflows/troubleshooting.md` |
+| `src/input/simulation.rs` | Synthetic key and mouse emission helpers | `docs/features/keyboard-interception.md` |
+| `src/input/mod.rs` | Module re-exports | — |
+
+## `src/config/`
+
+| File | Purpose | Linked Doc |
+|---|---|---|
+| `src/config/settings.rs` | Config structs, serde defaults, load/save helpers, keybinding validation | `docs/reference/configuration.md` |
+| `src/config/constants.rs` | Compile-time constants and default maps | `docs/reference/configuration.md` |
+| `src/config/mod.rs` | Module re-exports | — |
+
+## `src/state/`
+
+| File | Purpose | Linked Doc |
+|---|---|---|
+| `src/state/app_state.rs` | Shared runtime/UI state, `HeroType`, update state, queue metrics | `docs/architecture/state-and-dispatch.md`, `docs/workflows/adding-a-hero.md` |
+| `src/state/mod.rs` | Module re-exports | — |
+
+## `src/ui/`
+
+| File | Purpose | Linked Doc |
+|---|---|---|
+| `src/ui/app.rs` | Main egui app: tabs, hero selection, status, settings, update banner | `docs/architecture/overview.md`, `docs/workflows/adding-a-hero.md` |
+| `src/ui/mod.rs` | Module re-exports | — |
+
+## `src/models/`
+
+| File | Purpose | Linked Doc |
+|---|---|---|
+| `src/models/gsi_event.rs` | `GsiWebhookEvent` plus nested hero/item/ability/map structs | `docs/reference/gsi-schema-and-usage.md` |
+| `src/models/heroes.rs` | Hero enum and internal-name mapping | `docs/workflows/adding-a-hero.md` |
+| `src/models/items.rs` | Item model helpers | `docs/features/survivability.md` |
+| `src/models/mod.rs` | Module re-exports | — |
+
+## `src/update/`
+
+| File | Purpose | Linked Doc |
+|---|---|---|
+| `src/update/mod.rs` | Update check, download/apply, and restart flow | `docs/features/updates.md` |
+
+## `tests/`
+
+| File | Purpose | Linked Doc |
+|---|---|---|
+| `tests/gsi_handler_tests.rs` | Fixture-backed GSI deserialization smoke tests | `docs/workflows/testing-and-debugging.md`, `docs/reference/gsi-schema-and-usage.md` |
+| `tests/fixtures/` | Sample JSON payloads for Huskar and Tiny | `docs/workflows/testing-and-debugging.md`, `docs/reference/gsi-schema-and-usage.md` |
+
+## `assets/`
+
+| Path | Purpose | Linked Doc |
+|---|---|---|
+| `assets/icon.png` | Window/taskbar icon loaded at startup via `include_bytes!` | `src/main.rs` |
+
+## `examples/`
+
+| File | Purpose | Linked Doc |
+|---|---|---|
+| `examples/mouse_test.rs` | Local helper binary for inspecting `rdev` mouse button events | `docs/workflows/testing-and-debugging.md` |
+
+## `docs/`
+
+| Path | Purpose |
+|---|---|
+| `docs/architecture/overview.md` | System map and entry points |
+| `docs/architecture/runtime-flow.md` | Startup order, queues, threads, event flow |
+| `docs/architecture/state-and-dispatch.md` | `AppState`, dispatcher, hero/common composition |
+| `docs/features/danger-detection.md` | Danger heuristics, thresholds, defensive response |
+| `docs/features/keyboard-interception.md` | Interception ordering, blocking, replay |
+| `docs/features/soul-ring.md` | Soul Ring state and trigger rules |
+| `docs/features/survivability.md` | Shared healing, dispel, neutral items |
+| `docs/features/updates.md` | Update check/apply/restart flow |
+| `docs/heroes/hero-template.md` | Template for new hero docs |
+| `docs/heroes/*.md` | Hero-specific automation docs |
+| `docs/reference/configuration.md` | Section-by-section config reference and fallback defaults |
+| `docs/reference/gsi-schema-and-usage.md` | Consumed GSI fields, event flow, debug pointers |
+| `docs/reference/file-index.md` | This repo map |
+| `docs/workflows/adding-a-hero.md` | End-to-end hero addition workflow |
+| `docs/workflows/testing-and-debugging.md` | Test, build, fixture, and logging workflow |
+| `docs/workflows/troubleshooting.md` | Runtime failure-mode guide |
+| `docs/superpowers/specs/` | Archived design/spec docs for larger documentation or feature efforts |
+| `docs/superpowers/plans/` | Archived implementation plans and execution breakdowns |

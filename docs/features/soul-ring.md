@@ -1,8 +1,70 @@
 # Soul Ring Automation
 
-This document describes the Soul Ring item automation feature, which automatically triggers Soul Ring before ability or item usage to optimize mana efficiency.
+## Purpose
 
-## Overview
+Learn how the Soul Ring item automation automatically triggers Soul Ring before ability or item usage to optimize mana efficiency.  
+**Read this when:** configuring Soul Ring automation, debugging key interception, understanding safety checks.
+
+## Feature Summary
+
+- **Automatic Soul Ring triggering** – Intercepts ability/item keys and uses Soul Ring first
+- **GSI-based detection** – Auto-enables when Soul Ring is in inventory
+- **Safety checks** – Health and mana thresholds prevent wasted usage or suicide
+- **Cooldown lockout** – Prevents double-fire on double-tap or rapid key presses
+- **Smart item filtering** – Excludes items that don't cost mana (Blink, Phase Boots, etc.)
+
+## Configuration
+
+All settings in `config/config.toml` under `[soul_ring]`:
+
+```toml
+[soul_ring]
+# Master toggle for Soul Ring automation
+enabled = true
+
+# Only trigger Soul Ring if mana percent is below this threshold
+min_mana_percent = 100
+
+# Safety threshold - don't use Soul Ring if health percent is at or below this
+min_health_percent = 20
+
+# Delay in milliseconds between Soul Ring press and ability press
+delay_before_ability_ms = 30
+
+# Cooldown lockout in milliseconds to prevent double-fire on double-tap
+trigger_cooldown_ms = 10
+
+# Ability keys to intercept for Soul Ring triggering
+ability_keys = ["q", "w", "e", "r", "d", "f"]
+
+# Also trigger Soul Ring before item key presses (items that cost mana)
+intercept_item_keys = true
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | bool | `true` | Master toggle for the feature |
+| `min_mana_percent` | u32 | `100` in `config.toml` (`90` serde fallback) | Only trigger if mana is below this % |
+| `min_health_percent` | u32 | `20` | Don't trigger if health is at or below this % |
+| `delay_before_ability_ms` | u64 | `30` | Delay between Soul Ring and ability press |
+| `trigger_cooldown_ms` | u64 | `10` in `config.toml` (`500` serde fallback) | Lockout period after triggering (prevents double-fire) |
+| `ability_keys` | Vec<String> | `["q","w","e","r","d","f"]` | Ability keys to intercept |
+| `intercept_item_keys` | bool | `true` | Also intercept item slot keys |
+
+## Related Files
+
+| File | Purpose |
+|------|---------|
+| `src/actions/soul_ring.rs` | State tracking and trigger logic |
+| `src/input/keyboard.rs` | Key interception with `grab()` |
+| `src/actions/dispatcher.rs` | GSI event updates to Soul Ring state |
+| `src/config/settings.rs` | `SoulRingConfig` struct |
+
+---
+
+## Details
+
+### How It Works
 
 **Soul Ring** is an item that sacrifices 170 HP to grant 170 temporary mana for 10 seconds. The automation optimizes its usage by:
 
@@ -10,8 +72,6 @@ This document describes the Soul Ring item automation feature, which automatical
 2. **Intercepting** ability and item keypresses
 3. **Triggering Soul Ring first**, then forwarding the original keypress
 4. **Applying safety checks** to avoid suicide or wasted usage
-
-## How It Works
 
 ### Key Interception Flow
 
@@ -65,70 +125,30 @@ On every Game State Integration event, the script updates:
 
 The automation **automatically enables** when Soul Ring appears in your inventory and **automatically disables** when you sell or drop it. No manual toggle needed.
 
-## Configuration
+### Safety Features
 
-Located in `config/config.toml` under `[soul_ring]`:
-
-```toml
-[soul_ring]
-# Master toggle for Soul Ring automation
-enabled = true
-
-# Only trigger Soul Ring if mana percent is below this threshold
-min_mana_percent = 90
-
-# Safety threshold - don't use Soul Ring if health percent is at or below this
-min_health_percent = 20
-
-# Delay in milliseconds between Soul Ring press and ability press
-delay_before_ability_ms = 30
-
-# Cooldown lockout in milliseconds to prevent double-fire on double-tap
-trigger_cooldown_ms = 500
-
-# Ability keys to intercept for Soul Ring triggering
-ability_keys = ["q", "w", "e", "r", "d", "f"]
-
-# Also trigger Soul Ring before item key presses (items that cost mana)
-intercept_item_keys = true
-```
-
-### Configuration Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `enabled` | bool | `true` | Master toggle for the feature |
-| `min_mana_percent` | u32 | `90` | Only trigger if mana is below this % |
-| `min_health_percent` | u32 | `20` | Don't trigger if health is at or below this % |
-| `delay_before_ability_ms` | u64 | `30` | Delay between Soul Ring and ability press |
-| `trigger_cooldown_ms` | u64 | `500` | Lockout period after triggering (prevents double-fire) |
-| `ability_keys` | Vec<String> | `["q","w","e","r","d","f"]` | Ability keys to intercept |
-| `intercept_item_keys` | bool | `true` | Also intercept item slot keys |
-
-## Safety Features
-
-### Health Threshold
+#### Health Threshold
 
 Soul Ring costs 170 HP. The `min_health_percent` setting (default 20%) prevents the automation from triggering when your health is too low, avoiding accidental suicide.
 
-### Mana Threshold
+#### Mana Threshold
 
-The `min_mana_percent` setting (default 90%) ensures Soul Ring only triggers when you actually need mana. If you're at 95% mana, triggering Soul Ring would waste most of the temporary mana.
+The checked-in config sets `min_mana_percent = 100`, so Soul Ring can trigger whenever you're below full mana. The Rust fallback is `90` if the key is omitted. If you're already near full mana, triggering Soul Ring would waste most of the temporary mana.
 
-### Cooldown Lockout
+#### Cooldown Lockout
 
-The `trigger_cooldown_ms` setting (default 500ms) prevents double-firing when:
+The checked-in config sets `trigger_cooldown_ms = 10`, while the Rust fallback is `500` if the key is omitted. This lockout prevents double-firing when:
 - You double-tap an ability for self-cast
 - Multiple keypresses happen in quick succession
 - GSI updates arrive rapidly
 
-### Infinite Loop Prevention
+#### Infinite Loop Prevention
 
 The automation will **not** trigger Soul Ring when you press Soul Ring's own item slot key (would cause infinite loop).
 
-## Intercepted Keys
+### Intercepted Keys
 
-### Ability Keys
+#### Ability Keys
 
 By default, these keys are intercepted:
 - **Q** - First ability
@@ -138,7 +158,7 @@ By default, these keys are intercepted:
 - **D** - Fourth ability (if available)
 - **F** - Fifth ability (if available)
 
-### Item Keys
+#### Item Keys
 
 When `intercept_item_keys = true`, item slot keys are also intercepted:
 - Slot keys from `[keybindings]` config (default: Z, X, C, V, B, N)
@@ -168,21 +188,24 @@ The following items are **excluded** from triggering Soul Ring because they don'
 
 The skip list is defined in `src/actions/soul_ring.rs` as `SOUL_RING_SKIP_ITEMS`.
 
-## Integration with Hero Scripts
+### Integration with Hero Scripts
 
-Soul Ring automation runs **before** hero-specific key handling:
+Soul Ring automation does **not** sit in front of every hero-specific path.
 
-1. Key intercepted
-2. Soul Ring triggered (if applicable)
-3. Hero-specific logic runs (e.g., Shadow Fiend raze remap)
-4. Final key simulated
+Current ordering in `src/input/keyboard.rs` is:
 
-This ensures Soul Ring works correctly with:
-- Shadow Fiend's Q/W/E raze remapping
-- Largo's beat timing system
-- Any other hero-specific automation
+1. calculate Soul Ring eligibility
+2. run Shadow Fiend `Q/W/E` raze interception (when enabled)
+3. run Shadow Fiend `R` ultimate interception (when enabled)
+4. run the generic `Q/W/E/R/D/F` branch where Soul Ring can block and replay the key
 
-## Logging
+That means:
+
+- Largo's `Q/W/E/R` flow can still combine with Soul Ring because it uses the later generic branch
+- generic ability and eligible item keys can still prefire Soul Ring
+- Shadow Fiend `Q/W/E` raze interception currently wins first, so Soul Ring does **not** prefire there while raze interception is active
+
+### Logging
 
 With `level = "info"` in logging config, you'll see:
 ```
@@ -198,24 +221,15 @@ With `level = "debug"`, additional diagnostics:
 💍 Soul Ring: skipping no-mana item 'item_blink' on key 'z'
 ```
 
-## Technical Details
+### Technical Details
 
-### Key Files
-
-| File | Purpose |
-|------|---------|
-| `src/actions/soul_ring.rs` | State tracking and trigger logic |
-| `src/input/keyboard.rs` | Key interception with `grab()` |
-| `src/actions/dispatcher.rs` | GSI event updates to Soul Ring state |
-| `src/config/settings.rs` | `SoulRingConfig` struct |
-
-### Dependencies
+#### Dependencies
 
 - **rdev** with `unstable_grab` feature for key interception
 - Key interception uses Windows low-level keyboard hooks
 - `grab()` blocks keys from reaching other applications when returning `None`
 
-### Thread Safety
+#### Thread Safety
 
 Soul Ring state is stored in a global `Arc<Mutex<SoulRingState>>`:
 - GSI handler thread updates state

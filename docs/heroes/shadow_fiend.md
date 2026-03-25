@@ -1,8 +1,59 @@
 # Shadow Fiend (Nevermore) Automation
 
-This document describes the Shadow Fiend hero automation features, including the Shadowraze direction-facing helper and automatic BKB on ultimate.
+## Purpose
 
-## Overview
+Learn how the Shadow Fiend script remaps razes to face cursor direction and auto-BKB on ultimate.  
+**Read this when:** implementing or debugging SF automation, tuning raze delay, understanding direction-facing mechanics.
+
+## Feature Summary
+
+- **Automatic direction facing** – Intercepts Q/W/E, holds ALT, right-clicks to face cursor, then razes
+- **Auto-BKB on ultimate** – Uses BKB before Requiem of Souls when enabled
+- **Standalone combo implementation** – Blink + BKB + D + Ultimate exists in code, but current trigger wiring conflicts with the raze-intercept path
+- **GSI-based hero detection** – Automatically enables when `npc_dota_hero_nevermore` detected
+- **Survivability actions** – Auto-use healing/defensive items
+
+## Configuration
+
+All settings in `config/config.toml` under `[heroes.shadow_fiend]`:
+
+```toml
+[heroes.shadow_fiend]
+# Enable raze interception (ALT + right-click before Q/W/E)
+raze_intercept_enabled = true
+# Delay between right-click and raze key press (ms)
+raze_delay_ms = 10
+# Automatically use BKB before ultimate (Requiem of Souls) when pressing R
+# Sequence: BKB (double-tap) → D (if enabled) → R
+auto_bkb_on_ultimate = true
+# Automatically press D (Aghanim's ability) before ultimate
+auto_d_on_ultimate = true
+# Checked-in config value; current runtime does not honor this field directly
+standalone_key = "Home"
+```
+
+**Important runtime note:** `config/config.toml` still exposes `standalone_key`, but `Settings::get_standalone_key("shadow_fiend")` currently hardcodes `"q"` instead of reading that value. With `raze_intercept_enabled = true`, the keyboard hook also intercepts `Q` earlier for razes, so the standalone combo path is effectively in conflict with the raze path unless code changes or interception is disabled.
+
+### Tuning `raze_delay_ms`
+
+- **Too low (< 50ms)**: Hero may not have finished turning before raze fires
+- **Too high (> 200ms)**: Noticeable delay, feels sluggish
+- **Recommended**: 80-120ms works well for most situations
+
+## Related Files
+
+| File | Purpose |
+|------|---------|
+| `src/actions/heroes/shadow_fiend.rs` | SF script and raze execution logic |
+| `src/input/keyboard.rs` | Key interception and SF check |
+| `src/input/simulation.rs` | ALT key hold, mouse click, key simulation |
+| `src/config/settings.rs` | `ShadowFiendConfig` struct |
+
+---
+
+## Details
+
+### Automatic Direction Facing
 
 Shadow Fiend's Shadowraze abilities (Q/W/E) raze in the direction the hero is facing, not the cursor direction. This can be awkward because you need to right-click to face a direction first, then press the raze key.
 
@@ -12,10 +63,6 @@ The automation solves this by intercepting Q/W/E keypresses and automatically:
 3. **Pressing the raze key** after a configurable delay
 
 This allows you to raze toward your cursor naturally, similar to how most skillshots work.
-
-## Features
-
-### Automatic Direction Facing
 
 When you press Q, W, or E with Shadow Fiend selected:
 
@@ -44,7 +91,7 @@ This ensures you're protected by magic immunity during the channel without needi
 
 ### Standalone Combo (Blink + Ultimate)
 
-When you press the standalone key (default: Home), the script will:
+The script has a standalone combo implementation that will:
 
 1. **Check if Blink is available** (not on cooldown)
 2. If Blink is on cooldown → **Skip the combo entirely** (no action taken)
@@ -54,7 +101,7 @@ When you press the standalone key (default: Home), the script will:
    - **D ability** (if `auto_d_on_ultimate` enabled)
    - **R** (Requiem of Souls)
 
-This allows you to execute the full initiation combo with a single key press, but only when Blink is ready.
+This allows a full initiation combo in one trigger path, but the current runtime wiring is inconsistent: the checked-in config says `Home`, the helper returns `q`, and the `Q` raze intercept runs first when enabled.
 
 **Sequence:** Blink → BKB (optional) → D (optional) → R
 
@@ -71,57 +118,6 @@ When this is set to `1`, holding ALT and right-clicking makes your hero face tha
 ```
 cl_dota_alt_unit_movetodirection 1
 ```
-
-### GSI-Based Hero Detection
-
-Shadow Fiend is automatically detected via GSI when you pick the hero:
-- GSI reports `hero.name = "npc_dota_hero_nevermore"`
-- The app automatically selects Shadow Fiend and enables raze interception
-- No manual hero selection needed
-
-### Survivability Actions
-
-While playing SF, the script also provides common survivability features:
-- **Danger detection** - Monitors for rapid HP loss
-- **Auto healing items** - Uses Faerie Fire, Magic Wand, etc. when in danger
-- **Defensive items** - Uses BKB, Satanic, Blade Mail, etc. when configured
-
-## Configuration
-
-### Config File (`config/config.toml`)
-
-```toml
-[heroes.shadow_fiend]
-# Enable raze interception (ALT + right-click before Q/W/E)
-raze_intercept_enabled = true
-# Delay between right-click and raze key press (ms)
-raze_delay_ms = 100
-# Automatically use BKB before ultimate (Requiem of Souls) when pressing R
-# Sequence: BKB (double-tap) → D (if enabled) → R
-auto_bkb_on_ultimate = false
-# Automatically press D (Aghanim's ability) before ultimate
-auto_d_on_ultimate = false
-# Standalone combo key: Blink + Ultimate (only executes if Blink is off cooldown)
-standalone_key = "Home"
-```
-
-### Configuration Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `raze_intercept_enabled` | bool | `true` | Master toggle for raze interception |
-| `raze_delay_ms` | u64 | `100` | Delay in milliseconds between facing and razing |
-| `auto_bkb_on_ultimate` | bool | `false` | Auto-use BKB before Requiem of Souls |
-| `auto_d_on_ultimate` | bool | `false` | Auto-press D (Aghanim's ability) before ultimate |
-| `standalone_key` | string | `"Home"` | Key to trigger Blink + Ultimate combo |
-
-### Tuning `raze_delay_ms`
-
-- **Too low (< 50ms)**: Hero may not have finished turning before raze fires
-- **Too high (> 200ms)**: Noticeable delay, feels sluggish
-- **Recommended**: 80-120ms works well for most situations
-
-## How It Works
 
 ### Execution Flow
 
@@ -157,17 +153,7 @@ standalone_key = "Home"
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Key Files
-
-| File | Purpose |
-|------|---------|
-| `src/actions/heroes/shadow_fiend.rs` | SF script and raze execution logic |
-| `src/input/keyboard.rs` | Key interception and SF check |
-| `src/input/simulation.rs` | ALT key hold, mouse click, key simulation |
-| `src/config/settings.rs` | `ShadowFiendConfig` struct |
-| `src/state/app_state.rs` | `sf_enabled` flag management |
-
-## Usage
+### Usage
 
 1. **Enable in config**: Ensure `raze_intercept_enabled = true`
 2. **Set up Dota 2**: Add `cl_dota_alt_unit_movetodirection 1` to autoexec.cfg
@@ -175,31 +161,31 @@ standalone_key = "Home"
 4. **Pick Shadow Fiend**: Hero is auto-detected via GSI
 5. **Play normally**: Press Q/W/E to raze toward your cursor
 
-## Combining with Soul Ring
+### Combining with Soul Ring
 
-If you have Soul Ring and the Soul Ring automation enabled, it will trigger Soul Ring before the raze automatically. The Q/W/E keys are in the default `ability_keys` list for Soul Ring interception.
+If you have Soul Ring and Soul Ring automation enabled, note the current ordering caveat: Shadow Fiend's `Q/W/E` raze interception runs earlier than the generic Soul Ring replay branch, so Soul Ring does **not** currently prefire before razes while raze interception is active.
 
-## Troubleshooting
+### Troubleshooting
 
-### Razes not firing toward cursor
+#### Razes not firing toward cursor
 
 1. Check that `cl_dota_alt_unit_movetodirection 1` is set in Dota 2
-2. Verify Shadow Fiend is detected (check "Active Hero" in app UI)
+2. Verify the latest GSI payload shows Shadow Fiend in the UI and that `Active Hero` is Shadow Fiend when using the `HeroType` flow
 3. Try increasing `raze_delay_ms` to 150-200ms
 
-### Razes feel delayed
+#### Razes feel delayed
 
 - Lower `raze_delay_ms` (try 50-80ms)
 - Note: Too low may cause missed direction changes
 
-### Raze interception not working at all
+#### Raze interception not working at all
 
 1. Run the app as Administrator (required for key interception on Windows)
 2. Check that `raze_intercept_enabled = true` in config
 3. Verify GSI is working (check event count in app UI)
 
-## Limitations
+### Limitations
 
 - **Requires key interception**: The app must intercept keyboard input, which requires running as Administrator on Windows
-- **Fixed Q/W/E keys**: Currently hardcoded to Q, W, E - doesn't support remapped ability keys
+- **Standalone trigger drift**: `heroes.shadow_fiend.standalone_key` is present in config, but the current runtime hardcodes `"q"` and that conflicts with raze interception
 - **Turn rate dependent**: Very fast successive razes may not work if hero hasn't finished turning

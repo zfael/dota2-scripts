@@ -1,17 +1,66 @@
 # Largo Automation
 
-This document describes the Largo hero automation features, including the Amphibian Rhapsody ultimate helper.
+## Purpose
 
-## Overview
+Learn how the Largo hero script automates **Amphibian Rhapsody** (ultimate) with precise beat-timing and song management.  
+**Read this when:** implementing or debugging Largo automation, tuning beat timings, understanding GSI-based ultimate detection.
 
-Largo's ultimate ability, **Amphibian Rhapsody**, requires precise timing to maintain Groovin' stacks. The automation assists by:
+## Feature Summary
 
-1. **Automatically detecting** when ultimate is active via GSI (Game State Integration)
-2. **Pressing song keys** at precise intervals to maintain rhythm
-3. **Queuing song switches** to preserve timing when changing songs mid-ultimate
-4. **Supporting Aghanim's Scepter** dual-song mode
+- **GSI-based ultimate detection** – Monitors `largo_song_*` ability names to auto-enable ultimate mode
+- **Beat timing system** – Absolute timing with periodic corrections to prevent drift
+- **Song queuing** – Switches songs on next beat to preserve rhythm
+- **Aghanim's Scepter support** – Plays two songs simultaneously
+- **R key handling** – Stops beat loop immediately to prevent stale key presses
+- **Survivability actions** – Auto-use healing/defensive items when HP is low
 
-## Features
+## Configuration
+
+All settings in `config/config.toml` under `[heroes.largo]`:
+
+```toml
+[heroes.largo]
+amphibian_rhapsody_enabled = true
+auto_toggle_on_danger = true
+mana_threshold_percent = 20     # Auto-disable ultimate below this mana
+heal_hp_threshold = 50          # Switch to Island Elixir when HP below this
+
+# Beat timing configuration
+beat_interval_ms = 995          # Base interval per beat (990-1000)
+beat_correction_ms = 30         # Correction to apply every N beats
+beat_correction_every_n_beats = 5  # Apply correction every N beats (0 = disabled)
+
+# Keybindings
+q_ability_key = "q"             # Bullbelly Blitz (damage)
+w_ability_key = "w"             # Hotfeet Hustle (movement)
+e_ability_key = "e"             # Island Elixir (healing)
+r_ability_key = "r"             # Amphibian Rhapsody toggle
+standalone_key = "Home"         # Field exists in config, but current runtime does not read a Largo-specific value
+```
+
+**Important runtime note:** `heroes.largo.standalone_key` exists in config, but the current runtime does not wire Largo through `Settings::get_standalone_key(...)`. Manual Largo control still flows through the shared `AppState.trigger_key` plus the direct `Q/W/E/R` hotkey events described in `src/main.rs` and `src/input/keyboard.rs`.
+
+### Tuning Beat Timing
+
+| Problem | Solution |
+|---------|----------|
+| Clicks happen **too early** | Increase `beat_correction_ms` (positive value) |
+| Clicks happen **too late** | Decrease `beat_correction_ms` (negative value) |
+| Drift happens too quickly | Decrease `beat_correction_every_n_beats` |
+| Drift happens too slowly | Increase `beat_correction_every_n_beats` |
+| Disable correction entirely | Set `beat_correction_every_n_beats = 0` |
+
+## Related Files
+
+| File | Purpose |
+|------|---------|
+| `src/actions/heroes/largo.rs` | Main Largo script implementation |
+| `src/config/settings.rs` | LargoConfig struct and defaults |
+| `config/config.toml` | User configuration |
+
+---
+
+## Details
 
 ### GSI-Based Ultimate Detection
 
@@ -87,44 +136,6 @@ When you press R to end the ultimate:
 
 This prevents Q/W/E presses during the window between R press and GSI confirmation.
 
-## Configuration
-
-All settings are in `config/config.toml` under `[heroes.largo]`:
-
-```toml
-[heroes.largo]
-amphibian_rhapsody_enabled = true
-auto_toggle_on_danger = true
-mana_threshold_percent = 20     # Auto-disable ultimate below this mana
-heal_hp_threshold = 50          # Switch to Island Elixir when HP below this
-
-# Beat timing configuration
-beat_interval_ms = 995          # Base interval per beat (990-1000)
-beat_correction_ms = 30         # Correction to apply every N beats
-beat_correction_every_n_beats = 5  # Apply correction every N beats (0 = disabled)
-
-# Keybindings
-q_ability_key = "q"             # Bullbelly Blitz (damage)
-w_ability_key = "w"             # Hotfeet Hustle (movement)
-e_ability_key = "e"             # Island Elixir (healing)
-r_ability_key = "r"             # Amphibian Rhapsody toggle
-standalone_key = "Home"         # Manual ultimate activation
-```
-
-### Tuning Beat Timing
-
-If beats drift over time:
-
-| Problem | Solution |
-|---------|----------|
-| Clicks happen **too early** | Increase `beat_correction_ms` (positive value) |
-| Clicks happen **too late** | Decrease `beat_correction_ms` (negative value) |
-| Drift happens too quickly | Decrease `beat_correction_every_n_beats` |
-| Drift happens too slowly | Increase `beat_correction_every_n_beats` |
-| Disable correction entirely | Set `beat_correction_every_n_beats = 0` |
-
-## How It Works
-
 ### State Machine
 
 ```
@@ -174,19 +185,3 @@ A background thread runs continuously, checking every 5ms:
    - Press `current_song` key
    - Press `previous_song` key (if Aghs)
    - Increment `beat_count`
-
-## Survivability Actions
-
-In addition to ultimate management, the Largo script includes common survivability actions:
-
-- **Healing items**: Auto-use when HP is low
-- **Defensive items**: Auto-use when in danger
-- **Neutral items**: Auto-use defensive neutral items when in danger
-
-## Files
-
-| File | Description |
-|------|-------------|
-| `src/actions/heroes/largo.rs` | Main Largo script implementation |
-| `src/config/settings.rs` | LargoConfig struct and defaults |
-| `config/config.toml` | User configuration |

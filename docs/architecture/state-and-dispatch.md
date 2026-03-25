@@ -1,0 +1,176 @@
+# State and Dispatch
+
+**Purpose**: Read this before changing `AppState`, adding/removing a hero from routing, or moving shared logic between dispatcher/common/hero code.
+
+---
+
+## `AppState`
+
+`src/state/app_state.rs` defines the top-level shared runtime state:
+
+| Field | Type | Owner / meaning |
+|---|---|---|
+| `selected_hero` | `Option<HeroType>` | UI + hotkey routing for `Huskar`, `Largo`, `LegionCommander`, `ShadowFiend`, `Tiny` |
+| `gsi_enabled` | `bool` | Master gate for async dispatch from `process_gsi_events()` |
+| `standalone_enabled` | `bool` | Master gate for hotkey-triggered standalone combos |
+| `last_event` | `Option<GsiWebhookEvent>` | Latest GSI payload for UI/status rendering |
+| `metrics` | `QueueMetrics` | `events_processed`, `events_dropped`, `current_queue_depth` |
+| `trigger_key` | `Arc<Mutex<String>>` | Current standalone hotkey string, updated when the active hero changes |
+| `sf_enabled` | `Arc<Mutex<bool>>` | Fast flag for Shadow Fiend keyboard interception |
+| `update_state` | `Arc<Mutex<UpdateCheckState>>` | UI-visible update status machine |
+
+### Current caveats
+
+- `HeroType` does **not** include Broodmother. Broodmother keyboard behavior is driven by `BROODMOTHER_ACTIVE` in `src/actions/heroes/broodmother.rs`.
+- `metrics.events_processed` is updated in `AppState::update_from_gsi(...)`.
+- `metrics.current_queue_depth` is updated in `process_gsi_events(...)`.
+- `metrics.events_dropped` exists in state/UI, but the current GSI handler does not increment it when `try_send` fails.
+
+---
+
+## Shared `Arc<Mutex<...>>` usage
+
+### Top-level shared objects
+
+| Shared object | Declared in | Shared with |
+|---|---|---|
+| `Arc<Mutex<AppState>>` | `src/state/app_state.rs` | `src/main.rs`, `src/gsi/handler.rs`, `src/ui/app.rs` |
+| `Arc<Mutex<Settings>>` | `src/main.rs` | dispatcher, keyboard hook, hero scripts, UI, updater |
+| `Arc<Mutex<String>>` (`trigger_key`) | inside `AppState` | keyboard hook + UI + main hotkey consumer |
+| `Arc<Mutex<bool>>` (`sf_enabled`) | inside `AppState` | keyboard hook + UI/GSI hero selection |
+| `Arc<Mutex<UpdateCheckState>>` | inside `AppState` | startup update task + UI |
+
+### Feature-specific shared state
+
+These are not part of `AppState`, but they matter when tracing dispatch:
+
+| State | Path | Purpose |
+|---|---|---|
+| `SOUL_RING_STATE` | `src/actions/soul_ring.rs` | Shared Soul Ring inventory/health/mana snapshot used by GSI + keyboard paths |
+| `SF_LAST_EVENT` | `src/actions/heroes/shadow_fiend.rs` | Cached event for BKB/Blink checks during intercepted SF combos |
+| `HP_TRACKER` | `src/actions/danger_detector.rs` | Global danger heuristic state |
+| `LATEST_GSI_EVENT` | `src/actions/auto_items.rs` | Cached inventory/ability state for Broodmother auto-items |
+| `DISPEL_TRIGGERED` | `src/actions/dispel.rs` | Prevent repeated Manta/Lotus usage during one silence |
+| `BROODMOTHER_ACTIVE` | `src/actions/heroes/broodmother.rs` | Enables Broodmother mouse interception without using `AppState.selected_hero` |
+
+### Locking pattern used in this repo
+
+Common pattern:
+
+1. lock
+2. read/copy the few fields you need
+3. drop the lock
+4. perform input simulation, file I/O, sleeps, or dispatch
+
+Examples:
+
+- `src/main.rs` reads `selected_hero`, then `drop(state)` before calling `dispatch_standalone_trigger(...)`
+- `src/actions/dispatcher.rs` drops the `Settings` lock before hero dispatch
+- `src/actions/common.rs` gathers defensive-item config, then releases the settings lock before simulating keys
+- `src/actions/soul_ring.rs` drops `SOUL_RING_STATE` before sleeping and pressing keys
+
+When extending the code, keep lock scopes short. Do not hold `AppState` or `Settings` across sleeps, network/file I/O, or long-running combo logic.
+
+---
+
+## Dispatcher structure
+
+`src/actions/dispatcher.rs` owns two things:
+
+| Field | Type | Purpose |
+|---|---|---|
+| `hero_scripts` | `HashMap<String, Arc<dyn HeroScript>>` | Maps Dota hero names (for example `npc_dota_hero_huskar`) to concrete scripts |
+| `survivability` | `SurvivabilityActions` | Fallback path for heroes without a dedicated script |
+
+Hero registration happens once in `ActionDispatcher::new(...)`:
+
+- `HuskarScript`
+- `LargoScript`
+- `LegionCommanderScript`
+- `ShadowFiendScript`
+- `TinyScript`
+- `BroodmotherScript`
+
+The key used in the map is `HeroScript::hero_name()`.
+
+---
+
+## Hero dispatch vs common actions
+
+### What the dispatcher always does
+
+For every GSI event, `dispatch_gsi_event()` first runs shared, cross-cutting hooks:
+
+1. neutral item discovery logging
+2. Soul Ring state refresh
+3. silence dispel check
+4. Broodmother active-hero flag update
+5. auto-items GSI cache refresh
+
+These happen **before** any hero-specific routing.
+
+### How hero-specific routing works
+
+After the shared hooks:
+
+- if `event.hero.name` exists in `hero_scripts`, the dispatcher calls `hero_script.handle_gsi_event(event)`
+- otherwise it calls `survivability.execute_default_strategy(event)`
+
+### How common actions interact with hero scripts
+
+Important design detail: for registered heroes, the dispatcher does **not** automatically call `execute_default_strategy()`.
+
+Instead, the hero script decides how to compose shared behavior. In the current codebase, all registered hero scripts call shared survivability helpers themselves:
+
+- `danger_detector::update(...)`
+- `check_and_use_healing_items(...)`
+- `use_defensive_items_if_danger(...)`
+- `use_neutral_item_if_danger(...)`
+
+That means:
+
+- shared survivability changes often affect both `src/actions/common.rs` **and** multiple hero files
+- moving logic between dispatcher and common helpers can easily create duplicate or missing actions
+- docs for hero scripts should stay aligned when a hero overrides or sequences shared helpers differently
+
+---
+
+## `HeroScript` trait
+
+`src/actions/heroes/traits.rs` defines the dispatcher contract:
+
+| Method | Used by |
+|---|---|
+| `handle_gsi_event(&self, event: &GsiWebhookEvent)` | GSI routing from `ActionDispatcher::dispatch_gsi_event()` |
+| `handle_standalone_trigger(&self)` | Keyboard-triggered standalone combo path from `main.rs` |
+| `hero_name(&self) -> &'static str` | Startup registration key |
+| `as_any(&self) -> &dyn Any` | Downcasting for Largo-only helpers in `main.rs` |
+
+`as_any()` exists because `main.rs` needs access to concrete `LargoScript` methods like `select_song_manually(...)` and `deactivate_ultimate()`.
+
+---
+
+## Standalone dispatch path
+
+Standalone flow is split across `AppState`, the keyboard hook, and the dispatcher:
+
+1. `src/input/keyboard.rs` emits `HotkeyEvent::ComboTrigger`
+2. `src/main.rs` reads `AppState.selected_hero` and `standalone_enabled`
+3. `src/main.rs` converts `HeroType` into the game's hero name string
+4. `ActionDispatcher::dispatch_standalone_trigger(hero_name)` calls the matching script
+
+Special cases:
+
+- Largo manual `Q/W/E/R` hotkeys bypass `handle_standalone_trigger()` and call concrete `LargoScript` methods
+- Broodmother spider control uses `HotkeyEvent::BroodmotherSpiderAttack` plus `BROODMOTHER_ACTIVE`
+
+---
+
+## Safe edit checklist
+
+If you change:
+
+- `src/state/app_state.rs` -> also check `src/main.rs`, `src/gsi/handler.rs`, `src/ui/app.rs`
+- `src/actions/dispatcher.rs` -> also check `docs/architecture/runtime-flow.md` and hero docs touched by the routing change
+- `src/actions/heroes/traits.rs` -> every registered hero script must still compile and satisfy the trait
+- hero/common survivability composition -> read `docs/features/survivability.md` and `docs/features/danger-detection.md`
