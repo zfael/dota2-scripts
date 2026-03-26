@@ -18,15 +18,24 @@ lazy_static! {
 
 pub type GsiEventSender = mpsc::Sender<GsiWebhookEvent>;
 
+#[derive(Clone)]
+pub struct GsiServerState {
+    pub tx: GsiEventSender,
+    pub app_state: Arc<Mutex<AppState>>,
+}
+
 pub async fn gsi_webhook_handler(
-    State(tx): State<GsiEventSender>,
+    State(server_state): State<GsiServerState>,
     Json(event): Json<GsiWebhookEvent>,
 ) -> StatusCode {
     debug!("Received GSI event for hero: {}", event.hero.name);
 
-    match tx.try_send(event) {
+    match server_state.tx.try_send(event) {
         Ok(_) => StatusCode::OK,
         Err(mpsc::error::TrySendError::Full(_)) => {
+            if let Ok(mut state) = server_state.app_state.lock() {
+                state.metrics.events_dropped += 1;
+            }
             warn!("GSI event queue full, dropping event");
             StatusCode::SERVICE_UNAVAILABLE
         }
@@ -101,12 +110,44 @@ pub async fn process_gsi_events(
         };
 
         if gsi_enabled {
-            // Dispatch to action handlers asynchronously for time-critical actions
-            let dispatcher_clone = dispatcher.clone();
-            let event_clone = event.clone();
-            tokio::spawn(async move {
-                dispatcher_clone.dispatch_gsi_event(&event_clone);
-            });
+            dispatcher.dispatch_gsi_event(&event);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{gsi_webhook_handler, GsiServerState};
+    use crate::models::GsiWebhookEvent;
+    use crate::state::AppState;
+    use axum::{extract::State, http::StatusCode, Json};
+    use std::fs;
+    use tokio::sync::mpsc;
+
+    fn load_fixture_event(path: &str) -> GsiWebhookEvent {
+        let json_data = fs::read_to_string(path).expect("Failed to read GSI fixture");
+        serde_json::from_str(&json_data).expect("Failed to deserialize GSI fixture")
+    }
+
+    #[tokio::test]
+    async fn webhook_handler_tracks_dropped_events_when_queue_is_full() {
+        let event = load_fixture_event("tests/fixtures/huskar_event.json");
+        let app_state = AppState::new();
+        let (tx, _rx) = mpsc::channel(1);
+
+        tx.try_send(event.clone())
+            .expect("Channel should accept first event");
+
+        let status = gsi_webhook_handler(
+            State(GsiServerState {
+                tx,
+                app_state: app_state.clone(),
+            }),
+            Json(event),
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(app_state.lock().unwrap().metrics.events_dropped, 1);
     }
 }

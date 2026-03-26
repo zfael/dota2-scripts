@@ -1,5 +1,6 @@
 use crate::actions::heroes::traits::HeroScript;
 use crate::actions::common::SurvivabilityActions;
+use crate::actions::executor::ActionExecutor;
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Hero};
 use lazy_static::lazy_static;
@@ -50,10 +51,11 @@ struct UltimateState {
 
 pub struct LargoScript {
     settings: Arc<Mutex<Settings>>,
+    executor: Arc<ActionExecutor>,
 }
 
 impl LargoScript {
-    pub fn new(settings: Arc<Mutex<Settings>>) -> Self {
+    pub fn new(settings: Arc<Mutex<Settings>>, executor: Arc<ActionExecutor>) -> Self {
         // Start the beat monitoring thread once
         let mut started = BEAT_THREAD_STARTED.lock().unwrap();
         if !*started {
@@ -62,7 +64,7 @@ impl LargoScript {
             Self::start_beat_thread(settings.clone());
         }
         
-        Self { settings }
+        Self { settings, executor }
     }
 
     fn start_beat_thread(settings: Arc<Mutex<Settings>>) {
@@ -370,7 +372,7 @@ impl HeroScript for LargoScript {
         drop(state);
         
         // Use common survivability actions (healing, defensive items, neutral items)
-        let survivability = SurvivabilityActions::new(self.settings.clone());
+        let survivability = SurvivabilityActions::new(self.settings.clone(), self.executor.clone());
         survivability.check_and_use_healing_items(event);
         survivability.use_defensive_items_if_danger(event);
         survivability.use_neutral_item_if_danger(event);

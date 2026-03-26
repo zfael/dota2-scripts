@@ -1,5 +1,5 @@
 use crate::config::Settings;
-use crate::gsi::handler::{gsi_webhook_handler, process_gsi_events};
+use crate::gsi::handler::{gsi_webhook_handler, process_gsi_events, GsiServerState};
 use crate::models::GsiWebhookEvent;
 use crate::state::AppState;
 use axum::{routing::post, Router};
@@ -26,9 +26,13 @@ pub async fn start_gsi_server(
     });
 
     // Build router
+    let server_state = GsiServerState {
+        tx,
+        app_state: app_state.clone(),
+    };
     let app = Router::new()
         .route("/", post(gsi_webhook_handler))
-        .with_state(tx);
+        .with_state(server_state);
 
     let addr = format!("127.0.0.1:{}", port);
     info!("Starting GSI server on http://{}", addr);

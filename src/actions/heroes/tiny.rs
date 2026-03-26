@@ -1,5 +1,6 @@
 use crate::actions::heroes::traits::HeroScript;
 use crate::actions::common::{find_item_slot, SurvivabilityActions};
+use crate::actions::executor::ActionExecutor;
 use crate::actions::soul_ring::press_ability_with_soul_ring;
 use crate::config::Settings;
 use crate::input::simulation::press_key;
@@ -15,11 +16,12 @@ lazy_static::lazy_static! {
 
 pub struct TinyScript {
     settings: Arc<Mutex<Settings>>,
+    executor: Arc<ActionExecutor>,
 }
 
 impl TinyScript {
-    pub fn new(settings: Arc<Mutex<Settings>>) -> Self {
-        Self { settings }
+    pub fn new(settings: Arc<Mutex<Settings>>, executor: Arc<ActionExecutor>) -> Self {
+        Self { settings, executor }
     }
 
     pub fn execute_combo(&self, event: &GsiWebhookEvent) {
@@ -74,7 +76,7 @@ impl HeroScript for TinyScript {
         }
         
         // Use common survivability actions (danger detection, healing, defensive items)
-        let survivability = SurvivabilityActions::new(self.settings.clone());
+        let survivability = SurvivabilityActions::new(self.settings.clone(), self.executor.clone());
         let settings = self.settings.lock().unwrap();
         crate::actions::danger_detector::update(event, &settings.danger_detection);
         drop(settings);

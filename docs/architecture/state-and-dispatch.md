@@ -24,7 +24,7 @@
 - `HeroType` does **not** include Broodmother. Broodmother keyboard behavior is driven by `BROODMOTHER_ACTIVE` in `src/actions/heroes/broodmother.rs`.
 - `metrics.events_processed` is updated in `AppState::update_from_gsi(...)`.
 - `metrics.current_queue_depth` is updated in `process_gsi_events(...)`.
-- `metrics.events_dropped` exists in state/UI, but the current GSI handler does not increment it when `try_send` fails.
+- `metrics.events_dropped` is incremented in `gsi_webhook_handler()` when `try_send` fails because the bounded queue is full.
 
 ---
 
@@ -36,6 +36,7 @@
 |---|---|---|
 | `Arc<Mutex<AppState>>` | `src/state/app_state.rs` | `src/main.rs`, `src/gsi/handler.rs`, `src/ui/app.rs` |
 | `Arc<Mutex<Settings>>` | `src/main.rs` | dispatcher, keyboard hook, hero scripts, UI, updater |
+| `Arc<ActionExecutor>` | `src/actions/executor.rs` | `src/main.rs`, dispatcher, common survivability helpers, hero scripts that compose survivability |
 | `Arc<Mutex<String>>` (`trigger_key`) | inside `AppState` | keyboard hook + UI + main hotkey consumer |
 | `Arc<Mutex<bool>>` (`sf_enabled`) | inside `AppState` | keyboard hook + UI/GSI hero selection |
 | `Arc<Mutex<UpdateCheckState>>` | inside `AppState` | startup update task + UI |
@@ -80,6 +81,7 @@ When extending the code, keep lock scopes short. Do not hold `AppState` or `Sett
 | Field | Type | Purpose |
 |---|---|---|
 | `hero_scripts` | `HashMap<String, Arc<dyn HeroScript>>` | Maps Dota hero names (for example `npc_dota_hero_huskar`) to concrete scripts |
+| `executor` | `Arc<ActionExecutor>` | Schedules short GSI-driven action jobs without spawning a new OS thread per action |
 | `survivability` | `SurvivabilityActions` | Fallback path for heroes without a dedicated script |
 
 Hero registration happens once in `ActionDispatcher::new(...)`:
@@ -103,7 +105,7 @@ For every GSI event, `dispatch_gsi_event()` first runs shared, cross-cutting hoo
 
 1. neutral item discovery logging
 2. Soul Ring state refresh
-3. silence dispel check
+3. silence dispel check, which now queues Manta/Lotus jitter work on the shared action executor
 4. Broodmother active-hero flag update
 5. auto-items GSI cache refresh
 
@@ -132,6 +134,22 @@ That means:
 - shared survivability changes often affect both `src/actions/common.rs` **and** multiple hero files
 - moving logic between dispatcher and common helpers can easily create duplicate or missing actions
 - docs for hero scripts should stay aligned when a hero overrides or sequences shared helpers differently
+- the shared `ActionExecutor` now flows through those hero scripts because `SurvivabilityActions` depends on it for executor-backed armlet scheduling
+
+### Executor-backed paths added in item 2
+
+The current executor scope is intentionally limited to the hot GSI-driven short jobs identified in the audit:
+
+- default/common armlet handling in `src/actions/common.rs`
+- silence dispel jitter in `src/actions/dispel.rs`
+- Huskar armlet handling in `src/actions/heroes/huskar.rs`
+
+Notably unchanged in this item:
+
+- `src/input/keyboard.rs` thread spawns
+- `src/actions/heroes/shadow_fiend.rs` combo threads
+- `src/actions/heroes/largo.rs` beat-monitor thread
+- standalone combo execution outside the three migrated paths
 
 ---
 

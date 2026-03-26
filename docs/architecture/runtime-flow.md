@@ -47,7 +47,7 @@ Boot starts in `src/main.rs::main()`:
 - calls `tx.try_send(event)`
 - returns:
   - `200 OK` on success
-  - `503 Service Unavailable` if the queue is full
+  - `503 Service Unavailable` if the queue is full, after incrementing `AppState.metrics.events_dropped`
   - `500 Internal Server Error` if the channel is closed
 
 ### 3. Event processing
@@ -59,7 +59,7 @@ Boot starts in `src/main.rs::main()`:
 3. updates `state.metrics.current_queue_depth = rx.len()`
 4. logs hero death / respawn transitions via the `WAS_ALIVE` mutex
 5. checks `state.gsi_enabled`
-6. if enabled, spawns `dispatcher.dispatch_gsi_event(&event_clone)` on Tokio
+6. if enabled, calls `dispatcher.dispatch_gsi_event(&event)` inline on the GSI processor task
 
 ### 4. Dispatcher responsibilities
 
@@ -67,7 +67,7 @@ Boot starts in `src/main.rs::main()`:
 
 1. `log_neutral_item_discovery(event, &settings)`
 2. `soul_ring::update_from_gsi(&event.items, &event.hero, &settings)`
-3. `dispel::check_and_dispel_silence(event, &settings)`
+3. `dispel::check_and_dispel_silence(event, &settings, &executor)`
 4. update `BROODMOTHER_ACTIVE`
 5. `auto_items::update_gsi_state(event)`
 
@@ -86,6 +86,22 @@ Current hero scripts in `src/actions/heroes/*.rs` all compose shared survivabili
 - `SurvivabilityActions::use_neutral_item_if_danger(...)`
 
 The fallback path for unsupported heroes calls `execute_default_strategy()` instead, which performs the same shared survivability pipeline plus per-event armlet handling.
+
+### 6. Action executor lane
+
+`src/actions/executor.rs` owns one runtime-created worker thread for short GSI-driven action jobs that previously spawned raw OS threads on demand.
+
+Current item-2 users are:
+
+- default/common armlet handling in `SurvivabilityActions::execute_default_strategy(...)`
+- silence dispel jitter in `dispel::check_and_dispel_silence(...)`
+- Huskar armlet handling in `HuskarScript::handle_gsi_event(...)`
+
+The action executor is intentionally narrow in this rollout item:
+
+- keyboard-triggered Shadow Fiend combo threads are unchanged
+- Largo's long-lived beat-monitor thread is unchanged
+- standalone combo threads are unchanged
 
 ---
 

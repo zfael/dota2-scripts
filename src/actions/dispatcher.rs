@@ -1,4 +1,5 @@
 use crate::actions::common::SurvivabilityActions;
+use crate::actions::executor::ActionExecutor;
 use crate::actions::heroes::broodmother::BROODMOTHER_ACTIVE;
 use crate::actions::heroes::{BroodmotherScript, HeroScript, HuskarScript, LargoScript, LegionCommanderScript, ShadowFiendScript, TinyScript};
 use crate::actions::soul_ring;
@@ -75,6 +76,7 @@ fn log_neutral_item_discovery(event: &GsiWebhookEvent, settings: &Settings) {
 
 pub struct ActionDispatcher {
     pub hero_scripts: HashMap<String, Arc<dyn HeroScript>>,
+    executor: Arc<ActionExecutor>,
     survivability: SurvivabilityActions,
 }
 
@@ -83,31 +85,32 @@ unsafe impl Send for ActionDispatcher {}
 unsafe impl Sync for ActionDispatcher {}
 
 impl ActionDispatcher {
-    pub fn new(settings: Arc<Mutex<Settings>>) -> Self {
+    pub fn new(settings: Arc<Mutex<Settings>>, executor: Arc<ActionExecutor>) -> Self {
         let mut hero_scripts: HashMap<String, Arc<dyn HeroScript>> = HashMap::new();
 
         // Register hero scripts
-        let huskar = Arc::new(HuskarScript::new(settings.clone()));
+        let huskar = Arc::new(HuskarScript::new(settings.clone(), executor.clone()));
         hero_scripts.insert(huskar.hero_name().to_string(), huskar);
 
-        let largo = Arc::new(LargoScript::new(settings.clone()));
+        let largo = Arc::new(LargoScript::new(settings.clone(), executor.clone()));
         hero_scripts.insert(largo.hero_name().to_string(), largo);
 
-        let legion = Arc::new(LegionCommanderScript::new(settings.clone()));
+        let legion = Arc::new(LegionCommanderScript::new(settings.clone(), executor.clone()));
         hero_scripts.insert(legion.hero_name().to_string(), legion);
 
-        let shadow_fiend = Arc::new(ShadowFiendScript::new(settings.clone()));
+        let shadow_fiend = Arc::new(ShadowFiendScript::new(settings.clone(), executor.clone()));
         hero_scripts.insert(shadow_fiend.hero_name().to_string(), shadow_fiend);
 
-        let tiny = Arc::new(TinyScript::new(settings.clone()));
+        let tiny = Arc::new(TinyScript::new(settings.clone(), executor.clone()));
         hero_scripts.insert(tiny.hero_name().to_string(), tiny);
 
-        let broodmother = Arc::new(BroodmotherScript::new(settings.clone()));
+        let broodmother = Arc::new(BroodmotherScript::new(settings.clone(), executor.clone()));
         hero_scripts.insert(broodmother.hero_name().to_string(), broodmother);
 
         Self {
             hero_scripts,
-            survivability: SurvivabilityActions::new(settings),
+            executor: executor.clone(),
+            survivability: SurvivabilityActions::new(settings, executor),
         }
     }
 
@@ -120,7 +123,7 @@ impl ActionDispatcher {
         soul_ring::update_from_gsi(&event.items, &event.hero, &settings);
         
         // Check for silence dispel with Manta Style
-        crate::actions::dispel::check_and_dispel_silence(event, &settings);
+        crate::actions::dispel::check_and_dispel_silence(event, &settings, &self.executor);
         
         drop(settings); // Release lock before further processing
         

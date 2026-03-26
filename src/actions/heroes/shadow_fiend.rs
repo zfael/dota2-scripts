@@ -1,4 +1,5 @@
 use crate::actions::common::SurvivabilityActions;
+use crate::actions::executor::ActionExecutor;
 use crate::actions::heroes::HeroScript;
 use crate::config::Settings;
 use crate::input::simulation::press_key;
@@ -229,11 +230,12 @@ impl ShadowFiendState {
 ///    - Press R for Requiem of Souls
 pub struct ShadowFiendScript {
     settings: Arc<Mutex<Settings>>,
+    executor: Arc<ActionExecutor>,
 }
 
 impl ShadowFiendScript {
-    pub fn new(settings: Arc<Mutex<Settings>>) -> Self {
-        Self { settings }
+    pub fn new(settings: Arc<Mutex<Settings>>, executor: Arc<ActionExecutor>) -> Self {
+        Self { settings, executor }
     }
 }
 
@@ -248,7 +250,7 @@ impl HeroScript for ShadowFiendScript {
         }
         
         // Use common survivability actions (danger detection, healing, defensive items)
-        let survivability = SurvivabilityActions::new(self.settings.clone());
+        let survivability = SurvivabilityActions::new(self.settings.clone(), self.executor.clone());
         crate::actions::danger_detector::update(event, &settings.danger_detection);
         drop(settings);
         survivability.check_and_use_healing_items(event);

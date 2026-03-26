@@ -1,5 +1,6 @@
 use crate::actions::heroes::traits::HeroScript;
 use crate::actions::common::{armlet_toggle, ArmletConfig, SurvivabilityActions};
+use crate::actions::executor::ActionExecutor;
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Hero};
 use lazy_static::lazy_static;
@@ -15,11 +16,12 @@ lazy_static! {
 
 pub struct HuskarScript {
     settings: Arc<Mutex<Settings>>,
+    executor: Arc<ActionExecutor>,
 }
 
 impl HuskarScript {
-    pub fn new(settings: Arc<Mutex<Settings>>) -> Self {
-        Self { settings }
+    pub fn new(settings: Arc<Mutex<Settings>>, executor: Arc<ActionExecutor>) -> Self {
+        Self { settings, executor }
     }
 
     fn berserker_blood_cleanse(&self, event: &GsiWebhookEvent) {
@@ -97,7 +99,7 @@ impl HeroScript for HuskarScript {
         // Uses try_lock guard to prevent race conditions - if another toggle is in progress, skip
         let settings_clone = self.settings.clone();
         let event_clone = event.clone();
-        std::thread::spawn(move || {
+        self.executor.enqueue("huskar-armlet-toggle", move || {
             // Try to acquire the guard - if another thread holds it, skip this iteration
             let Ok(_guard) = ARMLET_THREAD_GUARD.try_lock() else {
                 debug!("Armlet toggle already in progress, skipping");
@@ -120,7 +122,7 @@ impl HeroScript for HuskarScript {
         drop(settings);
 
         // PRIORITY 3: Create survivability actions for healing and defensive items
-        let survivability = SurvivabilityActions::new(self.settings.clone());
+        let survivability = SurvivabilityActions::new(self.settings.clone(), self.executor.clone());
         
         // Check healing items (danger-aware)
         survivability.check_and_use_healing_items(event);

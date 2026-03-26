@@ -3,11 +3,13 @@
 //! Automatically uses dispel items (Manta Style, Lotus Orb) when silenced.
 //! Triggers immediately with random jitter for human-like reaction.
 
+use crate::actions::executor::ActionExecutor;
 use crate::config::Settings;
 use crate::models::GsiWebhookEvent;
 use lazy_static::lazy_static;
 use rand::Rng;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use tracing::info;
@@ -18,7 +20,11 @@ lazy_static! {
 }
 
 /// Check and use dispel items (Manta/Lotus) if silenced (called every GSI event)
-pub fn check_and_dispel_silence(event: &GsiWebhookEvent, settings: &Settings) {
+pub fn check_and_dispel_silence(
+    event: &GsiWebhookEvent,
+    settings: &Settings,
+    executor: &Arc<ActionExecutor>,
+) {
     // Reset trigger flag when not silenced
     if !event.hero.silenced {
         DISPEL_TRIGGERED.store(false, Ordering::SeqCst);
@@ -50,10 +56,8 @@ pub fn check_and_dispel_silence(event: &GsiWebhookEvent, settings: &Settings) {
 
                 let key = settings.get_key_for_slot(slot);
                 if let Some(key) = key {
-                    thread::spawn(move || {
-                        let jitter = rand::rng().random_range(30..100);
-                        thread::sleep(Duration::from_millis(jitter));
-                        
+                    let jitter = rand::rng().random_range(30..100);
+                    executor.enqueue_after("manta-dispel", Duration::from_millis(jitter), move || {
                         info!("🌀 Using Manta Style (silenced, jitter {}ms)", jitter);
                         crate::input::simulation::press_key(key);
                     });
@@ -69,10 +73,8 @@ pub fn check_and_dispel_silence(event: &GsiWebhookEvent, settings: &Settings) {
 
                 let key = settings.get_key_for_slot(slot);
                 if let Some(key) = key {
-                    thread::spawn(move || {
-                        let jitter = rand::rng().random_range(30..100);
-                        thread::sleep(Duration::from_millis(jitter));
-                        
+                    let jitter = rand::rng().random_range(30..100);
+                    executor.enqueue_after("lotus-dispel", Duration::from_millis(jitter), move || {
                         info!("🪷 Using Lotus Orb (silenced, jitter {}ms)", jitter);
                         // Double-tap for self-cast
                         crate::input::simulation::press_key(key);

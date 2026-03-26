@@ -1,5 +1,6 @@
 use crate::actions::heroes::HeroScript;
 use crate::actions::common::{find_item_slot, SurvivabilityActions};
+use crate::actions::executor::ActionExecutor;
 use crate::actions::soul_ring::press_ability_with_soul_ring;
 use crate::config::Settings;
 use crate::input::simulation::press_key;
@@ -12,13 +13,15 @@ use tracing::info;
 
 pub struct LegionCommanderScript {
     settings: Arc<Mutex<Settings>>,
+    executor: Arc<ActionExecutor>,
     last_event: Arc<Mutex<Option<GsiWebhookEvent>>>,
 }
 
 impl LegionCommanderScript {
-    pub fn new(settings: Arc<Mutex<Settings>>) -> Self {
+    pub fn new(settings: Arc<Mutex<Settings>>, executor: Arc<ActionExecutor>) -> Self {
         Self {
             settings,
+            executor,
             last_event: Arc::new(Mutex::new(None)),
         }
     }
@@ -112,7 +115,7 @@ impl HeroScript for LegionCommanderScript {
         *self.last_event.lock().unwrap() = Some(event.clone());
         
         // Use common survivability actions (danger detection, healing, defensive items)
-        let survivability = SurvivabilityActions::new(self.settings.clone());
+        let survivability = SurvivabilityActions::new(self.settings.clone(), self.executor.clone());
         let settings = self.settings.lock().unwrap();
         crate::actions::danger_detector::update(event, &settings.danger_detection);
         drop(settings);

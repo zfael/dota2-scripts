@@ -9,6 +9,7 @@ mod state;
 mod ui;
 mod update;
 
+use crate::actions::executor::ActionExecutor;
 use crate::actions::ActionDispatcher;
 use crate::config::Settings;
 use crate::gsi::start_gsi_server;
@@ -43,7 +44,8 @@ async fn main() {
     let sf_enabled = app_state.lock().unwrap().sf_enabled.clone();
 
     // Initialize action dispatcher
-    let dispatcher = Arc::new(ActionDispatcher::new(settings.clone()));
+    let action_executor = ActionExecutor::new();
+    let dispatcher = Arc::new(ActionDispatcher::new(settings.clone(), action_executor));
 
     // Start keyboard listener with dynamic trigger key and SF flag
     let keyboard_config = input::keyboard::KeyboardListenerConfig {

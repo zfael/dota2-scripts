@@ -1,3 +1,4 @@
+use crate::actions::executor::ActionExecutor;
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Item};
 use lazy_static::lazy_static;
@@ -148,6 +149,7 @@ pub fn find_item_slot_by_name(event: &GsiWebhookEvent, settings: &Settings, item
 /// Common survivability actions that apply to all heroes
 pub struct SurvivabilityActions {
     pub(crate) settings: Arc<Mutex<Settings>>,
+    pub(crate) executor: Arc<ActionExecutor>,
 }
 
 // Ensure SurvivabilityActions can be shared across threads
@@ -155,8 +157,8 @@ unsafe impl Send for SurvivabilityActions {}
 unsafe impl Sync for SurvivabilityActions {}
 
 impl SurvivabilityActions {
-    pub fn new(settings: Arc<Mutex<Settings>>) -> Self {
-        Self { settings }
+    pub fn new(settings: Arc<Mutex<Settings>>, executor: Arc<ActionExecutor>) -> Self {
+        Self { settings, executor }
     }
 
     /// Execute default GSI strategy (survivability + armlet + danger detection)
@@ -165,7 +167,7 @@ impl SurvivabilityActions {
         // Clone event for thread safety
         let event_clone = event.clone();
         let settings_clone = self.settings.clone();
-        std::thread::spawn(move || {
+        self.executor.enqueue("default-armlet-toggle", move || {
             let settings = settings_clone.lock().unwrap();
             
             // Check if hero has armlet in inventory

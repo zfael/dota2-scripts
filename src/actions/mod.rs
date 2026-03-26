@@ -3,6 +3,7 @@ pub mod common;
 pub mod danger_detector;
 pub mod dispel;
 pub mod dispatcher;
+pub mod executor;
 pub mod heroes;
 pub mod soul_ring;
 
