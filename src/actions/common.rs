@@ -335,17 +335,7 @@ impl SurvivabilityActions {
 
         if let Some(key) = key {
             info!("Using {} in {} (key: {})", item_name, slot, key);
-
-            let sequence = plan_item_key_sequence(item_name, key);
-            if sequence.len() == 1 {
-                crate::input::press_key(key);
-            } else {
-                let item_name = item_name.to_string();
-                self.executor.enqueue("common-item-self-cast", move || {
-                    execute_key_sequence(sequence);
-                    info!("Double-tapped {} for self-cast", item_name);
-                });
-            }
+            crate::input::press_key(key);
         }
     }
 
@@ -426,9 +416,16 @@ impl SurvivabilityActions {
             return;
         }
 
-        if ready_items.iter().any(|(item_name, _)| item_name == "item_glimmer_cape") {
-            let sequence = plan_defensive_item_key_sequence(&ready_items);
-            self.executor.enqueue("common-defensive-items", move || {
+        if let Some(glimmer_index) = ready_items
+            .iter()
+            .position(|(item_name, _)| item_name == "item_glimmer_cape")
+        {
+            for (_item_name, key) in &ready_items[..glimmer_index] {
+                crate::input::press_key(*key);
+            }
+
+            let sequence = plan_defensive_item_key_sequence(&ready_items[glimmer_index..]);
+            self.executor.enqueue("common-defensive-self-cast-tail", move || {
                 execute_key_sequence(sequence);
             });
             return;
@@ -564,7 +561,6 @@ mod tests {
     #[test]
     fn defensive_item_plan_keeps_glimmer_follow_up_before_later_items() {
         let items = vec![
-            ("item_black_king_bar".to_string(), '3'),
             ("item_glimmer_cape".to_string(), '4'),
             ("item_ghost".to_string(), '5'),
         ];
@@ -572,7 +568,6 @@ mod tests {
         assert_eq!(
             plan_defensive_item_key_sequence(&items),
             vec![
-                PlannedKeyPress::new('3', 0),
                 PlannedKeyPress::new('4', SELF_CAST_DELAY_MS),
                 PlannedKeyPress::new('4', 0),
                 PlannedKeyPress::new('5', 0),

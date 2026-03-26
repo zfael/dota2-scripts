@@ -102,7 +102,7 @@ Details:
 
 - each item is independently enabled/disabled in `[danger_detection]`
 - Glimmer is self-cast by double-tapping the bound key
-- when Glimmer is part of the defensive-item sequence, `common.rs` expands the presses into a timed plan and runs that plan on the shared `ActionExecutor`, so the synchronous GSI lane does not sleep while still keeping later defensive items behind Glimmer's follow-up tap
+- when Glimmer appears in the shared defensive-item sequence, `common.rs` queues the Glimmer self-cast tail on the shared `ActionExecutor`, so the synchronous GSI lane does not sleep for the 50ms follow-up timing and later defensive items still stay behind Glimmer's second tap
 - Satanic has a separate HP gate: `satanic_hp_threshold`
 
 For the heuristics that decide when this path runs, see `docs/features/danger-detection.md`.

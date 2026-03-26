@@ -136,7 +136,7 @@ That means:
 - docs for hero scripts should stay aligned when a hero overrides or sequences shared helpers differently
 - the shared `ActionExecutor` now flows through those hero scripts because `SurvivabilityActions` depends on it for executor-backed armlet scheduling plus the timed Glimmer/neutral self-cast survivability sequences
 
-### Executor-backed paths added in item 2
+### Current executor-backed paths
 
 The current executor scope is intentionally limited to the hot GSI-driven short jobs identified in the audit:
 
