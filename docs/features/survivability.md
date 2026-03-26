@@ -102,6 +102,7 @@ Details:
 
 - each item is independently enabled/disabled in `[danger_detection]`
 - Glimmer is self-cast by double-tapping the bound key
+- when Glimmer is part of the defensive-item sequence, `common.rs` expands the presses into a timed plan and runs that plan on the shared `ActionExecutor`, so the synchronous GSI lane does not sleep while still keeping later defensive items behind Glimmer's follow-up tap
 - Satanic has a separate HP gate: `satanic_hp_threshold`
 
 For the heuristics that decide when this path runs, see `docs/features/danger-detection.md`.
@@ -127,9 +128,9 @@ Current requirements:
 
 When triggered, the code:
 
-1. presses the neutral slot key
-2. sleeps 50ms
-3. presses `neutral_items.self_cast_key`
+1. validates the neutral item against the existing danger, HP, allowed-item, and `can_cast` gates
+2. queues a self-cast sequence on the shared `ActionExecutor`
+3. inside that executor job, presses the neutral slot key, waits 50ms, then presses `neutral_items.self_cast_key`
 
 ---
 

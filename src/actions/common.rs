@@ -11,6 +11,54 @@ lazy_static! {
     static ref ARMLET_CRITICAL_HP: Mutex<Option<u32>> = Mutex::new(None);
 }
 
+const SELF_CAST_DELAY_MS: u64 = 50;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PlannedKeyPress {
+    key: char,
+    delay_after_ms: u64,
+}
+
+impl PlannedKeyPress {
+    const fn new(key: char, delay_after_ms: u64) -> Self {
+        Self { key, delay_after_ms }
+    }
+}
+
+fn plan_item_key_sequence(item_name: &str, key: char) -> Vec<PlannedKeyPress> {
+    if item_name == "item_glimmer_cape" {
+        vec![
+            PlannedKeyPress::new(key, SELF_CAST_DELAY_MS),
+            PlannedKeyPress::new(key, 0),
+        ]
+    } else {
+        vec![PlannedKeyPress::new(key, 0)]
+    }
+}
+
+fn plan_defensive_item_key_sequence(items: &[(String, char)]) -> Vec<PlannedKeyPress> {
+    items
+        .iter()
+        .flat_map(|(item_name, key)| plan_item_key_sequence(item_name, *key))
+        .collect()
+}
+
+fn plan_neutral_item_key_sequence(neutral_key: char, self_cast_key: char) -> Vec<PlannedKeyPress> {
+    vec![
+        PlannedKeyPress::new(neutral_key, SELF_CAST_DELAY_MS),
+        PlannedKeyPress::new(self_cast_key, 0),
+    ]
+}
+
+fn execute_key_sequence(sequence: Vec<PlannedKeyPress>) {
+    for press in sequence {
+        crate::input::press_key(press.key);
+        if press.delay_after_ms > 0 {
+            std::thread::sleep(Duration::from_millis(press.delay_after_ms));
+        }
+    }
+}
+
 /// Armlet toggle configuration
 pub struct ArmletConfig {
     pub toggle_threshold: u32,
@@ -280,20 +328,23 @@ impl SurvivabilityActions {
     }
 
     fn use_item(&self, slot: &str, item_name: &str) {
-        let settings = self.settings.lock().unwrap();
-        if let Some(key) = settings.get_key_for_slot(slot) {
+        let key = {
+            let settings = self.settings.lock().unwrap();
+            settings.get_key_for_slot(slot)
+        };
+
+        if let Some(key) = key {
             info!("Using {} in {} (key: {})", item_name, slot, key);
-            
-            // Items like Glimmer Cape need double-tap for self-cast
-            let needs_double_tap = matches!(item_name, "item_glimmer_cape");
-            
-            crate::input::press_key(key);
-            
-            if needs_double_tap {
-                // Small delay between presses for self-cast
-                std::thread::sleep(std::time::Duration::from_millis(50));
+
+            let sequence = plan_item_key_sequence(item_name, key);
+            if sequence.len() == 1 {
                 crate::input::press_key(key);
-                info!("Double-tapped {} for self-cast", item_name);
+            } else {
+                let item_name = item_name.to_string();
+                self.executor.enqueue("common-item-self-cast", move || {
+                    execute_key_sequence(sequence);
+                    info!("Double-tapped {} for self-cast", item_name);
+                });
             }
         }
     }
@@ -332,6 +383,8 @@ impl SurvivabilityActions {
             (true, current_config.satanic_hp_threshold, defensive_items)
         }; // Lock released here
 
+        let mut ready_items = Vec::new();
+
         // Try to activate all enabled items that are ready
         for (item_name, enabled) in defensive_items_config {
             if !enabled {
@@ -353,12 +406,36 @@ impl SurvivabilityActions {
                     if let Some(can_cast) = item.can_cast {
                         if can_cast {
                             debug!("Activating defensive item: {}", item_name);
-                            self.use_item(slot, &item.name);
+                            let key = {
+                                let settings = self.settings.lock().unwrap();
+                                settings.get_key_for_slot(slot)
+                            };
+
+                            if let Some(key) = key {
+                                info!("Using {} in {} (key: {})", item.name, slot, key);
+                                ready_items.push((item.name.clone(), key));
+                            }
                             break; // Move to next item type
                         }
                     }
                 }
             }
+        }
+
+        if ready_items.is_empty() {
+            return;
+        }
+
+        if ready_items.iter().any(|(item_name, _)| item_name == "item_glimmer_cape") {
+            let sequence = plan_defensive_item_key_sequence(&ready_items);
+            self.executor.enqueue("common-defensive-items", move || {
+                execute_key_sequence(sequence);
+            });
+            return;
+        }
+
+        for (_item_name, key) in ready_items {
+            crate::input::press_key(key);
         }
     }
 
@@ -427,14 +504,10 @@ impl SurvivabilityActions {
         // Release lock before input simulation
         drop(settings);
 
-        // Press neutral item key
-        crate::input::press_key(neutral_key);
-
-        // Small delay before self-cast
-        std::thread::sleep(Duration::from_millis(50));
-
-        // Press self-cast key
-        crate::input::press_key(self_cast_key);
+        let sequence = plan_neutral_item_key_sequence(neutral_key, self_cast_key);
+        self.executor.enqueue("common-neutral-self-cast", move || {
+            execute_key_sequence(sequence);
+        });
     }
 
     /// Check and toggle armlet with default configuration
@@ -459,5 +532,62 @@ impl SurvivabilityActions {
         };
         
         armlet_toggle(event, &settings, &armlet_config);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        plan_defensive_item_key_sequence, plan_item_key_sequence, plan_neutral_item_key_sequence,
+        PlannedKeyPress, SELF_CAST_DELAY_MS,
+    };
+
+    #[test]
+    fn glimmer_plan_double_taps_for_self_cast() {
+        assert_eq!(
+            plan_item_key_sequence("item_glimmer_cape", '4'),
+            vec![
+                PlannedKeyPress::new('4', SELF_CAST_DELAY_MS),
+                PlannedKeyPress::new('4', 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn non_self_cast_item_plan_is_single_press() {
+        assert_eq!(
+            plan_item_key_sequence("item_black_king_bar", '3'),
+            vec![PlannedKeyPress::new('3', 0)]
+        );
+    }
+
+    #[test]
+    fn defensive_item_plan_keeps_glimmer_follow_up_before_later_items() {
+        let items = vec![
+            ("item_black_king_bar".to_string(), '3'),
+            ("item_glimmer_cape".to_string(), '4'),
+            ("item_ghost".to_string(), '5'),
+        ];
+
+        assert_eq!(
+            plan_defensive_item_key_sequence(&items),
+            vec![
+                PlannedKeyPress::new('3', 0),
+                PlannedKeyPress::new('4', SELF_CAST_DELAY_MS),
+                PlannedKeyPress::new('4', 0),
+                PlannedKeyPress::new('5', 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn neutral_item_plan_waits_before_self_cast() {
+        assert_eq!(
+            plan_neutral_item_key_sequence('n', 'a'),
+            vec![
+                PlannedKeyPress::new('n', SELF_CAST_DELAY_MS),
+                PlannedKeyPress::new('a', 0),
+            ]
+        );
     }
 }

@@ -134,13 +134,14 @@ That means:
 - shared survivability changes often affect both `src/actions/common.rs` **and** multiple hero files
 - moving logic between dispatcher and common helpers can easily create duplicate or missing actions
 - docs for hero scripts should stay aligned when a hero overrides or sequences shared helpers differently
-- the shared `ActionExecutor` now flows through those hero scripts because `SurvivabilityActions` depends on it for executor-backed armlet scheduling
+- the shared `ActionExecutor` now flows through those hero scripts because `SurvivabilityActions` depends on it for executor-backed armlet scheduling plus the timed Glimmer/neutral self-cast survivability sequences
 
 ### Executor-backed paths added in item 2
 
 The current executor scope is intentionally limited to the hot GSI-driven short jobs identified in the audit:
 
 - default/common armlet handling in `src/actions/common.rs`
+- shared survivability timed self-casts in `src/actions/common.rs` (Glimmer Cape follow-up tap and neutral-item self-cast)
 - silence dispel jitter in `src/actions/dispel.rs`
 - Huskar armlet handling in `src/actions/heroes/huskar.rs`
 
