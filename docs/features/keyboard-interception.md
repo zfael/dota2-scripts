@@ -12,6 +12,7 @@
 | `src/actions/soul_ring.rs` | Soul Ring shared state, key eligibility rules, health/mana/cooldown gates |
 | `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend intercepted sequences (`Q/W/E` razes, `R` ultimate combo) |
 | `src/input/simulation.rs` | High-level synthetic keys/mouse + `SIMULATING_KEYS` guard |
+| `src/ui/app.rs` | Per-frame refresh of the shared `KeyboardSnapshot` |
 
 Related but not primary owners:
 
@@ -32,6 +33,24 @@ The repo uses **global interception**, not per-window polling:
 
 If the app blocks a key, it must replay the desired behavior itself.
 
+### Cached keyboard snapshot
+
+The hot callback no longer locks and clones full runtime config on every event.
+
+- `main.rs` creates one `Arc<RwLock<KeyboardSnapshot>>`
+- `start_keyboard_listener(...)` receives that shared snapshot
+- `Dota2ScriptApp::update(...)` refreshes it every frame from current `Settings` + `AppState`
+- the callback clones it only on the button/key paths that need static config
+
+The snapshot holds only static keyboard-facing facts:
+
+- parsed combo-trigger key
+- Shadow Fiend interception flags and delays
+- Broodmother callback-facing config and pre-parsed keys
+- Soul Ring thresholds, ability keys, and item-slot keys
+
+It does **not** replace live Soul Ring runtime state. Cooldowns, mana, health, alive state, Soul Ring availability, and slot-to-item contents still come from `SOUL_RING_STATE`, which is refreshed from GSI. That means moving an item between slots in-game still updates the interception path once GSI reports the new inventory layout.
+
 ### Platform note
 
 This feature assumes the app can install a global keyboard hook on Windows. If interception stops working, check elevation/OS-hook permissions before changing logic.
@@ -44,31 +63,34 @@ Current callback order on key/button input:
 
 1. **Ignore our own simulated input**
    - `SIMULATING_KEYS` -> immediate pass-through
-2. **Track Space**
+2. **Read snapshot once**
+   - clone `KeyboardSnapshot` from the shared `RwLock`
+3. **Track Space**
    - updates `MODIFIER_KEY_HELD`
-3. **Broodmother Space + right-click**
+4. **Broodmother Space + right-click**
    - blocks the click
    - spawns `auto_items::execute_auto_items(...)`
-4. **Broodmother middle mouse**
+5. **Broodmother middle mouse**
    - blocks the click
    - sends `HotkeyEvent::BroodmotherSpiderAttack`
    - also spawns `execute_spider_attack_move(...)`
-5. **Calculate Soul Ring eligibility**
-   - `SOUL_RING_STATE.should_intercept_key(...)`
-   - `SOUL_RING_STATE.should_trigger(...)`
-6. **Shadow Fiend raze intercept**
-   - if `sf_enabled` and `raze_intercept_enabled`
+6. **Calculate Soul Ring eligibility**
+   - one live `SOUL_RING_STATE` lock on the keypress path
+   - `should_intercept_key_with_config(&snapshot.soul_ring)`
+   - `should_trigger_with_config(&snapshot.soul_ring)`
+7. **Shadow Fiend raze intercept**
+   - if `snapshot.sf_enabled` and `snapshot.shadow_fiend.raze_intercept_enabled`
    - block `Q/W/E`
-7. **Shadow Fiend ultimate intercept**
-   - if `sf_enabled` and `auto_bkb_on_ultimate`
+8. **Shadow Fiend ultimate intercept**
+   - if `snapshot.sf_enabled` and `snapshot.shadow_fiend.auto_bkb_on_ultimate`
    - block `R`
-8. **Largo / generic ability-key path**
-   - emit Largo events for `Q/W/E/R`
+9. **Largo / generic ability-key path**
+   - emit `HotkeyEvent::LargoQ/W/E/R`
    - if Soul Ring should trigger, block and replay
    - otherwise pass through
-9. **Item-slot Soul Ring interception**
+10. **Item-slot Soul Ring interception**
    - blocks configured item keys when the item is mana-using and Soul Ring should fire first
-10. **Standalone combo key**
+11. **Standalone combo key**
    - sends `HotkeyEvent::ComboTrigger`
    - does not block the original key
 
@@ -115,7 +137,9 @@ Used by:
 
 `src/actions/soul_ring.rs` owns `SOUL_RING_STATE: LazyLock<Arc<Mutex<SoulRingState>>>`.
 
-`src/actions/dispatcher.rs` refreshes that state on every GSI event via `update_from_gsi(...)`.
+`src/gsi/handler.rs::process_gsi_events()` refreshes that state on every GSI event via `update_from_gsi(...)`, even when the main GSI automation toggle is off.
+
+The keyboard callback now combines that live state with static config from `snapshot.soul_ring`.
 
 ### What `SoulRingState` tracks
 
@@ -130,7 +154,7 @@ Used by:
 
 ### When a key is eligible
 
-`should_trigger(settings)` requires:
+`should_trigger_with_config(&snapshot.soul_ring)` requires:
 
 - `[soul_ring].enabled = true`
 - Soul Ring present and castable
@@ -149,7 +173,7 @@ Used by:
 
 ### Replay flow
 
-`spawn_soul_ring_then_key(original_key, settings)`:
+`spawn_soul_ring_then_key(original_key, snapshot.soul_ring.clone())`:
 
 1. lock `SOUL_RING_STATE`
 2. if eligible, mark as triggered
@@ -165,9 +189,9 @@ This runs on a short-lived thread so the `grab()` callback can return immediatel
 
 ### Activation gate
 
-The keyboard hook reads `AppState.sf_enabled`.
+The callback reads `snapshot.sf_enabled`, which is rebuilt from `AppState.sf_enabled`.
 
-That flag is updated when:
+That source flag is updated when:
 
 - `AppState::update_from_gsi(...)` detects `npc_dota_hero_nevermore`
 - the UI manually changes `selected_hero`
@@ -192,7 +216,7 @@ If `heroes.shadow_fiend.auto_bkb_on_ultimate = true`, the hook blocks `R` and ca
 That helper:
 
 - reads `SF_LAST_EVENT` for inventory state
-- optionally double-taps BKB
+- attempts BKB if available
 - optionally presses `D`
 - then presses `R`
 
@@ -226,7 +250,7 @@ These are still part of the interception surface even though this page centers o
 |---|---|---|
 | Soul Ring | `config/config.toml` -> `[soul_ring]` | `enabled`, `min_mana_percent`, `min_health_percent`, `delay_before_ability_ms`, `trigger_cooldown_ms`, `ability_keys`, `intercept_item_keys` |
 | Shadow Fiend | `config/config.toml` -> `[heroes.shadow_fiend]` | `raze_intercept_enabled`, `raze_delay_ms`, `auto_bkb_on_ultimate`, `auto_d_on_ultimate` |
-| Global hotkey | `config/config.toml` -> `[keybindings]` | slot key mappings; `combo_trigger` exists in config, but the live standalone trigger currently comes from `AppState.trigger_key` |
+| Global hotkey | `config/config.toml` -> `[keybindings]` | slot key mappings; the live standalone trigger is read from `AppState.trigger_key` and cached as a parsed `snapshot.trigger_key` |
 
 ---
 

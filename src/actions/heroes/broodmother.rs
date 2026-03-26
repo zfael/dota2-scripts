@@ -12,6 +12,7 @@ use crate::config::Settings;
 use crate::input::keyboard::{parse_key_string, simulate_key};
 use crate::models::{GsiWebhookEvent, Hero};
 use lazy_static::lazy_static;
+use rdev::Key;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -59,6 +60,26 @@ impl BroodmotherScript {
         thread::sleep(Duration::from_millis(30));
 
         // Reselect hero
+        if let Some(key) = hero_key {
+            simulate_key(key);
+        }
+
+        info!("🕷️ Broodmother: Spider move complete");
+    }
+
+    /// Execute spider move macro using pre-parsed keys (callback-facing variant).
+    /// Called from the keyboard callback with keys already parsed from the snapshot.
+    pub fn execute_spider_attack_move_with_keys(spider_key: Option<Key>, hero_key: Option<Key>) {
+        info!("🕷️ Broodmother: Executing spider move");
+
+        if let Some(key) = spider_key {
+            simulate_key(key);
+            thread::sleep(Duration::from_millis(30));
+        }
+
+        crate::input::simulation::mouse_click();
+        thread::sleep(Duration::from_millis(30));
+
         if let Some(key) = hero_key {
             simulate_key(key);
         }

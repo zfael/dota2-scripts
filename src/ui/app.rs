@@ -1,8 +1,9 @@
 use crate::state::{AppState, HeroType, UpdateCheckState};
 use crate::config::Settings;
+use crate::input::keyboard::KeyboardSnapshot;
 use crate::update::{apply_update, restart_application, ApplyUpdateResult};
 use eframe::egui;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 #[derive(PartialEq)]
 enum Tab {
@@ -14,15 +15,17 @@ enum Tab {
 pub struct Dota2ScriptApp {
     app_state: Arc<Mutex<AppState>>,
     settings: Arc<Mutex<Settings>>,
+    keyboard_snapshot: Arc<RwLock<KeyboardSnapshot>>,
     selected_tab: Tab,
     update_dismissed: bool,
 }
 
 impl Dota2ScriptApp {
-    pub fn new(app_state: Arc<Mutex<AppState>>, settings: Arc<Mutex<Settings>>) -> Self {
+    pub fn new(app_state: Arc<Mutex<AppState>>, settings: Arc<Mutex<Settings>>, keyboard_snapshot: Arc<RwLock<KeyboardSnapshot>>) -> Self {
         Self { 
             app_state,
             settings,
+            keyboard_snapshot,
             selected_tab: Tab::Main,
             update_dismissed: false,
         }
@@ -33,6 +36,14 @@ impl eframe::App for Dota2ScriptApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Request continuous repaints for real-time updates
         ctx.request_repaint();
+
+        // Refresh the shared keyboard snapshot from the current settings and state
+        {
+            let settings_guard = self.settings.lock().unwrap();
+            let state_guard = self.app_state.lock().unwrap();
+            *self.keyboard_snapshot.write().unwrap() =
+                KeyboardSnapshot::from_runtime(&settings_guard, &state_guard);
+        }
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Dota 2 Script Automation");

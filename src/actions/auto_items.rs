@@ -8,7 +8,7 @@
 //! 2. Use all configured abilities (with optional HP threshold)
 //! 3. Right-click the target
 
-use crate::config::{AutoAbilityConfig, Settings};
+use crate::config::AutoAbilityConfig;
 use crate::input::simulation::{mouse_click, press_key};
 use crate::models::GsiWebhookEvent;
 use lazy_static::lazy_static;
@@ -33,18 +33,17 @@ pub fn update_gsi_state(event: &GsiWebhookEvent) {
 }
 
 /// Find item slot key by item name (partial match)
-fn find_item_key(event: &GsiWebhookEvent, settings: &Settings, item_name: &str) -> Option<char> {
+fn find_item_key(event: &GsiWebhookEvent, slot_keys: &[char; 6], item_name: &str) -> Option<char> {
     let items = &event.items;
-    let keybinds = &settings.keybindings;
     
     // Check each slot for the item (partial match, e.g., "orchid" matches "item_orchid")
     let slots = [
-        (&items.slot0, keybinds.slot0),
-        (&items.slot1, keybinds.slot1),
-        (&items.slot2, keybinds.slot2),
-        (&items.slot3, keybinds.slot3),
-        (&items.slot4, keybinds.slot4),
-        (&items.slot5, keybinds.slot5),
+        (&items.slot0, slot_keys[0]),
+        (&items.slot1, slot_keys[1]),
+        (&items.slot2, slot_keys[2]),
+        (&items.slot3, slot_keys[3]),
+        (&items.slot4, slot_keys[4]),
+        (&items.slot5, slot_keys[5]),
     ];
     
     for (item, key) in slots {
@@ -71,12 +70,12 @@ fn find_item_key(event: &GsiWebhookEvent, settings: &Settings, item_name: &str) 
 /// Execute auto-items sequence: use configured items and abilities, then right-click
 ///
 /// # Arguments
-/// * `settings` - Global settings for keybindings
+/// * `slot_keys` - Item slot keybindings [slot0..slot5]
 /// * `item_names` - List of item names to try using
 /// * `auto_abilities` - List of abilities to auto-cast with optional HP thresholds
 /// * `abilities_first` - If true, cast abilities before items; if false, items first
 pub fn execute_auto_items(
-    settings: &Settings,
+    slot_keys: &[char; 6],
     item_names: &[String],
     auto_abilities: &[AutoAbilityConfig],
     abilities_first: bool,
@@ -100,7 +99,7 @@ pub fn execute_auto_items(
     // Helper closure to use items
     let use_items = |items_used: &mut u32| {
         for item_name in item_names {
-            if let Some(key) = find_item_key(&event, settings, item_name) {
+            if let Some(key) = find_item_key(&event, slot_keys, item_name) {
                 info!("🎯 Using item '{}' (key: {})", item_name, key);
                 press_key(key);
                 *items_used += 1;

@@ -1,7 +1,7 @@
 use rdev::{grab, simulate, Button, Event, EventType, Key};
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::{self, Receiver};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
 use tracing::{debug, error, info, warn};
@@ -10,8 +10,10 @@ use crate::actions::auto_items::MODIFIER_KEY_HELD;
 use crate::actions::heroes::broodmother::BROODMOTHER_ACTIVE;
 use crate::actions::heroes::shadow_fiend::ShadowFiendState;
 use crate::actions::SOUL_RING_STATE;
-use crate::config::Settings;
+use crate::actions::soul_ring::SoulRingKeyboardConfig;
+use crate::config::{AutoAbilityConfig, Settings};
 use crate::input::simulation::SIMULATING_KEYS;
+use crate::state::app_state::AppState;
 
 pub enum HotkeyEvent {
     ComboTrigger,
@@ -23,39 +25,12 @@ pub enum HotkeyEvent {
 }
 
 pub struct KeyboardListenerConfig {
-    pub trigger_key: Arc<Mutex<String>>,
-    pub sf_enabled: Arc<Mutex<bool>>,
-    pub settings: Arc<Mutex<Settings>>,
+    pub snapshot: Arc<RwLock<KeyboardSnapshot>>,
 }
 
 /// Parse key string to rdev::Key (public version)
 pub fn parse_key_string(key_str: &str) -> Option<Key> {
-    match key_str.to_lowercase().as_str() {
-        "home" => Some(Key::Home),
-        "end" => Some(Key::End),
-        "insert" => Some(Key::Insert),
-        "delete" => Some(Key::Delete),
-        "pageup" => Some(Key::PageUp),
-        "pagedown" => Some(Key::PageDown),
-        "f1" => Some(Key::F1),
-        "f2" => Some(Key::F2),
-        "f3" => Some(Key::F3),
-        "f4" => Some(Key::F4),
-        "f5" => Some(Key::F5),
-        "f6" => Some(Key::F6),
-        "f7" => Some(Key::F7),
-        "f8" => Some(Key::F8),
-        "f9" => Some(Key::F9),
-        "f10" => Some(Key::F10),
-        "f11" => Some(Key::F11),
-        "f12" => Some(Key::F12),
-        // Single char keys
-        s if s.len() == 1 => {
-            let ch = s.chars().next().unwrap();
-            char_to_key(ch)
-        }
-        _ => None,
-    }
+    parse_key(key_str)
 }
 
 /// Parse key string to rdev::Key
@@ -193,11 +168,11 @@ pub fn simulate_key(key: Key) {
 
 /// Spawn Soul Ring trigger + ability key simulation in a separate thread
 /// This is necessary because grab() callback must return quickly
-fn spawn_soul_ring_then_key(original_key: Key, settings: Settings) {
+fn spawn_soul_ring_then_key(original_key: Key, sr_config: SoulRingKeyboardConfig) {
     thread::spawn(move || {
         let mut soul_ring_state = SOUL_RING_STATE.lock().unwrap();
         
-        if soul_ring_state.should_trigger(&settings) {
+        if soul_ring_state.should_trigger_with_config(&sr_config) {
             if let Some(sr_key) = soul_ring_state.slot_key {
                 // Mark as triggered to start cooldown lockout
                 soul_ring_state.mark_triggered();
@@ -209,7 +184,7 @@ fn spawn_soul_ring_then_key(original_key: Key, settings: Settings) {
                     simulate_key(sr_rdev_key);
                     
                     // Wait configured delay before ability
-                    let delay = settings.soul_ring.delay_before_ability_ms;
+                    let delay = sr_config.delay_before_ability_ms;
                     thread::sleep(Duration::from_millis(delay));
                 }
             } else {
@@ -238,7 +213,7 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
             if SIMULATING_KEYS.load(Ordering::SeqCst) {
                 return Some(event);
             }
-            
+
             // Track Space key (modifier for auto-items)
             match event.event_type {
                 EventType::KeyPress(Key::Space) => {
@@ -253,14 +228,17 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
             // Handle Space + Right-click for Broodmother auto-items
             if let EventType::ButtonPress(Button::Right) = event.event_type {
                 if MODIFIER_KEY_HELD.load(Ordering::SeqCst) && BROODMOTHER_ACTIVE.load(Ordering::SeqCst) {
-                    let settings = config.settings.lock().unwrap().clone();
-                    if settings.heroes.broodmother.auto_items_enabled {
-                        let items = settings.heroes.broodmother.auto_items.clone();
-                        let auto_abilities = settings.heroes.broodmother.auto_abilities.clone();
-                        let abilities_first = settings.heroes.broodmother.auto_abilities_first;
+                    let snapshot = config.snapshot.read().unwrap().clone();
+                    if snapshot.broodmother.auto_items_enabled {
+                        let auto_items = snapshot.broodmother.auto_items.clone();
+                        let auto_abilities = snapshot.broodmother.auto_abilities.clone();
+                        let abilities_first = snapshot.broodmother.abilities_first;
+                        let slot_keys = snapshot.broodmother.slot_keys;
                         debug!("🎯 Space+Right-click - Broodmother auto-items");
                         thread::spawn(move || {
-                            crate::actions::auto_items::execute_auto_items(&settings, &items, &auto_abilities, abilities_first);
+                            crate::actions::auto_items::execute_auto_items(
+                                &slot_keys, &auto_items, &auto_abilities, abilities_first,
+                            );
                         });
                         return None; // Block original right-click
                     }
@@ -271,13 +249,16 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
             if let EventType::ButtonPress(button) = event.event_type {
                 let is_spider_micro_button = matches!(button, Button::Middle);
                 if is_spider_micro_button && BROODMOTHER_ACTIVE.load(Ordering::SeqCst) {
-                    let settings = config.settings.lock().unwrap().clone();
-                    if settings.heroes.broodmother.spider_micro_enabled {
+                    let snapshot = config.snapshot.read().unwrap().clone();
+                    if snapshot.broodmother.spider_micro_enabled {
                         info!("🕷️ Mouse5 pressed - Broodmother spider attack-move");
                         let _ = event_tx.send(HotkeyEvent::BroodmotherSpiderAttack);
-                        // Spawn in thread to not block the grab callback
+                        let spider_key = snapshot.broodmother.spider_micro_key;
+                        let hero_key = snapshot.broodmother.hero_reselect_key;
                         thread::spawn(move || {
-                            crate::actions::heroes::broodmother::BroodmotherScript::execute_spider_attack_move(&settings);
+                            crate::actions::heroes::broodmother::BroodmotherScript::execute_spider_attack_move_with_keys(
+                                spider_key, hero_key,
+                            );
                         });
                         return None; // Block the original mouse button
                     }
@@ -285,17 +266,17 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
             }
             
             if let EventType::KeyPress(key) = event.event_type {
-                let settings = config.settings.lock().unwrap().clone();
-                let sf_enabled = *config.sf_enabled.lock().unwrap();
-                
+                // Read snapshot once per keyboard event — static config comes from here.
+                let snapshot = config.snapshot.read().unwrap().clone();
+
                 // Convert key to char to check if we should intercept
                 let key_char = key_to_char(key);
                 
-                // Check if this is a key we should intercept for Soul Ring
+                // Single live SOUL_RING_STATE read for all Soul Ring interception decisions
                 let should_intercept_for_soul_ring = if let Some(ch) = key_char {
                     let soul_ring_state = SOUL_RING_STATE.lock().unwrap();
-                    let should_intercept = soul_ring_state.should_intercept_key(ch, &settings);
-                    let should_trigger = soul_ring_state.should_trigger(&settings);
+                    let should_intercept = soul_ring_state.should_intercept_key_with_config(ch, &snapshot.soul_ring);
+                    let should_trigger = soul_ring_state.should_trigger_with_config(&snapshot.soul_ring);
                     debug!(
                         "💍 Key '{}': intercept={}, trigger={}, available={}, can_cast={}, mana={}%, health={}%",
                         ch, should_intercept, should_trigger,
@@ -307,17 +288,15 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                     false
                 };
 
-                // Handle Shadow Fiend Q/W/E keys (when SF is selected AND raze interception is enabled in config)
-                let sf_raze_enabled_in_config = settings.heroes.shadow_fiend.raze_intercept_enabled;
-                let sf_raze_active = sf_enabled && sf_raze_enabled_in_config;
+                // Handle Shadow Fiend Q/W/E keys (when SF is selected AND raze interception is enabled)
+                let sf_raze_active = snapshot.sf_enabled && snapshot.shadow_fiend.raze_intercept_enabled;
                 if sf_raze_active {
                     match key {
                         Key::KeyQ | Key::KeyW | Key::KeyE => {
                             let raze_key = key_to_char(key).unwrap();
                             info!("{} key pressed - SF raze", raze_key.to_ascii_uppercase());
                             
-                            // Delegate to ShadowFiendState for raze execution
-                            ShadowFiendState::execute_raze(raze_key, &settings);
+                            ShadowFiendState::execute_raze(raze_key, snapshot.shadow_fiend.raze_delay_ms);
                             
                             // Block original key
                             return None;
@@ -327,12 +306,10 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                 }
 
                 // Handle Shadow Fiend R key for auto-BKB on ultimate
-                let sf_auto_bkb_enabled = settings.heroes.shadow_fiend.auto_bkb_on_ultimate;
-                if sf_enabled && sf_auto_bkb_enabled && key == Key::KeyR {
+                if snapshot.sf_enabled && snapshot.shadow_fiend.auto_bkb_on_ultimate && key == Key::KeyR {
                     info!("R key pressed - SF auto-BKB ultimate combo");
                     
-                    // Delegate to ShadowFiendState for ultimate combo execution
-                    ShadowFiendState::execute_ultimate_combo(&settings);
+                    ShadowFiendState::execute_ultimate_combo(snapshot.shadow_fiend.auto_d_on_ultimate);
                     
                     // Block original key (will be pressed by execute_ultimate_combo)
                     return None;
@@ -352,7 +329,7 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                         
                         // If Soul Ring should trigger, spawn handler and block original
                         if should_intercept_for_soul_ring {
-                            spawn_soul_ring_then_key(key, settings.clone());
+                            spawn_soul_ring_then_key(key, snapshot.soul_ring.clone());
                             return None; // Block original
                         }
                         
@@ -362,21 +339,16 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                     _ => {}
                 }
                 
-                // Check for item slot keys (for Soul Ring triggering)
-                if let Some(ch) = key_char {
-                    let soul_ring_state = SOUL_RING_STATE.lock().unwrap();
-                    if soul_ring_state.is_item_key(ch, &settings) && soul_ring_state.should_trigger(&settings) {
-                        drop(soul_ring_state);
-                        spawn_soul_ring_then_key(key, settings.clone());
-                        return None; // Block original
-                    }
+                // Check for item slot keys (for Soul Ring triggering on non-ability keys)
+                if should_intercept_for_soul_ring {
+                    spawn_soul_ring_then_key(key, snapshot.soul_ring.clone());
+                    return None; // Block original
                 }
                 
                 // Check for combo trigger key
-                let current_key_str = config.trigger_key.lock().unwrap().clone();
-                if let Some(trigger_rdev_key) = parse_key(&current_key_str) {
-                    if key == trigger_rdev_key {
-                        info!("{} key pressed - triggering combo", current_key_str);
+                if let Some(trigger_key) = snapshot.trigger_key {
+                    if key == trigger_key {
+                        info!("{:?} key pressed - triggering combo", trigger_key);
                         let _ = event_tx.send(HotkeyEvent::ComboTrigger);
                         // Pass through - combo trigger doesn't need to be blocked
                     }
@@ -397,3 +369,141 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
     event_rx
 }
 
+/// Snapshot of the Shadow Fiend keyboard-relevant config.
+#[derive(Debug, Clone)]
+pub struct ShadowFiendKeyboardSnapshot {
+    pub raze_intercept_enabled: bool,
+    pub auto_bkb_on_ultimate: bool,
+    pub raze_delay_ms: u64,
+    pub auto_d_on_ultimate: bool,
+}
+
+/// Snapshot of the Broodmother keyboard-relevant config.
+#[derive(Debug, Clone)]
+pub struct BroodmotherKeyboardSnapshot {
+    pub spider_micro_enabled: bool,
+    pub auto_items_enabled: bool,
+    /// Pre-parsed spider control group key (avoids re-parsing in the callback).
+    pub spider_micro_key: Option<Key>,
+    /// Pre-parsed hero reselect key (avoids re-parsing in the callback).
+    pub hero_reselect_key: Option<Key>,
+    /// Item names for Space+Right-click auto-items.
+    pub auto_items: Vec<String>,
+    /// Ability configs for Space+Right-click auto-items.
+    pub auto_abilities: Vec<AutoAbilityConfig>,
+    pub abilities_first: bool,
+    /// Slot keybindings [slot0..slot5] for item-key lookup.
+    pub slot_keys: [char; 6],
+}
+
+/// Immutable snapshot of all keyboard-listener configuration, derived from
+/// `Settings` and `AppState` at a point in time.
+///
+/// The callback reads this snapshot once per event instead of locking
+/// `Settings`, `sf_enabled`, and `trigger_key` separately.
+#[derive(Debug, Clone)]
+pub struct KeyboardSnapshot {
+    /// The parsed combo-trigger key, or `None` if the configured string is
+    /// not a recognised key name.
+    pub trigger_key: Option<Key>,
+    /// Whether Shadow Fiend raze interception is active.
+    pub sf_enabled: bool,
+    pub shadow_fiend: ShadowFiendKeyboardSnapshot,
+    pub broodmother: BroodmotherKeyboardSnapshot,
+    /// Static Soul Ring keyboard config (thresholds, key sets, delays).
+    pub soul_ring: SoulRingKeyboardConfig,
+}
+
+impl KeyboardSnapshot {
+    /// Build a snapshot from the current runtime settings and app state.
+    pub fn from_runtime(settings: &Settings, state: &AppState) -> Self {
+        let trigger_key_str = state.trigger_key.lock().unwrap().clone();
+        let trigger_key = parse_key_string(&trigger_key_str);
+        let sf_enabled = *state.sf_enabled.lock().unwrap();
+
+        let sf = &settings.heroes.shadow_fiend;
+        let bm = &settings.heroes.broodmother;
+
+        Self {
+            trigger_key,
+            sf_enabled,
+            shadow_fiend: ShadowFiendKeyboardSnapshot {
+                raze_intercept_enabled: sf.raze_intercept_enabled,
+                auto_bkb_on_ultimate: sf.auto_bkb_on_ultimate,
+                raze_delay_ms: sf.raze_delay_ms,
+                auto_d_on_ultimate: sf.auto_d_on_ultimate,
+            },
+            broodmother: BroodmotherKeyboardSnapshot {
+                spider_micro_enabled: bm.spider_micro_enabled,
+                auto_items_enabled: bm.auto_items_enabled,
+                spider_micro_key: parse_key_string(&bm.spider_control_group_key),
+                hero_reselect_key: parse_key_string(&bm.reselect_hero_key),
+                auto_items: bm.auto_items.clone(),
+                auto_abilities: bm.auto_abilities.clone(),
+                abilities_first: bm.auto_abilities_first,
+                slot_keys: [
+                    settings.keybindings.slot0,
+                    settings.keybindings.slot1,
+                    settings.keybindings.slot2,
+                    settings.keybindings.slot3,
+                    settings.keybindings.slot4,
+                    settings.keybindings.slot5,
+                ],
+            },
+            soul_ring: SoulRingKeyboardConfig::from_settings(settings),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+    use crate::state::app_state::{HeroType, QueueMetrics, UpdateCheckState};
+
+    #[test]
+    fn keyboard_snapshot_parses_trigger_key_and_sf_flags() {
+        let settings = Settings::default();
+        let state = AppState {
+            selected_hero: Some(HeroType::ShadowFiend),
+            gsi_enabled: true,
+            standalone_enabled: true,
+            last_event: None,
+            metrics: QueueMetrics::default(),
+            trigger_key: Arc::new(Mutex::new("Home".to_string())),
+            sf_enabled: Arc::new(Mutex::new(true)),
+            update_state: Arc::new(Mutex::new(UpdateCheckState::Idle)),
+        };
+
+        let snapshot = KeyboardSnapshot::from_runtime(&settings, &state);
+
+        assert_eq!(snapshot.trigger_key, Some(Key::Home));
+        assert!(snapshot.sf_enabled);
+        assert!(snapshot.shadow_fiend.raze_intercept_enabled);
+    }
+
+    #[test]
+    fn keyboard_snapshot_handles_invalid_trigger_key() {
+        let state = AppState::default();
+        *state.trigger_key.lock().unwrap() = "not-a-key".to_string();
+
+        let snapshot = KeyboardSnapshot::from_runtime(&Settings::default(), &state);
+
+        assert_eq!(snapshot.trigger_key, None);
+    }
+
+    #[test]
+    fn keyboard_snapshot_sf_disabled_by_default() {
+        let state = AppState::default();
+        let snapshot = KeyboardSnapshot::from_runtime(&Settings::default(), &state);
+        assert!(!snapshot.sf_enabled);
+    }
+
+    #[test]
+    fn keyboard_snapshot_parses_f5_trigger_key() {
+        let state = AppState::default();
+        *state.trigger_key.lock().unwrap() = "F5".to_string();
+        let snapshot = KeyboardSnapshot::from_runtime(&Settings::default(), &state);
+        assert_eq!(snapshot.trigger_key, Some(Key::F5));
+    }
+}

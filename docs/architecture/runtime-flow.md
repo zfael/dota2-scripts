@@ -11,20 +11,25 @@ Boot starts in `src/main.rs::main()`:
 1. **Load settings** from `config/config.toml` into `Arc<Mutex<Settings>>`
 2. **Initialize tracing** using `RUST_LOG` or `settings.logging.level`
 3. **Create shared state** with `AppState::new()` (`Arc<Mutex<AppState>>`)
-4. **Create dispatcher** with `ActionDispatcher::new(settings.clone())`
-5. **Start keyboard hook** with `start_keyboard_listener()`
+4. **Build the initial keyboard snapshot**
+   - `main.rs` creates `Arc<RwLock<KeyboardSnapshot>>`
+   - snapshot is built from current `Settings` + `AppState`
+5. **Create dispatcher** with `ActionDispatcher::new(settings.clone())`
+6. **Start keyboard hook** with `start_keyboard_listener()`
+   - `KeyboardListenerConfig` now contains the shared snapshot
    - spawns the `rdev::grab` thread in `src/input/keyboard.rs`
    - returns `Receiver<HotkeyEvent>` to `main.rs`
-6. **Spawn GSI server task**
+7. **Spawn GSI server task**
    - `main.rs` calls `tokio::spawn(start_gsi_server(...))`
-7. **Optionally spawn update check**
+8. **Optionally spawn update check**
    - guarded by `settings.updates.check_on_startup`
    - uses `tokio::task::spawn_blocking` and writes into `AppState.update_state`
-8. **Spawn hotkey handler thread**
+9. **Spawn hotkey handler thread**
    - consumes `HotkeyEvent`s from the keyboard hook
    - dispatches standalone combos and Largo manual song actions
-9. **Run egui UI on the main thread**
+10. **Run egui UI on the main thread**
    - `eframe::run_native(...)`
+   - `Dota2ScriptApp::update(...)` refreshes the shared `KeyboardSnapshot` every frame from current `Settings` + `AppState`
 
 ---
 
@@ -57,19 +62,21 @@ Boot starts in `src/main.rs::main()`:
 1. optionally appends the raw event to a JSONL session file when `settings.gsi_logging.enabled`
 2. locks `AppState` and calls `state.update_from_gsi(event.clone())`
 3. updates `state.metrics.current_queue_depth = rx.len()`
-4. logs hero death / respawn transitions via the `WAS_ALIVE` mutex
-5. checks `state.gsi_enabled`
-6. if enabled, calls `dispatcher.dispatch_gsi_event(&event)` inline on the GSI processor task
+4. refreshes keyboard-supporting runtime state from the latest GSI event even if full GSI automation is disabled:
+   - `soul_ring::update_from_gsi(...)`
+   - `auto_items::update_gsi_state(...)`
+   - `BROODMOTHER_ACTIVE`
+   - `SF_LAST_EVENT` for Shadow Fiend keyboard combos
+5. logs hero death / respawn transitions via the `WAS_ALIVE` mutex
+6. checks `state.gsi_enabled`
+7. if enabled, calls `dispatcher.dispatch_gsi_event(&event)` inline on the GSI processor task
 
 ### 4. Dispatcher responsibilities
 
 `src/actions/dispatcher.rs::dispatch_gsi_event()` always runs these pre-dispatch hooks first:
 
 1. `log_neutral_item_discovery(event, &settings)`
-2. `soul_ring::update_from_gsi(&event.items, &event.hero, &settings)`
-3. `dispel::check_and_dispel_silence(event, &settings, &executor)`
-4. update `BROODMOTHER_ACTIVE`
-5. `auto_items::update_gsi_state(event)`
+2. `dispel::check_and_dispel_silence(event, &settings, &executor)`
 
 Then it routes by hero name:
 
@@ -109,39 +116,57 @@ The action executor is intentionally narrow in this rollout item:
 
 `src/input/keyboard.rs::start_keyboard_listener()` spawns a dedicated OS thread and installs `rdev::grab(callback)`.
 
+`main.rs` and `ui/app.rs` share one `Arc<RwLock<KeyboardSnapshot>>` with that listener:
+
+- `main.rs` creates the initial snapshot before the hook starts
+- `Dota2ScriptApp::update(...)` refreshes it every frame
+- the callback clones it only on the button/key paths that need static config
+
+The snapshot only carries static keyboard-relevant config:
+
+- parsed combo-trigger key
+- Shadow Fiend interception flags and delays
+- Broodmother callback-facing config and pre-parsed keys
+- Soul Ring thresholds, ability keys, and item-slot keys
+
+Live Soul Ring state is still read from `SOUL_RING_STATE` so inventory moves, cooldowns, mana, health, and hero-alive state stay current with GSI.
+
 ### Callback order
 
 For each intercepted event, the callback does this in order:
 
 1. **Pass through simulated events**
    - if `SIMULATING_KEYS` is set, return `Some(event)` immediately
-2. **Track modifier state**
+2. **Read the keyboard snapshot once**
+   - clone `KeyboardSnapshot` from the shared `RwLock`
+3. **Track modifier state**
    - update `MODIFIER_KEY_HELD` on Space press/release
-3. **Broodmother Space + right-click**
+4. **Broodmother Space + right-click**
    - if `MODIFIER_KEY_HELD` and `BROODMOTHER_ACTIVE`, spawn `auto_items::execute_auto_items(...)`
    - return `None` to block the original right-click
-4. **Broodmother middle mouse**
+5. **Broodmother middle mouse**
    - send `HotkeyEvent::BroodmotherSpiderAttack`
    - also spawn `BroodmotherScript::execute_spider_attack_move(...)`
    - return `None`
-5. **Compute Soul Ring intercept eligibility**
-   - uses `SOUL_RING_STATE.should_intercept_key(...)`
-   - also checks `SOUL_RING_STATE.should_trigger(...)`
-6. **Shadow Fiend raze intercept**
-   - if `sf_enabled` and `settings.heroes.shadow_fiend.raze_intercept_enabled`
+6. **Compute Soul Ring intercept eligibility**
+   - takes one live `SOUL_RING_STATE` lock on the keypress path
+   - uses snapshot-backed `should_intercept_key_with_config(...)`
+   - also checks `should_trigger_with_config(...)`
+7. **Shadow Fiend raze intercept**
+   - if `snapshot.sf_enabled` and `snapshot.shadow_fiend.raze_intercept_enabled`
    - block `Q/W/E`, call `ShadowFiendState::execute_raze(...)`
-7. **Shadow Fiend ultimate intercept**
-   - if `sf_enabled` and `auto_bkb_on_ultimate`
+8. **Shadow Fiend ultimate intercept**
+   - if `snapshot.sf_enabled` and `snapshot.shadow_fiend.auto_bkb_on_ultimate`
    - block `R`, call `ShadowFiendState::execute_ultimate_combo(...)`
-8. **Largo / generic ability-key path**
+9. **Largo / generic ability-key path**
    - emit Largo events for `Q/W/E/R`
    - if Soul Ring should trigger, block and replay
    - otherwise pass the key through
-9. **Item-key Soul Ring interception**
+10. **Item-key Soul Ring interception**
    - for slot keys mapped in config
    - spawn `spawn_soul_ring_then_key(...)` and block the original item key
-10. **Standalone combo trigger**
-   - compare key to `AppState.trigger_key`
+11. **Standalone combo trigger**
+   - compare key to `snapshot.trigger_key`
    - send `HotkeyEvent::ComboTrigger`
    - do **not** block the original key
 

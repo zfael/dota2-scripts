@@ -8,7 +8,7 @@
 //! - Item being used costs mana (skip list items like Blink, Phase Boots are excluded)
 
 use crate::config::Settings;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tracing::{debug, info};
@@ -175,63 +175,136 @@ impl SoulRingState {
         SOUL_RING_SKIP_ITEMS.contains(&item_name)
     }
 
-    /// Check if a key is an item key that should trigger Soul Ring
-    pub fn is_item_key(&self, key_char: char, settings: &Settings) -> bool {
-        if !settings.soul_ring.intercept_item_keys {
-            return false;
-        }
+}
 
-        // Check if the key matches any item slot keybinding
-        let item_keys = [
+/// Global Soul Ring state, shared between keyboard listener and GSI handler
+pub static SOUL_RING_STATE: std::sync::LazyLock<Arc<Mutex<SoulRingState>>> =
+    std::sync::LazyLock::new(|| Arc::new(Mutex::new(SoulRingState::new())));
+
+/// Static keyboard configuration snapshot for Soul Ring, derived from `Settings`.
+///
+/// Separates config-time constants (ability keys, item slot keys, thresholds)
+/// from live runtime facts (`SOUL_RING_STATE`) that still come from GSI.
+#[derive(Debug, Clone)]
+pub struct SoulRingKeyboardConfig {
+    pub enabled: bool,
+    pub min_mana_percent: u32,
+    pub min_health_percent: u32,
+    pub delay_before_ability_ms: u64,
+    pub trigger_cooldown_ms: u64,
+    /// Ability keys that should trigger Soul Ring (stored lowercase).
+    pub ability_keys: HashSet<char>,
+    pub intercept_item_keys: bool,
+    /// Item slot keys from keybindings (stored lowercase).
+    pub item_slot_keys: HashSet<char>,
+}
+
+impl SoulRingKeyboardConfig {
+    /// Build a config snapshot from `Settings`.
+    pub fn from_settings(settings: &Settings) -> Self {
+        let ability_keys = settings
+            .soul_ring
+            .ability_keys
+            .iter()
+            .filter_map(|s| s.chars().next())
+            .map(|c| c.to_ascii_lowercase())
+            .collect();
+
+        let item_slot_keys = [
             settings.keybindings.slot0,
             settings.keybindings.slot1,
             settings.keybindings.slot2,
             settings.keybindings.slot3,
             settings.keybindings.slot4,
             settings.keybindings.slot5,
-        ];
+        ]
+        .iter()
+        .map(|c| c.to_ascii_lowercase())
+        .collect();
 
+        Self {
+            enabled: settings.soul_ring.enabled,
+            min_mana_percent: settings.soul_ring.min_mana_percent,
+            min_health_percent: settings.soul_ring.min_health_percent,
+            delay_before_ability_ms: settings.soul_ring.delay_before_ability_ms,
+            trigger_cooldown_ms: settings.soul_ring.trigger_cooldown_ms,
+            ability_keys,
+            intercept_item_keys: settings.soul_ring.intercept_item_keys,
+            item_slot_keys,
+        }
+    }
+
+    /// Return `true` if `key` is in the ability-keys set (case-insensitive).
+    pub fn is_ability_key(&self, key: char) -> bool {
+        self.ability_keys.contains(&key.to_ascii_lowercase())
+    }
+
+    /// Return `true` if `key` is in the item-slot-keys set (case-insensitive).
+    pub fn is_item_slot_key(&self, key: char) -> bool {
+        self.item_slot_keys.contains(&key.to_ascii_lowercase())
+    }
+}
+
+impl SoulRingState {
+    /// Config-based variant of [`should_trigger`] that accepts a pre-built
+    /// `SoulRingKeyboardConfig` instead of the full `Settings`.
+    pub fn should_trigger_with_config(&self, config: &SoulRingKeyboardConfig) -> bool {
+        if !config.enabled {
+            return false;
+        }
+        if !self.available || !self.can_cast || self.slot_key.is_none() {
+            return false;
+        }
+        if !self.hero_alive {
+            return false;
+        }
+        if config.min_mana_percent < 100 && self.hero_mana_percent >= config.min_mana_percent {
+            return false;
+        }
+        if self.hero_health_percent <= config.min_health_percent {
+            return false;
+        }
+        if let Some(last) = self.last_triggered {
+            let elapsed = last.elapsed();
+            let cooldown = Duration::from_millis(config.trigger_cooldown_ms);
+            if elapsed < cooldown {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Config-based keyboard interception helper for the cached snapshot path.
+    pub fn should_intercept_key_with_config(
+        &self,
+        key_char: char,
+        config: &SoulRingKeyboardConfig,
+    ) -> bool {
+        if config.is_ability_key(key_char) {
+            return true;
+        }
+        if !config.intercept_item_keys {
+            return false;
+        }
         let key_lower = key_char.to_ascii_lowercase();
-        
-        // Don't trigger on the Soul Ring's own key (would cause infinite loop)
+        // Don't intercept Soul Ring's own key.
         if let Some(sr_key) = self.slot_key {
             if key_lower == sr_key.to_ascii_lowercase() {
                 return false;
             }
         }
-
-        // Check if this key corresponds to an item slot
-        let is_item_slot = item_keys
-            .iter()
-            .any(|k| k.to_ascii_lowercase() == key_lower);
-
-        if !is_item_slot {
+        if !config.is_item_slot_key(key_char) {
             return false;
         }
-
-        // Check if the item in this slot should be skipped (no mana cost)
+        // Skip items with no mana cost.
         if let Some(item_name) = self.get_item_for_key(key_char) {
             if self.should_skip_item(item_name) {
-                debug!(
-                    "💍 Soul Ring: skipping no-mana item '{}' on key '{}'",
-                    item_name, key_char
-                );
                 return false;
             }
         }
-
         true
     }
-
-    /// Check if a key should trigger Soul Ring (ability or item key)
-    pub fn should_intercept_key(&self, key_char: char, settings: &Settings) -> bool {
-        self.is_ability_key(key_char, settings) || self.is_item_key(key_char, settings)
-    }
 }
-
-/// Global Soul Ring state, shared between keyboard listener and GSI handler
-pub static SOUL_RING_STATE: std::sync::LazyLock<Arc<Mutex<SoulRingState>>> =
-    std::sync::LazyLock::new(|| Arc::new(Mutex::new(SoulRingState::new())));
 
 /// Press an ability key with automatic Soul Ring triggering (for use in combos)
 /// This is the programmatic equivalent of the keyboard interception
@@ -319,5 +392,127 @@ mod tests {
         assert!(!state.can_cast);
         assert!(state.slot_key.is_none());
         assert!(!state.hero_alive);
+    }
+
+    #[test]
+    fn soul_ring_keyboard_config_matches_ability_keys_case_insensitively() {
+        let config = SoulRingKeyboardConfig {
+            enabled: true,
+            min_mana_percent: 100,
+            min_health_percent: 1,
+            delay_before_ability_ms: 30,
+            trigger_cooldown_ms: 250,
+            ability_keys: ['q', 'w', 'e'].into_iter().collect(),
+            intercept_item_keys: false,
+            item_slot_keys: ['z', 'x', 'c', 'v', 'b', 'n'].into_iter().collect(),
+        };
+
+        assert!(config.is_ability_key('Q'));
+        assert!(config.is_ability_key('w'));
+        assert!(!config.is_ability_key('r'));
+    }
+
+    #[test]
+    fn soul_ring_keyboard_config_matches_item_slot_keys_case_insensitively() {
+        let config = SoulRingKeyboardConfig {
+            enabled: true,
+            min_mana_percent: 100,
+            min_health_percent: 1,
+            delay_before_ability_ms: 30,
+            trigger_cooldown_ms: 250,
+            ability_keys: ['q', 'w', 'e'].into_iter().collect(),
+            intercept_item_keys: true,
+            item_slot_keys: ['z', 'x', 'c', 'v', 'b', 'n'].into_iter().collect(),
+        };
+
+        assert!(config.is_item_slot_key('Z'));
+        assert!(config.is_item_slot_key('n'));
+        assert!(!config.is_item_slot_key('q'));
+    }
+
+    #[test]
+    fn should_trigger_with_config_respects_enabled_flag() {
+        let mut state = SoulRingState::default();
+        state.available = true;
+        state.can_cast = true;
+        state.slot_key = Some('z');
+        state.hero_alive = true;
+        state.hero_mana_percent = 50;
+        state.hero_health_percent = 80;
+
+        let config = SoulRingKeyboardConfig {
+            enabled: false,
+            min_mana_percent: 100,
+            min_health_percent: 1,
+            delay_before_ability_ms: 30,
+            trigger_cooldown_ms: 250,
+            ability_keys: ['q'].into_iter().collect(),
+            intercept_item_keys: false,
+            item_slot_keys: HashSet::new(),
+        };
+
+        assert!(!state.should_trigger_with_config(&config));
+    }
+
+    #[test]
+    fn should_trigger_with_config_passes_when_all_conditions_met() {
+        let mut state = SoulRingState::default();
+        state.available = true;
+        state.can_cast = true;
+        state.slot_key = Some('z');
+        state.hero_alive = true;
+        state.hero_mana_percent = 50;
+        state.hero_health_percent = 80;
+
+        let config = SoulRingKeyboardConfig {
+            enabled: true,
+            min_mana_percent: 100,
+            min_health_percent: 1,
+            delay_before_ability_ms: 30,
+            trigger_cooldown_ms: 250,
+            ability_keys: ['q'].into_iter().collect(),
+            intercept_item_keys: false,
+            item_slot_keys: HashSet::new(),
+        };
+
+        assert!(state.should_trigger_with_config(&config));
+    }
+
+    #[test]
+    fn should_intercept_key_with_config_ability_key_returns_true() {
+        let state = SoulRingState::default();
+
+        let config = SoulRingKeyboardConfig {
+            enabled: true,
+            min_mana_percent: 100,
+            min_health_percent: 1,
+            delay_before_ability_ms: 30,
+            trigger_cooldown_ms: 250,
+            ability_keys: ['q', 'w', 'e'].into_iter().collect(),
+            intercept_item_keys: false,
+            item_slot_keys: HashSet::new(),
+        };
+
+        assert!(state.should_intercept_key_with_config('q', &config));
+        assert!(state.should_intercept_key_with_config('W', &config));
+        assert!(!state.should_intercept_key_with_config('r', &config));
+    }
+
+    #[test]
+    fn should_intercept_key_with_config_skips_item_keys_when_disabled() {
+        let state = SoulRingState::default();
+
+        let config = SoulRingKeyboardConfig {
+            enabled: true,
+            min_mana_percent: 100,
+            min_health_percent: 1,
+            delay_before_ability_ms: 30,
+            trigger_cooldown_ms: 250,
+            ability_keys: HashSet::new(),
+            intercept_item_keys: false,
+            item_slot_keys: ['z', 'x', 'c'].into_iter().collect(),
+        };
+
+        assert!(!state.should_intercept_key_with_config('z', &config));
     }
 }

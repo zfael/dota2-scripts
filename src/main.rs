@@ -13,11 +13,11 @@ use crate::actions::executor::ActionExecutor;
 use crate::actions::ActionDispatcher;
 use crate::config::Settings;
 use crate::gsi::start_gsi_server;
-use crate::input::keyboard::start_keyboard_listener;
+use crate::input::keyboard::{start_keyboard_listener, KeyboardSnapshot};
 use crate::state::{AppState, UpdateCheckState};
 use crate::ui::Dota2ScriptApp;
 use crate::update::{check_for_update, UpdateCheckResult};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use tracing::info;
 use tracing_subscriber;
 
@@ -39,19 +39,20 @@ async fn main() {
     // Initialize shared state
     let app_state = AppState::new();
     
-    // Get trigger key and SF enabled flag from app state
-    let trigger_key = app_state.lock().unwrap().trigger_key.clone();
-    let sf_enabled = app_state.lock().unwrap().sf_enabled.clone();
+    // Build the initial keyboard snapshot before starting the listener
+    let initial_snapshot = {
+        let settings_guard = settings.lock().unwrap();
+        let state_guard = app_state.lock().unwrap();
+        Arc::new(RwLock::new(KeyboardSnapshot::from_runtime(&settings_guard, &state_guard)))
+    };
 
     // Initialize action dispatcher
     let action_executor = ActionExecutor::new();
     let dispatcher = Arc::new(ActionDispatcher::new(settings.clone(), action_executor));
 
-    // Start keyboard listener with dynamic trigger key and SF flag
+    // Start keyboard listener with snapshot-based config
     let keyboard_config = input::keyboard::KeyboardListenerConfig {
-        trigger_key: trigger_key.clone(),
-        sf_enabled: sf_enabled.clone(),
-        settings: settings.clone(),
+        snapshot: initial_snapshot.clone(),
     };
     let hotkey_rx = start_keyboard_listener(keyboard_config);
 
@@ -193,7 +194,7 @@ async fn main() {
         ..Default::default()
     };
 
-    let app = Dota2ScriptApp::new(app_state, settings);
+    let app = Dota2ScriptApp::new(app_state, settings, initial_snapshot);
 
     if let Err(e) = eframe::run_native(
         "Dota 2 Script Automation",

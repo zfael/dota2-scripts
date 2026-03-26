@@ -21,8 +21,8 @@ pub struct ShadowFiendState;
 impl ShadowFiendState {
     /// Execute a raze with ALT hold for direction facing
     /// This spawns a thread to handle the timing-sensitive sequence
-    pub fn execute_raze(raze_key: char, settings: &Settings) {
-        let delay_ms = settings.heroes.shadow_fiend.raze_delay_ms;
+    pub fn execute_raze(raze_key: char, raze_delay_ms: u64) {
+        let delay_ms = raze_delay_ms;
         
         // Spawn raze execution in separate thread
         thread::spawn(move || {
@@ -46,60 +46,47 @@ impl ShadowFiendState {
         });
     }
 
-    /// Execute ultimate with optional BKB and D
-    /// Sequence: BKB (if enabled & available) → D (if enabled) → R
-    pub fn execute_ultimate_combo(settings: &Settings) {
-        let sf_config = &settings.heroes.shadow_fiend;
-        
-        // If auto_bkb_on_ultimate is disabled, just press R directly
-        if !sf_config.auto_bkb_on_ultimate {
-            info!("👻 SF Ultimate: auto_bkb disabled, pressing R directly");
-            press_key('r');
-            return;
-        }
-        
+    /// Execute ultimate with optional D after the caller has decided to run the auto-BKB path.
+    /// Sequence: BKB (if available) → D (if enabled) → R
+    pub fn execute_ultimate_combo(auto_d_on_ultimate: bool) {
         // Spawn in thread to handle timing-sensitive sequence
-        let auto_bkb = sf_config.auto_bkb_on_ultimate;
-        let auto_d = sf_config.auto_d_on_ultimate;
+        let auto_d = auto_d_on_ultimate;
         
         thread::spawn(move || {
             // Get last GSI event to check for BKB
             let event_guard = SF_LAST_EVENT.lock().unwrap();
             
-            if auto_bkb {
-                if let Some(event) = event_guard.as_ref() {
-                    // Need to get settings again inside thread for item lookup
-                    // Check for BKB in inventory
-                    let bkb_slot = event.items.all_slots().iter()
-                        .find(|(_, item)| item.name.contains("black_king_bar") && item.can_cast == Some(true))
-                        .map(|(slot, _)| *slot);
+            if let Some(event) = event_guard.as_ref() {
+                // Check for BKB in inventory
+                let bkb_slot = event.items.all_slots().iter()
+                    .find(|(_, item)| item.name.contains("black_king_bar") && item.can_cast == Some(true))
+                    .map(|(slot, _)| *slot);
+                
+                if let Some(slot) = bkb_slot {
+                    // Map slot to key (simplified - use hardcoded mapping based on common keybindings)
+                    let key = match slot {
+                        "slot0" => Some('z'),
+                        "slot1" => Some('x'),
+                        "slot2" => Some('c'),
+                        "slot3" => Some('v'),
+                        "slot4" => Some('b'),
+                        "slot5" => Some('n'),
+                        _ => None,
+                    };
                     
-                    if let Some(slot) = bkb_slot {
-                        // Map slot to key (simplified - use hardcoded mapping based on common keybindings)
-                        let key = match slot {
-                            "slot0" => Some('z'),
-                            "slot1" => Some('x'),
-                            "slot2" => Some('c'),
-                            "slot3" => Some('v'),
-                            "slot4" => Some('b'),
-                            "slot5" => Some('n'),
-                            _ => None,
-                        };
-                        
-                        if let Some(bkb_key) = key {
-                            info!("👻 SF Ultimate: Using BKB ({}) before Requiem", bkb_key);
-                            // Double-tap for self-cast
-                            press_key(bkb_key);
-                            thread::sleep(Duration::from_millis(30));
-                            press_key(bkb_key);
-                            thread::sleep(Duration::from_millis(50));
-                        }
-                    } else {
-                        info!("👻 SF Ultimate: BKB not found or on cooldown");
+                    if let Some(bkb_key) = key {
+                        info!("👻 SF Ultimate: Using BKB ({}) before Requiem", bkb_key);
+                        // Double-tap for self-cast
+                        press_key(bkb_key);
+                        thread::sleep(Duration::from_millis(30));
+                        press_key(bkb_key);
+                        thread::sleep(Duration::from_millis(50));
                     }
                 } else {
-                    info!("👻 SF Ultimate: No GSI event available, skipping BKB");
+                    info!("👻 SF Ultimate: BKB not found or on cooldown");
                 }
+            } else {
+                info!("👻 SF Ultimate: No GSI event available, skipping BKB");
             }
             
             drop(event_guard); // Release lock
