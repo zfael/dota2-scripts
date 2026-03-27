@@ -28,8 +28,9 @@ Boot starts in `src/main.rs::main()`:
    - consumes `HotkeyEvent`s from the keyboard hook
    - dispatches standalone combos and Largo manual song actions
 10. **Run egui UI on the main thread**
-   - `eframe::run_native(...)`
-   - `Dota2ScriptApp::update(...)` refreshes the shared `KeyboardSnapshot` every frame from current `Settings` + `AppState`
+    - `eframe::run_native(...)`
+    - `Dota2ScriptApp::update(...)` throttles shared `KeyboardSnapshot` refreshes to a short interval instead of rebuilding it every frame
+    - read-only main-tab rendering now uses one cloned `AppState::ui_snapshot()` per frame instead of repeatedly locking `AppState` for status/metrics sections
 
 ---
 
@@ -62,11 +63,12 @@ Boot starts in `src/main.rs::main()`:
 1. optionally appends the raw event to a JSONL session file when `settings.gsi_logging.enabled`
 2. locks `AppState` and calls `state.update_from_gsi(event.clone())`
 3. updates `state.metrics.current_queue_depth = rx.len()`
-4. refreshes keyboard-supporting runtime state from the latest GSI event even if full GSI automation is disabled:
+4. refreshes all shared keyboard-supporting runtime state from the latest GSI event, even if full GSI automation is disabled. This includes:
    - `soul_ring::update_from_gsi(...)`
    - `auto_items::update_gsi_state(...)`
    - `BROODMOTHER_ACTIVE`
    - `SF_LAST_EVENT` for Shadow Fiend keyboard combos
+   This refresh is always performed in the handler, before the `gsi_enabled` gate. The dispatcher no longer repeats or owns any of these shared cache updates.
 5. logs hero death / respawn transitions via the `WAS_ALIVE` mutex
 6. checks `state.gsi_enabled`
 7. if enabled, calls `dispatcher.dispatch_gsi_event(&event)` inline on the GSI processor task
@@ -121,7 +123,7 @@ The action executor is intentionally narrow in this rollout item:
 `main.rs` and `ui/app.rs` share one `Arc<RwLock<KeyboardSnapshot>>` with that listener:
 
 - `main.rs` creates the initial snapshot before the hook starts
-- `Dota2ScriptApp::update(...)` refreshes it every frame
+- `Dota2ScriptApp::update(...)` refreshes it on a short timer instead of every repaint
 - the callback clones it only on the button/key paths that need static config
 
 The snapshot only carries static keyboard-relevant config:

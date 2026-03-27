@@ -25,6 +25,7 @@
 - `metrics.events_processed` is updated in `AppState::update_from_gsi(...)`.
 - `metrics.current_queue_depth` is updated in `process_gsi_events(...)`.
 - `metrics.events_dropped` is incremented in `gsi_webhook_handler()` when `try_send` fails because the bounded queue is full.
+- `AppState::ui_snapshot()` clones the UI-facing hot fields once so `src/ui/app.rs` can render read-only status and metrics sections without repeatedly locking `AppState`.
 
 ---
 
@@ -69,6 +70,7 @@ Examples:
 - `src/actions/dispatcher.rs` drops the `Settings` lock before hero dispatch
 - `src/actions/common.rs` gathers defensive-item config, then releases the settings lock before simulating keys
 - `src/actions/soul_ring.rs` drops `SOUL_RING_STATE` before sleeping and pressing keys
+- `src/ui/app.rs` now throttles keyboard-snapshot rebuilds and uses one `AppState::ui_snapshot()` per frame for read-only main-tab sections
 
 When extending the code, keep lock scopes short. Do not hold `AppState` or `Settings` across sleeps, network/file I/O, or long-running combo logic.
 
@@ -76,7 +78,7 @@ When extending the code, keep lock scopes short. Do not hold `AppState` or `Sett
 
 ## Dispatcher structure
 
-`src/actions/dispatcher.rs` owns two things:
+`src/actions/dispatcher.rs` owns:
 
 | Field | Type | Purpose |
 |---|---|---|
@@ -97,19 +99,15 @@ The key used in the map is `HeroScript::hero_name()`.
 
 ---
 
-## Hero dispatch vs common actions
+## Dispatcher responsibilities
 
-### What the dispatcher always does
-
-For every GSI event, `dispatch_gsi_event()` first runs shared, cross-cutting hooks:
+For every GSI event, `dispatch_gsi_event()` runs only dispatch-local hooks and routing:
 
 1. neutral item discovery logging
-2. Soul Ring state refresh
-3. silence dispel check, which now queues Manta/Lotus jitter work on the shared action executor
-4. Broodmother active-hero flag update
-5. auto-items GSI cache refresh
+2. silence dispel check (queues Manta/Lotus jitter work on the shared action executor)
+3. hero/default routing (calls the hero script or fallback survivability)
 
-These happen **before** any hero-specific routing.
+All shared keyboard/runtime cache refreshes are now performed upstream in the handler, before the dispatcher is called.
 
 ### How hero-specific routing works
 

@@ -26,15 +26,14 @@
    - optionally writes JSONL when `[gsi_logging].enabled = true`
    - updates `AppState.last_event`
    - updates `AppState.metrics.current_queue_depth`
+   - refreshes all shared keyboard-supporting and runtime caches from the latest GSI event (e.g., Soul Ring, auto-items, Broodmother, Shadow Fiend), even if GSI automation is disabled
    - logs death/respawn transitions
    - checks `AppState.gsi_enabled`
-   - spawns `ActionDispatcher::dispatch_gsi_event(...)`
-5. `src/actions/dispatcher.rs` runs shared hooks before hero/common actions:
+   - if enabled, calls `ActionDispatcher::dispatch_gsi_event(...)` with the already-refreshed event
+5. `src/actions/dispatcher.rs` consumes the event and runs only dispatch-local hooks and routing:
    - neutral-item discovery logging
-   - Soul Ring state refresh
    - silence dispel checks
-   - Broodmother active-hero flag updates
-   - auto-items GSI cache refresh
+   - hero/default routing
 
 **HTTP status behavior**
 
