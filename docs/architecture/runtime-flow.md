@@ -89,12 +89,12 @@ Then it routes by hero name:
 
 Current hero scripts in `src/actions/heroes/*.rs` all compose shared survivability manually:
 
-- `danger_detector::update(...)`
-- `SurvivabilityActions::check_and_use_healing_items(...)`
-- `SurvivabilityActions::use_defensive_items_if_danger(...)`
-- `SurvivabilityActions::use_neutral_item_if_danger(...)`
+- `danger_detector::update(...)` computes the current event's `in_danger` result once
+- `SurvivabilityActions::check_and_use_healing_items_with_danger(..., in_danger)`
+- `SurvivabilityActions::use_defensive_items_if_danger_with_snapshot(..., in_danger)`
+- `SurvivabilityActions::use_neutral_item_if_danger_with_snapshot(..., in_danger)`
 
-The fallback path for unsupported heroes calls `execute_default_strategy()` instead, which performs the same shared survivability pipeline plus per-event armlet handling.
+The fallback path for unsupported heroes calls `execute_default_strategy()` instead, which now follows the same pattern internally: compute one event-local danger result, reuse it through the shared survivability pipeline, and still handle per-event armlet work.
 
 ### 6. Action executor lane
 
