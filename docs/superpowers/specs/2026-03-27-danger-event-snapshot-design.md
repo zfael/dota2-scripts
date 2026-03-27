@@ -17,7 +17,8 @@ That means one GSI event can take multiple locks on the global `HP_TRACKER` stat
 
 - Preserve current danger behavior exactly.
 - Reduce same-event lock traffic in the danger/survivability path.
-- Keep the slice tightly scoped to `danger_detector` and its immediate `common.rs` consumers, with only small adjacent wins if they stay low-risk.
+- Cover the current gameplay paths that already use danger-aware common survivability helpers, not just the unsupported-hero fallback path.
+- Keep the slice tightly scoped to `danger_detector`, `common.rs`, and the hero call sites that already compose those helpers, with only small adjacent wins if they stay low-risk.
 - Keep manual gameplay behavior identical for healing, defensive items, and neutral items.
 
 ## Non-goals
@@ -103,7 +104,14 @@ Do **not** change the heuristic or its state machine.
 
 ### Common survivability flow
 
-In `src\actions\common.rs::execute_default_strategy()`:
+In the current codebase, danger-aware common survivability is used from:
+
+- `src\actions\common.rs::execute_default_strategy()` for fallback/unsupported heroes
+- supported hero scripts that already call `danger_detector::update(...)` plus common survivability helpers directly
+
+This slice should optimize **all of those existing gameplay paths**.
+
+Recommended flow:
 
 1. call `danger_detector::update(...)` once
 2. store the returned boolean for the current event
@@ -115,7 +123,7 @@ Likely consumers:
 - defensive-item gating
 - neutral-item gating
 
-That means `common.rs` should stop calling `danger_detector::is_in_danger()` repeatedly inside the same event flow when it already has the answer.
+That means danger-aware paths should stop calling `danger_detector::is_in_danger()` repeatedly inside the same event flow when they already have the answer.
 
 ### Public API boundary
 
@@ -125,12 +133,13 @@ Keep the current public `SurvivabilityActions` API stable for hero scripts that 
 - `use_defensive_items_if_danger(event)`
 - `use_neutral_item_if_danger(event)`
 
-This slice should stay narrow by avoiding a fan-out signature change across hero scripts.
+This slice should stay narrow by avoiding unnecessary public API churn, but it does need to cover the hero scripts that already compose danger + common survivability directly.
 
 Recommended implementation shape:
 
-- keep existing public methods unchanged
-- add private/internal helper variants inside `common.rs` that accept the already-computed danger result for the default/common pass
+- keep public call surfaces as stable as practical
+- add private/internal helper variants inside `common.rs` that accept the already-computed danger result
+- let the existing hero scripts that already compute danger call those snapshot-aware paths instead of forcing them back through repeated global reads
 
 For example:
 
@@ -167,13 +176,13 @@ This is only in scope if:
 
 - `src\actions\danger_detector.rs`
 - `src\actions\common.rs`
+- existing hero scripts that already call `danger_detector::update(...)` and then invoke common survivability helpers
 - focused tests in the touched modules
 - documentation for danger-detection/runtime flow if the code path description changes
 
 ### Out of scope
 
-- hero-local callers outside the immediate common survivability path
-- changing existing public `SurvivabilityActions` method signatures across hero scripts
+- unrelated hero logic outside the existing danger/common survivability composition
 - UI redesign
 - changing danger config knobs
 - changing silence-dispel behavior
