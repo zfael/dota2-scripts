@@ -181,7 +181,7 @@ Standalone flow is split across `AppState`, the keyboard hook, and the dispatche
 Special cases:
 
 - Largo manual `Q/W/E/R` hotkeys bypass `handle_standalone_trigger()` and call concrete `LargoScript` methods
-- Broodmother spider control uses `HotkeyEvent::BroodmotherSpiderAttack` plus `BROODMOTHER_ACTIVE`
+- Broodmother callback actions stay in `src/input/keyboard.rs`, which uses `BROODMOTHER_ACTIVE` and a dedicated callback worker instead of the `HotkeyEvent` channel
 
 ---
 

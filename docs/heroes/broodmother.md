@@ -76,6 +76,8 @@ Press Middle Mouse to execute a quick spider attack command:
 
 This allows rapid spider micro without taking your hand off the mouse.
 
+**Implementation note:** Middle mouse is intercepted in the keyboard callback and enqueues the spider micro sequence to the dedicated Broodmother callback worker, preventing callback-thread overload.
+
 ### 🎯 Auto-Items & Abilities on Space + Right-Click
 
 Hold Space and right-click on an enemy to automatically:
@@ -92,7 +94,10 @@ Hold Space and right-click on an enemy to automatically:
 
 Ideal for burst combos with instant item and ability usage.
 
-**Important runtime note:** the config exposes `auto_items_modifier`, but the current keyboard hook still tracks the physical Space key directly. If you change that field without changing `src/input/keyboard.rs`, runtime behavior will not follow the new value.
+**Implementation notes:**
+- Space + right-click is intercepted in the keyboard callback and enqueues auto-items/ability execution to the dedicated Broodmother callback worker
+- This prevents callback-thread overload and ensures FIFO execution order
+- The config exposes `auto_items_modifier`, but the current keyboard hook still tracks the physical Space key directly; if you change that field without changing `src/input/keyboard.rs`, runtime behavior will not follow the new value
 
 ### Auto-Abilities Format
 

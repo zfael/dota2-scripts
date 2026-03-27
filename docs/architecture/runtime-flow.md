@@ -144,11 +144,10 @@ For each intercepted event, the callback does this in order:
 3. **Track modifier state**
    - update `MODIFIER_KEY_HELD` on Space press/release
 4. **Broodmother Space + right-click**
-   - if `MODIFIER_KEY_HELD` and `BROODMOTHER_ACTIVE`, spawn `auto_items::execute_auto_items(...)`
+   - if `MODIFIER_KEY_HELD` and `BROODMOTHER_ACTIVE`, enqueue auto-items/ability execution to the Broodmother callback worker
    - return `None` to block the original right-click
 5. **Broodmother middle mouse**
-   - send `HotkeyEvent::BroodmotherSpiderAttack`
-   - also spawn `BroodmotherScript::execute_spider_attack_move(...)`
+   - enqueue spider micro to the Broodmother callback worker
    - return `None`
 6. **Compute Soul Ring intercept eligibility**
    - takes one live `SOUL_RING_STATE` lock on the keypress path
@@ -200,9 +199,8 @@ That thread:
 - gates generic combo triggers on `AppState.standalone_enabled`
 - uses `AppState.selected_hero` to decide which hero gets `dispatch_standalone_trigger(...)`
 - handles Largo `Q/W/E/R` events by downcasting to `LargoScript`
-- handles Broodmother spider events directly
 
-Important nuance: `AppState.selected_hero` only models `Huskar`, `Largo`, `LegionCommander`, `ShadowFiend`, and `Tiny`. Broodmother keyboard behavior uses `BROODMOTHER_ACTIVE` instead.
+Important nuance: `AppState.selected_hero` only models `Huskar`, `Largo`, `LegionCommander`, `ShadowFiend`, and `Tiny`. Broodmother keyboard behavior uses `BROODMOTHER_ACTIVE` and the dedicated Broodmother callback worker, not the hotkey event channel.
 
 ---
 
@@ -220,8 +218,7 @@ Largo no longer uses a tight polling loop. Its dedicated worker blocks on a time
 | `src/actions/executor.rs` | ActionExecutor worker thread | When `ActionDispatcher::new(...)` constructs the executor | Runs queued short GSI-driven jobs FIFO; immediate jobs go straight to this worker |
 | `src/input/simulation.rs` | Synthetic-input worker thread | First call to a simulation helper | Owns `Enigo`; drains one unbounded FIFO queue |
 | `src/input/keyboard.rs` | Soul Ring replay worker thread | First intercepted Soul Ring key | Long-lived lazy singleton; drains one unbounded FIFO queue of `SoulRingReplayRequest`s; uses `rdev::simulate` for replay |
-| `src/input/keyboard.rs` | Broodmother auto-items thread | Per Space+right-click | Short-lived |
-| `src/input/keyboard.rs` | Broodmother spider macro thread | Per middle click | Short-lived |
+| `src/input/keyboard.rs` | Broodmother callback worker thread | First Broodmother callback action | Long-lived lazy singleton; drains one unbounded FIFO queue of `BroodmotherCallbackRequest`s; handles both Space+right-click auto-items/abilities and middle-mouse spider micro |
 | `src/actions/executor.rs` | Delayed enqueue helper thread | Per non-zero `enqueue_after(...)` job | Short-lived; sleeps off-worker before sending the job to the executor lane |
 | `src/actions/heroes/shadow_fiend.rs` | Raze / ultimate / standalone combo threads | On intercepted SF key / standalone trigger | Short-lived |
 | `src/actions/heroes/largo.rs` | Largo scheduled beat worker | Once in `LargoScript::new()` | Long-lived singleton guarded by `BEAT_THREAD_STARTED`; timed wait until next beat or state-change wake-up |

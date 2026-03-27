@@ -21,7 +21,6 @@ pub enum HotkeyEvent {
     LargoW,
     LargoE,
     LargoR,
-    BroodmotherSpiderAttack,
 }
 
 pub struct KeyboardListenerConfig {
@@ -308,50 +307,49 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                 _ => {}
             }
             
-            // Handle Space + Right-click for Broodmother auto-items
-            if let EventType::ButtonPress(Button::Right) = event.event_type {
-                if MODIFIER_KEY_HELD.load(Ordering::SeqCst) && BROODMOTHER_ACTIVE.load(Ordering::SeqCst) {
-                    let snapshot = config.snapshot.read().unwrap().clone();
-                    if snapshot.broodmother.auto_items_enabled {
-                        let auto_items = snapshot.broodmother.auto_items.clone();
-                        let auto_abilities = snapshot.broodmother.auto_abilities.clone();
-                        let abilities_first = snapshot.broodmother.abilities_first;
-                        let slot_keys = snapshot.broodmother.slot_keys;
-                        debug!("🎯 Space+Right-click - Broodmother auto-items");
-                        thread::spawn(move || {
-                            crate::actions::auto_items::execute_auto_items(
-                                &slot_keys, &auto_items, &auto_abilities, abilities_first,
-                            );
-                        });
-                        return None; // Block original right-click
-                    }
-                }
-            }
-            
-            // Handle Middle Mouse button for Broodmother spider micro
-            if let EventType::ButtonPress(button) = event.event_type {
-                let is_spider_micro_button = matches!(button, Button::Middle);
-                if is_spider_micro_button && BROODMOTHER_ACTIVE.load(Ordering::SeqCst) {
-                    let snapshot = config.snapshot.read().unwrap().clone();
-                    if snapshot.broodmother.spider_micro_enabled {
-                        info!("🕷️ Mouse5 pressed - Broodmother spider attack-move");
-                        let _ = event_tx.send(HotkeyEvent::BroodmotherSpiderAttack);
-                        let spider_key = snapshot.broodmother.spider_micro_key;
-                        let hero_key = snapshot.broodmother.hero_reselect_key;
-                        thread::spawn(move || {
-                            crate::actions::heroes::broodmother::BroodmotherScript::execute_spider_attack_move_with_keys(
-                                spider_key, hero_key,
-                            );
-                        });
-                        return None; // Block the original mouse button
-                    }
-                }
-            }
-            
-            if let EventType::KeyPress(key) = event.event_type {
-                // Read snapshot once per keyboard event — static config comes from here.
-                let snapshot = config.snapshot.read().unwrap().clone();
+            // Handle Broodmother callback actions without touching snapshot unless needed.
+            match event.event_type {
+                EventType::ButtonPress(Button::Right) => {
+                    let modifier_held = MODIFIER_KEY_HELD.load(Ordering::SeqCst);
+                    let broodmother_active = BROODMOTHER_ACTIVE.load(Ordering::SeqCst);
 
+                    if modifier_held && broodmother_active {
+                        let snapshot = config.snapshot.read().unwrap().clone();
+                        if let Some(action) = plan_broodmother_callback_action(
+                            &event.event_type,
+                            modifier_held,
+                            broodmother_active,
+                            &snapshot,
+                        ) {
+                            debug!("🎯 Space+Right-click - Broodmother auto-items");
+                            enqueue_broodmother_callback_action(action);
+                            return None; // Block original right-click
+                        }
+                    }
+                }
+                EventType::ButtonPress(Button::Middle) => {
+                    let broodmother_active = BROODMOTHER_ACTIVE.load(Ordering::SeqCst);
+
+                    if broodmother_active {
+                        let snapshot = config.snapshot.read().unwrap().clone();
+                        if let Some(action) = plan_broodmother_callback_action(
+                            &event.event_type,
+                            false,
+                            broodmother_active,
+                            &snapshot,
+                        ) {
+                            info!("🕷️ Middle mouse pressed - Broodmother spider attack-move");
+                            enqueue_broodmother_callback_action(action);
+                            return None; // Block the original mouse button
+                        }
+                    }
+                }
+                _ => {}
+            }
+
+            if let EventType::KeyPress(key) = event.event_type {
+                let snapshot = config.snapshot.read().unwrap().clone();
+                // Read snapshot once per keyboard event — static config comes from here.
                 // Convert key to char to check if we should intercept
                 let key_char = key_to_char(key);
                 
@@ -497,6 +495,107 @@ pub struct KeyboardSnapshot {
     pub soul_ring: SoulRingKeyboardConfig,
 }
 
+#[derive(Debug, Clone)]
+enum BroodmotherCallbackAction {
+    AutoItems {
+        slot_keys: [char; 6],
+        auto_items: Vec<String>,
+        auto_abilities: Vec<AutoAbilityConfig>,
+        abilities_first: bool,
+    },
+    SpiderMicro {
+        spider_key: Option<Key>,
+        hero_key: Option<Key>,
+    },
+}
+
+/// Request to execute a Broodmother callback action via the dedicated worker.
+#[derive(Debug, Clone)]
+struct BroodmotherCallbackRequest {
+    action: BroodmotherCallbackAction,
+}
+
+/// Single-worker queue for Broodmother callback actions (auto-items and spider micro).
+/// Uses LazyLock to initialize once on first access.
+static BROODMOTHER_CALLBACK_QUEUE: LazyLock<Sender<BroodmotherCallbackRequest>> = LazyLock::new(|| {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || broodmother_callback_worker(rx));
+    tx
+});
+
+/// Worker thread that executes Broodmother callback actions sequentially.
+fn broodmother_callback_worker(rx: Receiver<BroodmotherCallbackRequest>) {
+    info!("Broodmother callback worker started");
+    
+    while let Ok(request) = rx.recv() {
+        execute_broodmother_callback_action_with_guard("", || {
+            execute_broodmother_callback_action(request.action, "");
+        });
+    }
+    
+    info!("Broodmother callback worker exited");
+}
+
+/// Execute a Broodmother callback action and keep the worker alive if it panics.
+fn execute_broodmother_callback_action_with_guard<F>(context: &str, action: F)
+where
+    F: FnOnce(),
+{
+    if let Err(panic_payload) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(action)) {
+        let panic_message = if let Some(message) = panic_payload.downcast_ref::<&str>() {
+            *message
+        } else if let Some(message) = panic_payload.downcast_ref::<String>() {
+            message.as_str()
+        } else {
+            "unknown panic payload"
+        };
+
+        warn!(
+            "Broodmother callback action panicked{}; worker will continue running: {}",
+            context, panic_message
+        );
+    }
+}
+
+/// Shared execution helper for Broodmother callback actions.
+/// Used by both the worker and fallback thread to ensure identical behavior.
+fn execute_broodmother_callback_action(action: BroodmotherCallbackAction, context: &str) {
+    match action {
+        BroodmotherCallbackAction::AutoItems { slot_keys, auto_items, auto_abilities, abilities_first } => {
+            debug!("🕷️ Executing Broodmother auto-items{}", context);
+            crate::actions::auto_items::execute_auto_items(
+                &slot_keys,
+                &auto_items,
+                &auto_abilities,
+                abilities_first,
+            );
+        }
+        BroodmotherCallbackAction::SpiderMicro { spider_key, hero_key } => {
+            debug!("🕷️ Executing Broodmother spider micro{}", context);
+            crate::actions::heroes::broodmother::BroodmotherScript::execute_spider_attack_move_with_keys(
+                spider_key,
+                hero_key,
+            );
+        }
+    }
+}
+
+/// Enqueue Broodmother callback action to the dedicated worker thread.
+/// Falls back to spawning a thread if the queue is unexpectedly closed.
+fn enqueue_broodmother_callback_action(action: BroodmotherCallbackAction) {
+    let request = BroodmotherCallbackRequest { action: action.clone() };
+    
+    if let Err(e) = BROODMOTHER_CALLBACK_QUEUE.send(request) {
+        warn!("Broodmother callback queue closed unexpectedly, falling back to thread spawn: {:?}", e);
+        
+        thread::spawn(move || {
+            execute_broodmother_callback_action_with_guard(" (fallback)", || {
+                execute_broodmother_callback_action(action, " (fallback)");
+            });
+        });
+    }
+}
+
 impl KeyboardSnapshot {
     /// Build a snapshot from the current runtime settings and app state.
     pub fn from_runtime(settings: &Settings, state: &AppState) -> Self {
@@ -538,13 +637,67 @@ impl KeyboardSnapshot {
     }
 }
 
+fn plan_broodmother_callback_action(
+    event_type: &EventType,
+    modifier_held: bool,
+    broodmother_active: bool,
+    snapshot: &KeyboardSnapshot,
+) -> Option<BroodmotherCallbackAction> {
+    match event_type {
+        EventType::ButtonPress(Button::Right)
+            if modifier_held && broodmother_active && snapshot.broodmother.auto_items_enabled =>
+        {
+            Some(BroodmotherCallbackAction::AutoItems {
+                slot_keys: snapshot.broodmother.slot_keys,
+                auto_items: snapshot.broodmother.auto_items.clone(),
+                auto_abilities: snapshot.broodmother.auto_abilities.clone(),
+                abilities_first: snapshot.broodmother.abilities_first,
+            })
+        }
+        EventType::ButtonPress(Button::Middle)
+            if broodmother_active && snapshot.broodmother.spider_micro_enabled =>
+        {
+            Some(BroodmotherCallbackAction::SpiderMicro {
+                spider_key: snapshot.broodmother.spider_micro_key,
+                hero_key: snapshot.broodmother.hero_reselect_key,
+            })
+        }
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::Mutex;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use crate::state::app_state::{HeroType, QueueMetrics, UpdateCheckState};
     use crate::actions::soul_ring::{SoulRingState, SoulRingKeyboardConfig};
     use std::collections::HashSet;
+
+    fn broodmother_test_snapshot() -> KeyboardSnapshot {
+        KeyboardSnapshot {
+            trigger_key: None,
+            sf_enabled: false,
+            shadow_fiend: ShadowFiendKeyboardSnapshot {
+                raze_intercept_enabled: false,
+                auto_bkb_on_ultimate: false,
+                raze_delay_ms: 0,
+                auto_d_on_ultimate: false,
+            },
+            broodmother: BroodmotherKeyboardSnapshot {
+                spider_micro_enabled: true,
+                auto_items_enabled: true,
+                spider_micro_key: Some(Key::KeyQ),
+                hero_reselect_key: Some(Key::KeyH),
+                auto_items: vec!["item1".to_string(), "item2".to_string()],
+                auto_abilities: vec![],
+                abilities_first: true,
+                slot_keys: ['a', 's', 'd', 'f', 'g', 'h'],
+            },
+            soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
+        }
+    }
 
     #[test]
     fn keyboard_snapshot_parses_trigger_key_and_sf_flags() {
@@ -676,5 +829,110 @@ mod tests {
             }
             _ => panic!("Expected OriginalOnly plan when slot key invalid"),
         }
+    }
+
+    #[test]
+    fn broodmother_space_right_click_plans_auto_items_action() {
+        let snapshot = broodmother_test_snapshot();
+        let action = plan_broodmother_callback_action(
+            &EventType::ButtonPress(Button::Right),
+            true,
+            true,
+            &snapshot,
+        );
+
+        match action {
+            Some(BroodmotherCallbackAction::AutoItems { slot_keys, auto_items, auto_abilities, abilities_first }) => {
+                assert_eq!(slot_keys, snapshot.broodmother.slot_keys);
+                assert_eq!(auto_items, snapshot.broodmother.auto_items);
+                assert_eq!(auto_abilities.len(), snapshot.broodmother.auto_abilities.len());
+                assert_eq!(abilities_first, snapshot.broodmother.abilities_first);
+            }
+            _ => panic!("expected AutoItems action"),
+        }
+    }
+
+    #[test]
+    fn broodmother_middle_mouse_plans_spider_micro_action() {
+        let snapshot = broodmother_test_snapshot();
+        let action = plan_broodmother_callback_action(
+            &EventType::ButtonPress(Button::Middle),
+            false,
+            true,
+            &snapshot,
+        );
+
+        match action {
+            Some(BroodmotherCallbackAction::SpiderMicro { spider_key, hero_key }) => {
+                assert_eq!(spider_key, snapshot.broodmother.spider_micro_key);
+                assert_eq!(hero_key, snapshot.broodmother.hero_reselect_key);
+            }
+            _ => panic!("expected SpiderMicro action"),
+        }
+    }
+
+    #[test]
+    fn broodmother_callback_action_is_none_when_disabled_or_inactive() {
+        let mut auto_items_disabled_snapshot = broodmother_test_snapshot();
+        auto_items_disabled_snapshot.broodmother.auto_items_enabled = false;
+
+        match plan_broodmother_callback_action(
+            &EventType::ButtonPress(Button::Right),
+            true,
+            true,
+            &auto_items_disabled_snapshot,
+        ) {
+            None => {}
+            Some(action) => panic!("expected None for disabled auto-items, got {:?}", action),
+        }
+
+        let mut spider_micro_disabled_snapshot = broodmother_test_snapshot();
+        spider_micro_disabled_snapshot.broodmother.spider_micro_enabled = false;
+
+        match plan_broodmother_callback_action(
+            &EventType::ButtonPress(Button::Middle),
+            false,
+            true,
+            &spider_micro_disabled_snapshot,
+        ) {
+            None => {}
+            Some(action) => panic!("expected None for disabled spider micro, got {:?}", action),
+        }
+
+        let mut broodmother_inactive_snapshot = broodmother_test_snapshot();
+        broodmother_inactive_snapshot.broodmother.spider_micro_enabled = true;
+
+        match plan_broodmother_callback_action(
+            &EventType::ButtonPress(Button::Middle),
+            false,
+            false,
+            &broodmother_inactive_snapshot,
+        ) {
+            None => {}
+            Some(action) => panic!("expected None for inactive Broodmother, got {:?}", action),
+        }
+    }
+
+    #[test]
+    fn broodmother_callback_action_guard_runs_non_panicking_action() {
+        let ran = Arc::new(AtomicBool::new(false));
+        let ran_clone = ran.clone();
+
+        execute_broodmother_callback_action_with_guard("", move || {
+            ran_clone.store(true, Ordering::SeqCst);
+        });
+
+        assert!(ran.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn broodmother_callback_action_guard_swallows_panics() {
+        let result = std::panic::catch_unwind(|| {
+            execute_broodmother_callback_action_with_guard("", || {
+                panic!("boom");
+            });
+        });
+
+        assert!(result.is_ok());
     }
 }

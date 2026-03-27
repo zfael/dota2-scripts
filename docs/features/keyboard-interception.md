@@ -69,11 +69,10 @@ Current callback order on key/button input:
    - updates `MODIFIER_KEY_HELD`
 4. **Broodmother Space + right-click**
    - blocks the click
-   - spawns `auto_items::execute_auto_items(...)`
+   - enqueues auto-items/ability execution to the Broodmother callback worker
 5. **Broodmother middle mouse**
    - blocks the click
-   - sends `HotkeyEvent::BroodmotherSpiderAttack`
-   - also spawns `execute_spider_attack_move(...)`
+   - enqueues spider micro to the Broodmother callback worker
 6. **Calculate Soul Ring eligibility**
    - one live `SOUL_RING_STATE` lock on the keypress path
    - `should_intercept_key_with_config(&snapshot.soul_ring)`
@@ -253,10 +252,11 @@ These are still part of the interception surface even though this page centers o
 
 ### Broodmother
 
-- This Soul Ring worker slice does not change Broodmother callback behavior; Space + right-click and middle-mouse spider paths still use their existing short-lived threads.
-- Space + right-click blocks the click and uses cached GSI state from `src/actions/auto_items.rs`
-- middle mouse blocks the click and triggers spider micro
+- Broodmother callback actions now queue to one dedicated worker instead of spawning raw threads from the callback
+- Space + right-click blocks the click and enqueues auto-items/ability execution to the Broodmother callback worker
+- middle mouse blocks the click and enqueues spider micro to the same worker
 - activation is keyed off `BROODMOTHER_ACTIVE`, not `AppState.selected_hero`
+- Soul Ring remains on its own separate dedicated replay worker
 
 ---
 
