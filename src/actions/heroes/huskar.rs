@@ -104,20 +104,20 @@ impl HeroScript for HuskarScript {
 
         // PRIORITY 2: Update danger detection state
         let settings = self.settings.lock().unwrap();
-        crate::actions::danger_detector::update(event, &settings.danger_detection);
+        let in_danger = crate::actions::danger_detector::update(event, &settings.danger_detection);
         drop(settings);
 
         // PRIORITY 3: Create survivability actions for healing and defensive items
         let survivability = SurvivabilityActions::new(self.settings.clone(), self.executor.clone());
         
         // Check healing items (danger-aware)
-        survivability.check_and_use_healing_items(event);
+        survivability.check_and_use_healing_items_with_danger(event, in_danger);
 
         // Use defensive items if in danger
-        survivability.use_defensive_items_if_danger(event);
+        survivability.use_defensive_items_if_danger_with_snapshot(event, in_danger);
 
         // Use neutral items if in danger
-        survivability.use_neutral_item_if_danger(event);
+        survivability.use_neutral_item_if_danger_with_snapshot(event, in_danger);
 
         // PRIORITY 4: Huskar-specific berserker blood cleanse
         self.berserker_blood_cleanse(event);

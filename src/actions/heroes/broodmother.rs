@@ -97,11 +97,11 @@ impl HeroScript for BroodmotherScript {
         // Use common survivability actions (danger detection, healing, defensive items)
         let settings = self.settings.lock().unwrap();
         let survivability = SurvivabilityActions::new(self.settings.clone(), self.executor.clone());
-        crate::actions::danger_detector::update(event, &settings.danger_detection);
+        let in_danger = crate::actions::danger_detector::update(event, &settings.danger_detection);
         drop(settings);
-        survivability.check_and_use_healing_items(event);
-        survivability.use_defensive_items_if_danger(event);
-        survivability.use_neutral_item_if_danger(event);
+        survivability.check_and_use_healing_items_with_danger(event, in_danger);
+        survivability.use_defensive_items_if_danger_with_snapshot(event, in_danger);
+        survivability.use_neutral_item_if_danger_with_snapshot(event, in_danger);
     }
 
     fn handle_standalone_trigger(&self) {
