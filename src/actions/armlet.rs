@@ -72,6 +72,37 @@ fn next_critical_retry_health(health: u32, threshold: u32) -> Option<u32> {
     }
 }
 
+fn cooldown_ready(last_toggle: Option<Instant>, cooldown_ms: u64) -> bool {
+    match last_toggle {
+        Some(last_time) => last_time.elapsed() >= Duration::from_millis(cooldown_ms),
+        None => true,
+    }
+}
+
+fn cooldown_remaining_ms(last_toggle: Option<Instant>, cooldown_ms: u64) -> u64 {
+    match last_toggle {
+        Some(last_time) => cooldown_ms.saturating_sub(last_time.elapsed().as_millis() as u64),
+        None => 0,
+    }
+}
+
+fn should_force_critical_retry(
+    health: u32,
+    threshold: u32,
+    last_critical: Option<u32>,
+    last_toggle: Option<Instant>,
+    cooldown_ms: u64,
+) -> bool {
+    match last_critical {
+        Some(last_critical) => {
+            health < threshold / 2
+                && health <= last_critical
+                && cooldown_ready(last_toggle, cooldown_ms)
+        }
+        None => false,
+    }
+}
+
 fn find_armlet_slot_key(event: &GsiWebhookEvent, settings: &Settings) -> Option<char> {
     let armlet_slot = event
         .items
@@ -103,24 +134,31 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
     let cooldown_ms = resolved.toggle_cooldown_ms;
     let cast_modifier = resolve_cast_modifier(&resolved);
 
-    let mut critical_hp = ARMLET_CRITICAL_HP.lock().unwrap();
-    if let Some(last_critical) = *critical_hp {
-        if health < threshold / 2 && health <= last_critical {
-            warn!(
-                "Critical HP detected! HP: {} (likely armlet stuck on). Forcing emergency toggle.",
-                health
-            );
+    let last_critical = *ARMLET_CRITICAL_HP.lock().unwrap();
+    let last_toggle_snapshot = *ARMLET_LAST_TOGGLE.lock().unwrap();
 
-            execute_dual_trigger(slot_key, cast_modifier);
-            *critical_hp = None;
-            drop(critical_hp);
+    if should_force_critical_retry(
+        health,
+        threshold,
+        last_critical,
+        last_toggle_snapshot,
+        cooldown_ms,
+    ) {
+        warn!(
+            "Critical HP detected! HP: {} (likely armlet stuck on). Forcing emergency toggle.",
+            health
+        );
 
-            let mut last_toggle = ARMLET_LAST_TOGGLE.lock().unwrap();
-            *last_toggle = Some(Instant::now());
-            return;
-        }
+        execute_dual_trigger(slot_key, cast_modifier);
+
+        let mut critical_hp = ARMLET_CRITICAL_HP.lock().unwrap();
+        *critical_hp = None;
+        drop(critical_hp);
+
+        let mut last_toggle = ARMLET_LAST_TOGGLE.lock().unwrap();
+        *last_toggle = Some(Instant::now());
+        return;
     }
-    drop(critical_hp);
 
     if health < trigger_point {
         if event.hero.is_stunned() {
@@ -129,14 +167,10 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
         }
 
         let mut last_toggle = ARMLET_LAST_TOGGLE.lock().unwrap();
-        let can_toggle = match *last_toggle {
-            Some(last_time) => last_time.elapsed() >= Duration::from_millis(cooldown_ms),
-            None => true,
-        };
+        let can_toggle = cooldown_ready(*last_toggle, cooldown_ms);
 
         if !can_toggle {
-            let remaining =
-                cooldown_ms.saturating_sub(last_toggle.unwrap().elapsed().as_millis() as u64);
+            let remaining = cooldown_remaining_ms(*last_toggle, cooldown_ms);
             debug!("Armlet toggle on cooldown ({}ms remaining)", remaining);
             return;
         }
@@ -163,14 +197,15 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
 #[cfg(test)]
 mod tests {
     use super::{
-        next_critical_retry_health, parse_cast_modifier, plan_dual_trigger_sequence,
-        resolve_cast_modifier, ArmletTriggerStep,
+        cooldown_ready, next_critical_retry_health, parse_cast_modifier, plan_dual_trigger_sequence,
+        resolve_cast_modifier, should_force_critical_retry, ArmletTriggerStep,
     };
     use crate::config::{
         settings::{ArmletAutomationConfig, HeroArmletOverrideConfig},
         Settings,
     };
     use crate::input::simulation::ModifierKey;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn dual_trigger_plan_uses_quick_cast_then_modified_cast() {
@@ -210,6 +245,44 @@ mod tests {
     fn critical_retry_health_only_arms_for_very_low_hp() {
         assert_eq!(next_critical_retry_health(100, 320), Some(100));
         assert_eq!(next_critical_retry_health(220, 320), None);
+    }
+
+    #[test]
+    fn critical_retry_waits_for_cooldown_before_forcing_another_toggle() {
+        let just_now = Some(Instant::now());
+
+        assert!(!should_force_critical_retry(
+            1,
+            120,
+            Some(1),
+            just_now,
+            300,
+        ));
+    }
+
+    #[test]
+    fn critical_retry_can_fire_after_cooldown_when_hp_is_still_critical() {
+        let cooled_down = Some(Instant::now() - Duration::from_millis(400));
+
+        assert!(should_force_critical_retry(
+            1,
+            120,
+            Some(1),
+            cooled_down,
+            300,
+        ));
+    }
+
+    #[test]
+    fn cooldown_ready_is_false_until_window_has_elapsed() {
+        assert!(!cooldown_ready(
+            Some(Instant::now() - Duration::from_millis(50)),
+            300
+        ));
+        assert!(cooldown_ready(
+            Some(Instant::now() - Duration::from_millis(350)),
+            300
+        ));
     }
 
     #[test]
