@@ -162,11 +162,11 @@ For each intercepted event, the callback does this in order:
    - block `R`, call `ShadowFiendState::execute_ultimate_combo(...)`
 9. **Largo / generic ability-key path**
    - emit Largo events for `Q/W/E/R`
-   - if Soul Ring should trigger, block and replay
+   - if Soul Ring should trigger, enqueue replay work to the dedicated Soul Ring worker and block the original key
    - otherwise pass the key through
 10. **Item-key Soul Ring interception**
    - for slot keys mapped in config
-   - spawn `spawn_soul_ring_then_key(...)` and block the original item key
+   - call `spawn_soul_ring_then_key(...)`, which enqueues work to the dedicated Soul Ring worker, and block the original item key
 11. **Standalone combo trigger**
    - compare key to `snapshot.trigger_key`
    - send `HotkeyEvent::ComboTrigger`
@@ -219,7 +219,7 @@ Largo no longer uses a tight polling loop. Its dedicated worker blocks on a time
 | `src/input/keyboard.rs` | `rdev::grab` thread | Always | Global hook; blocks forever |
 | `src/actions/executor.rs` | ActionExecutor worker thread | When `ActionDispatcher::new(...)` constructs the executor | Runs queued short GSI-driven jobs FIFO; immediate jobs go straight to this worker |
 | `src/input/simulation.rs` | Synthetic-input worker thread | First call to a simulation helper | Owns `Enigo`; drains one unbounded FIFO queue |
-| `src/input/keyboard.rs` | `spawn_soul_ring_then_key(...)` | Per intercepted Soul Ring key | Short-lived |
+| `src/input/keyboard.rs` | Soul Ring replay worker thread | First intercepted Soul Ring key | Long-lived lazy singleton; drains one unbounded FIFO queue of `SoulRingReplayRequest`s; uses `rdev::simulate` for replay |
 | `src/input/keyboard.rs` | Broodmother auto-items thread | Per Space+right-click | Short-lived |
 | `src/input/keyboard.rs` | Broodmother spider macro thread | Per middle click | Short-lived |
 | `src/actions/executor.rs` | Delayed enqueue helper thread | Per non-zero `enqueue_after(...)` job | Short-lived; sleeps off-worker before sending the job to the executor lane |

@@ -110,7 +110,7 @@ Uses `rdev::simulate` to replay a blocked physical key:
 - emits key press + key release
 - clears `SIMULATING_KEYS`
 
-Used by Soul Ring interception because the original physical key was swallowed by `grab()`.
+Used by the Soul Ring replay worker because the original physical key was swallowed by `grab()`.
 
 ### `src/input/simulation.rs`
 
@@ -183,13 +183,20 @@ The keyboard callback now combines that live state with static config from `snap
 
 `spawn_soul_ring_then_key(original_key, snapshot.soul_ring.clone())`:
 
-1. lock `SOUL_RING_STATE`
-2. if eligible, mark as triggered
-3. replay Soul Ring's slot key
-4. wait `delay_before_ability_ms`
-5. replay the original blocked key
+1. enqueues a `SoulRingReplayRequest` onto one dedicated lazy worker queue
+2. the callback returns immediately
 
-This runs on a short-lived thread so the `grab()` callback can return immediately.
+The lazy worker thread:
+
+1. receives the request from the unbounded FIFO queue
+2. locks `SOUL_RING_STATE`
+3. computes the replay plan (`TriggerThenOriginal` or `OriginalOnly`) while still holding the lock
+4. if eligible, marks state as triggered, then releases the lock
+5. replays Soul Ring's slot key via `rdev::simulate`
+6. waits `delay_before_ability_ms`
+7. replays the original blocked key via `rdev::simulate`
+
+If the worker queue is unexpectedly closed, `spawn_soul_ring_then_key` falls back to spawning a short-lived thread with identical replay logic.
 
 ---
 
@@ -246,6 +253,7 @@ These are still part of the interception surface even though this page centers o
 
 ### Broodmother
 
+- This Soul Ring worker slice does not change Broodmother callback behavior; Space + right-click and middle-mouse spider paths still use their existing short-lived threads.
 - Space + right-click blocks the click and uses cached GSI state from `src/actions/auto_items.rs`
 - middle mouse blocks the click and triggers spider micro
 - activation is keyed off `BROODMOTHER_ACTIVE`, not `AppState.selected_hero`

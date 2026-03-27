@@ -1,7 +1,7 @@
 use rdev::{grab, simulate, Button, Event, EventType, Key};
 use std::sync::atomic::Ordering;
-use std::sync::mpsc::{self, Receiver};
-use std::sync::{Arc, RwLock};
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, LazyLock, RwLock};
 use std::thread;
 use std::time::Duration;
 use tracing::{debug, error, info, warn};
@@ -10,7 +10,7 @@ use crate::actions::auto_items::MODIFIER_KEY_HELD;
 use crate::actions::heroes::broodmother::BROODMOTHER_ACTIVE;
 use crate::actions::heroes::shadow_fiend::ShadowFiendState;
 use crate::actions::SOUL_RING_STATE;
-use crate::actions::soul_ring::SoulRingKeyboardConfig;
+use crate::actions::soul_ring::{SoulRingKeyboardConfig, SoulRingState};
 use crate::config::{AutoAbilityConfig, Settings};
 use crate::input::simulation::SIMULATING_KEYS;
 use crate::state::app_state::AppState;
@@ -149,6 +149,70 @@ fn key_to_char(key: Key) -> Option<char> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SoulRingReplayPlan {
+    TriggerThenOriginal {
+        soul_ring_key: Key,
+        delay_ms: u64,
+        original_key: Key,
+    },
+    OriginalOnly {
+        original_key: Key,
+    },
+}
+
+fn plan_soul_ring_replay(
+    state: &SoulRingState,
+    original_key: Key,
+    config: &SoulRingKeyboardConfig,
+) -> SoulRingReplayPlan {
+    if let Some(original_char) = key_to_char(original_key) {
+        if state.should_intercept_key_with_config(original_char, config)
+            && state.should_trigger_with_config(config)
+        {
+            if let Some(sr_key) = state.slot_key.and_then(char_to_key) {
+                return SoulRingReplayPlan::TriggerThenOriginal {
+                    soul_ring_key: sr_key,
+                    delay_ms: config.delay_before_ability_ms,
+                    original_key,
+                };
+            }
+        }
+    }
+
+    SoulRingReplayPlan::OriginalOnly { original_key }
+}
+
+/// Request to replay Soul Ring + original key
+#[derive(Debug, Clone)]
+struct SoulRingReplayRequest {
+    original_key: Key,
+    config: SoulRingKeyboardConfig,
+}
+
+/// Lazy-initialized Soul Ring replay worker queue.
+/// The worker thread starts on the first enqueue.
+static SOUL_RING_REPLAY_QUEUE: LazyLock<Sender<SoulRingReplayRequest>> = LazyLock::new(|| {
+    let (tx, rx) = mpsc::channel::<SoulRingReplayRequest>();
+    
+    // Spawn dedicated worker thread
+    thread::spawn(move || {
+        info!("Soul Ring replay worker started");
+        
+        while let Ok(request) = rx.recv() {
+            // Lock state and compute the replay plan
+            let soul_ring_state = SOUL_RING_STATE.lock().unwrap();
+            let plan = plan_soul_ring_replay(&soul_ring_state, request.original_key, &request.config);
+            // Execute using shared helper to ensure identical behavior between worker and fallback
+            execute_soul_ring_plan_with_context(soul_ring_state, plan, "");
+        }
+        
+        info!("Soul Ring replay worker exited");
+    });
+    
+    tx
+});
+
 /// Simulate a key press using rdev (must be called from a non-grab thread)
 /// Sets SIMULATING_KEYS flag to prevent re-interception
 pub fn simulate_key(key: Key) {
@@ -166,37 +230,56 @@ pub fn simulate_key(key: Key) {
     SIMULATING_KEYS.store(false, Ordering::SeqCst);
 }
 
-/// Spawn Soul Ring trigger + ability key simulation in a separate thread
-/// This is necessary because grab() callback must return quickly
-fn spawn_soul_ring_then_key(original_key: Key, sr_config: SoulRingKeyboardConfig) {
-    thread::spawn(move || {
-        let mut soul_ring_state = SOUL_RING_STATE.lock().unwrap();
-        
-        if soul_ring_state.should_trigger_with_config(&sr_config) {
-            if let Some(sr_key) = soul_ring_state.slot_key {
-                // Mark as triggered to start cooldown lockout
-                soul_ring_state.mark_triggered();
-                drop(soul_ring_state); // Release lock before sleeping
-                
-                // Simulate Soul Ring key press
-                if let Some(sr_rdev_key) = char_to_key(sr_key) {
-                    debug!("💍 Pressing Soul Ring key: {}", sr_key);
-                    simulate_key(sr_rdev_key);
-                    
-                    // Wait configured delay before ability
-                    let delay = sr_config.delay_before_ability_ms;
-                    thread::sleep(Duration::from_millis(delay));
-                }
-            } else {
-                drop(soul_ring_state);
-            }
-        } else {
-            drop(soul_ring_state);
+/// Execute a planned Soul Ring replay using the provided mutex guard.
+/// The guard is consumed so the function can mark the state and drop the lock
+/// before performing key simulation (identical behaviour for worker and fallback).
+fn execute_soul_ring_plan_with_context(
+    mut guard: std::sync::MutexGuard<'_, SoulRingState>,
+    plan: SoulRingReplayPlan,
+    context: &str,
+) {
+    match plan {
+        SoulRingReplayPlan::TriggerThenOriginal { soul_ring_key, delay_ms, original_key } => {
+            // Mark as triggered before dropping lock, then execute replay
+            guard.mark_triggered();
+            drop(guard);
+
+            debug!("💍 Pressing Soul Ring key{}: {:?}", context, soul_ring_key);
+            simulate_key(soul_ring_key);
+
+            thread::sleep(Duration::from_millis(delay_ms));
+
+            simulate_key(original_key);
         }
+        SoulRingReplayPlan::OriginalOnly { original_key } => {
+            // No Soul Ring trigger needed, just replay original
+            drop(guard);
+            simulate_key(original_key);
+        }
+    }
+}
+
+/// Enqueue Soul Ring trigger + ability key simulation to the dedicated worker thread.
+/// This is necessary because grab() callback must return quickly.
+/// Falls back to spawning a thread if the queue is unexpectedly closed.
+fn spawn_soul_ring_then_key(original_key: Key, sr_config: SoulRingKeyboardConfig) {
+    let request = SoulRingReplayRequest {
+        original_key,
+        config: sr_config.clone(),
+    };
+    
+    if let Err(e) = SOUL_RING_REPLAY_QUEUE.send(request) {
+        // Queue is closed unexpectedly - fall back to spawning a thread to avoid dropping input
+        warn!("Soul Ring replay queue closed unexpectedly, falling back to thread spawn: {:?}", e);
         
-        // Simulate the original ability/item key
-        simulate_key(original_key);
-    });
+        thread::spawn(move || {
+            let soul_ring_state = SOUL_RING_STATE.lock().unwrap();
+            let plan = plan_soul_ring_replay(&soul_ring_state, original_key, &sr_config);
+
+            // Use the same execution path as the worker but include a (fallback) suffix in logs
+            execute_soul_ring_plan_with_context(soul_ring_state, plan, " (fallback)");
+        });
+    }
 }
 
 /// Start keyboard listener in a separate thread with key interception (grab)
@@ -460,6 +543,8 @@ mod tests {
     use super::*;
     use std::sync::Mutex;
     use crate::state::app_state::{HeroType, QueueMetrics, UpdateCheckState};
+    use crate::actions::soul_ring::{SoulRingState, SoulRingKeyboardConfig};
+    use std::collections::HashSet;
 
     #[test]
     fn keyboard_snapshot_parses_trigger_key_and_sf_flags() {
@@ -505,5 +590,91 @@ mod tests {
         *state.trigger_key.lock().unwrap() = "F5".to_string();
         let snapshot = KeyboardSnapshot::from_runtime(&Settings::default(), &state);
         assert_eq!(snapshot.trigger_key, Some(Key::F5));
+    }
+
+    // Soul Ring replay-plan tests
+    fn soul_ring_test_config() -> SoulRingKeyboardConfig {
+        SoulRingKeyboardConfig {
+            enabled: true,
+            min_mana_percent: 100,
+            min_health_percent: 1,
+            delay_before_ability_ms: 33,
+            trigger_cooldown_ms: 250,
+            ability_keys: ['q', 'w', 'e'].into_iter().collect(),
+            intercept_item_keys: true,
+            item_slot_keys: ['z', 'x', 'c', 'v', 'b', 'n'].into_iter().collect(),
+        }
+    }
+
+    #[test]
+    fn eligible_soul_ring_replay_plan_triggers_before_original_key() {
+        let mut state = SoulRingState::default();
+        state.available = true;
+        state.can_cast = true;
+        state.slot_key = Some('z');
+        state.hero_alive = true;
+        state.hero_mana_percent = 10;
+        state.hero_health_percent = 90;
+
+        let config = soul_ring_test_config();
+        let plan = crate::input::keyboard::plan_soul_ring_replay(&state, Key::KeyQ, &config);
+
+        match plan {
+            crate::input::keyboard::SoulRingReplayPlan::TriggerThenOriginal { soul_ring_key, delay_ms, original_key } => {
+                assert_eq!(soul_ring_key, Key::KeyZ);
+                assert_eq!(delay_ms, config.delay_before_ability_ms);
+                assert_eq!(original_key, Key::KeyQ);
+            }
+            _ => panic!("Expected TriggerThenOriginal plan"),
+        }
+    }
+
+    #[test]
+    fn ineligible_soul_ring_replay_plan_replays_original_only() {
+        let mut state = SoulRingState::default();
+        state.available = true;
+        state.can_cast = true;
+        state.slot_key = Some('z');
+        state.hero_alive = true;
+        state.hero_mana_percent = 100;
+        state.hero_health_percent = 90;
+
+        let mut config = soul_ring_test_config();
+        // Make ability set empty so key is not intercepted
+        config.ability_keys = HashSet::new();
+        config.intercept_item_keys = false;
+
+        let plan = crate::input::keyboard::plan_soul_ring_replay(&state, Key::KeyR, &config);
+
+        match plan {
+            crate::input::keyboard::SoulRingReplayPlan::OriginalOnly { original_key } => {
+                assert_eq!(original_key, Key::KeyR);
+            }
+            _ => panic!("Expected OriginalOnly plan"),
+        }
+    }
+
+    #[test]
+    fn invalid_soul_ring_slot_key_replays_original_only() {
+        let mut state = SoulRingState::default();
+        state.available = true;
+        state.can_cast = true;
+        state.slot_key = Some('?');
+        state.hero_alive = true;
+        state.hero_mana_percent = 10;
+        state.hero_health_percent = 90;
+
+        let mut config = soul_ring_test_config();
+        // Ensure original key is intercepted
+        config.ability_keys = ['q'].into_iter().collect();
+
+        let plan = crate::input::keyboard::plan_soul_ring_replay(&state, Key::KeyQ, &config);
+
+        match plan {
+            crate::input::keyboard::SoulRingReplayPlan::OriginalOnly { original_key } => {
+                assert_eq!(original_key, Key::KeyQ);
+            }
+            _ => panic!("Expected OriginalOnly plan when slot key invalid"),
+        }
     }
 }
