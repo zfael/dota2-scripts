@@ -8,7 +8,7 @@ Learn how the Largo hero script automates **Amphibian Rhapsody** (ultimate) with
 ## Feature Summary
 
 - **GSI-based ultimate detection** – Monitors `largo_song_*` ability names to auto-enable ultimate mode
-- **Beat timing system** – Absolute timing with periodic corrections to prevent drift
+- **Beat timing system** – Absolute anchor timing with periodic corrections to prevent drift
 - **Song queuing** – Switches songs on next beat to preserve rhythm
 - **Aghanim's Scepter support** – Plays two songs simultaneously
 - **R key handling** – Stops beat loop immediately to prevent stale key presses
@@ -124,7 +124,7 @@ When switching songs mid-ultimate, the new song is **queued** and applied on the
 With Aghanim's Scepter, you can play **two songs simultaneously**. The script detects Aghs via GSI and:
 
 - Stores the `previous_song` when switching
-- Presses both `current_song` and `previous_song` keys on each beat
+- Presses the `current_song` key first, then the `previous_song` key on each beat
 
 ### R Key Handling
 
@@ -157,7 +157,7 @@ This prevents Q/W/E presses during the window between R press and GSI confirmati
 ┌─────────────────────────────────────────────────────────────┐
 │                    ACTIVE (Playing)                          │
 │         (active = true, current_song = Some(song))           │
-│            Beat thread pressing keys every ~995ms            │
+│   Scheduled worker waits for beat deadline or wake-up        │
 │                                                              │
 │   ┌─────────────────────────────────────────────────────┐   │
 │   │  Q/W/E pressed → pending_song = new_song            │   │
@@ -173,15 +173,19 @@ This prevents Q/W/E presses during the window between R press and GSI confirmati
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Beat Thread
+### Scheduled Beat Worker
 
-A background thread runs continuously, checking every 5ms:
+A dedicated Largo worker uses a timed wait instead of polling every few milliseconds.
 
-1. If `active == false` → skip
-2. If `current_song == None` → skip
-3. Calculate expected beat time with corrections
-4. If `now >= expected_beat_time`:
-   - Process `pending_song` if present (switch songs)
-   - Press `current_song` key
-   - Press `previous_song` key (if Aghs)
+1. If ultimate is inactive or no song is selected yet, it blocks until a state change wakes it
+2. Once a song is active, it calculates the next beat deadline from the absolute anchor time plus periodic correction offsets
+3. It then sleeps until either:
+   - the next beat deadline arrives, or
+   - a state-change wake-up happens (for example: first song selected, a queued song switch, config snapshot refresh, or ultimate stop)
+4. When the beat deadline is due:
+   - Process `pending_song` if present (switch songs on the beat)
+   - Press `current_song`
+   - Press `previous_song` after it when Aghanim's Scepter is active
    - Increment `beat_count`
+
+The first manual song selection still wakes the worker so the first beat fires immediately, and pressing `R` still clears the schedule immediately so no stale Q/W/E presses happen while waiting for GSI confirmation.

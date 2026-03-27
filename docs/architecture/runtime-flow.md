@@ -107,7 +107,7 @@ Current item-2 users are:
 The action executor is intentionally narrow in this rollout item:
 
 - keyboard-triggered Shadow Fiend combo threads are unchanged
-- Largo's long-lived beat-monitor thread is unchanged
+- Largo keeps its own long-lived scheduled beat worker; it sleeps until the next beat deadline or a state-change wake-up and uses a cached beat-config snapshot instead of locking shared settings every cycle
 - standalone combo threads are unchanged
 
 ---
@@ -206,6 +206,8 @@ Important nuance: `AppState.selected_hero` only models `Huskar`, `Largo`, `Legio
 
 ## Background tasks and threads
 
+Largo no longer uses a tight polling loop. Its dedicated worker blocks on a timed wait until the next scheduled beat or an explicit wake caused by song, ultimate, or config-state changes, and steady-state scheduling reads the cached Largo beat config stored in worker state.
+
 | Where it starts | Task/thread | Start condition | Notes |
 |---|---|---|---|
 | `src/main.rs` | Tokio task for `start_gsi_server(...)` | Always | Owns the axum listener |
@@ -220,7 +222,7 @@ Important nuance: `AppState.selected_hero` only models `Huskar`, `Largo`, `Legio
 | `src/actions/common.rs` | Armlet thread inside `execute_default_strategy()` | Per fallback GSI event when armlet is present | Short-lived |
 | `src/actions/dispel.rs` | Manta/Lotus thread | On first silenced event with enabled item | Short-lived; adds 30-100ms jitter |
 | `src/actions/heroes/shadow_fiend.rs` | Raze / ultimate / standalone combo threads | On intercepted SF key / standalone trigger | Short-lived |
-| `src/actions/heroes/largo.rs` | Beat monitoring thread | Once in `LargoScript::new()` | Long-lived singleton guarded by `BEAT_THREAD_STARTED` |
+| `src/actions/heroes/largo.rs` | Largo scheduled beat worker | Once in `LargoScript::new()` | Long-lived singleton guarded by `BEAT_THREAD_STARTED`; timed wait until next beat or state-change wake-up |
 | `src/ui/app.rs` | Update apply thread | User clicks **Update Now** | Calls `apply_update()` then `restart_application()` |
 | `src/ui/app.rs` | Manual retry thread | User clicks **Retry** / **Check for Updates Now** | Calls `check_for_update()` |
 
@@ -233,5 +235,5 @@ Important nuance: `AppState.selected_hero` only models `Huskar`, `Largo`, `Legio
 | `src/main.rs`, `src/gsi/server.rs`, `src/gsi/handler.rs` | boot order, queueing, `AppState` updates, update-check startup behavior |
 | `src/input/keyboard.rs` | blocked-vs-pass-through behavior, `SIMULATING_KEYS`, hotkey channel flow |
 | `src/actions/dispatcher.rs` | pre-dispatch side effects, hero registration, fallback path |
-| `src/actions/heroes/largo.rs` | singleton beat-thread startup and Largo hotkey handling |
+| `src/actions/heroes/largo.rs` | singleton scheduled-worker startup, cached beat-config updates, and Largo hotkey handling |
 | `src/ui/app.rs`, `src/update/mod.rs` | `UpdateCheckState` transitions and restart flow |
