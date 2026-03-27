@@ -244,7 +244,7 @@ mod tests {
         // Contract assertion: handler owns shared cache refresh
         // When gsi_enabled = true, handler should refresh caches once per event.
         // Dispatcher should not duplicate that work.
-        // Current state: FAILS because dispatcher also calls update_gsi_state().
+        // Current state: PASSES after deduplication fix (handler is sole owner of cache refresh).
         assert_eq!(
             crate::actions::auto_items::update_counter_for_tests(),
             1,
