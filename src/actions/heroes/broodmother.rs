@@ -20,7 +20,8 @@ use std::time::Duration;
 use tracing::info;
 
 lazy_static! {
-    /// Track if Broodmother is the current hero (for Mouse5 interception)
+    /// Track if Broodmother is the current hero (for Mouse5 interception).
+    /// Updated once per event in handler's refresh helper — not dispatcher-owned.
     pub static ref BROODMOTHER_ACTIVE: AtomicBool = AtomicBool::new(false);
 }
 
@@ -38,7 +39,7 @@ impl BroodmotherScript {
     /// Sequence: Select spiders (F2) → Right click → Reselect hero (F1)
     pub fn execute_spider_attack_move(settings: &Settings) {
         let config = &settings.heroes.broodmother;
-        
+
         if !config.spider_micro_enabled {
             return;
         }
@@ -92,7 +93,7 @@ impl HeroScript for BroodmotherScript {
     fn handle_gsi_event(&self, event: &GsiWebhookEvent) {
         // BROODMOTHER_ACTIVE is updated by dispatcher for all GSI events
         // This handler is only called when playing Broodmother
-        
+
         // Use common survivability actions (danger detection, healing, defensive items)
         let settings = self.settings.lock().unwrap();
         let survivability = SurvivabilityActions::new(self.settings.clone(), self.executor.clone());

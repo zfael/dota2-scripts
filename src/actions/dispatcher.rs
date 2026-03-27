@@ -1,15 +1,15 @@
 use crate::actions::common::SurvivabilityActions;
 use crate::actions::executor::ActionExecutor;
-use crate::actions::heroes::broodmother::BROODMOTHER_ACTIVE;
-use crate::actions::heroes::{BroodmotherScript, HeroScript, HuskarScript, LargoScript, LegionCommanderScript, ShadowFiendScript, TinyScript};
-use crate::actions::soul_ring;
+use crate::actions::heroes::{
+    BroodmotherScript, HeroScript, HuskarScript, LargoScript, LegionCommanderScript,
+    ShadowFiendScript, TinyScript,
+};
 use crate::config::Settings;
-use crate::models::{GsiWebhookEvent, Hero};
+use crate::models::GsiWebhookEvent;
 use lazy_static::lazy_static;
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use tracing::{debug, warn};
 
@@ -24,7 +24,7 @@ fn log_neutral_item_discovery(event: &GsiWebhookEvent, settings: &Settings) {
     }
 
     let neutral_item = &event.items.neutral0;
-    
+
     // Skip empty slots
     if neutral_item.name == "empty" {
         return;
@@ -47,21 +47,17 @@ fn log_neutral_item_discovery(event: &GsiWebhookEvent, settings: &Settings) {
 
     // Append to log file
     let log_path = "logs/neutral_items_discovered.txt";
-    match OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(log_path)
-    {
+    match OpenOptions::new().create(true).append(true).open(log_path) {
         Ok(mut file) => {
             let can_cast = neutral_item.can_cast.unwrap_or(false);
             let passive = neutral_item.passive.unwrap_or(false);
             let cooldown = neutral_item.cooldown.unwrap_or(0);
-            
+
             let log_entry = format!(
                 "{} | can_cast: {} | passive: {} | cooldown: {}\n",
                 neutral_item.name, can_cast, passive, cooldown
             );
-            
+
             if let Err(e) = file.write_all(log_entry.as_bytes()) {
                 warn!("Failed to write to neutral items log: {}", e);
             } else {
@@ -95,7 +91,10 @@ impl ActionDispatcher {
         let largo = Arc::new(LargoScript::new(settings.clone(), executor.clone()));
         hero_scripts.insert(largo.hero_name().to_string(), largo);
 
-        let legion = Arc::new(LegionCommanderScript::new(settings.clone(), executor.clone()));
+        let legion = Arc::new(LegionCommanderScript::new(
+            settings.clone(),
+            executor.clone(),
+        ));
         hero_scripts.insert(legion.hero_name().to_string(), legion);
 
         let shadow_fiend = Arc::new(ShadowFiendScript::new(settings.clone(), executor.clone()));
@@ -115,25 +114,18 @@ impl ActionDispatcher {
     }
 
     pub fn dispatch_gsi_event(&self, event: &GsiWebhookEvent) {
-        // Log neutral item discovery
+        // Shared keyboard/runtime caches are refreshed upstream in process_gsi_events().
+        // Dispatcher only runs dispatch-local hooks and routes automation work.
         let settings = self.survivability.settings.lock().unwrap();
+        
+        // Log neutral item discovery
         log_neutral_item_discovery(event, &settings);
-        
-        // Update Soul Ring state from GSI event
-        soul_ring::update_from_gsi(&event.items, &event.hero, &settings);
-        
+
         // Check for silence dispel with Manta Style
         crate::actions::dispel::check_and_dispel_silence(event, &settings, &self.executor);
-        
+
         drop(settings); // Release lock before further processing
-        
-        // Update Broodmother active state for all GSI events (enables/disables Mouse5 interception)
-        let is_broodmother = event.hero.name == Hero::Broodmother.to_game_name();
-        BROODMOTHER_ACTIVE.store(is_broodmother, Ordering::SeqCst);
-        
-        // Update auto-items GSI cache (for item availability checking)
-        crate::actions::auto_items::update_gsi_state(event);
-        
+
         // Check if hero has a custom handler
         if let Some(hero_script) = self.hero_scripts.get(&event.hero.name) {
             // Hero has custom handler, use it
@@ -141,7 +133,10 @@ impl ActionDispatcher {
             hero_script.handle_gsi_event(event);
         } else {
             // No custom handler, use default strategy (survivability + armlet)
-            debug!("No custom handler for {}, using default strategy", event.hero.name);
+            debug!(
+                "No custom handler for {}, using default strategy",
+                event.hero.name
+            );
             self.survivability.execute_default_strategy(event);
         }
     }

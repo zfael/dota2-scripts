@@ -44,7 +44,8 @@ pub fn update_counter_for_tests() -> usize {
     UPDATE_GSI_STATE_CALLS.load(std::sync::atomic::Ordering::SeqCst)
 }
 
-/// Update the cached GSI state (called from dispatcher)
+/// Update the cached GSI state (called once per event from handler's refresh helper).
+/// Dispatcher does NOT call this — shared cache refresh is upstream-owned.
 pub fn update_gsi_state(event: &GsiWebhookEvent) {
     #[cfg(test)]
     {

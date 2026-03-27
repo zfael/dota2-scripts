@@ -26,6 +26,9 @@ pub struct GsiServerState {
 }
 
 fn refresh_keyboard_runtime_state(event: &GsiWebhookEvent, settings: &Settings) {
+    // Canonical owner of shared keyboard/runtime cache refresh.
+    // Called once per event in process_gsi_events() before the gsi_enabled gate.
+    // Dispatcher must NOT duplicate this work.
     crate::actions::soul_ring::update_from_gsi(&event.items, &event.hero, settings);
     crate::actions::auto_items::update_gsi_state(event);
     crate::actions::heroes::broodmother::BROODMOTHER_ACTIVE.store(
