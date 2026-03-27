@@ -106,6 +106,8 @@ Current item-2 users are:
 
 The action executor is intentionally narrow in this rollout item:
 
+- immediate jobs now send straight to the executor worker channel instead of spawning a zero-delay helper thread first
+- delayed jobs still sleep off-worker before sending, so timer/jitter waits do not block immediate jobs that are already queued
 - keyboard-triggered Shadow Fiend combo threads are unchanged
 - Largo keeps its own long-lived scheduled beat worker; it sleeps until the next beat deadline or a state-change wake-up and uses a cached beat-config snapshot instead of locking shared settings every cycle
 - standalone combo threads are unchanged
@@ -215,12 +217,12 @@ Largo no longer uses a tight polling loop. Its dedicated worker blocks on a time
 | `src/main.rs` | `spawn_blocking(check_for_update)` | Only when `updates.check_on_startup` is true | Writes `UpdateCheckState` |
 | `src/main.rs` | Hotkey consumer thread | Always | Handles `HotkeyEvent`s from the keyboard hook |
 | `src/input/keyboard.rs` | `rdev::grab` thread | Always | Global hook; blocks forever |
+| `src/actions/executor.rs` | ActionExecutor worker thread | When `ActionDispatcher::new(...)` constructs the executor | Runs queued short GSI-driven jobs FIFO; immediate jobs go straight to this worker |
 | `src/input/simulation.rs` | Synthetic-input worker thread | First call to a simulation helper | Owns `Enigo`; drains one unbounded FIFO queue |
 | `src/input/keyboard.rs` | `spawn_soul_ring_then_key(...)` | Per intercepted Soul Ring key | Short-lived |
 | `src/input/keyboard.rs` | Broodmother auto-items thread | Per Space+right-click | Short-lived |
 | `src/input/keyboard.rs` | Broodmother spider macro thread | Per middle click | Short-lived |
-| `src/actions/common.rs` | Armlet thread inside `execute_default_strategy()` | Per fallback GSI event when armlet is present | Short-lived |
-| `src/actions/dispel.rs` | Manta/Lotus thread | On first silenced event with enabled item | Short-lived; adds 30-100ms jitter |
+| `src/actions/executor.rs` | Delayed enqueue helper thread | Per non-zero `enqueue_after(...)` job | Short-lived; sleeps off-worker before sending the job to the executor lane |
 | `src/actions/heroes/shadow_fiend.rs` | Raze / ultimate / standalone combo threads | On intercepted SF key / standalone trigger | Short-lived |
 | `src/actions/heroes/largo.rs` | Largo scheduled beat worker | Once in `LargoScript::new()` | Long-lived singleton guarded by `BEAT_THREAD_STARTED`; timed wait until next beat or state-change wake-up |
 | `src/ui/app.rs` | Update apply thread | User clicks **Update Now** | Calls `apply_update()` then `restart_application()` |

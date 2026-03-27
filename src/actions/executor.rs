@@ -10,6 +10,20 @@ enum ActionMessage {
     Run { label: &'static str, job: ActionJob },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DispatchMode {
+    Immediate,
+    Delayed(Duration),
+}
+
+fn dispatch_mode_for_delay(delay: Duration) -> DispatchMode {
+    if delay.is_zero() {
+        DispatchMode::Immediate
+    } else {
+        DispatchMode::Delayed(delay)
+    }
+}
+
 pub struct ActionExecutor {
     tx: Sender<ActionMessage>,
 }
@@ -65,25 +79,49 @@ impl ActionExecutor {
         let tx = self.tx.clone();
         let job = Box::new(job) as ActionJob;
 
-        thread::spawn(move || {
-            if !delay.is_zero() {
-                thread::sleep(delay);
+        match dispatch_mode_for_delay(delay) {
+            DispatchMode::Immediate => {
+                if let Err(error) = tx.send(ActionMessage::Run { label, job }) {
+                    warn!("Failed to enqueue action job {}: {}", label, error);
+                }
             }
-
-            if let Err(error) = tx.send(ActionMessage::Run { label, job }) {
-                warn!("Failed to enqueue delayed action job {}: {}", label, error);
+            DispatchMode::Delayed(d) => {
+                thread::spawn(move || {
+                    thread::sleep(d);
+                    if let Err(error) = tx.send(ActionMessage::Run { label, job }) {
+                        warn!("Failed to enqueue delayed action job {}: {}", label, error);
+                    }
+                });
             }
-        });
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::ActionExecutor;
+    use super::{dispatch_mode_for_delay, ActionExecutor, DispatchMode};
     use std::sync::mpsc;
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::sync::Arc;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn zero_delay_dispatch_mode_is_immediate() {
+        assert_eq!(
+            dispatch_mode_for_delay(Duration::ZERO),
+            DispatchMode::Immediate
+        );
+    }
+
+    #[test]
+    fn non_zero_delay_dispatch_mode_is_delayed() {
+        let delay = Duration::from_millis(1);
+
+        assert_eq!(
+            dispatch_mode_for_delay(delay),
+            DispatchMode::Delayed(delay)
+        );
+    }
 
     #[test]
     fn enqueue_runs_job() {
