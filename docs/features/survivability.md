@@ -105,6 +105,15 @@ With the checked-in config, a slot bound to `x` toggles as:
 - `x`
 - `Alt + x`
 
+The runtime now sends that as one dedicated serialized worker-owned chord:
+
+1. quick-cast slot key
+2. modifier down
+3. slot key again while the modifier is held
+4. modifier up
+
+That means the two casts are still **not** truly simultaneous, but Armlet no longer pays the old extra queue handoff / guard pulse between those four steps. The whole chord executes inside one synthetic-input worker command, so the second cast follows the modifier press as quickly as that worker can emit it, and the short replay-safety guard is applied once after the full chord instead of once after the first click.
+
 Supported modifier strings are:
 
 - `Alt`
@@ -112,6 +121,23 @@ Supported modifier strings are:
 - `Shift`
 
 If the configured modifier is unknown, the runtime logs a warning and falls back to `Alt`.
+
+### Diagnostics and tuning workflow
+
+For offline tuning, `src/actions/armlet.rs` now includes replay-model tests that compare threshold and cooldown behavior against sample HP timelines, plus an ignored matrix test that prints comparison rows for several candidate configs.
+
+For live verification, enable:
+
+```powershell
+$env:RUST_LOG="dota2_scripts::actions::armlet=debug,dota2_scripts::input::simulation=debug"; cargo run --release
+```
+
+With that filter, the logs show both:
+
+- the armlet module's resolved trigger / cooldown decisions
+- the synthetic-input worker's executed armlet chord order and per-step timing
+
+Use that combination when you need to confirm whether a real toggle emitted the intended `slot-key -> modifier down -> slot-key -> modifier up` sequence or when you are comparing threshold / cooldown settings during gameplay tests.
 
 ### Shared defaults + hero overrides
 

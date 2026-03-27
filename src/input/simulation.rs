@@ -3,8 +3,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Mutex, OnceLock};
 use std::thread;
-use std::time::Duration;
-use tracing::warn;
+use std::time::{Duration, Instant};
+use tracing::{debug, warn};
 
 const POST_ACTION_GUARD_DELAY_MS: u64 = 10;
 
@@ -51,6 +51,7 @@ enum SyntheticAction {
     LeftClick,
     ModifierDown(ModifierKey),
     ModifierUp(ModifierKey),
+    ArmletChord { slot_key: char, modifier: ModifierKey },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -137,6 +138,10 @@ pub fn modifier_up(modifier: ModifierKey) {
     enqueue_command_and_wait(modifier_up_command(modifier));
 }
 
+pub fn armlet_chord(slot_key: char, modifier: ModifierKey) {
+    enqueue_command_and_wait(armlet_chord_command(slot_key, modifier));
+}
+
 fn press_key_command(key_char: char) -> SyntheticInputCommand {
     SyntheticInputCommand {
         action: SyntheticAction::KeyClick(key_char),
@@ -200,6 +205,15 @@ fn modifier_up_command(modifier: ModifierKey) -> SyntheticInputCommand {
     SyntheticInputCommand {
         action: SyntheticAction::ModifierUp(modifier),
         guard_behavior: GuardBehavior::ReleaseHold {
+            delay_ms: POST_ACTION_GUARD_DELAY_MS,
+        },
+    }
+}
+
+fn armlet_chord_command(slot_key: char, modifier: ModifierKey) -> SyntheticInputCommand {
+    SyntheticInputCommand {
+        action: SyntheticAction::ArmletChord { slot_key, modifier },
+        guard_behavior: GuardBehavior::Pulse {
             delay_ms: POST_ACTION_GUARD_DELAY_MS,
         },
     }
@@ -338,13 +352,15 @@ fn execute_command(
     command: SyntheticInputCommand,
     guard_state: &mut WorkerGuardState,
 ) {
+    let action = command.action;
     let guard_plan = plan_guard_execution(guard_state, command.guard_behavior);
+    let started = Instant::now();
 
     if let Some(value) = guard_plan.set_simulating_before {
         SIMULATING_KEYS.store(value, Ordering::SeqCst);
     }
 
-    perform_action(enigo, command.action);
+    perform_action(enigo, action);
 
     if let Some(delay_ms) = guard_plan.post_action_delay_ms {
         thread::sleep(Duration::from_millis(delay_ms));
@@ -353,6 +369,13 @@ fn execute_command(
     if let Some(value) = guard_plan.final_simulating_value {
         SIMULATING_KEYS.store(value, Ordering::SeqCst);
     }
+
+    debug!(
+        "Synthetic input executed {:?} with {:?} in {}ms",
+        action,
+        command.guard_behavior,
+        started.elapsed().as_millis()
+    );
 }
 
 fn plan_guard_execution(
@@ -391,6 +414,39 @@ fn plan_guard_execution(
 
 fn perform_action(enigo: &mut Enigo, action: SyntheticAction) {
     match action {
+        action @ SyntheticAction::KeyClick(_)
+        | action @ SyntheticAction::KeyDown(_)
+        | action @ SyntheticAction::KeyUp(_)
+        | action @ SyntheticAction::RightClick
+        | action @ SyntheticAction::LeftClick
+        | action @ SyntheticAction::ModifierDown(_)
+        | action @ SyntheticAction::ModifierUp(_) => perform_single_action(enigo, action),
+        SyntheticAction::ArmletChord { slot_key, modifier } => {
+            let started = Instant::now();
+            let steps = armlet_chord_steps(slot_key, modifier);
+            debug!(
+                "Synthetic armlet chord starting for '{}' with {:?}: {:?}",
+                slot_key, modifier, steps
+            );
+
+            for (index, step) in steps.into_iter().enumerate() {
+                let step_started = Instant::now();
+                perform_single_action(enigo, step);
+                debug!(
+                    "Synthetic armlet chord step {}/{} {:?} completed at +{}ms (step {}ms)",
+                    index + 1,
+                    steps.len(),
+                    step,
+                    started.elapsed().as_millis(),
+                    step_started.elapsed().as_millis()
+                );
+            }
+        }
+    }
+}
+
+fn perform_single_action(enigo: &mut Enigo, action: SyntheticAction) {
+    match action {
         SyntheticAction::KeyClick(key_char) => {
             if let Err(e) = enigo.key(Key::Unicode(key_char), Direction::Click) {
                 warn!("Failed to press key '{}': {}", key_char, e);
@@ -426,7 +482,19 @@ fn perform_action(enigo: &mut Enigo, action: SyntheticAction) {
                 warn!("Failed to release {:?}: {}", modifier, e);
             }
         }
+        SyntheticAction::ArmletChord { .. } => {
+            warn!("Armlet chord should be expanded before single-action execution");
+        }
     }
+}
+
+fn armlet_chord_steps(slot_key: char, modifier: ModifierKey) -> [SyntheticAction; 4] {
+    [
+        SyntheticAction::KeyClick(slot_key),
+        SyntheticAction::ModifierDown(modifier),
+        SyntheticAction::KeyClick(slot_key),
+        SyntheticAction::ModifierUp(modifier),
+    ]
 }
 
 fn enigo_modifier_key(modifier: ModifierKey) -> Key {
@@ -434,6 +502,45 @@ fn enigo_modifier_key(modifier: ModifierKey) -> Key {
         ModifierKey::Alt => Key::Alt,
         ModifierKey::Control => Key::Control,
         ModifierKey::Shift => Key::Shift,
+    }
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SyntheticLowLevelTraceEntry {
+    action: SyntheticAction,
+    started_at_ms: u64,
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn trace_low_level_sequence(commands: &[SyntheticInputCommand]) -> Vec<SyntheticLowLevelTraceEntry> {
+    let mut guard_state = WorkerGuardState::default();
+    let mut started_at_ms = 0;
+    let mut trace = Vec::new();
+
+    for command in commands {
+        let guard_plan = plan_guard_execution(&mut guard_state, command.guard_behavior);
+        for action in expand_trace_actions(command.action) {
+            trace.push(SyntheticLowLevelTraceEntry {
+                action,
+                started_at_ms,
+            });
+        }
+
+        if let Some(delay_ms) = guard_plan.post_action_delay_ms {
+            started_at_ms += delay_ms;
+        }
+    }
+
+    trace
+}
+
+fn expand_trace_actions(action: SyntheticAction) -> Vec<SyntheticAction> {
+    match action {
+        SyntheticAction::ArmletChord { slot_key, modifier } => {
+            armlet_chord_steps(slot_key, modifier).to_vec()
+        }
+        other => vec![other],
     }
 }
 
@@ -475,6 +582,12 @@ mod tests {
         assert_eq!(
             alt_up_command().guard_behavior,
             GuardBehavior::ReleaseHold {
+                delay_ms: POST_ACTION_GUARD_DELAY_MS,
+            }
+        );
+        assert_eq!(
+            armlet_chord_command('x', ModifierKey::Alt).guard_behavior,
+            GuardBehavior::Pulse {
                 delay_ms: POST_ACTION_GUARD_DELAY_MS,
             }
         );
@@ -549,6 +662,67 @@ mod tests {
                 press_key_command('q'),
                 alt_down_command(),
                 mouse_click_command()
+            ]
+        );
+    }
+
+    #[test]
+    fn dual_trigger_trace_places_modifier_between_the_two_casts() {
+        let trace = trace_low_level_sequence(&[armlet_chord_command('x', ModifierKey::Alt)]);
+
+        assert_eq!(
+            trace,
+            vec![
+                SyntheticLowLevelTraceEntry {
+                    action: SyntheticAction::KeyClick('x'),
+                    started_at_ms: 0,
+                },
+                SyntheticLowLevelTraceEntry {
+                    action: SyntheticAction::ModifierDown(ModifierKey::Alt),
+                    started_at_ms: 0,
+                },
+                SyntheticLowLevelTraceEntry {
+                    action: SyntheticAction::KeyClick('x'),
+                    started_at_ms: 0,
+                },
+                SyntheticLowLevelTraceEntry {
+                    action: SyntheticAction::ModifierUp(ModifierKey::Alt),
+                    started_at_ms: 0,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn armlet_chord_keeps_only_one_guard_delay_for_follow_up_commands() {
+        let trace = trace_low_level_sequence(&[
+            armlet_chord_command('x', ModifierKey::Alt),
+            press_key_command('q'),
+        ]);
+
+        assert_eq!(
+            trace,
+            vec![
+                SyntheticLowLevelTraceEntry {
+                    action: SyntheticAction::KeyClick('x'),
+                    started_at_ms: 0,
+                },
+                SyntheticLowLevelTraceEntry {
+                    action: SyntheticAction::ModifierDown(ModifierKey::Alt),
+                    started_at_ms: 0,
+                },
+                SyntheticLowLevelTraceEntry {
+                    action: SyntheticAction::KeyClick('x'),
+                    started_at_ms: 0,
+                },
+                SyntheticLowLevelTraceEntry {
+                    action: SyntheticAction::ModifierUp(ModifierKey::Alt),
+                    started_at_ms: 0,
+                },
+                SyntheticLowLevelTraceEntry {
+                    action: SyntheticAction::KeyClick('q'),
+                    started_at_ms: POST_ACTION_GUARD_DELAY_MS,
+                },
             ]
         );
     }

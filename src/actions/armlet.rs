@@ -1,11 +1,11 @@
 use crate::config::settings::EffectiveArmletConfig;
 use crate::config::Settings;
-use crate::input::simulation::{modifier_down, modifier_up, press_key, ModifierKey};
+use crate::input::simulation::{armlet_chord, ModifierKey};
 use crate::models::GsiWebhookEvent;
 use lazy_static::lazy_static;
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
-use tracing::{debug, info, warn};
+use std::time::Instant;
+use tracing::{debug, info, trace, warn};
 
 lazy_static! {
     static ref ARMLET_LAST_TOGGLE: Mutex<Option<Instant>> = Mutex::new(None);
@@ -17,6 +17,50 @@ enum ArmletTriggerStep {
     QuickCast(char),
     ModifierDown(ModifierKey),
     ModifierUp(ModifierKey),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ArmletDecision {
+    Toggle,
+    CriticalRetry,
+    SkipSafe,
+    SkipStunned,
+    SkipCooldown,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ArmletEvaluation {
+    decision: ArmletDecision,
+    trigger_point: u32,
+    cooldown_remaining_ms: u64,
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ArmletReplaySample {
+    at_ms: u64,
+    health: u32,
+    stunned: bool,
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ArmletReplayEvent {
+    at_ms: u64,
+    health: u32,
+    decision: ArmletDecision,
+    trigger_point: u32,
+    cooldown_remaining_ms: u64,
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+struct ArmletReplayReport {
+    normal_toggles: usize,
+    critical_retries: usize,
+    cooldown_blocks: usize,
+    stun_blocks: usize,
+    events: Vec<ArmletReplayEvent>,
 }
 
 fn parse_cast_modifier(raw: &str) -> Option<ModifierKey> {
@@ -50,18 +94,20 @@ fn plan_dual_trigger_sequence(
     ]
 }
 
-fn execute_trigger_step(step: ArmletTriggerStep) {
-    match step {
-        ArmletTriggerStep::QuickCast(key) => press_key(key),
-        ArmletTriggerStep::ModifierDown(modifier) => modifier_down(modifier),
-        ArmletTriggerStep::ModifierUp(modifier) => modifier_up(modifier),
-    }
-}
-
 fn execute_dual_trigger(slot_key: char, cast_modifier: ModifierKey) {
-    for step in plan_dual_trigger_sequence(slot_key, cast_modifier) {
-        execute_trigger_step(step);
-    }
+    let started = Instant::now();
+    let sequence = plan_dual_trigger_sequence(slot_key, cast_modifier);
+    debug!(
+        "Armlet dual-trigger starting for '{}' with {:?}: {:?}",
+        slot_key, cast_modifier, sequence
+    );
+
+    armlet_chord(slot_key, cast_modifier);
+
+    debug!(
+        "Armlet dual-trigger finished in {}ms via dedicated worker chord",
+        started.elapsed().as_millis()
+    );
 }
 
 fn next_critical_retry_health(health: u32, threshold: u32) -> Option<u32> {
@@ -72,20 +118,55 @@ fn next_critical_retry_health(health: u32, threshold: u32) -> Option<u32> {
     }
 }
 
-fn cooldown_ready(last_toggle: Option<Instant>, cooldown_ms: u64) -> bool {
-    match last_toggle {
-        Some(last_time) => last_time.elapsed() >= Duration::from_millis(cooldown_ms),
+fn elapsed_since_toggle_ms(last_toggle: Option<Instant>) -> Option<u64> {
+    last_toggle.map(|last_time| last_time.elapsed().as_millis() as u64)
+}
+
+fn cooldown_ready_for_elapsed(elapsed_since_last_toggle_ms: Option<u64>, cooldown_ms: u64) -> bool {
+    match elapsed_since_last_toggle_ms {
+        Some(elapsed_ms) => elapsed_ms >= cooldown_ms,
         None => true,
     }
 }
 
-fn cooldown_remaining_ms(last_toggle: Option<Instant>, cooldown_ms: u64) -> u64 {
-    match last_toggle {
-        Some(last_time) => cooldown_ms.saturating_sub(last_time.elapsed().as_millis() as u64),
+fn cooldown_remaining_for_elapsed(
+    elapsed_since_last_toggle_ms: Option<u64>,
+    cooldown_ms: u64,
+) -> u64 {
+    match elapsed_since_last_toggle_ms {
+        Some(elapsed_ms) => cooldown_ms.saturating_sub(elapsed_ms),
         None => 0,
     }
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
+fn cooldown_ready(last_toggle: Option<Instant>, cooldown_ms: u64) -> bool {
+    cooldown_ready_for_elapsed(elapsed_since_toggle_ms(last_toggle), cooldown_ms)
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn cooldown_remaining_ms(last_toggle: Option<Instant>, cooldown_ms: u64) -> u64 {
+    cooldown_remaining_for_elapsed(elapsed_since_toggle_ms(last_toggle), cooldown_ms)
+}
+
+fn should_force_critical_retry_for_elapsed(
+    health: u32,
+    threshold: u32,
+    last_critical: Option<u32>,
+    elapsed_since_last_toggle_ms: Option<u64>,
+    cooldown_ms: u64,
+) -> bool {
+    match last_critical {
+        Some(last_critical) => {
+            health < threshold / 2
+                && health <= last_critical
+                && cooldown_ready_for_elapsed(elapsed_since_last_toggle_ms, cooldown_ms)
+        }
+        None => false,
+    }
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
 fn should_force_critical_retry(
     health: u32,
     threshold: u32,
@@ -93,14 +174,128 @@ fn should_force_critical_retry(
     last_toggle: Option<Instant>,
     cooldown_ms: u64,
 ) -> bool {
-    match last_critical {
-        Some(last_critical) => {
-            health < threshold / 2
-                && health <= last_critical
-                && cooldown_ready(last_toggle, cooldown_ms)
-        }
-        None => false,
+    should_force_critical_retry_for_elapsed(
+        health,
+        threshold,
+        last_critical,
+        elapsed_since_toggle_ms(last_toggle),
+        cooldown_ms,
+    )
+}
+
+fn evaluate_armlet_decision(
+    health: u32,
+    threshold: u32,
+    predictive_offset: u32,
+    is_stunned: bool,
+    last_critical: Option<u32>,
+    elapsed_since_last_toggle_ms: Option<u64>,
+    cooldown_ms: u64,
+) -> ArmletEvaluation {
+    let trigger_point = threshold.saturating_add(predictive_offset);
+    let cooldown_remaining_ms =
+        cooldown_remaining_for_elapsed(elapsed_since_last_toggle_ms, cooldown_ms);
+
+    if should_force_critical_retry_for_elapsed(
+        health,
+        threshold,
+        last_critical,
+        elapsed_since_last_toggle_ms,
+        cooldown_ms,
+    ) {
+        return ArmletEvaluation {
+            decision: ArmletDecision::CriticalRetry,
+            trigger_point,
+            cooldown_remaining_ms,
+        };
     }
+
+    if health >= trigger_point {
+        return ArmletEvaluation {
+            decision: ArmletDecision::SkipSafe,
+            trigger_point,
+            cooldown_remaining_ms,
+        };
+    }
+
+    if is_stunned {
+        return ArmletEvaluation {
+            decision: ArmletDecision::SkipStunned,
+            trigger_point,
+            cooldown_remaining_ms,
+        };
+    }
+
+    if cooldown_remaining_ms > 0 {
+        return ArmletEvaluation {
+            decision: ArmletDecision::SkipCooldown,
+            trigger_point,
+            cooldown_remaining_ms,
+        };
+    }
+
+    ArmletEvaluation {
+        decision: ArmletDecision::Toggle,
+        trigger_point,
+        cooldown_remaining_ms,
+    }
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn simulate_armlet_replay(
+    samples: &[ArmletReplaySample],
+    config: &EffectiveArmletConfig,
+) -> ArmletReplayReport {
+    let mut report = ArmletReplayReport::default();
+    let mut last_critical = None;
+    let mut last_toggle_at_ms = None;
+
+    for sample in samples {
+        let elapsed_since_last_toggle_ms =
+            last_toggle_at_ms.map(|last_toggle_at| sample.at_ms.saturating_sub(last_toggle_at));
+        let evaluation = evaluate_armlet_decision(
+            sample.health,
+            config.toggle_threshold,
+            config.predictive_offset,
+            sample.stunned,
+            last_critical,
+            elapsed_since_last_toggle_ms,
+            config.toggle_cooldown_ms,
+        );
+
+        report.events.push(ArmletReplayEvent {
+            at_ms: sample.at_ms,
+            health: sample.health,
+            decision: evaluation.decision,
+            trigger_point: evaluation.trigger_point,
+            cooldown_remaining_ms: evaluation.cooldown_remaining_ms,
+        });
+
+        match evaluation.decision {
+            ArmletDecision::Toggle => {
+                report.normal_toggles += 1;
+                last_toggle_at_ms = Some(sample.at_ms);
+                last_critical =
+                    next_critical_retry_health(sample.health, config.toggle_threshold);
+            }
+            ArmletDecision::CriticalRetry => {
+                report.critical_retries += 1;
+                last_toggle_at_ms = Some(sample.at_ms);
+                last_critical = None;
+            }
+            ArmletDecision::SkipCooldown => {
+                report.cooldown_blocks += 1;
+            }
+            ArmletDecision::SkipStunned => {
+                report.stun_blocks += 1;
+            }
+            ArmletDecision::SkipSafe => {
+                last_critical = None;
+            }
+        }
+    }
+
+    report
 }
 
 fn find_armlet_slot_key(event: &GsiWebhookEvent, settings: &Settings) -> Option<char> {
@@ -130,66 +325,88 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
 
     let health = event.hero.health;
     let threshold = resolved.toggle_threshold;
-    let trigger_point = threshold + resolved.predictive_offset;
     let cooldown_ms = resolved.toggle_cooldown_ms;
     let cast_modifier = resolve_cast_modifier(&resolved);
 
     let last_critical = *ARMLET_CRITICAL_HP.lock().unwrap();
     let last_toggle_snapshot = *ARMLET_LAST_TOGGLE.lock().unwrap();
-
-    if should_force_critical_retry(
+    let elapsed_since_last_toggle_ms = elapsed_since_toggle_ms(last_toggle_snapshot);
+    let evaluation = evaluate_armlet_decision(
         health,
         threshold,
+        resolved.predictive_offset,
+        event.hero.is_stunned(),
         last_critical,
-        last_toggle_snapshot,
+        elapsed_since_last_toggle_ms,
         cooldown_ms,
-    ) {
-        warn!(
-            "Critical HP detected! HP: {} (likely armlet stuck on). Forcing emergency toggle.",
-            health
-        );
+    );
 
-        execute_dual_trigger(slot_key, cast_modifier);
+    match evaluation.decision {
+        ArmletDecision::CriticalRetry => {
+            warn!(
+                "Critical HP detected! HP: {} (likely armlet stuck on). Forcing emergency toggle.",
+                health
+            );
+            debug!(
+                "Armlet emergency retry: hero={}, health={}, trigger={}, cooldown={}ms, modifier={:?}",
+                event.hero.name, health, evaluation.trigger_point, cooldown_ms, cast_modifier
+            );
 
-        let mut critical_hp = ARMLET_CRITICAL_HP.lock().unwrap();
-        *critical_hp = None;
-        drop(critical_hp);
+            execute_dual_trigger(slot_key, cast_modifier);
 
-        let mut last_toggle = ARMLET_LAST_TOGGLE.lock().unwrap();
-        *last_toggle = Some(Instant::now());
-        return;
-    }
-
-    if health < trigger_point {
-        if event.hero.is_stunned() {
-            debug!("Hero stunned, skipping armlet toggle (HP: {})", health);
-            return;
-        }
-
-        let mut last_toggle = ARMLET_LAST_TOGGLE.lock().unwrap();
-        let can_toggle = cooldown_ready(*last_toggle, cooldown_ms);
-
-        if !can_toggle {
-            let remaining = cooldown_remaining_ms(*last_toggle, cooldown_ms);
-            debug!("Armlet toggle on cooldown ({}ms remaining)", remaining);
-            return;
-        }
-
-        info!(
-            "Triggering armlet toggle (HP: {} < trigger: {}, base: {}, cooldown: {}ms)",
-            health, trigger_point, threshold, cooldown_ms
-        );
-
-        execute_dual_trigger(slot_key, cast_modifier);
-        *last_toggle = Some(Instant::now());
-        drop(last_toggle);
-
-        let mut critical_hp = ARMLET_CRITICAL_HP.lock().unwrap();
-        *critical_hp = next_critical_retry_health(health, threshold);
-    } else if let Ok(mut critical_hp) = ARMLET_CRITICAL_HP.try_lock() {
-        if critical_hp.is_some() {
-            debug!("HP recovered to safe levels, resetting critical HP tracker");
+            let mut critical_hp = ARMLET_CRITICAL_HP.lock().unwrap();
             *critical_hp = None;
+            drop(critical_hp);
+
+            let mut last_toggle = ARMLET_LAST_TOGGLE.lock().unwrap();
+            *last_toggle = Some(Instant::now());
+        }
+        ArmletDecision::Toggle => {
+            info!(
+                "Triggering armlet toggle (HP: {} < trigger: {}, base: {}, cooldown: {}ms)",
+                health, evaluation.trigger_point, threshold, cooldown_ms
+            );
+            debug!(
+                "Armlet decision: hero={}, health={}, threshold={}, offset={}, cooldown={}ms, modifier={:?}",
+                event.hero.name,
+                health,
+                threshold,
+                resolved.predictive_offset,
+                cooldown_ms,
+                cast_modifier
+            );
+
+            execute_dual_trigger(slot_key, cast_modifier);
+            let mut last_toggle = ARMLET_LAST_TOGGLE.lock().unwrap();
+            *last_toggle = Some(Instant::now());
+
+            let mut critical_hp = ARMLET_CRITICAL_HP.lock().unwrap();
+            *critical_hp = next_critical_retry_health(health, threshold);
+        }
+        ArmletDecision::SkipStunned => {
+            debug!(
+                "Hero stunned, skipping armlet toggle (HP: {}, trigger: {})",
+                health, evaluation.trigger_point
+            );
+        }
+        ArmletDecision::SkipCooldown => {
+            debug!(
+                "Armlet toggle on cooldown ({}ms remaining, HP: {}, trigger: {})",
+                evaluation.cooldown_remaining_ms, health, evaluation.trigger_point
+            );
+        }
+        ArmletDecision::SkipSafe => {
+            trace!(
+                "Armlet safe: hero={}, health={}, trigger={}",
+                event.hero.name, health, evaluation.trigger_point
+            );
+
+            if let Ok(mut critical_hp) = ARMLET_CRITICAL_HP.try_lock() {
+                if critical_hp.is_some() {
+                    debug!("HP recovered to safe levels, resetting critical HP tracker");
+                    *critical_hp = None;
+                }
+            }
         }
     }
 }
@@ -197,11 +414,13 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
 #[cfg(test)]
 mod tests {
     use super::{
-        cooldown_ready, next_critical_retry_health, parse_cast_modifier, plan_dual_trigger_sequence,
-        resolve_cast_modifier, should_force_critical_retry, ArmletTriggerStep,
+        cooldown_ready, cooldown_remaining_ms, evaluate_armlet_decision, next_critical_retry_health,
+        parse_cast_modifier, plan_dual_trigger_sequence, resolve_cast_modifier,
+        should_force_critical_retry, simulate_armlet_replay, ArmletDecision, ArmletReplaySample,
+        ArmletTriggerStep,
     };
     use crate::config::{
-        settings::{ArmletAutomationConfig, HeroArmletOverrideConfig},
+        settings::{ArmletAutomationConfig, EffectiveArmletConfig, HeroArmletOverrideConfig},
         Settings,
     };
     use crate::input::simulation::ModifierKey;
@@ -283,6 +502,235 @@ mod tests {
             Some(Instant::now() - Duration::from_millis(350)),
             300
         ));
+    }
+
+    #[test]
+    fn cooldown_remaining_reports_unexpired_window() {
+        let remaining = cooldown_remaining_ms(Some(Instant::now() - Duration::from_millis(75)), 300);
+
+        assert!(remaining >= 200);
+        assert!(remaining <= 225);
+    }
+
+    #[test]
+    fn evaluate_armlet_decision_reports_cooldown_blocks_with_remaining_time() {
+        let evaluation = evaluate_armlet_decision(100, 120, 0, false, None, Some(150), 300);
+
+        assert_eq!(evaluation.decision, ArmletDecision::SkipCooldown);
+        assert_eq!(evaluation.trigger_point, 120);
+        assert_eq!(evaluation.cooldown_remaining_ms, 150);
+    }
+
+    #[test]
+    fn replay_shows_higher_threshold_triggers_earlier_than_lower_threshold() {
+        let samples = [
+            ArmletReplaySample {
+                at_ms: 0,
+                health: 260,
+                stunned: false,
+            },
+            ArmletReplaySample {
+                at_ms: 200,
+                health: 180,
+                stunned: false,
+            },
+            ArmletReplaySample {
+                at_ms: 400,
+                health: 140,
+                stunned: false,
+            },
+            ArmletReplaySample {
+                at_ms: 700,
+                health: 60,
+                stunned: false,
+            },
+        ];
+        let conservative = EffectiveArmletConfig {
+            enabled: true,
+            cast_modifier: "Alt".to_string(),
+            toggle_threshold: 80,
+            predictive_offset: 0,
+            toggle_cooldown_ms: 150,
+        };
+        let aggressive = EffectiveArmletConfig {
+            toggle_threshold: 150,
+            ..conservative.clone()
+        };
+
+        let conservative_report = simulate_armlet_replay(&samples, &conservative);
+        let aggressive_report = simulate_armlet_replay(&samples, &aggressive);
+
+        assert_eq!(conservative_report.normal_toggles, 1);
+        assert_eq!(aggressive_report.normal_toggles, 2);
+        assert_eq!(
+            aggressive_report.events[2].decision,
+            ArmletDecision::Toggle
+        );
+        assert_eq!(
+            conservative_report.events[2].decision,
+            ArmletDecision::SkipSafe
+        );
+    }
+
+    #[test]
+    fn replay_shows_shorter_cooldown_handles_more_burst_windows() {
+        let samples = [
+            ArmletReplaySample {
+                at_ms: 0,
+                health: 110,
+                stunned: false,
+            },
+            ArmletReplaySample {
+                at_ms: 120,
+                health: 95,
+                stunned: false,
+            },
+            ArmletReplaySample {
+                at_ms: 220,
+                health: 85,
+                stunned: false,
+            },
+            ArmletReplaySample {
+                at_ms: 420,
+                health: 80,
+                stunned: false,
+            },
+        ];
+        let slow = EffectiveArmletConfig {
+            enabled: true,
+            cast_modifier: "Alt".to_string(),
+            toggle_threshold: 120,
+            predictive_offset: 0,
+            toggle_cooldown_ms: 300,
+        };
+        let fast = EffectiveArmletConfig {
+            toggle_cooldown_ms: 100,
+            ..slow.clone()
+        };
+
+        let slow_report = simulate_armlet_replay(&samples, &slow);
+        let fast_report = simulate_armlet_replay(&samples, &fast);
+
+        assert_eq!(slow_report.normal_toggles, 2);
+        assert_eq!(slow_report.cooldown_blocks, 2);
+        assert_eq!(fast_report.normal_toggles, 4);
+        assert_eq!(fast_report.cooldown_blocks, 0);
+    }
+
+    #[test]
+    fn replay_surfaces_critical_retry_after_initial_low_hp_toggle() {
+        let samples = [
+            ArmletReplaySample {
+                at_ms: 0,
+                health: 40,
+                stunned: false,
+            },
+            ArmletReplaySample {
+                at_ms: 350,
+                health: 20,
+                stunned: false,
+            },
+        ];
+        let config = EffectiveArmletConfig {
+            enabled: true,
+            cast_modifier: "Alt".to_string(),
+            toggle_threshold: 120,
+            predictive_offset: 0,
+            toggle_cooldown_ms: 300,
+        };
+
+        let report = simulate_armlet_replay(&samples, &config);
+
+        assert_eq!(report.normal_toggles, 1);
+        assert_eq!(report.critical_retries, 1);
+        assert_eq!(report.events[1].decision, ArmletDecision::CriticalRetry);
+    }
+
+    #[test]
+    #[ignore = "Diagnostic matrix for manual armlet tuning sessions"]
+    fn print_armlet_tuning_matrix_for_burst_scenarios() {
+        let scenarios = vec![
+            (
+                "steady burst",
+                vec![
+                    ArmletReplaySample {
+                        at_ms: 0,
+                        health: 150,
+                        stunned: false,
+                    },
+                    ArmletReplaySample {
+                        at_ms: 120,
+                        health: 110,
+                        stunned: false,
+                    },
+                    ArmletReplaySample {
+                        at_ms: 240,
+                        health: 70,
+                        stunned: false,
+                    },
+                    ArmletReplaySample {
+                        at_ms: 420,
+                        health: 35,
+                        stunned: false,
+                    },
+                ],
+            ),
+            (
+                "multi source spike",
+                vec![
+                    ArmletReplaySample {
+                        at_ms: 0,
+                        health: 220,
+                        stunned: false,
+                    },
+                    ArmletReplaySample {
+                        at_ms: 80,
+                        health: 130,
+                        stunned: false,
+                    },
+                    ArmletReplaySample {
+                        at_ms: 160,
+                        health: 65,
+                        stunned: false,
+                    },
+                    ArmletReplaySample {
+                        at_ms: 340,
+                        health: 25,
+                        stunned: false,
+                    },
+                ],
+            ),
+        ];
+        let thresholds = [50, 80, 120, 150];
+        let cooldowns = [100, 150, 250, 300];
+
+        for (name, samples) in scenarios {
+            println!("scenario: {}", name);
+            for threshold in thresholds {
+                for cooldown in cooldowns {
+                    let report = simulate_armlet_replay(
+                        &samples,
+                        &EffectiveArmletConfig {
+                            enabled: true,
+                            cast_modifier: "Alt".to_string(),
+                            toggle_threshold: threshold,
+                            predictive_offset: 0,
+                            toggle_cooldown_ms: cooldown,
+                        },
+                    );
+
+                    println!(
+                        "  threshold={} cooldown={} => toggles={}, critical_retries={}, cooldown_blocks={}, stun_blocks={}",
+                        threshold,
+                        cooldown,
+                        report.normal_toggles,
+                        report.critical_retries,
+                        report.cooldown_blocks,
+                        report.stun_blocks
+                    );
+                }
+            }
+        }
     }
 
     #[test]
