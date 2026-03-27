@@ -114,13 +114,21 @@ Used by Soul Ring interception because the original physical key was swallowed b
 
 ### `src/input/simulation.rs`
 
-Uses enigo for higher-level combos:
+Uses a lazy, single-consumer enigo worker for higher-level combos:
 
 - `press_key(char)`
 - `mouse_click()`
 - `left_click()`
 - `alt_down()`
 - `alt_up()`
+
+The helper API keeps its prior blocking timing semantics, but each call now submits work onto one unbounded FIFO queue owned inside `src/input/simulation.rs` and waits for the worker to finish that command. The worker thread is started lazily on first use and owns the real `Enigo` instance, so higher-level combo code no longer contends on an implicit global `Mutex<Enigo>` in caller threads.
+
+`SIMULATING_KEYS` is still managed by this path:
+
+- `press_key`, `mouse_click`, `left_click`, and `alt_up` keep the brief post-action guard window before the worker restores the flag
+- `alt_down` sets the flag and keeps it active across later queued commands until the matching queued `alt_up` runs
+- this preserves FIFO replay ordering for Shadow Fiend facing sequences without changing the `rdev::simulate` Soul Ring replay path
 
 Used by:
 

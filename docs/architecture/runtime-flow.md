@@ -177,7 +177,15 @@ Two emitters are used:
 | Owner | API | Used for |
 |---|---|---|
 | `src/input/keyboard.rs` | `simulate_key()` via `rdev::simulate` | Replaying the exact blocked key after Soul Ring |
-| `src/input/simulation.rs` | `press_key`, `mouse_click`, `alt_down`, `alt_up` via enigo | Higher-level combos like SF raze facing, BKB double-tap, right-click macros |
+| `src/input/simulation.rs` | `press_key`, `mouse_click`, `left_click`, `alt_down`, `alt_up` submit work to a lazy worker thread and wait for completion | Higher-level combos like SF raze facing, BKB double-tap, right-click macros |
+
+`src/input/simulation.rs` now owns one explicit synthetic-input lane:
+
+- the first helper call lazily starts a dedicated worker thread
+- that worker owns the single `Enigo` instance for the process
+- callers submit commands onto an unbounded FIFO `std::sync::mpsc` queue, then wait for the worker to finish that command
+- the worker, not the caller thread, performs the small post-action guard delays for replay-safe input, so helper timing semantics stay stable while lane ownership is centralized
+- `alt_down()` keeps `SIMULATING_KEYS` active across later queued commands until the matching queued `alt_up()` runs
 
 ---
 
@@ -205,6 +213,7 @@ Important nuance: `AppState.selected_hero` only models `Huskar`, `Largo`, `Legio
 | `src/main.rs` | `spawn_blocking(check_for_update)` | Only when `updates.check_on_startup` is true | Writes `UpdateCheckState` |
 | `src/main.rs` | Hotkey consumer thread | Always | Handles `HotkeyEvent`s from the keyboard hook |
 | `src/input/keyboard.rs` | `rdev::grab` thread | Always | Global hook; blocks forever |
+| `src/input/simulation.rs` | Synthetic-input worker thread | First call to a simulation helper | Owns `Enigo`; drains one unbounded FIFO queue |
 | `src/input/keyboard.rs` | `spawn_soul_ring_then_key(...)` | Per intercepted Soul Ring key | Short-lived |
 | `src/input/keyboard.rs` | Broodmother auto-items thread | Per Space+right-click | Short-lived |
 | `src/input/keyboard.rs` | Broodmother spider macro thread | Per middle click | Short-lived |
