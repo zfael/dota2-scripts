@@ -123,6 +123,8 @@ Uses a lazy, single-consumer enigo worker for higher-level combos:
 
 The helper API keeps its prior blocking timing semantics, but each call now submits work onto one unbounded FIFO queue owned inside `src/input/simulation.rs` and waits for the worker to finish that command. The worker thread is started lazily on first use and owns the real `Enigo` instance, so higher-level combo code no longer contends on an implicit global `Mutex<Enigo>` in caller threads.
 
+The Enigo-backed worker now tracks queue depth, queued total, peak depth, drops, and completions. Those metrics are for the synthetic-input lane only and are exposed via `synthetic_input_metrics()` in the debug UI. Soul Ring replay remains a separate path with its own dedicated worker.
+
 `SIMULATING_KEYS` is still managed by this path:
 
 - `press_key`, `mouse_click`, `left_click`, and `alt_up` keep the brief post-action guard window before the worker restores the flag

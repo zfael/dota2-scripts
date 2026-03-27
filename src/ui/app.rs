@@ -259,6 +259,17 @@ impl Dota2ScriptApp {
                 ui.label(format!("Queue Depth: {}", state.metrics.current_queue_depth));
             }
             
+            ui.add_space(5.0);
+            ui.label("Synthetic Input:");
+            {
+                let metrics = crate::input::simulation::synthetic_input_metrics();
+                ui.label(format!("  Current Depth: {}", metrics.current_depth));
+                ui.label(format!("  Queued Total: {}", metrics.queued_total));
+                ui.label(format!("  Peak Depth: {}", metrics.peak_depth));
+                ui.label(format!("  Completed: {}", metrics.completed_total));
+                ui.label(format!("  Dropped: {}", metrics.dropped_total));
+            }
+            
             ui.add_space(10.0);
             ui.separator();
             

@@ -1,7 +1,7 @@
 use enigo::{Button, Direction, Enigo, Key, Keyboard, Mouse, Settings};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 use tracing::warn;
@@ -9,9 +9,30 @@ use tracing::warn;
 const POST_ACTION_GUARD_DELAY_MS: u64 = 10;
 
 static SYNTHETIC_INPUT_TX: OnceLock<Sender<SyntheticInputJob>> = OnceLock::new();
+static METRICS: OnceLock<Mutex<SyntheticInputMetricsState>> = OnceLock::new();
 
 /// Global flag to indicate we're simulating keys - prevents keyboard grab re-interception
 pub static SIMULATING_KEYS: AtomicBool = AtomicBool::new(false);
+
+#[cfg_attr(not(test), allow(dead_code))]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct SyntheticInputMetricsState {
+    queued_total: u64,
+    completed_total: u64,
+    dropped_total: u64,
+    current_depth: usize,
+    peak_depth: usize,
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct SyntheticInputMetricsSnapshot {
+    pub queued_total: u64,
+    pub completed_total: u64,
+    pub dropped_total: u64,
+    pub current_depth: usize,
+    pub peak_depth: usize,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SyntheticAction {
@@ -42,6 +63,13 @@ struct SyntheticInputCommand {
 struct SyntheticInputJob {
     command: SyntheticInputCommand,
     completion_tx: Sender<()>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct EnqueueMetricsCheckpoint {
+    queued_total: u64,
+    current_depth: usize,
+    peak_depth: usize,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -177,15 +205,77 @@ fn enqueue_with_sender(
     job: SyntheticInputJob,
     action: SyntheticAction,
 ) -> bool {
+    let mut state = metrics_store().lock().unwrap();
+    let checkpoint = EnqueueMetricsCheckpoint {
+        queued_total: state.queued_total,
+        current_depth: state.current_depth,
+        peak_depth: state.peak_depth,
+    };
+    record_enqueue_success(&mut state);
+
     if sender.send(job).is_err() {
         warn!(
             "Synthetic input worker is unavailable; dropping queued action {:?}",
             action
         );
+        restore_enqueue_success(&mut state, checkpoint);
+        record_enqueue_failure(&mut state);
         return false;
     }
 
     true
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn record_enqueue_success(state: &mut SyntheticInputMetricsState) {
+    state.queued_total += 1;
+    state.current_depth += 1;
+    state.peak_depth = state.peak_depth.max(state.current_depth);
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn record_completion(state: &mut SyntheticInputMetricsState) {
+    state.completed_total += 1;
+    if state.current_depth > 0 {
+        state.current_depth -= 1;
+    }
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn restore_enqueue_success(
+    state: &mut SyntheticInputMetricsState,
+    checkpoint: EnqueueMetricsCheckpoint,
+) {
+    state.queued_total = checkpoint.queued_total;
+    state.current_depth = checkpoint.current_depth;
+    state.peak_depth = checkpoint.peak_depth;
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn record_enqueue_failure(state: &mut SyntheticInputMetricsState) {
+    state.dropped_total += 1;
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn metrics_snapshot(state: &SyntheticInputMetricsState) -> SyntheticInputMetricsSnapshot {
+    SyntheticInputMetricsSnapshot {
+        queued_total: state.queued_total,
+        completed_total: state.completed_total,
+        dropped_total: state.dropped_total,
+        current_depth: state.current_depth,
+        peak_depth: state.peak_depth,
+    }
+}
+
+fn metrics_store() -> &'static Mutex<SyntheticInputMetricsState> {
+    METRICS.get_or_init(|| Mutex::new(SyntheticInputMetricsState::default()))
+}
+
+/// Public snapshot access to synthetic input backlog metrics
+pub fn synthetic_input_metrics() -> SyntheticInputMetricsSnapshot {
+    let store = metrics_store();
+    let state = store.lock().unwrap();
+    metrics_snapshot(&state)
 }
 
 fn worker_sender() -> &'static Sender<SyntheticInputJob> {
@@ -209,6 +299,11 @@ fn run_worker(rx: Receiver<SyntheticInputJob>, mut enigo: Enigo) {
 
     while let Ok(job) = rx.recv() {
         execute_command(&mut enigo, job.command, &mut guard_state);
+        
+        let mut state = metrics_store().lock().unwrap();
+        record_completion(&mut state);
+        drop(state);
+        
         let _ = job.completion_tx.send(());
     }
 }
@@ -312,6 +407,9 @@ fn perform_action(enigo: &mut Enigo, action: SyntheticAction) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    static METRICS_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     fn test_job(command: SyntheticInputCommand) -> SyntheticInputJob {
         let (completion_tx, _completion_rx) = mpsc::channel();
@@ -392,6 +490,7 @@ mod tests {
 
     #[test]
     fn queued_commands_preserve_fifo_order() {
+        let _guard = METRICS_TEST_LOCK.lock().unwrap();
         let (tx, rx) = mpsc::channel();
 
         assert!(enqueue_with_sender(
@@ -419,5 +518,139 @@ mod tests {
                 mouse_click_command()
             ]
         );
+    }
+
+    #[test]
+    fn enqueue_success_updates_depth_and_peak() {
+        let mut metrics = SyntheticInputMetricsState::default();
+
+        record_enqueue_success(&mut metrics);
+
+        assert_eq!(
+            metrics_snapshot(&metrics),
+            SyntheticInputMetricsSnapshot {
+                queued_total: 1,
+                completed_total: 0,
+                dropped_total: 0,
+                current_depth: 1,
+                peak_depth: 1,
+            }
+        );
+
+        record_enqueue_success(&mut metrics);
+
+        assert_eq!(
+            metrics_snapshot(&metrics),
+            SyntheticInputMetricsSnapshot {
+                queued_total: 2,
+                completed_total: 0,
+                dropped_total: 0,
+                current_depth: 2,
+                peak_depth: 2,
+            }
+        );
+    }
+
+    #[test]
+    fn completion_updates_completed_and_reduces_depth() {
+        let mut metrics = SyntheticInputMetricsState {
+            queued_total: 3,
+            completed_total: 0,
+            dropped_total: 0,
+            current_depth: 2,
+            peak_depth: 2,
+        };
+
+        record_completion(&mut metrics);
+
+        assert_eq!(
+            metrics_snapshot(&metrics),
+            SyntheticInputMetricsSnapshot {
+                queued_total: 3,
+                completed_total: 1,
+                dropped_total: 0,
+                current_depth: 1,
+                peak_depth: 2,
+            }
+        );
+
+        record_completion(&mut metrics);
+        record_completion(&mut metrics);
+
+        assert_eq!(
+            metrics_snapshot(&metrics),
+            SyntheticInputMetricsSnapshot {
+                queued_total: 3,
+                completed_total: 3,
+                dropped_total: 0,
+                current_depth: 0,
+                peak_depth: 2,
+            }
+        );
+    }
+
+    #[test]
+    fn failed_enqueue_only_updates_dropped_total() {
+        let mut metrics = SyntheticInputMetricsState {
+            queued_total: 4,
+            completed_total: 2,
+            dropped_total: 1,
+            current_depth: 2,
+            peak_depth: 5,
+        };
+
+        record_enqueue_failure(&mut metrics);
+
+        assert_eq!(
+            metrics_snapshot(&metrics),
+            SyntheticInputMetricsSnapshot {
+                queued_total: 4,
+                completed_total: 2,
+                dropped_total: 2,
+                current_depth: 2,
+                peak_depth: 5,
+            }
+        );
+    }
+
+    #[test]
+    fn failed_enqueue_rolls_back_provisional_success_and_records_drop() {
+        let _guard = METRICS_TEST_LOCK.lock().unwrap();
+        let before = synthetic_input_metrics();
+        let (tx, rx) = mpsc::channel();
+        drop(rx);
+
+        assert!(!enqueue_with_sender(
+            &tx,
+            test_job(mouse_click_command()),
+            SyntheticAction::RightClick
+        ));
+
+        let after = synthetic_input_metrics();
+
+        assert_eq!(after.queued_total, before.queued_total);
+        assert_eq!(after.completed_total, before.completed_total);
+        assert_eq!(after.current_depth, before.current_depth);
+        assert_eq!(after.peak_depth, before.peak_depth);
+        assert_eq!(after.dropped_total, before.dropped_total + 1);
+    }
+
+    #[test]
+    fn snapshot_copies_all_metric_fields() {
+        let state = SyntheticInputMetricsState {
+            queued_total: 10,
+            completed_total: 7,
+            dropped_total: 1,
+            current_depth: 2,
+            peak_depth: 5,
+        };
+
+        let snapshot = metrics_snapshot(&state);
+
+        assert_eq!(snapshot.queued_total, state.queued_total);
+        assert_eq!(snapshot.completed_total, state.completed_total);
+        assert_eq!(snapshot.dropped_total, state.dropped_total);
+        assert_eq!(snapshot.current_depth, state.current_depth);
+        assert_eq!(snapshot.peak_depth, state.peak_depth);
     }
 }

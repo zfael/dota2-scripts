@@ -187,6 +187,8 @@ Two emitters are used:
 - callers submit commands onto an unbounded FIFO `std::sync::mpsc` queue, then wait for the worker to finish that command
 - the worker, not the caller thread, performs the small post-action guard delays for replay-safe input, so helper timing semantics stay stable while lane ownership is centralized
 - `alt_down()` keeps `SIMULATING_KEYS` active across later queued commands until the matching queued `alt_up()` runs
+- the synthetic-input worker now exposes queue metrics via `synthetic_input_metrics()`: current depth, queued total, peak depth, completed total, and dropped total are visible in the debug UI
+- these metrics are separate from both GSI queue metrics and the Soul Ring replay worker
 
 ---
 
