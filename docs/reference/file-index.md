@@ -52,7 +52,8 @@
 |---|---|---|
 | `src/actions/mod.rs` | Module re-exports | — |
 | `src/actions/dispatcher.rs` | Pre-dispatch hooks plus hero/common routing for every GSI event | `docs/architecture/state-and-dispatch.md`, `docs/reference/gsi-schema-and-usage.md` |
-| `src/actions/common.rs` | Shared survivability pipeline: healing, defensive items, neutral items, armlet helper | `docs/features/survivability.md`, `docs/features/danger-detection.md`, `docs/reference/gsi-schema-and-usage.md` |
+| `src/actions/armlet.rs` | Shared armlet planning, config resolution, cooldown/critical-state handling, and dual-trigger execution | `docs/features/survivability.md`, `docs/heroes/huskar.md`, `docs/reference/configuration.md` |
+| `src/actions/common.rs` | Shared survivability pipeline: healing, defensive items, neutral items, and armlet job enqueueing | `docs/features/survivability.md`, `docs/features/danger-detection.md`, `docs/reference/gsi-schema-and-usage.md` |
 | `src/actions/danger_detector.rs` | HP-loss heuristic and global danger state | `docs/features/danger-detection.md` |
 | `src/actions/auto_items.rs` | Cached GSI item state and Broodmother item/ability combo execution | `docs/features/survivability.md`, `docs/reference/gsi-schema-and-usage.md` |
 | `src/actions/dispel.rs` | Silence dispel logic (Manta / Lotus) | `docs/features/survivability.md`, `docs/reference/gsi-schema-and-usage.md` |
@@ -65,7 +66,7 @@
 | `src/actions/heroes/mod.rs` | Hero module registration and re-exports | `docs/workflows/adding-a-hero.md` |
 | `src/actions/heroes/traits.rs` | `HeroScript` trait contract | `docs/architecture/state-and-dispatch.md`, `docs/workflows/adding-a-hero.md` |
 | `src/actions/heroes/broodmother.rs` | Broodmother spider micro and auto-items/abilities | `docs/heroes/broodmother.md` |
-| `src/actions/heroes/huskar.rs` | Huskar armlet automation and Berserker Blood cleanse | `docs/heroes/huskar.md` |
+| `src/actions/heroes/huskar.rs` | Huskar Berserker Blood cleanse plus shared armlet-survivability wiring | `docs/heroes/huskar.md` |
 | `src/actions/heroes/largo.rs` | Largo ultimate state, beat timing, manual song hooks | `docs/heroes/largo.md` |
 | `src/actions/heroes/legion_commander.rs` | Legion Commander combo automation | `docs/heroes/legion_commander.md` |
 | `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend raze / ultimate / standalone combo logic | `docs/heroes/shadow_fiend.md`, `docs/features/keyboard-interception.md` |

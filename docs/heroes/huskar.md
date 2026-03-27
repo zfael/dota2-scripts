@@ -2,173 +2,182 @@
 
 ## Purpose
 
-Learn how the Huskar script automates armlet toggling and Berserker Blood cleansing for survival optimization.  
-**Read this when:** configuring Huskar automation, tuning armlet thresholds and predictive offset, understanding debuff-cleanse logic.
+Learn how the Huskar script plugs into the shared armlet module and automates Berserker Blood cleansing for survival optimization.
+
+**Read this when:** configuring Huskar automation, tuning shared or Huskar-specific armlet thresholds, or understanding debuff-cleanse logic.
 
 ## Feature Summary
 
-- **Armlet toggle automation** – Auto-toggles Armlet of Mordiggian at low HP with predictive offset
-- **Berserker Blood debuff cleanse** – Activates Berserker Blood to cleanse debuffs with configurable delay
-- **GSI-based detection** – Auto-enables when `npc_dota_hero_huskar` detected
-- **Survivability actions** – Auto-use healing/defensive items
-- **No standalone trigger** – Combo key not implemented
+- **Shared armlet toggle automation** - Uses the repo-wide armlet module with Huskar-specific override values
+- **Berserker Blood debuff cleanse** - Activates Berserker Blood to cleanse debuffs after a configurable delay
+- **GSI-based detection** - Auto-enables when `npc_dota_hero_huskar` is active
+- **Survivability actions** - Auto-uses healing, defensive, and neutral items
+- **No standalone trigger** - Combo key is still not implemented
 
 ## Configuration
 
-All settings in `config/config.toml` under `[heroes.huskar]`:
+Huskar armlet behavior uses shared defaults from `[armlet]` plus optional Huskar-specific overrides in `[heroes.huskar.armlet]`:
 
 ```toml
+[armlet]
+cast_modifier = "Alt"
+toggle_threshold = 320
+predictive_offset = 30
+toggle_cooldown_ms = 250
+
 [heroes.huskar]
-# Armlet toggle threshold: activate when HP < this value (raw HP, not percent)
-armlet_toggle_threshold = 120
-# Predictive offset: additional HP to predict damage and toggle earlier
-armlet_predictive_offset = 150
-# Cooldown between armlet toggles to prevent spam (ms)
-armlet_toggle_cooldown_ms = 300
-# Key to press for Berserker Blood (E ability)
 berserker_blood_key = "e"
-# Delay to wait for additional debuffs before cleansing (ms)
 berserker_blood_delay_ms = 300
-# Standalone combo key (currently not implemented)
 standalone_key = "Home"
+
+[heroes.huskar.armlet]
+toggle_threshold = 120
+predictive_offset = 150
+toggle_cooldown_ms = 300
 ```
 
 The checked-in `config/config.toml` values below override the Rust defaults from `src/config/settings.rs`.
 
 | Option | Type | `config.toml` | Rust default | Description |
-|--------|------|---------------|--------------|-------------|
-| `armlet_toggle_threshold` | u32 | `120` | `320` | Raw HP threshold for armlet toggle |
-| `armlet_predictive_offset` | u32 | `150` | `30` | Additional HP buffer to predict incoming damage |
-| `armlet_toggle_cooldown_ms` | u64 | `300` | `250` | Cooldown between toggles to prevent spam |
+|---|---|---|---|---|
+| `[armlet].cast_modifier` | string | `"Alt"` | `"Alt"` | Shared cast-side modifier paired with the quick-cast slot key |
+| `[armlet].toggle_threshold` | u32 | `320` | `320` | Shared base HP threshold before hero overrides |
+| `[armlet].predictive_offset` | u32 | `30` | `30` | Shared predictive HP buffer |
+| `[armlet].toggle_cooldown_ms` | u64 | `250` | `250` | Shared cooldown between toggle attempts |
+| `[heroes.huskar.armlet].toggle_threshold` | u32 | `120` | inherits `[armlet]` | Huskar override for base threshold |
+| `[heroes.huskar.armlet].predictive_offset` | u32 | `150` | inherits `[armlet]` | Huskar override for predictive buffer |
+| `[heroes.huskar.armlet].toggle_cooldown_ms` | u64 | `300` | inherits `[armlet]` | Huskar override for cooldown |
 | `berserker_blood_key` | char | `'e'` | `'e'` | Key to press for Berserker Blood |
-| `berserker_blood_delay_ms` | u64 | `300` | `300` | Delay before activating cleanse (wait for multiple debuffs) |
+| `berserker_blood_delay_ms` | u64 | `300` | `300` | Delay before activating cleanse |
 | `standalone_key` | string | `"Home"` | `"Home"` | Reserved for future standalone combo |
+
+Legacy flat Huskar keys (`armlet_toggle_threshold`, `armlet_predictive_offset`, `armlet_toggle_cooldown_ms`) are still read when the nested `[heroes.huskar.armlet]` block is absent, so older local configs keep their Huskar tuning.
 
 ## Related Files
 
 | File | Purpose |
-|------|---------|
-| `src/actions/heroes/huskar.rs` | Huskar script implementation |
-| `src/actions/common.rs` | `armlet_toggle()` shared function and `ArmletConfig` |
-| `src/config/settings.rs` | `HuskarConfig` struct and defaults |
+|---|---|
+| `src/actions/heroes/huskar.rs` | Huskar Berserker Blood cleanse plus shared armlet-survivability wiring |
+| `src/actions/armlet.rs` | Shared armlet planning, config resolution, cooldown tracking, and dual-trigger execution |
+| `src/actions/common.rs` | Shared survivability helpers that enqueue armlet checks |
+| `src/config/settings.rs` | Shared `[armlet]` config plus Huskar-specific override fields |
 | `config/config.toml` | User configuration |
 
 ---
 
 ## Details
 
-### ⚔️ Armlet Toggle Automation
+### Armlet Toggle Automation
 
-Armlet of Mordiggian is a toggle item that drains HP continuously but provides massive damage and attack speed. Huskar benefits from low HP due to his passive, making armlet toggling at critical HP a core mechanic.
+Armlet of Mordiggian is a toggle item that drains HP continuously but provides large offensive stats. Huskar benefits from low HP because of his passive, so armlet toggling remains a key survival mechanic.
 
-The automation runs in a **separate guarded thread** on every GSI event:
+Huskar no longer owns a separate armlet implementation. On each GSI event, `src/actions/heroes/huskar.rs` enqueues the shared armlet check, and `src/actions/armlet.rs` handles:
 
-1. **Calculate effective threshold**: `armlet_toggle_threshold + armlet_predictive_offset`
-2. **Check if hero HP is below threshold**
-3. **Toggle armlet** if off cooldown (respects `armlet_toggle_cooldown_ms`)
-4. **Prevent race conditions** via `ARMLET_THREAD_GUARD` mutex (only one toggle thread runs at a time)
+1. resolving shared `[armlet]` defaults
+2. applying Huskar overrides from `[heroes.huskar.armlet]`
+3. checking HP, stun state, cooldown, and equipped Armlet
+4. emitting the dual-trigger toggle sequence
+
+#### Dual-trigger sequence
+
+The shared armlet module toggles by pressing:
+
+1. the quick-cast slot key from `[keybindings]`
+2. the same slot key again while holding `[armlet].cast_modifier`
+
+With the checked-in config and Armlet in `slot1`, the sequence is:
+
+- `x`
+- `Alt + x`
 
 #### Predictive Offset
 
-The `armlet_predictive_offset` adds a safety buffer to account for incoming damage. For example:
+The effective trigger line is:
 
-- `armlet_toggle_threshold = 120`
-- `armlet_predictive_offset = 150`
-- **Effective threshold = 270 HP**
+`toggle_threshold + predictive_offset`
 
-When your HP drops below 270, the script toggles armlet to survive burst damage.
+With the checked-in Huskar override:
 
-#### Cooldown Guard
+- shared `toggle_threshold = 320`
+- Huskar override `toggle_threshold = 120`
+- shared `predictive_offset = 30`
+- Huskar override `predictive_offset = 150`
+- effective trigger = `270 HP`
 
-The `armlet_toggle_cooldown_ms` prevents rapid toggling that could waste time or cause death. After a toggle, the script waits this duration before allowing another toggle.
+When Huskar's HP drops below 270, the shared armlet module becomes eligible to toggle.
 
-### 🩸 Berserker Blood Debuff Cleanse
+#### Cooldown and critical retry
 
-Berserker Blood (E) is an active ability that can cleanse debuffs by activating the skill. The automation detects debuffs and activates Berserker Blood after a configurable delay.
+The shared `toggle_cooldown_ms` prevents rapid retriggers. Huskar overrides it to `300ms` in the checked-in config.
+
+If a toggle fires at extremely low HP, the shared armlet module also arms a critical retry marker. If later GSI updates show HP still critically low or even lower, the module forces one more dual-trigger attempt to recover from a likely failed or missed toggle.
+
+### Berserker Blood Debuff Cleanse
+
+Berserker Blood (E) is still Huskar-specific and remains in `src/actions/heroes/huskar.rs`.
 
 #### Trigger Conditions
 
 All conditions must be met:
 
-1. **Hero is alive** (`hero.is_alive()`)
-2. **Hero has debuff** (`hero.has_debuff == true`)
-3. **Berserker Blood ability found** in `ability0-3` with name `"huskar_berserkers_blood"`
-4. **Ability is ready**: `can_cast == true`, `level > 0`, `cooldown == 0`
-5. **Delay timer elapsed** (`berserker_blood_delay_ms` since first debuff detected)
+1. hero is alive
+2. hero currently has a debuff
+3. the Berserker Blood ability is present in `ability0`-`ability3`
+4. the ability is castable, leveled, and off cooldown
+5. the configured delay has elapsed since the first debuff detection
 
 #### Delay Timer Logic
 
-When a debuff is first detected, the script starts a timer. If the debuff persists for the configured delay (default: 300ms), Berserker Blood is activated. This allows waiting for **multiple debuffs** to stack before cleansing (more efficient).
+When a debuff is first detected, the script starts a timer. If the debuff persists for the configured delay, Berserker Blood is activated. This lets Huskar wait briefly for stacked debuffs instead of cleansing the very first one immediately.
 
-**State tracking:**
-- `BERSERKER_BLOOD_DEBUFF_DETECTED` stores the timestamp of first debuff detection
-- When debuff disappears, the tracker is reset
-- Once the delay elapses, the ability is activated and tracker is reset
+State tracking:
 
-Example flow:
-```
-T=0ms:    Debuff detected → Start 300ms timer
-T=150ms:  Still debuffed, waiting...
-T=300ms:  Timer elapsed → Activate Berserker Blood (E key pressed)
-T=301ms:  Tracker reset
-```
+- `BERSERKER_BLOOD_DEBUFF_DETECTED` stores the first debuff timestamp
+- when debuffs disappear, the tracker resets
+- once the delay elapses, the ability is activated and the tracker resets
 
-If debuffs are removed before the delay elapses (e.g., by other dispels), the tracker resets without wasting the ability.
+### Survivability Actions
 
-### 🛡️ Survivability Actions
+Huskar still uses the shared `SurvivabilityActions` system for:
 
-Huskar uses the common `SurvivabilityActions` system:
+- healing items
+- defensive items
+- neutral items
+- danger detection updates
 
-- **Healing items** – Auto-use Magic Wand, Faerie Fire, Satanic, etc. when HP drops
-- **Defensive items** – BKB, Lotus Orb, Blade Mail when danger detected
-- **Neutral items** – Witchbane, Safety Bubble, etc.
-- **Danger detection** – Monitors HP changes and enemy abilities
+See `docs/features/survivability.md` for the shared pipeline details.
 
-These features share the global `[common]`, `[danger_detection]`, and `[neutral_items]` config sections.
+### Standalone Trigger
 
-### 🔒 Thread Safety
+The `standalone_key` config option still exists, but the Huskar script currently logs:
 
-**Armlet toggle runs in a spawned thread** to prevent blocking GSI processing. A `try_lock()` guard ensures only one armlet toggle thread runs at a time:
-
-```rust
-let Ok(_guard) = ARMLET_THREAD_GUARD.try_lock() else {
-    debug!("Armlet toggle already in progress, skipping");
-    return;
-};
-```
-
-If another toggle is already running, subsequent triggers are skipped. This prevents race conditions and excessive toggling.
-
-### ⚠️ Standalone Trigger Not Implemented
-
-The `standalone_key` config option exists but the script currently logs:
-
-```
+```text
 Huskar standalone trigger not implemented
 ```
 
-Future enhancements may add a manual combo sequence (e.g., Blink + abilities).
-
 ### Usage
 
-1. **Equip Armlet of Mordiggian** in-game
-2. **Level Berserker Blood** (E ability)
-3. **Configure thresholds** in `config/config.toml` to match your playstyle
-4. **Run the app** – Hero is auto-detected via GSI
-5. **Armlet toggles automatically** when HP drops below threshold
-6. **Berserker Blood cleanses debuffs** after delay
+1. Equip Armlet of Mordiggian in-game.
+2. Level Berserker Blood.
+3. Tune `[armlet]` and `[heroes.huskar.armlet]` to your preference.
+4. Run the app and let GSI detect Huskar.
+5. Confirm armlet toggles when HP drops below the effective threshold.
+6. Confirm Berserker Blood cleanses debuffs after the configured delay.
 
 ### Logging
 
-With `level = "info"`, you'll see:
-```
+With `level = "info"`, you'll see messages like:
+
+```text
+Triggering armlet toggle (HP: 250 < trigger: 270, base: 120, cooldown: 300ms)
 Debuff detected, starting 300ms timer for Berserker Blood
 Activating Berserker Blood to cleanse debuffs (300ms delay elapsed)
 ```
 
 With `level = "debug"`:
-```
-Armlet toggle already in progress, skipping
+
+```text
+Armlet toggle on cooldown (125ms remaining)
 Berserker Blood not ready: can_cast=true, level=4, cooldown=5.2
 Waiting for more debuffs... (150ms elapsed)
 ```

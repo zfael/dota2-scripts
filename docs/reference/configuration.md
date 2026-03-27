@@ -69,6 +69,18 @@
 |---|---:|---:|---|
 | `survivability_hp_threshold` | `30` | `30` | Base HP% threshold for shared healing when danger mode is not active. See `docs/features/survivability.md`. |
 
+## `[armlet]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `enabled` | `true` | `true` | Master switch for shared armlet automation. The runtime still only acts when the current hero is alive and actually has Armlet equipped. |
+| `cast_modifier` | `"Alt"` | `"Alt"` | Shared cast-side modifier paired with the quick-cast slot key. Supported values are `Alt`, `Ctrl` / `Control`, and `Shift`. Unknown values warn and fall back to `Alt`. |
+| `toggle_threshold` | `320` | `320` | Shared raw-HP base threshold before any hero-specific overrides are applied. |
+| `predictive_offset` | `30` | `30` | Shared extra HP buffer added to the base threshold. |
+| `toggle_cooldown_ms` | `250` | `250` | Shared cooldown between armlet toggle attempts. |
+
+See `docs/features/survivability.md`.
+
 ## `[danger_detection]`
 
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |
@@ -136,12 +148,20 @@ See `docs/features/soul-ring.md` and `docs/features/keyboard-interception.md`.
 
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |
 |---|---:|---:|---|
-| `armlet_toggle_threshold` | `120` | `320` | Checked-in config is much lower than the code fallback. |
-| `armlet_predictive_offset` | `150` | `30` | Extra HP buffer before the toggle trigger fires. |
-| `armlet_toggle_cooldown_ms` | `300` | `250` | Cooldown between toggle attempts. |
 | `berserker_blood_key` | `"e"` | `"e"` | `char` field; one-character string only. |
 | `berserker_blood_delay_ms` | `300` | `300` | Delay between first debuff detection and cleanse attempt. |
 | `standalone_key` | `"Home"` | `"Home"` | Used by the generic combo-trigger path. |
+
+### `[heroes.huskar.armlet]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `enabled` | omitted | inherits `[armlet].enabled` | Optional per-hero override. If omitted, Huskar inherits the shared armlet master switch. |
+| `toggle_threshold` | `120` | inherits `[armlet].toggle_threshold` | Checked-in Huskar config overrides the shared base threshold. |
+| `predictive_offset` | `150` | inherits `[armlet].predictive_offset` | Checked-in Huskar config overrides the shared predictive buffer. |
+| `toggle_cooldown_ms` | `300` | inherits `[armlet].toggle_cooldown_ms` | Checked-in Huskar config overrides the shared cooldown. |
+
+**Compatibility note:** legacy flat Huskar keys (`armlet_toggle_threshold`, `armlet_predictive_offset`, `armlet_toggle_cooldown_ms`) are still read when the nested `[heroes.huskar.armlet]` block is absent, so older local configs do not lose Huskar-specific tuning.
 
 See `docs/heroes/huskar.md`.
 

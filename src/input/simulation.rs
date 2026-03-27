@@ -35,6 +35,13 @@ pub struct SyntheticInputMetricsSnapshot {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModifierKey {
+    Alt,
+    Control,
+    Shift,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SyntheticAction {
     KeyClick(char),
     KeyDown(char),
@@ -42,8 +49,8 @@ enum SyntheticAction {
     RightClick,
     #[allow(dead_code)]
     LeftClick,
-    AltDown,
-    AltUp,
+    ModifierDown(ModifierKey),
+    ModifierUp(ModifierKey),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -74,7 +81,7 @@ struct EnqueueMetricsCheckpoint {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct WorkerGuardState {
-    alt_guard_held: bool,
+    modifier_guard_held: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -114,12 +121,20 @@ pub fn left_click() {
 
 /// Hold ALT key down
 pub fn alt_down() {
-    enqueue_command_and_wait(alt_down_command());
+    modifier_down(ModifierKey::Alt);
 }
 
 /// Release ALT key
 pub fn alt_up() {
-    enqueue_command_and_wait(alt_up_command());
+    modifier_up(ModifierKey::Alt);
+}
+
+pub fn modifier_down(modifier: ModifierKey) {
+    enqueue_command_and_wait(modifier_down_command(modifier));
+}
+
+pub fn modifier_up(modifier: ModifierKey) {
+    enqueue_command_and_wait(modifier_up_command(modifier));
 }
 
 fn press_key_command(key_char: char) -> SyntheticInputCommand {
@@ -164,16 +179,26 @@ fn left_click_command() -> SyntheticInputCommand {
     }
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn alt_down_command() -> SyntheticInputCommand {
+    modifier_down_command(ModifierKey::Alt)
+}
+
+fn modifier_down_command(modifier: ModifierKey) -> SyntheticInputCommand {
     SyntheticInputCommand {
-        action: SyntheticAction::AltDown,
+        action: SyntheticAction::ModifierDown(modifier),
         guard_behavior: GuardBehavior::HoldUntilAltUp,
     }
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn alt_up_command() -> SyntheticInputCommand {
+    modifier_up_command(ModifierKey::Alt)
+}
+
+fn modifier_up_command(modifier: ModifierKey) -> SyntheticInputCommand {
     SyntheticInputCommand {
-        action: SyntheticAction::AltUp,
+        action: SyntheticAction::ModifierUp(modifier),
         guard_behavior: GuardBehavior::ReleaseHold {
             delay_ms: POST_ACTION_GUARD_DELAY_MS,
         },
@@ -343,10 +368,10 @@ fn plan_guard_execution(
         GuardBehavior::Pulse { delay_ms } => GuardExecutionPlan {
             set_simulating_before: Some(true),
             post_action_delay_ms: Some(delay_ms),
-            final_simulating_value: Some(guard_state.alt_guard_held),
+            final_simulating_value: Some(guard_state.modifier_guard_held),
         },
         GuardBehavior::HoldUntilAltUp => {
-            guard_state.alt_guard_held = true;
+            guard_state.modifier_guard_held = true;
             GuardExecutionPlan {
                 set_simulating_before: Some(true),
                 post_action_delay_ms: None,
@@ -354,7 +379,7 @@ fn plan_guard_execution(
             }
         }
         GuardBehavior::ReleaseHold { delay_ms } => {
-            guard_state.alt_guard_held = false;
+            guard_state.modifier_guard_held = false;
             GuardExecutionPlan {
                 set_simulating_before: None,
                 post_action_delay_ms: Some(delay_ms),
@@ -391,16 +416,24 @@ fn perform_action(enigo: &mut Enigo, action: SyntheticAction) {
                 warn!("Failed to perform left click: {}", e);
             }
         }
-        SyntheticAction::AltDown => {
-            if let Err(e) = enigo.key(Key::Alt, Direction::Press) {
-                warn!("Failed to press ALT down: {}", e);
+        SyntheticAction::ModifierDown(modifier) => {
+            if let Err(e) = enigo.key(enigo_modifier_key(modifier), Direction::Press) {
+                warn!("Failed to press {:?} down: {}", modifier, e);
             }
         }
-        SyntheticAction::AltUp => {
-            if let Err(e) = enigo.key(Key::Alt, Direction::Release) {
-                warn!("Failed to release ALT: {}", e);
+        SyntheticAction::ModifierUp(modifier) => {
+            if let Err(e) = enigo.key(enigo_modifier_key(modifier), Direction::Release) {
+                warn!("Failed to release {:?}: {}", modifier, e);
             }
         }
+    }
+}
+
+fn enigo_modifier_key(modifier: ModifierKey) -> Key {
+    match modifier {
+        ModifierKey::Alt => Key::Alt,
+        ModifierKey::Control => Key::Control,
+        ModifierKey::Shift => Key::Shift,
     }
 }
 
@@ -461,7 +494,7 @@ mod tests {
                 final_simulating_value: None,
             }
         );
-        assert!(guard_state.alt_guard_held);
+        assert!(guard_state.modifier_guard_held);
 
         let click_plan =
             plan_guard_execution(&mut guard_state, mouse_click_command().guard_behavior);
@@ -473,7 +506,7 @@ mod tests {
                 final_simulating_value: Some(true),
             }
         );
-        assert!(guard_state.alt_guard_held);
+        assert!(guard_state.modifier_guard_held);
 
         let alt_up_plan =
             plan_guard_execution(&mut guard_state, alt_up_command().guard_behavior);
@@ -485,7 +518,7 @@ mod tests {
                 final_simulating_value: Some(false),
             }
         );
-        assert!(!guard_state.alt_guard_held);
+        assert!(!guard_state.modifier_guard_held);
     }
 
     #[test]
@@ -501,7 +534,7 @@ mod tests {
         assert!(enqueue_with_sender(
             &tx,
             test_job(alt_down_command()),
-            SyntheticAction::AltDown
+            SyntheticAction::ModifierDown(ModifierKey::Alt)
         ));
         assert!(enqueue_with_sender(
             &tx,

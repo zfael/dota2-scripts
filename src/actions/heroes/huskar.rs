@@ -1,5 +1,6 @@
 use crate::actions::heroes::traits::HeroScript;
-use crate::actions::common::{armlet_toggle, ArmletConfig, SurvivabilityActions};
+use crate::actions::armlet;
+use crate::actions::common::SurvivabilityActions;
 use crate::actions::executor::ActionExecutor;
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Hero};
@@ -10,8 +11,6 @@ use tracing::{debug, info};
 
 lazy_static! {
     static ref BERSERKER_BLOOD_DEBUFF_DETECTED: Mutex<Option<Instant>> = Mutex::new(None);
-    /// Guard to prevent multiple armlet toggle threads from running simultaneously
-    static ref ARMLET_THREAD_GUARD: Mutex<()> = Mutex::new(());
 }
 
 pub struct HuskarScript {
@@ -95,25 +94,12 @@ impl HuskarScript {
 
 impl HeroScript for HuskarScript {
     fn handle_gsi_event(&self, event: &GsiWebhookEvent) {
-        // PRIORITY 1: Armlet toggle in separate thread (critical for Huskar survival)
-        // Uses try_lock guard to prevent race conditions - if another toggle is in progress, skip
+        // PRIORITY 1: Shared armlet toggle path
         let settings_clone = self.settings.clone();
         let event_clone = event.clone();
         self.executor.enqueue("huskar-armlet-toggle", move || {
-            // Try to acquire the guard - if another thread holds it, skip this iteration
-            let Ok(_guard) = ARMLET_THREAD_GUARD.try_lock() else {
-                debug!("Armlet toggle already in progress, skipping");
-                return;
-            };
-            
             let settings = settings_clone.lock().unwrap();
-            let armlet_config = ArmletConfig {
-                toggle_threshold: settings.heroes.huskar.armlet_toggle_threshold,
-                predictive_offset: settings.heroes.huskar.armlet_predictive_offset,
-                toggle_cooldown_ms: settings.heroes.huskar.armlet_toggle_cooldown_ms,
-            };
-            armlet_toggle(&event_clone, &settings, &armlet_config);
-            // _guard is dropped here, releasing the lock
+            armlet::maybe_toggle(&event_clone, &settings);
         });
 
         // PRIORITY 2: Update danger detection state

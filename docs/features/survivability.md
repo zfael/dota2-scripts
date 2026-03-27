@@ -8,12 +8,13 @@
 
 | Path | What it owns |
 |---|---|
-| `src/actions/common.rs` | Shared survivability pipeline: armlet, healing items, defensive items, neutral items |
+| `src/actions/armlet.rs` | Shared armlet planning, config resolution, cooldown tracking, critical retry handling, and dual-trigger execution |
+| `src/actions/common.rs` | Shared survivability pipeline: armlet job enqueueing, healing items, defensive items, neutral items |
 | `src/actions/danger_detector.rs` | Global `in_danger` heuristic consumed by common and hero code |
 | `src/actions/dispel.rs` | Immediate Manta/Lotus reaction to silence |
 | `src/actions/auto_items.rs` | Cached GSI item/ability state and Space+right-click item usage; not the HP-healing loop, but part of the shared item automation surface |
-| `src/config/settings.rs` | `CommonConfig`, `DangerDetectionConfig`, `NeutralItemConfig` defaults |
-| `config/config.toml` | Checked-in values for `[common]`, `[danger_detection]`, `[neutral_items]` |
+| `src/config/settings.rs` | `CommonConfig`, shared `ArmletAutomationConfig`, hero armlet overrides, `DangerDetectionConfig`, `NeutralItemConfig` defaults |
+| `config/config.toml` | Checked-in values for `[common]`, `[armlet]`, `[danger_detection]`, `[neutral_items]`, and hero armlet overrides |
 
 ---
 
@@ -76,6 +77,51 @@ For each inventory slot from `event.items.all_slots()`:
 - match exact `item.name`
 - require `item.can_cast == Some(true)`
 - use the slot's configured key via `Settings::get_key_for_slot(...)`
+
+---
+
+## Armlet automation
+
+Owned by `src/actions/armlet.rs`.
+
+This path is shared across heroes and fallback survivability flow. The runtime only acts when:
+
+- `[armlet].enabled = true` after per-hero override resolution
+- the hero is alive
+- the hero currently has `item_armlet`
+- the hero is not stunned at the moment a normal toggle would fire
+- current HP is below `toggle_threshold + predictive_offset`
+- the shared cooldown has elapsed
+
+### Trigger shape
+
+Armlet toggling now uses a dual-trigger sequence:
+
+1. press the quick-cast slot key from `[keybindings]`
+2. press the cast-side trigger for the same slot using `[armlet].cast_modifier`
+
+With the checked-in config, a slot bound to `x` toggles as:
+
+- `x`
+- `Alt + x`
+
+Supported modifier strings are:
+
+- `Alt`
+- `Ctrl` / `Control`
+- `Shift`
+
+If the configured modifier is unknown, the runtime logs a warning and falls back to `Alt`.
+
+### Shared defaults + hero overrides
+
+The base armlet behavior lives in `[armlet]`.
+
+Supported heroes can override the shared threshold/cooldown values through nested hero config blocks such as `[heroes.huskar.armlet]`. If a hero has no override, the shared defaults apply. Huskar also keeps backward compatibility with its older flat armlet keys if the nested block is absent.
+
+### Critical retry
+
+When a toggle fires at extremely low HP (below half the configured base threshold), the module records a critical retry marker. If a later event shows HP still critically low or lower, the module forces one more dual-trigger toggle even if that suggests the previous toggle likely failed to flip the item state cleanly.
 
 ---
 
@@ -183,7 +229,9 @@ If you change how shared item availability is read from GSI, check both:
 | Section | Keys currently used by survivability code |
 |---|---|
 | `[common]` | `survivability_hp_threshold` |
+| `[armlet]` | `enabled`, `cast_modifier`, `toggle_threshold`, `predictive_offset`, `toggle_cooldown_ms` |
 | `[danger_detection]` | `enabled`, `healing_threshold_in_danger`, `max_healing_items_per_danger`, `auto_bkb`, `auto_satanic`, `satanic_hp_threshold`, `auto_blade_mail`, `auto_glimmer_cape`, `auto_ghost_scepter`, `auto_shivas_guard`, `auto_manta_on_silence`, `auto_lotus_on_silence` |
+| `[heroes.<hero>.armlet]` | optional per-hero `enabled`, `toggle_threshold`, `predictive_offset`, `toggle_cooldown_ms` overrides |
 | `[neutral_items]` | `enabled`, `self_cast_key`, `use_in_danger`, `hp_threshold`, `allowed_items` |
 
 ---

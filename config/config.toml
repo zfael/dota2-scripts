@@ -24,13 +24,22 @@ level = "info"
 [common]
 survivability_hp_threshold = 30
 
+[armlet]
+enabled = true
+cast_modifier = "Alt"
+toggle_threshold = 320
+predictive_offset = 30
+toggle_cooldown_ms = 250
+
 [heroes.huskar]
-armlet_toggle_threshold = 120
-armlet_predictive_offset = 150
-armlet_toggle_cooldown_ms = 300
 berserker_blood_key = "e"
 berserker_blood_delay_ms = 300
 standalone_key = "Home"
+
+[heroes.huskar.armlet]
+toggle_threshold = 120
+predictive_offset = 150
+toggle_cooldown_ms = 300
 
 [heroes.legion_commander]
 standalone_key = "Home"

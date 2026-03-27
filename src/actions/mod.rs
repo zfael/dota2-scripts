@@ -1,3 +1,4 @@
+pub mod armlet;
 pub mod auto_items;
 pub mod common;
 pub mod danger_detector;

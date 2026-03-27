@@ -67,6 +67,50 @@ pub struct CommonConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArmletAutomationConfig {
+    #[serde(default = "default_armlet_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_armlet_cast_modifier")]
+    pub cast_modifier: String,
+    #[serde(default = "default_armlet_threshold")]
+    pub toggle_threshold: u32,
+    #[serde(default = "default_armlet_offset")]
+    pub predictive_offset: u32,
+    #[serde(default = "default_armlet_cooldown")]
+    pub toggle_cooldown_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct HeroArmletOverrideConfig {
+    #[serde(default)]
+    pub enabled: Option<bool>,
+    #[serde(default)]
+    pub toggle_threshold: Option<u32>,
+    #[serde(default)]
+    pub predictive_offset: Option<u32>,
+    #[serde(default)]
+    pub toggle_cooldown_ms: Option<u64>,
+}
+
+impl HeroArmletOverrideConfig {
+    pub fn is_empty(&self) -> bool {
+        self.enabled.is_none()
+            && self.toggle_threshold.is_none()
+            && self.predictive_offset.is_none()
+            && self.toggle_cooldown_ms.is_none()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EffectiveArmletConfig {
+    pub enabled: bool,
+    pub cast_modifier: String,
+    pub toggle_threshold: u32,
+    pub predictive_offset: u32,
+    pub toggle_cooldown_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HuskarConfig {
     #[serde(default = "default_armlet_threshold")]
     pub armlet_toggle_threshold: u32,
@@ -80,12 +124,16 @@ pub struct HuskarConfig {
     pub berserker_blood_delay_ms: u64,
     #[serde(default = "default_standalone_key")]
     pub standalone_key: String,
+    #[serde(default)]
+    pub armlet: HeroArmletOverrideConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LegionCommanderConfig {
     #[serde(default = "default_standalone_key")]
     pub standalone_key: String,
+    #[serde(default)]
+    pub armlet: HeroArmletOverrideConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,12 +151,16 @@ pub struct ShadowFiendConfig {
     /// Standalone combo trigger key (Blink + Ultimate combo)
     #[serde(default = "default_standalone_key")]
     pub standalone_key: String,
+    #[serde(default)]
+    pub armlet: HeroArmletOverrideConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TinyConfig {
     #[serde(default = "default_standalone_key")]
     pub standalone_key: String,
+    #[serde(default)]
+    pub armlet: HeroArmletOverrideConfig,
 }
 
 /// Configuration for auto-casting an ability during Space+Right-click combo
@@ -144,6 +196,8 @@ pub struct BroodmotherConfig {
     pub auto_abilities: Vec<AutoAbilityConfig>,
     #[serde(default = "default_auto_abilities_first")]
     pub auto_abilities_first: bool,
+    #[serde(default)]
+    pub armlet: HeroArmletOverrideConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -172,6 +226,8 @@ pub struct LargoConfig {
     pub r_ability_key: char,
     #[serde(default = "default_standalone_key")]
     pub standalone_key: String,
+    #[serde(default)]
+    pub armlet: HeroArmletOverrideConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -302,6 +358,8 @@ pub struct Settings {
     #[serde(default)]
     pub common: CommonConfig,
     #[serde(default)]
+    pub armlet: ArmletAutomationConfig,
+    #[serde(default)]
     pub heroes: HeroesConfig,
     #[serde(default)]
     pub danger_detection: DangerDetectionConfig,
@@ -349,6 +407,12 @@ fn default_log_level() -> String {
 }
 fn default_survivability_threshold() -> u32 {
     30
+}
+fn default_armlet_enabled() -> bool {
+    true
+}
+fn default_armlet_cast_modifier() -> String {
+    "Alt".to_string()
 }
 fn default_armlet_threshold() -> u32 {
     320
@@ -580,6 +644,18 @@ impl Default for CommonConfig {
     }
 }
 
+impl Default for ArmletAutomationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_armlet_enabled(),
+            cast_modifier: default_armlet_cast_modifier(),
+            toggle_threshold: default_armlet_threshold(),
+            predictive_offset: default_armlet_offset(),
+            toggle_cooldown_ms: default_armlet_cooldown(),
+        }
+    }
+}
+
 impl Default for HuskarConfig {
     fn default() -> Self {
         Self {
@@ -589,6 +665,7 @@ impl Default for HuskarConfig {
             berserker_blood_key: default_berserker_blood_key(),
             berserker_blood_delay_ms: default_berserker_blood_delay(),
             standalone_key: default_standalone_key(),
+            armlet: HeroArmletOverrideConfig::default(),
         }
     }
 }
@@ -597,6 +674,7 @@ impl Default for LegionCommanderConfig {
     fn default() -> Self {
         Self {
             standalone_key: default_standalone_key(),
+            armlet: HeroArmletOverrideConfig::default(),
         }
     }
 }
@@ -609,6 +687,7 @@ impl Default for ShadowFiendConfig {
             auto_bkb_on_ultimate: default_sf_auto_bkb_on_ultimate(),
             auto_d_on_ultimate: default_sf_auto_d_on_ultimate(),
             standalone_key: default_standalone_key(),
+            armlet: HeroArmletOverrideConfig::default(),
         }
     }
 }
@@ -625,6 +704,7 @@ impl Default for BroodmotherConfig {
             auto_items: default_auto_items(),
             auto_abilities: default_auto_abilities(),
             auto_abilities_first: default_auto_abilities_first(),
+            armlet: HeroArmletOverrideConfig::default(),
         }
     }
 }
@@ -633,6 +713,7 @@ impl Default for TinyConfig {
     fn default() -> Self {
         Self {
             standalone_key: default_standalone_key(),
+            armlet: HeroArmletOverrideConfig::default(),
         }
     }
 }
@@ -652,6 +733,7 @@ impl Default for LargoConfig {
             e_ability_key: default_largo_e_key(),
             r_ability_key: default_largo_r_key(),
             standalone_key: default_standalone_key(),
+            armlet: HeroArmletOverrideConfig::default(),
         }
     }
 }
@@ -712,6 +794,7 @@ impl Default for Settings {
             keybindings: KeybindingsConfig::default(),
             logging: LoggingConfig::default(),
             common: CommonConfig::default(),
+            armlet: ArmletAutomationConfig::default(),
             heroes: HeroesConfig::default(),
             danger_detection: DangerDetectionConfig::default(),
             neutral_items: NeutralItemConfig::default(),
@@ -805,6 +888,58 @@ impl Settings {
             "neutral0" => Some(self.keybindings.neutral0),
             _ => None,
         }
+    }
+
+    fn huskar_armlet_override(&self) -> HeroArmletOverrideConfig {
+        if !self.heroes.huskar.armlet.is_empty() {
+            return self.heroes.huskar.armlet.clone();
+        }
+
+        HeroArmletOverrideConfig {
+            enabled: None,
+            toggle_threshold: Some(self.heroes.huskar.armlet_toggle_threshold),
+            predictive_offset: Some(self.heroes.huskar.armlet_predictive_offset),
+            toggle_cooldown_ms: Some(self.heroes.huskar.armlet_toggle_cooldown_ms),
+        }
+    }
+
+    fn hero_armlet_override(&self, hero_name: &str) -> Option<HeroArmletOverrideConfig> {
+        match hero_name {
+            "npc_dota_hero_huskar" => Some(self.huskar_armlet_override()),
+            "npc_dota_hero_legion_commander" => Some(self.heroes.legion_commander.armlet.clone()),
+            "npc_dota_hero_nevermore" => Some(self.heroes.shadow_fiend.armlet.clone()),
+            "npc_dota_hero_tiny" => Some(self.heroes.tiny.armlet.clone()),
+            "npc_dota_hero_largo" => Some(self.heroes.largo.armlet.clone()),
+            "npc_dota_hero_broodmother" => Some(self.heroes.broodmother.armlet.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn resolve_armlet_config(&self, hero_name: &str) -> EffectiveArmletConfig {
+        let mut resolved = EffectiveArmletConfig {
+            enabled: self.armlet.enabled,
+            cast_modifier: self.armlet.cast_modifier.clone(),
+            toggle_threshold: self.armlet.toggle_threshold,
+            predictive_offset: self.armlet.predictive_offset,
+            toggle_cooldown_ms: self.armlet.toggle_cooldown_ms,
+        };
+
+        if let Some(hero_override) = self.hero_armlet_override(hero_name) {
+            if let Some(enabled) = hero_override.enabled {
+                resolved.enabled = enabled;
+            }
+            if let Some(toggle_threshold) = hero_override.toggle_threshold {
+                resolved.toggle_threshold = toggle_threshold;
+            }
+            if let Some(predictive_offset) = hero_override.predictive_offset {
+                resolved.predictive_offset = predictive_offset;
+            }
+            if let Some(toggle_cooldown_ms) = hero_override.toggle_cooldown_ms {
+                resolved.toggle_cooldown_ms = toggle_cooldown_ms;
+            }
+        }
+
+        resolved
     }
 
     pub fn get_standalone_key(&self, hero: &str) -> String {
