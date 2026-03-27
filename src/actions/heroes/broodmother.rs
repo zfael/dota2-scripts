@@ -91,7 +91,7 @@ impl BroodmotherScript {
 
 impl HeroScript for BroodmotherScript {
     fn handle_gsi_event(&self, event: &GsiWebhookEvent) {
-        // BROODMOTHER_ACTIVE is updated by dispatcher for all GSI events
+        // BROODMOTHER_ACTIVE is refreshed by handler.rs for all GSI events
         // This handler is only called when playing Broodmother
 
         // Use common survivability actions (danger detection, healing, defensive items)
