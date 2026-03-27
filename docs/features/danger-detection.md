@@ -8,8 +8,8 @@
 
 | Path | What it owns |
 |---|---|
-| `src/actions/danger_detector.rs` | Global HP tracker and `is_in_danger()` flag |
-| `src/actions/common.rs` | Healing, defensive items, and neutral items that consume `is_in_danger()` |
+| `src/actions/danger_detector.rs` | Cross-event HP tracker; `update(...)` owns the current danger decision and `is_in_danger()` exposes the persisted flag |
+| `src/actions/common.rs` | Healing, defensive items, and neutral items; the shared survivability pass reuses one current-event danger result instead of re-reading the tracker mid-pass |
 | `src/actions/dispel.rs` | Silence dispels configured under `[danger_detection]`, but not gated by `in_danger` |
 | `src/config/settings.rs` | `DangerDetectionConfig` defaults and serde wiring |
 | `config/config.toml` | Checked-in runtime values |
@@ -70,11 +70,11 @@ Current default:
 
 ## What danger changes
 
-Danger does not act on its own. Other modules read `danger_detector::is_in_danger()` and change behavior.
+Danger does not act on its own. `danger_detector::update(...)` still owns the cross-event tracker, and common survivability now computes one current-event `in_danger` result up front and reuses that snapshot through the healing, defensive-item, and neutral-item checks for the same GSI event. Direct `danger_detector::is_in_danger()` reads outside that shared pass are unchanged.
 
 ### 1. Healing thresholds
 
-Owned by `src/actions/common.rs::check_and_use_healing_items()`.
+Owned by `src/actions/common.rs::check_and_use_healing_items()` and the event-snapshot variant used by the shared survivability pass.
 
 | Mode | Threshold source | Default | Max items per call |
 |---|---|---|---|
@@ -106,7 +106,7 @@ Hardcoded heal values used in the doc/review context:
 
 ### 3. Defensive items
 
-Owned by `src/actions/common.rs::use_defensive_items_if_danger()`.
+Owned by `src/actions/common.rs::use_defensive_items_if_danger()` and the event-snapshot variant used by the shared survivability pass.
 
 Current activation order:
 
@@ -128,11 +128,11 @@ Behavior details:
 
 ### 4. Neutral items in danger
 
-Owned by `src/actions/common.rs::use_neutral_item_if_danger()`.
+Owned by `src/actions/common.rs::use_neutral_item_if_danger()` and the event-snapshot variant used by the shared survivability pass.
 
 Danger is also used as a gate for neutral item self-cast automation when all of these are true:
 
-- `danger_detector::is_in_danger() == true`
+- the current danger result is `true` (either the per-event snapshot in the shared pass or a direct `is_in_danger()` read elsewhere)
 - `[neutral_items].enabled = true`
 - `[neutral_items].use_in_danger = true`
 - `event.hero.health_percent < neutral_items.hp_threshold`
