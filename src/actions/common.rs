@@ -188,36 +188,38 @@ impl SurvivabilityActions {
         });
 
         // PRIORITY 2: Update danger detection state
-        {
+        let in_danger = {
             let settings = self.settings.lock().unwrap();
-            let _in_danger =
-                crate::actions::danger_detector::update(event, &settings.danger_detection);
-        }
+            crate::actions::danger_detector::update(event, &settings.danger_detection)
+        };
 
         // PRIORITY 3: Always check survivability first
-        self.check_and_use_healing_items(event);
+        self.check_and_use_healing_items_with_danger(event, in_danger);
 
         // PRIORITY 4: Use defensive items if in danger
-        self.use_defensive_items_if_danger(event);
+        self.use_defensive_items_if_danger_with_snapshot(event, in_danger);
 
         // PRIORITY 5: Use neutral items if in danger
-        self.use_neutral_item_if_danger(event);
+        self.use_neutral_item_if_danger_with_snapshot(event, in_danger);
     }
 
     /// Check if hero needs healing and use appropriate items
     pub fn check_and_use_healing_items(&self, event: &GsiWebhookEvent) {
+        let in_danger = crate::actions::danger_detector::is_in_danger();
+        self.check_and_use_healing_items_with_danger(event, in_danger);
+    }
+
+    pub(crate) fn check_and_use_healing_items_with_danger(
+        &self,
+        event: &GsiWebhookEvent,
+        in_danger: bool,
+    ) {
         if !event.hero.is_alive() {
             return;
         }
 
-        // Determine threshold based on danger state
-        let in_danger = crate::actions::danger_detector::is_in_danger();
         let settings = self.settings.lock().unwrap();
-        let threshold = if in_danger && settings.danger_detection.enabled {
-            settings.danger_detection.healing_threshold_in_danger
-        } else {
-            settings.common.survivability_hp_threshold
-        };
+        let threshold = healing_threshold_for_event(&settings, in_danger);
 
         // Check if HP is below threshold
         if event.hero.health_percent >= threshold {
@@ -292,20 +294,21 @@ impl SurvivabilityActions {
 
     /// Use defensive items when in danger
     pub fn use_defensive_items_if_danger(&self, event: &GsiWebhookEvent) {
+        let in_danger = crate::actions::danger_detector::is_in_danger();
+        self.use_defensive_items_if_danger_with_snapshot(event, in_danger);
+    }
+
+    pub(crate) fn use_defensive_items_if_danger_with_snapshot(
+        &self,
+        event: &GsiWebhookEvent,
+        in_danger: bool,
+    ) {
         // Check danger state and gather config - release lock before item usage
         let (_enabled, satanic_threshold, defensive_items_config) = {
             let settings = self.settings.lock().unwrap();
             let current_config = &settings.danger_detection;
 
-            if !current_config.enabled {
-                return;
-            }
-
-            if !crate::actions::danger_detector::is_in_danger() {
-                return;
-            }
-
-            if !event.hero.is_alive() {
+            if !should_consider_defensive_items(event, &settings, in_danger) {
                 return;
             }
 
@@ -393,41 +396,43 @@ impl SurvivabilityActions {
 
     /// Use neutral items when in danger
     pub fn use_neutral_item_if_danger(&self, event: &GsiWebhookEvent) {
+        let in_danger = crate::actions::danger_detector::is_in_danger();
+        self.use_neutral_item_if_danger_with_snapshot(event, in_danger);
+    }
+
+    pub(crate) fn use_neutral_item_if_danger_with_snapshot(
+        &self,
+        event: &GsiWebhookEvent,
+        in_danger: bool,
+    ) {
         if !event.hero.is_alive() {
             return;
         }
 
         let settings = self.settings.lock().unwrap();
 
-        // Check if neutral item usage is enabled
         if !settings.neutral_items.enabled {
             return;
         }
 
-        // Check if use_in_danger is enabled
         if !settings.neutral_items.use_in_danger {
             return;
         }
 
-        // Check if we're in danger
-        let in_danger = crate::actions::danger_detector::is_in_danger();
         if !in_danger {
             return;
         }
 
-        // Check if HP is below threshold
         if event.hero.health_percent >= settings.neutral_items.hp_threshold {
             return;
         }
 
         let neutral_item = &event.items.neutral0;
 
-        // Check if neutral slot is not empty
         if neutral_item.name == "empty" {
             return;
         }
 
-        // Check if item is in allowed list (exact match)
         if !settings
             .neutral_items
             .allowed_items
@@ -437,7 +442,6 @@ impl SurvivabilityActions {
             return;
         }
 
-        // Check if item can be cast (not on cooldown)
         if let Some(can_cast) = neutral_item.can_cast {
             if !can_cast {
                 debug!("Neutral item on cooldown: {}", neutral_item.name);
@@ -543,9 +547,16 @@ mod tests {
 
 #[cfg(test)]
 mod snapshot_tests {
+    use std::sync::{Arc, Mutex};
+
+    use crate::actions::executor::ActionExecutor;
     use crate::config::Settings;
-    use crate::models::gsi_event::{GsiWebhookEvent, Hero, Ability, Abilities, Items, Item, Map};
-    use super::{healing_threshold_for_event, should_consider_defensive_items, should_consider_neutral_item};
+    use crate::models::gsi_event::{Abilities, Ability, GsiWebhookEvent, Hero, Item, Items, Map};
+
+    use super::{
+        healing_threshold_for_event, should_consider_defensive_items,
+        should_consider_neutral_item, SurvivabilityActions,
+    };
 
     fn empty_ability() -> Ability {
         Ability {
@@ -557,6 +568,94 @@ mod snapshot_tests {
             passive: false,
             ultimate: false,
         }
+    }
+
+    fn hero_with_health(health: u32, health_percent: u32) -> Hero {
+        Hero {
+            aghanims_scepter: false,
+            aghanims_shard: false,
+            alive: true,
+            attributes_level: 0,
+            is_break: false,
+            buyback_cooldown: 0,
+            buyback_cost: 0,
+            disarmed: false,
+            facet: 0,
+            has_debuff: false,
+            health,
+            health_percent,
+            hexed: false,
+            id: 0,
+            level: 1,
+            magicimmune: false,
+            mana: 0,
+            mana_percent: 0,
+            max_health: 100,
+            max_mana: 0,
+            muted: false,
+            name: String::new(),
+            respawn_seconds: 0,
+            silenced: false,
+            smoked: false,
+            stunned: false,
+            talent_1: false,
+            talent_2: false,
+            talent_3: false,
+            talent_4: false,
+            talent_5: false,
+            talent_6: false,
+            talent_7: false,
+            talent_8: false,
+            xp: 0,
+            xpos: 0,
+            ypos: 0,
+        }
+    }
+
+    fn empty_abilities() -> Abilities {
+        Abilities {
+            ability0: empty_ability(),
+            ability1: empty_ability(),
+            ability2: empty_ability(),
+            ability3: empty_ability(),
+            ability4: empty_ability(),
+            ability5: empty_ability(),
+        }
+    }
+
+    fn empty_items() -> Items {
+        Items {
+            neutral0: Item::default(),
+            slot0: Item::default(),
+            slot1: Item::default(),
+            slot2: Item::default(),
+            slot3: Item::default(),
+            slot4: Item::default(),
+            slot5: Item::default(),
+            slot6: Item::default(),
+            slot7: Item::default(),
+            slot8: Item::default(),
+            stash0: Item::default(),
+            stash1: Item::default(),
+            stash2: Item::default(),
+            stash3: Item::default(),
+            stash4: Item::default(),
+            stash5: Item::default(),
+            teleport0: Item::default(),
+        }
+    }
+
+    fn base_event(hero: Hero, items: Items) -> GsiWebhookEvent {
+        GsiWebhookEvent {
+            hero,
+            abilities: empty_abilities(),
+            items,
+            map: Map { clock_time: 0 },
+        }
+    }
+
+    fn test_actions(settings: Settings) -> SurvivabilityActions {
+        SurvivabilityActions::new(Arc::new(Mutex::new(settings)), ActionExecutor::new())
     }
 
     #[test]
@@ -576,68 +675,13 @@ mod snapshot_tests {
     #[test]
     fn defensive_items_gate_uses_passed_danger_flag() {
         let settings = Settings::default();
-        let event = GsiWebhookEvent {
-            hero: Hero {
-                aghanims_scepter: false,
-                aghanims_shard: false,
-                alive: true,
-                attributes_level: 0,
-                is_break: false,
-                buyback_cooldown: 0,
-                buyback_cost: 0,
-                disarmed: false,
-                facet: 0,
-                has_debuff: false,
-                health: 100,
-                health_percent: 100,
-                hexed: false,
-                id: 0,
-                level: 1,
-                magicimmune: false,
-                mana: 0,
-                mana_percent: 0,
-                max_health: 100,
-                max_mana: 0,
-                muted: false,
-                name: String::new(),
-                respawn_seconds: 0,
-                silenced: false,
-                smoked: false,
-                stunned: false,
-                talent_1: false,
-                talent_2: false,
-                talent_3: false,
-                talent_4: false,
-                talent_5: false,
-                talent_6: false,
-                talent_7: false,
-                talent_8: false,
-                xp: 0,
-                xpos: 0,
-                ypos: 0,
-            },
-            abilities: Abilities { ability0: empty_ability(), ability1: empty_ability(), ability2: empty_ability(), ability3: empty_ability(), ability4: empty_ability(), ability5: empty_ability() },
-            items: Items {
-                neutral0: Item::default(),
-                slot0: Item { name: "item_black_king_bar".to_string(), can_cast: Some(true), ..Default::default() },
-                slot1: Default::default(),
-                slot2: Default::default(),
-                slot3: Default::default(),
-                slot4: Default::default(),
-                slot5: Default::default(),
-                slot6: Default::default(),
-                slot7: Default::default(),
-                slot8: Default::default(),
-                stash0: Default::default(),
-                stash1: Default::default(),
-                stash2: Default::default(),
-                stash3: Default::default(),
-                stash4: Default::default(),
-                stash5: Default::default(),
-                teleport0: Default::default(),
-            },
-            map: Map { clock_time: 0 },
+        let mut items = empty_items();
+        items.slot0 = Item {
+            name: "item_black_king_bar".to_string(),
+            can_cast: Some(true),
+            ..Default::default()
         };
+        let event = base_event(hero_with_health(100, 100), items);
 
         assert!(!should_consider_defensive_items(&event, &settings, false));
         assert!(should_consider_defensive_items(&event, &settings, true));
@@ -648,71 +692,54 @@ mod snapshot_tests {
         let mut settings = Settings::default();
         settings.neutral_items.enabled = true;
         settings.neutral_items.allowed_items = vec!["item_neutral_test".to_string()];
-
-        let event = GsiWebhookEvent {
-            hero: Hero {
-                aghanims_scepter: false,
-                aghanims_shard: false,
-                alive: true,
-                attributes_level: 0,
-                is_break: false,
-                buyback_cooldown: 0,
-                buyback_cost: 0,
-                disarmed: false,
-                facet: 0,
-                has_debuff: false,
-                health: 20,
-                health_percent: 20,
-                hexed: false,
-                id: 0,
-                level: 1,
-                magicimmune: false,
-                mana: 0,
-                mana_percent: 0,
-                max_health: 100,
-                max_mana: 0,
-                muted: false,
-                name: String::new(),
-                respawn_seconds: 0,
-                silenced: false,
-                smoked: false,
-                stunned: false,
-                talent_1: false,
-                talent_2: false,
-                talent_3: false,
-                talent_4: false,
-                talent_5: false,
-                talent_6: false,
-                talent_7: false,
-                talent_8: false,
-                xp: 0,
-                xpos: 0,
-                ypos: 0,
-            },
-            abilities: Abilities { ability0: empty_ability(), ability1: empty_ability(), ability2: empty_ability(), ability3: empty_ability(), ability4: empty_ability(), ability5: empty_ability() },
-            items: Items {
-                neutral0: Item { name: "item_neutral_test".to_string(), can_cast: Some(true), ..Default::default() },
-                slot0: Default::default(),
-                slot1: Default::default(),
-                slot2: Default::default(),
-                slot3: Default::default(),
-                slot4: Default::default(),
-                slot5: Default::default(),
-                slot6: Default::default(),
-                slot7: Default::default(),
-                slot8: Default::default(),
-                stash0: Default::default(),
-                stash1: Default::default(),
-                stash2: Default::default(),
-                stash3: Default::default(),
-                stash4: Default::default(),
-                stash5: Default::default(),
-                teleport0: Default::default(),
-            },
-            map: Map { clock_time: 0 },
+        let mut items = empty_items();
+        items.neutral0 = Item {
+            name: "item_neutral_test".to_string(),
+            can_cast: Some(true),
+            ..Default::default()
         };
+        let event = base_event(hero_with_health(20, 20), items);
 
         assert!(!should_consider_neutral_item(&event, &settings, false));
         assert!(should_consider_neutral_item(&event, &settings, true));
+    }
+
+    #[test]
+    fn check_and_use_healing_items_with_danger_uses_passed_flag_without_tracker_setup() {
+        let actions = test_actions(Settings::default());
+        let event = base_event(hero_with_health(40, 40), empty_items());
+
+        actions.check_and_use_healing_items_with_danger(&event, true);
+    }
+
+    #[test]
+    fn use_defensive_items_if_danger_with_snapshot_returns_early_when_flag_is_false() {
+        let actions = test_actions(Settings::default());
+        let mut items = empty_items();
+        items.slot0 = Item {
+            name: "item_black_king_bar".to_string(),
+            can_cast: Some(true),
+            ..Default::default()
+        };
+        let event = base_event(hero_with_health(20, 20), items);
+
+        actions.use_defensive_items_if_danger_with_snapshot(&event, false);
+    }
+
+    #[test]
+    fn use_neutral_item_if_danger_with_snapshot_returns_early_when_flag_is_false() {
+        let mut settings = Settings::default();
+        settings.neutral_items.enabled = true;
+        settings.neutral_items.allowed_items = vec!["item_neutral_test".to_string()];
+        let actions = test_actions(settings);
+        let mut items = empty_items();
+        items.neutral0 = Item {
+            name: "item_neutral_test".to_string(),
+            can_cast: Some(true),
+            ..Default::default()
+        };
+        let event = base_event(hero_with_health(20, 20), items);
+
+        actions.use_neutral_item_if_danger_with_snapshot(&event, false);
     }
 }
