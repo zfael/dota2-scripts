@@ -34,8 +34,9 @@ fn refresh_keyboard_runtime_state(event: &GsiWebhookEvent, settings: &Settings) 
     );
 
     if event.hero.name == Hero::Nevermore.to_game_name() {
-        let mut last_event =
-            crate::actions::heroes::shadow_fiend::SF_LAST_EVENT.lock().unwrap();
+        let mut last_event = crate::actions::heroes::shadow_fiend::SF_LAST_EVENT
+            .lock()
+            .unwrap();
         *last_event = Some(event.clone());
     }
 }
@@ -195,6 +196,60 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn process_gsi_events_refreshes_auto_items_cache_once_when_gsi_is_enabled() {
+        let _guard = shared_test_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        reset_keyboard_runtime_state();
+        crate::actions::auto_items::reset_update_counter_for_tests();
+
+        // Use Huskar fixture but mutate event to prevent any real automation:
+        // - Set hero to full health (no survivability actions)
+        // - Disable all item casting
+        let mut event = load_fixture_event("tests/fixtures/huskar_event.json");
+        event.hero.health_percent = 100;
+        event.hero.health = event.hero.max_health;
+        event.hero.silenced = false;
+        event.items.slot0.can_cast = Some(false);
+        event.items.slot1.can_cast = Some(false);
+        event.items.slot2.can_cast = Some(false);
+        event.items.slot3.can_cast = Some(false);
+        event.items.slot4.can_cast = Some(false);
+        event.items.slot5.can_cast = Some(false);
+
+        let app_state = AppState::new();
+        app_state.lock().unwrap().gsi_enabled = true;
+
+        let mut settings_value = Settings::default();
+        // Disable automation features to prevent gameplay actions
+        settings_value.soul_ring.enabled = false;
+        settings_value.neutral_items.log_discoveries = false;
+        let settings = std::sync::Arc::new(std::sync::Mutex::new(settings_value));
+        let dispatcher = std::sync::Arc::new(ActionDispatcher::new(
+            settings.clone(),
+            ActionExecutor::new(),
+        ));
+        let (tx, rx) = mpsc::channel(1);
+
+        tx.send(event.clone())
+            .await
+            .expect("test event should send");
+        drop(tx);
+
+        process_gsi_events(rx, app_state, dispatcher, settings).await;
+
+        // Contract assertion: handler owns shared cache refresh
+        // When gsi_enabled = true, handler should refresh caches once per event.
+        // Dispatcher should not duplicate that work.
+        // Current state: FAILS because dispatcher also calls update_gsi_state().
+        assert_eq!(
+            crate::actions::auto_items::update_counter_for_tests(),
+            1,
+            "Handler should refresh auto_items cache exactly once per enabled event"
+        );
+    }
+
+    #[tokio::test]
     async fn process_gsi_events_refreshes_keyboard_state_when_gsi_automation_is_disabled() {
         let _guard = shared_test_lock()
             .lock()
@@ -228,13 +283,22 @@ mod tests {
         ));
         let (tx, rx) = mpsc::channel(1);
 
-        tx.send(event.clone()).await.expect("test event should send");
+        tx.send(event.clone())
+            .await
+            .expect("test event should send");
         drop(tx);
 
         process_gsi_events(rx, app_state.clone(), dispatcher, settings).await;
 
         assert_eq!(
-            app_state.lock().unwrap().last_event.as_ref().unwrap().hero.name,
+            app_state
+                .lock()
+                .unwrap()
+                .last_event
+                .as_ref()
+                .unwrap()
+                .hero
+                .name,
             crate::models::Hero::Broodmother.to_game_name()
         );
         assert!(BROODMOTHER_ACTIVE.load(std::sync::atomic::Ordering::SeqCst));
@@ -274,7 +338,9 @@ mod tests {
         ));
         let (tx, rx) = mpsc::channel(1);
 
-        tx.send(event.clone()).await.expect("test event should send");
+        tx.send(event.clone())
+            .await
+            .expect("test event should send");
         drop(tx);
 
         process_gsi_events(rx, app_state, dispatcher, settings).await;

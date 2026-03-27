@@ -18,16 +18,39 @@ use std::thread;
 use std::time::Duration;
 use tracing::{debug, info};
 
+#[cfg(test)]
+use std::sync::atomic::AtomicUsize;
+
 lazy_static! {
     /// Track if the modifier key is currently held
     pub static ref MODIFIER_KEY_HELD: AtomicBool = AtomicBool::new(false);
-    
+
     /// Cache of the latest GSI event for item state
     pub static ref LATEST_GSI_EVENT: Mutex<Option<GsiWebhookEvent>> = Mutex::new(None);
 }
 
+#[cfg(test)]
+lazy_static! {
+    static ref UPDATE_GSI_STATE_CALLS: AtomicUsize = AtomicUsize::new(0);
+}
+
+#[cfg(test)]
+pub fn reset_update_counter_for_tests() {
+    UPDATE_GSI_STATE_CALLS.store(0, std::sync::atomic::Ordering::SeqCst);
+}
+
+#[cfg(test)]
+pub fn update_counter_for_tests() -> usize {
+    UPDATE_GSI_STATE_CALLS.load(std::sync::atomic::Ordering::SeqCst)
+}
+
 /// Update the cached GSI state (called from dispatcher)
 pub fn update_gsi_state(event: &GsiWebhookEvent) {
+    #[cfg(test)]
+    {
+        UPDATE_GSI_STATE_CALLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+    
     let mut cached = LATEST_GSI_EVENT.lock().unwrap();
     *cached = Some(event.clone());
 }
@@ -35,7 +58,7 @@ pub fn update_gsi_state(event: &GsiWebhookEvent) {
 /// Find item slot key by item name (partial match)
 fn find_item_key(event: &GsiWebhookEvent, slot_keys: &[char; 6], item_name: &str) -> Option<char> {
     let items = &event.items;
-    
+
     // Check each slot for the item (partial match, e.g., "orchid" matches "item_orchid")
     let slots = [
         (&items.slot0, slot_keys[0]),
@@ -45,15 +68,18 @@ fn find_item_key(event: &GsiWebhookEvent, slot_keys: &[char; 6], item_name: &str
         (&items.slot4, slot_keys[4]),
         (&items.slot5, slot_keys[5]),
     ];
-    
+
     for (item, key) in slots {
         if item.name.contains(item_name) {
             // Check if item is castable (not on cooldown, can be used)
             let can_cast = item.can_cast.unwrap_or(false);
             let cooldown = item.cooldown.unwrap_or(0);
-            
+
             if can_cast && cooldown == 0 {
-                debug!("🎯 Found castable item '{}' in slot with key '{}'", item.name, key);
+                debug!(
+                    "🎯 Found castable item '{}' in slot with key '{}'",
+                    item.name, key
+                );
                 return Some(key);
             } else {
                 debug!(
@@ -63,7 +89,7 @@ fn find_item_key(event: &GsiWebhookEvent, slot_keys: &[char; 6], item_name: &str
             }
         }
     }
-    
+
     None
 }
 
@@ -92,10 +118,10 @@ pub fn execute_auto_items(
         }
     };
     drop(cached);
-    
+
     let mut items_used = 0;
     let mut abilities_used = 0;
-    
+
     // Helper closure to use items
     let use_items = |items_used: &mut u32| {
         for item_name in item_names {
@@ -107,7 +133,7 @@ pub fn execute_auto_items(
             }
         }
     };
-    
+
     // Helper closure to use abilities
     let use_abilities = |abilities_used: &mut u32| {
         for ability_config in auto_abilities {
@@ -121,17 +147,23 @@ pub fn execute_auto_items(
                     continue;
                 }
             }
-            
+
             // Get ability by index and check if castable
             if let Some(ability) = event.abilities.get_by_index(ability_config.index) {
                 if ability.can_cast && ability.cooldown == 0 && ability.level > 0 {
                     if let Some(threshold) = ability_config.hp_threshold {
                         info!(
                             "🎯 Using ability {} key '{}' (HP {}% < {}%)",
-                            ability_config.index, ability_config.key, event.hero.health_percent, threshold
+                            ability_config.index,
+                            ability_config.key,
+                            event.hero.health_percent,
+                            threshold
                         );
                     } else {
-                        info!("🎯 Using ability {} key '{}'", ability_config.index, ability_config.key);
+                        info!(
+                            "🎯 Using ability {} key '{}'",
+                            ability_config.index, ability_config.key
+                        );
                     }
                     press_key(ability_config.key);
                     *abilities_used += 1;
@@ -145,7 +177,7 @@ pub fn execute_auto_items(
             }
         }
     };
-    
+
     // Execute in configured order
     if abilities_first {
         use_abilities(&mut abilities_used);
@@ -154,10 +186,13 @@ pub fn execute_auto_items(
         use_items(&mut items_used);
         use_abilities(&mut abilities_used);
     }
-    
+
     // Always right-click at the end (attack the target)
     if items_used > 0 || abilities_used > 0 {
-        info!("🎯 Auto-combo complete ({} items, {} abilities), attacking", items_used, abilities_used);
+        info!(
+            "🎯 Auto-combo complete ({} items, {} abilities), attacking",
+            items_used, abilities_used
+        );
     }
     mouse_click();
 }
