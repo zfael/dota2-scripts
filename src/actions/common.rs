@@ -97,6 +97,7 @@ pub fn find_item_slot_by_name(
 }
 
 /// Snapshot-aware helpers for danger-aware gating used by survivability paths
+#[cfg_attr(not(test), allow(dead_code))]
 fn healing_threshold_for_event(settings: &Settings, in_danger: bool) -> u32 {
     if in_danger && settings.danger_detection.enabled {
         settings.danger_detection.healing_threshold_in_danger
@@ -105,6 +106,7 @@ fn healing_threshold_for_event(settings: &Settings, in_danger: bool) -> u32 {
     }
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn should_consider_defensive_items(event: &GsiWebhookEvent, settings: &Settings, in_danger: bool) -> bool {
     // Mirror the early gates in use_defensive_items_if_danger
     if !settings.danger_detection.enabled {
@@ -119,6 +121,7 @@ fn should_consider_defensive_items(event: &GsiWebhookEvent, settings: &Settings,
     true
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn should_consider_neutral_item(event: &GsiWebhookEvent, settings: &Settings, in_danger: bool) -> bool {
     // Minimal gating used by use_neutral_item_if_danger
     if !settings.neutral_items.enabled || !settings.neutral_items.use_in_danger {
