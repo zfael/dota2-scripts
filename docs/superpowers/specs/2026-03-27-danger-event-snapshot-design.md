@@ -117,6 +117,40 @@ Likely consumers:
 
 That means `common.rs` should stop calling `danger_detector::is_in_danger()` repeatedly inside the same event flow when it already has the answer.
 
+### Public API boundary
+
+Keep the current public `SurvivabilityActions` API stable for hero scripts that already call:
+
+- `check_and_use_healing_items(event)`
+- `use_defensive_items_if_danger(event)`
+- `use_neutral_item_if_danger(event)`
+
+This slice should stay narrow by avoiding a fan-out signature change across hero scripts.
+
+Recommended implementation shape:
+
+- keep existing public methods unchanged
+- add private/internal helper variants inside `common.rs` that accept the already-computed danger result for the default/common pass
+
+For example:
+
+```rust
+pub fn check_and_use_healing_items(&self, event: &GsiWebhookEvent) {
+    let in_danger = crate::actions::danger_detector::is_in_danger();
+    self.check_and_use_healing_items_with_danger(event, in_danger);
+}
+
+fn check_and_use_healing_items_with_danger(
+    &self,
+    event: &GsiWebhookEvent,
+    in_danger: bool,
+) {
+    // shared logic
+}
+```
+
+Apply the same pattern to defensive/neutral-item helpers if needed.
+
 ### Adjacent low-risk win
 
 If it falls out naturally while changing those helper signatures, it is acceptable to gather a small amount of danger-related config once per pass instead of reacquiring the same settings values in multiple tiny scopes.
@@ -139,6 +173,7 @@ This is only in scope if:
 ### Out of scope
 
 - hero-local callers outside the immediate common survivability path
+- changing existing public `SurvivabilityActions` method signatures across hero scripts
 - UI redesign
 - changing danger config knobs
 - changing silence-dispel behavior
