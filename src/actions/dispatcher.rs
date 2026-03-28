@@ -159,7 +159,17 @@ impl ActionDispatcher {
     pub fn dispatch_standalone_trigger(&self, hero_name: &str) {
         if let Some(hero_script) = self.hero_scripts.get(hero_name) {
             debug!("Dispatching standalone trigger to {}", hero_name);
-            hero_script.handle_standalone_trigger();
+            match standalone_dispatch_mode(hero_name) {
+                StandaloneDispatchMode::Inline => hero_script.handle_standalone_trigger(),
+                StandaloneDispatchMode::Executor => {
+                    let hero_name = hero_name.to_string();
+                    let hero_script = Arc::clone(hero_script);
+                    self.executor.enqueue("standalone-trigger", move || {
+                        debug!("Executing standalone trigger on executor for {}", hero_name);
+                        hero_script.handle_standalone_trigger();
+                    });
+                }
+            }
         }
     }
 }
