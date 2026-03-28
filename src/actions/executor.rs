@@ -36,26 +36,6 @@ impl ScheduledAction {
     }
 }
 
-impl PartialEq for ScheduledAction {
-    fn eq(&self, other: &Self) -> bool {
-        self.due_at == other.due_at && self.sequence == other.sequence
-    }
-}
-
-impl Eq for ScheduledAction {}
-
-impl PartialOrd for ScheduledAction {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for ScheduledAction {
-    fn cmp(&self, other: &Self) -> Ordering {
-        scheduled_action_cmp(self, other)
-    }
-}
-
 #[allow(dead_code)]
 fn scheduled_action_cmp(left: &ScheduledAction, right: &ScheduledAction) -> Ordering {
     left.due_at
