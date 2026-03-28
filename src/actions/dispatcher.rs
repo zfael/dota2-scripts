@@ -262,23 +262,13 @@ mod tests {
             let _ = returned_tx.send(());
         });
 
-        started_rx
+        returned_rx
             .recv_timeout(Duration::from_millis(100))
-            .expect("blocking script should start");
+            .expect("Tiny standalone dispatch should return promptly");
 
-        match returned_rx.recv_timeout(Duration::from_millis(50)) {
-            Ok(()) => {}
-            Err(error) => {
-                let _ = release_tx.send(());
-                dispatch_handle
-                    .join()
-                    .expect("dispatch thread should finish after release");
-                panic!(
-                    "Tiny standalone dispatch should return before the blocking script finishes: {}",
-                    error
-                );
-            }
-        }
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("blocking script should start");
 
         let _ = release_tx.send(());
         dispatch_handle
