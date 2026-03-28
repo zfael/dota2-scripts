@@ -335,12 +335,18 @@ mod tests {
 
     #[test]
     fn build_standalone_request_copies_runtime_flags_from_settings() {
-        let settings = Settings::default();
+        let mut settings = Settings::default();
+        // Set non-default values to ensure build_standalone_request copies them
+        settings.heroes.shadow_fiend.auto_bkb_on_ultimate = true;
+        settings.heroes.shadow_fiend.auto_d_on_ultimate = true;
         let request = build_standalone_request(&settings);
-        assert!(matches!(
+        assert_eq!(
             request,
-            ShadowFiendRequest::Standalone { auto_bkb_on_ultimate: _, auto_d_on_ultimate: _ }
-        ));
+            ShadowFiendRequest::Standalone {
+                auto_bkb_on_ultimate: true,
+                auto_d_on_ultimate: true,
+            }
+        );
     }
 
     #[test]
