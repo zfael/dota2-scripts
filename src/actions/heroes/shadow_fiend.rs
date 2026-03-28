@@ -111,16 +111,8 @@ impl ShadowFiendState {
                     .map(|(slot, _)| *slot);
 
                 if let Some(slot) = bkb_slot {
-                    // Map slot to key (simplified - use hardcoded mapping based on common keybindings)
-                    let key = match slot {
-                        "slot0" => Some('z'),
-                        "slot1" => Some('x'),
-                        "slot2" => Some('c'),
-                        "slot3" => Some('v'),
-                        "slot4" => Some('b'),
-                        "slot5" => Some('n'),
-                        _ => None,
-                    };
+                    // Map slot to key (use shared helper)
+                    let key = slot_to_common_key(slot);
 
                     if let Some(bkb_key) = key {
                         info!("👻 SF Ultimate: Using BKB ({}) before Requiem", bkb_key);
@@ -185,15 +177,7 @@ impl ShadowFiendState {
                     return;
                 }
 
-                let blink_key = blink_slot.and_then(|slot| match slot {
-                    "slot0" => Some('z'),
-                    "slot1" => Some('x'),
-                    "slot2" => Some('c'),
-                    "slot3" => Some('v'),
-                    "slot4" => Some('b'),
-                    "slot5" => Some('n'),
-                    _ => None,
-                });
+                let blink_key = blink_slot.and_then(|slot| slot_to_common_key(slot));
 
                 // Check for BKB if enabled
                 let bkb_key = if auto_bkb {
@@ -204,15 +188,7 @@ impl ShadowFiendState {
                         .find(|(_, item)| {
                             item.name.contains("black_king_bar") && item.can_cast == Some(true)
                         })
-                        .and_then(|(slot, _)| match *slot {
-                            "slot0" => Some('z'),
-                            "slot1" => Some('x'),
-                            "slot2" => Some('c'),
-                            "slot3" => Some('v'),
-                            "slot4" => Some('b'),
-                            "slot5" => Some('n'),
-                            _ => None,
-                        })
+                        .and_then(|(slot, _)| slot_to_common_key(*slot))
                 } else {
                     None
                 };
