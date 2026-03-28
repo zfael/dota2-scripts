@@ -53,6 +53,8 @@ Legion Commander's combo automatically uses Soul Ring before the first Press The
 
 Press the standalone key (default: `Home`) to execute the full Legion Commander Duel combo.
 
+Execution note: the standalone trigger now enqueues the combo onto `ActionExecutor` instead of blocking the hotkey consumer thread. The combo still reads the latest cached GSI event at execution time, and the Press The Attack → items → Duel → Overwhelming Odds order and timing remain unchanged.
+
 **Requirements:**
 - Stored GSI event available (for item slot detection)
 - If no GSI event, logs message and does nothing

@@ -204,7 +204,9 @@ That thread:
 
 - gates generic combo triggers on `AppState.standalone_enabled`
 - uses `AppState.selected_hero` to decide which hero gets `dispatch_standalone_trigger(...)`
-- handles Largo `Q/W/E/R` events by downcasting to `LargoScript`
+- dispatches Tiny and Legion Commander standalone triggers onto `ActionExecutor`, so the hotkey consumer returns immediately for those combos
+- handles Largo `Q/W/E/R` events by downcasting to `LargoScript` and using the dedicated manual-hotkey path
+- leaves Shadow Fiend standalone handling on its existing specialized request-worker path inside `src/actions/heroes/shadow_fiend.rs`
 
 Important nuance: `AppState.selected_hero` only models `Huskar`, `Largo`, `LegionCommander`, `ShadowFiend`, and `Tiny`. Broodmother keyboard behavior uses `BROODMOTHER_ACTIVE` and the dedicated Broodmother callback worker, not the hotkey event channel.
 
@@ -221,7 +223,7 @@ Largo no longer uses a tight polling loop. Its dedicated worker blocks on a time
 | `src/main.rs` | `spawn_blocking(check_for_update)` | Only when `updates.check_on_startup` is true | Writes `UpdateCheckState` |
 | `src/main.rs` | Hotkey consumer thread | Always | Handles `HotkeyEvent`s from the keyboard hook |
 | `src/input/keyboard.rs` | `rdev::grab` thread | Always | Global hook; blocks forever |
-| `src/actions/executor.rs` | ActionExecutor worker thread | When `ActionDispatcher::new(...)` constructs the executor | Runs ready action jobs FIFO; immediate jobs go straight to this worker |
+| `src/actions/executor.rs` | ActionExecutor worker thread | When `ActionDispatcher::new(...)` constructs the executor | Runs ready action jobs FIFO; immediate jobs, including Tiny and Legion Commander standalone combo jobs, go straight to this worker |
 | `src/actions/executor.rs` | ActionExecutor delayed scheduler thread | When `ActionDispatcher::new(...)` constructs the executor | Owns delayed-job deadlines inside the executor and forwards due work onto the worker lane |
 | `src/input/simulation.rs` | Synthetic-input worker thread | First call to a simulation helper | Owns `Enigo`; drains one unbounded FIFO queue |
 | `src/input/keyboard.rs` | Soul Ring replay worker thread | First intercepted Soul Ring key | Long-lived lazy singleton; drains one unbounded FIFO queue of `SoulRingReplayRequest`s; uses `rdev::simulate` for replay |

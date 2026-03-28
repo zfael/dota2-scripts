@@ -52,6 +52,8 @@ Tiny's combo automatically uses Soul Ring before the first Avalanche (W) press i
 
 Press the standalone key (default: `Home`) to execute the full Tiny burst combo.
 
+Execution note: the standalone trigger now enqueues the combo onto `ActionExecutor` instead of running inline on the hotkey consumer thread. The combo still reads the latest cached GSI event at execution time, and the blink → Avalanche → Toss → Tree Grab order and timing remain unchanged.
+
 **Requirements:**
 - At least one GSI event received (for item slot detection)
 - If no GSI event yet, logs warning and does nothing

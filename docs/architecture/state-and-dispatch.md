@@ -142,6 +142,7 @@ The current executor scope is intentionally limited to the hot GSI-driven short 
 - shared survivability timed self-casts in `src/actions/common.rs` (Glimmer Cape follow-up tap and neutral-item self-cast)
 - silence dispel jitter in `src/actions/dispel.rs`
 - Huskar armlet handling in `src/actions/heroes/huskar.rs`
+- Tiny and Legion Commander standalone combo execution in `src/actions/heroes/tiny.rs` and `src/actions/heroes/legion_commander.rs`
 
 Notably unchanged in this item:
 
@@ -169,16 +170,18 @@ Notably unchanged in this item:
 
 ## Standalone dispatch path
 
-Standalone flow is split across `AppState`, the keyboard hook, and the dispatcher:
+Standalone flow is split across `AppState`, the keyboard hook, the dispatcher, and the executor:
 
 1. `src/input/keyboard.rs` emits `HotkeyEvent::ComboTrigger`
 2. `src/main.rs` reads `AppState.selected_hero` and `standalone_enabled`
 3. `src/main.rs` converts `HeroType` into the game's hero name string
 4. `ActionDispatcher::dispatch_standalone_trigger(hero_name)` calls the matching script
+5. Tiny and Legion Commander standalone triggers enqueue onto `ActionExecutor`
+6. Largo manual `Q/W/E/R` hotkeys still bypass `handle_standalone_trigger()` and use the concrete `LargoScript` methods
 
 Special cases:
 
-- Largo manual `Q/W/E/R` hotkeys bypass `handle_standalone_trigger()` and call concrete `LargoScript` methods
+- Shadow Fiend standalone handling stays on its existing specialized path inside the hero script
 - Broodmother callback actions stay in `src/input/keyboard.rs`, which uses `BROODMOTHER_ACTIVE` and a dedicated callback worker instead of the `HotkeyEvent` channel
 
 ---
