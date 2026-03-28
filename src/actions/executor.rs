@@ -1,6 +1,10 @@
 use std::cmp::Ordering;
 use std::sync::mpsc::{self, Sender};
 use std::sync::Arc;
+#[cfg(test)]
+use std::cell::RefCell;
+#[cfg(test)]
+use std::sync::atomic::AtomicU64;
 use std::thread;
 use std::time::{Duration, Instant};
 use tracing::{debug, warn};
@@ -75,6 +79,8 @@ fn dispatch_mode_for_delay(delay: Duration) -> DispatchMode {
 
 pub struct ActionExecutor {
     tx: Sender<ActionMessage>,
+    #[cfg(test)]
+    sequence: AtomicU64,
 }
 
 impl ActionExecutor {
@@ -109,7 +115,11 @@ impl ActionExecutor {
             }
         });
 
-        Arc::new(Self { tx })
+        Arc::new(Self {
+            tx,
+            #[cfg(test)]
+            sequence: AtomicU64::new(0),
+        })
     }
 
     pub fn enqueue<F>(&self, label: &'static str, job: F)
@@ -133,24 +143,121 @@ impl ActionExecutor {
                 }
             }
             DispatchMode::Delayed(d) => {
-                thread::spawn(move || {
-                    thread::sleep(d);
-                    if let Err(error) = tx.send(ActionMessage::Run { label, job }) {
-                        warn!("Failed to enqueue delayed action job {}: {}", label, error);
+                #[cfg(test)]
+                {
+                    let sequence = self
+                        .sequence
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+                    if test_delay_capture_enabled() {
+                        capture_test_delayed_action(ScheduledAction {
+                            due_at: test_delayed_due_at(d),
+                            sequence,
+                            message: ActionMessage::Run { label, job },
+                        });
+                        return;
                     }
-                });
+
+                    thread::spawn(move || {
+                        thread::sleep(d);
+                        if let Err(error) = tx.send(ActionMessage::Run { label, job }) {
+                            warn!("Failed to enqueue delayed action job {}: {}", label, error);
+                        }
+                    });
+                    return;
+                }
+
+                #[cfg(not(test))]
+                {
+                    thread::spawn(move || {
+                        thread::sleep(d);
+                        if let Err(error) = tx.send(ActionMessage::Run { label, job }) {
+                            warn!("Failed to enqueue delayed action job {}: {}", label, error);
+                        }
+                    });
+                }
             }
         }
     }
 }
 
 #[cfg(test)]
+thread_local! {
+    static TEST_DELAY_CAPTURE: RefCell<Option<Vec<ScheduledAction>>> = RefCell::new(None);
+    static TEST_BASE_INSTANT: Instant = Instant::now();
+}
+
+#[cfg(test)]
+fn test_delay_capture_enabled() -> bool {
+    TEST_DELAY_CAPTURE.with(|capture| capture.borrow().is_some())
+}
+
+#[cfg(test)]
+fn test_delayed_due_at(delay: Duration) -> Instant {
+    TEST_BASE_INSTANT.with(|base| *base + delay)
+}
+
+#[cfg(test)]
+fn set_test_delay_capture(enabled: bool) {
+    TEST_DELAY_CAPTURE.with(|capture| {
+        *capture.borrow_mut() = if enabled { Some(Vec::new()) } else { None };
+    });
+}
+
+#[cfg(test)]
+fn capture_test_delayed_action(action: ScheduledAction) {
+    TEST_DELAY_CAPTURE.with(|capture| {
+        if let Some(actions) = capture.borrow_mut().as_mut() {
+            actions.push(action);
+        }
+    });
+}
+
+#[cfg(test)]
+fn flush_test_delayed_actions(executor: &ActionExecutor) {
+    let actions = TEST_DELAY_CAPTURE.with(|capture| {
+        capture
+            .borrow_mut()
+            .take()
+            .expect("test delayed action capture should be enabled")
+    });
+
+    let mut actions = actions;
+    actions.sort_by(scheduled_action_cmp);
+
+    for action in actions {
+        let ActionMessage::Run { label, job } = action.message;
+        if let Err(error) = executor.tx.send(ActionMessage::Run { label, job }) {
+            warn!("Failed to flush delayed action job {}: {}", label, error);
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
-    use super::{dispatch_mode_for_delay, scheduled_action_cmp, ActionExecutor, DispatchMode, ScheduledAction};
+    use super::{
+        dispatch_mode_for_delay, flush_test_delayed_actions, scheduled_action_cmp,
+        set_test_delay_capture, ActionExecutor, DispatchMode, ScheduledAction,
+    };
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::sync::mpsc;
     use std::sync::Arc;
     use std::time::{Duration, Instant};
+
+    struct TestDelayCaptureGuard;
+
+    impl TestDelayCaptureGuard {
+        fn enable() -> Self {
+            set_test_delay_capture(true);
+            Self
+        }
+    }
+
+    impl Drop for TestDelayCaptureGuard {
+        fn drop(&mut self) {
+            set_test_delay_capture(false);
+        }
+    }
 
     #[test]
     fn zero_delay_dispatch_mode_is_immediate() {
@@ -209,6 +316,43 @@ mod tests {
         }
 
         panic!("executor did not run immediate job");
+    }
+
+    #[test]
+    fn enqueue_after_equal_deadline_delayed_jobs_run_fifo_relative_to_call_order() {
+        let executor = ActionExecutor::new();
+        let (tx, rx) = mpsc::channel::<&'static str>();
+
+        let _capture_guard = TestDelayCaptureGuard::enable();
+
+        let first_tx = tx.clone();
+        executor.enqueue_after(
+            "test-first-delayed",
+            Duration::from_millis(25),
+            move || {
+                let _ = first_tx.send("first");
+            },
+        );
+
+        executor.enqueue_after(
+            "test-second-delayed",
+            Duration::from_millis(25),
+            move || {
+                let _ = tx.send("second");
+            },
+        );
+
+        flush_test_delayed_actions(&executor);
+
+        let first = rx
+            .recv_timeout(Duration::from_millis(50))
+            .expect("first delayed job should run");
+        assert_eq!(first, "first");
+
+        let second = rx
+            .recv_timeout(Duration::from_millis(50))
+            .expect("second delayed job should run");
+        assert_eq!(second, "second");
     }
 
     #[test]
