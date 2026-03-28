@@ -10,8 +10,8 @@
 |---|---|
 | `src/input/keyboard.rs` | Global `rdev::grab` hook, decision tree, `HotkeyEvent` channel, Soul Ring replay helper |
 | `src/actions/soul_ring.rs` | Soul Ring shared state, key eligibility rules, health/mana/cooldown gates |
-| `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend intercepted sequences (`Q/W/E` razes, `R` ultimate combo) |
-| `src/input/simulation.rs` | High-level synthetic keys/mouse + `SIMULATING_KEYS` guard |
+| `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend intercepted-sequence planning and dedicated request worker (`Q/W/E` razes, `R` ultimate combo, standalone combo) |
+| `src/input/simulation.rs` | High-level synthetic keys/mouse emission + `SIMULATING_KEYS` guard |
 | `src/ui/app.rs` | Per-frame refresh of the shared `KeyboardSnapshot` |
 
 Related but not primary owners:
@@ -78,11 +78,13 @@ Current callback order on key/button input:
    - `should_intercept_key_with_config(&snapshot.soul_ring)`
    - `should_trigger_with_config(&snapshot.soul_ring)`
 7. **Shadow Fiend raze intercept**
-   - if `snapshot.sf_enabled` and `snapshot.shadow_fiend.raze_intercept_enabled`
-   - block `Q/W/E`
+    - if `snapshot.sf_enabled` and `snapshot.shadow_fiend.raze_intercept_enabled`
+    - block `Q/W/E`
+    - enqueue the raze sequence onto Shadow Fiend's dedicated worker
 8. **Shadow Fiend ultimate intercept**
-   - if `snapshot.sf_enabled` and `snapshot.shadow_fiend.auto_bkb_on_ultimate`
-   - block `R`
+    - if `snapshot.sf_enabled` and `snapshot.shadow_fiend.auto_bkb_on_ultimate`
+    - block `R`
+    - enqueue the ultimate sequence onto the same dedicated worker
 9. **Largo / generic ability-key path**
    - emit `HotkeyEvent::LargoQ/W/E/R`
    - if Soul Ring should trigger, block and replay
@@ -113,7 +115,7 @@ Used by the Soul Ring replay worker because the original physical key was swallo
 
 ### `src/input/simulation.rs`
 
-Uses a lazy, single-consumer enigo worker for higher-level combos:
+Uses a lazy, single-consumer enigo worker for higher-level combos and still owns the actual synthetic input emission for those sequences:
 
 - `press_key(char)`
 - `mouse_click()`
@@ -218,12 +220,13 @@ That source flag is updated when:
 
 `src/actions/heroes/shadow_fiend.rs` then:
 
-1. sleeps briefly
-2. holds `ALT`
-3. right-clicks to face direction
-4. releases `ALT`
-5. waits `heroes.shadow_fiend.raze_delay_ms`
-6. presses the raze key
+1. enqueues one `Raze` request onto a dedicated Shadow Fiend worker
+2. the worker sleeps briefly
+3. the worker calls `src/input/simulation.rs` helpers to hold `ALT`
+4. the worker calls `src/input/simulation.rs` helpers to right-click and face direction
+5. the worker releases `ALT`
+6. the worker waits `heroes.shadow_fiend.raze_delay_ms`
+7. the worker presses the raze key through `src/input/simulation.rs`
 
 ### `R` ultimate path
 
@@ -231,14 +234,18 @@ If `heroes.shadow_fiend.auto_bkb_on_ultimate = true`, the hook blocks `R` and ca
 
 That helper:
 
+- enqueues one `Ultimate` request onto the same dedicated Shadow Fiend worker
 - reads `SF_LAST_EVENT` for inventory state
 - attempts BKB if available
 - optionally presses `D`
 - then presses `R`
+- uses `src/input/simulation.rs` for the actual synthetic key presses
 
 ### Standalone combo
 
 The standalone hotkey is **not** a blocked-key intercept. It travels through the `HotkeyEvent` channel and ends up at `handle_standalone_trigger()`.
+
+That standalone-key conflict remains unchanged in this slice and is still out of scope here: the checked-in config exposes `heroes.shadow_fiend.standalone_key`, but current runtime wiring still conflicts with the raze-intercept path when that path uses `Q`.
 
 ---
 

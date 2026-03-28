@@ -110,9 +110,10 @@ The action executor is intentionally narrow in this rollout item:
 
 - immediate jobs now send straight to the executor worker channel instead of spawning a zero-delay helper thread first
 - delayed jobs still sleep off-worker before sending, so timer/jitter waits do not block immediate jobs that are already queued
-- keyboard-triggered Shadow Fiend combo threads are unchanged
+- keyboard-triggered Shadow Fiend sequences now enqueue onto their own dedicated worker in `src/actions/heroes/shadow_fiend.rs` instead of spawning one raw thread per intercept
+- `src/input/simulation.rs` still owns the actual synthetic input emission for those Shadow Fiend sequences
 - Largo keeps its own long-lived scheduled beat worker; it sleeps until the next beat deadline or a state-change wake-up and uses a cached beat-config snapshot instead of locking shared settings every cycle
-- standalone combo threads are unchanged
+- the existing Shadow Fiend standalone-key conflict is unchanged and remains out of scope for this slice
 
 ---
 
@@ -156,11 +157,11 @@ For each intercepted event, the callback does this in order:
    - uses snapshot-backed `should_intercept_key_with_config(...)`
    - also checks `should_trigger_with_config(...)`
 7. **Shadow Fiend raze intercept**
-   - if `snapshot.sf_enabled` and `snapshot.shadow_fiend.raze_intercept_enabled`
-   - block `Q/W/E`, call `ShadowFiendState::execute_raze(...)`
+    - if `snapshot.sf_enabled` and `snapshot.shadow_fiend.raze_intercept_enabled`
+    - block `Q/W/E`, call `ShadowFiendState::execute_raze(...)`, and enqueue one raze request onto the dedicated Shadow Fiend worker
 8. **Shadow Fiend ultimate intercept**
-   - if `snapshot.sf_enabled` and `snapshot.shadow_fiend.auto_bkb_on_ultimate`
-   - block `R`, call `ShadowFiendState::execute_ultimate_combo(...)`
+    - if `snapshot.sf_enabled` and `snapshot.shadow_fiend.auto_bkb_on_ultimate`
+    - block `R`, call `ShadowFiendState::execute_ultimate_combo(...)`, and enqueue one ultimate request onto the same worker
 9. **Largo / generic ability-key path**
    - emit Largo events for `Q/W/E/R`
    - if Soul Ring should trigger, enqueue replay work to the dedicated Soul Ring worker and block the original key
@@ -224,7 +225,7 @@ Largo no longer uses a tight polling loop. Its dedicated worker blocks on a time
 | `src/input/keyboard.rs` | Soul Ring replay worker thread | First intercepted Soul Ring key | Long-lived lazy singleton; drains one unbounded FIFO queue of `SoulRingReplayRequest`s; uses `rdev::simulate` for replay |
 | `src/input/keyboard.rs` | Broodmother callback worker thread | First Broodmother callback action | Long-lived lazy singleton; drains one unbounded FIFO queue of `BroodmotherCallbackRequest`s; handles both Space+right-click auto-items/abilities and middle-mouse spider micro |
 | `src/actions/executor.rs` | Delayed enqueue helper thread | Per non-zero `enqueue_after(...)` job | Short-lived; sleeps off-worker before sending the job to the executor lane |
-| `src/actions/heroes/shadow_fiend.rs` | Raze / ultimate / standalone combo threads | On intercepted SF key / standalone trigger | Short-lived |
+| `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend request worker thread | First SF intercept or standalone trigger | Long-lived lazy singleton; drains FIFO raze/ultimate/standalone requests instead of spawning one raw thread per intercept; actual synthetic input emission still runs through `src/input/simulation.rs`; standalone-key conflict is unchanged |
 | `src/actions/heroes/largo.rs` | Largo scheduled beat worker | Once in `LargoScript::new()` | Long-lived singleton guarded by `BEAT_THREAD_STARTED`; timed wait until next beat or state-change wake-up |
 | `src/ui/app.rs` | Update apply thread | User clicks **Update Now** | Calls `apply_update()` then `restart_application()` |
 | `src/ui/app.rs` | Manual retry thread | User clicks **Retry** / **Check for Updates Now** | Calls `check_for_update()` |

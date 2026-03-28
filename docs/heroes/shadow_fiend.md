@@ -7,9 +7,9 @@ Learn how the Shadow Fiend script remaps razes to face cursor direction and auto
 
 ## Feature Summary
 
-- **Automatic direction facing** – Intercepts Q/W/E, holds ALT, right-clicks to face cursor, then razes
-- **Auto-BKB on ultimate** – Uses BKB before Requiem of Souls when enabled
-- **Standalone combo implementation** – Blink + BKB + D + Ultimate exists in code, but current trigger wiring conflicts with the raze-intercept path
+- **Automatic direction facing** – Intercepts Q/W/E, enqueues one request onto a dedicated Shadow Fiend worker, then faces cursor and razes
+- **Auto-BKB on ultimate** – Intercepts R, enqueues the combo onto the same worker, and uses BKB before Requiem of Souls when enabled
+- **Standalone combo implementation** – Blink + BKB + D + Ultimate exists in code, and the current standalone-key conflict remains unchanged in this slice
 - **GSI-based hero detection** – Automatically enables when `npc_dota_hero_nevermore` detected
 - **Survivability actions** – Auto-use healing/defensive items
 
@@ -32,7 +32,7 @@ auto_d_on_ultimate = true
 standalone_key = "Home"
 ```
 
-**Important runtime note:** `config/config.toml` still exposes `standalone_key`, but `Settings::get_standalone_key("shadow_fiend")` currently hardcodes `"q"` instead of reading that value. With `raze_intercept_enabled = true`, the keyboard hook also intercepts `Q` earlier for razes, so the standalone combo path is effectively in conflict with the raze path unless code changes or interception is disabled.
+**Important runtime note:** `config/config.toml` still exposes `standalone_key`, but `Settings::get_standalone_key("shadow_fiend")` currently hardcodes `"q"` instead of reading that value. With `raze_intercept_enabled = true`, the keyboard hook also intercepts `Q` earlier for razes, so the standalone combo path is effectively in conflict with the raze path unless code changes or interception is disabled. That conflict is unchanged and out of scope for this worker-offload slice.
 
 ### Tuning `raze_delay_ms`
 
@@ -67,10 +67,11 @@ This allows you to raze toward your cursor naturally, similar to how most skills
 When you press Q, W, or E with Shadow Fiend selected:
 
 1. The keypress is **intercepted** (blocked from reaching the game)
-2. ALT is held down (enables move-to-direction mode)
-3. A right-click is simulated to face the cursor
-4. ALT is released
-5. After a short delay, the raze key is pressed
+2. The intercept enqueues one raze request onto Shadow Fiend's dedicated worker
+3. That worker uses `src/input/simulation.rs` to hold ALT (enables move-to-direction mode)
+4. The worker simulates a right-click to face the cursor
+5. The worker releases ALT
+6. After a short delay, the worker presses the raze key through `src/input/simulation.rs`
 
 This happens in ~150-200ms total, making it feel nearly instant.
 
@@ -78,12 +79,13 @@ This happens in ~150-200ms total, making it feel nearly instant.
 
 When enabled, pressing R to cast Requiem of Souls will automatically:
 
-1. **Check for BKB** in your inventory (if `auto_bkb_on_ultimate` is enabled)
-2. **Use BKB** (double-tap for self-cast) if available and off cooldown
-3. **Press D** (Aghanim's ability) if `auto_d_on_ultimate` is enabled
-4. **Cast Requiem of Souls** (R)
+1. **Intercept R** and enqueue one ultimate request onto Shadow Fiend's dedicated worker
+2. **Check for BKB** in your inventory (if `auto_bkb_on_ultimate` is enabled)
+3. **Use BKB** (double-tap for self-cast) if available and off cooldown
+4. **Press D** (Aghanim's ability) if `auto_d_on_ultimate` is enabled
+5. **Cast Requiem of Souls** (R)
 
-This ensures you're protected by magic immunity during the channel without needing to manually activate BKB first.
+`src/input/simulation.rs` still owns the actual synthetic key emission for the worker's BKB/D/R sequence. This ensures you're protected by magic immunity during the channel without needing to manually activate BKB first.
 
 **Sequence:** BKB (double-tap) → D (optional) → R
 
@@ -102,6 +104,8 @@ The script has a standalone combo implementation that will:
    - **R** (Requiem of Souls)
 
 This allows a full initiation combo in one trigger path, but the current runtime wiring is inconsistent: the checked-in config says `Home`, the helper returns `q`, and the `Q` raze intercept runs first when enabled.
+
+This slice does not change that standalone-key conflict; it only moves intercepted Shadow Fiend work off per-intercept raw threads and onto one dedicated worker.
 
 **Sequence:** Blink → BKB (optional) → D (optional) → R
 
@@ -134,17 +138,18 @@ cl_dota_alt_unit_movetodirection 1
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  ShadowFiendState::execute_raze('q') spawns thread          │
+│  ShadowFiendState::execute_raze('q') enqueues worker request │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
+│  Dedicated SF worker drains the request                     │
 │  1. Wait 50ms (settle time)                                 │
-│  2. Press and hold ALT                                      │
-│  3. Right-click at cursor position                          │
-│  4. Wait 50ms, release ALT                                  │
+│  2. Use simulation.rs to press and hold ALT                 │
+│  3. Use simulation.rs to right-click at cursor position     │
+│  4. Wait 50ms, use simulation.rs to release ALT             │
 │  5. Wait raze_delay_ms (default 100ms)                      │
-│  6. Press Q key                                             │
+│  6. Use simulation.rs to press Q key                        │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
