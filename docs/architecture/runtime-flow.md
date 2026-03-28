@@ -98,7 +98,7 @@ The fallback path for unsupported heroes calls `execute_default_strategy()` inst
 
 ### 6. Action executor lane
 
-`src/actions/executor.rs` owns one runtime-created worker thread for short GSI-driven action jobs that previously spawned raw OS threads on demand.
+`src/actions/executor.rs` owns one runtime-created worker thread for ready GSI-driven action jobs plus one long-lived delayed scheduler thread for deferred work.
 
 Current item-2 users are:
 
@@ -108,8 +108,9 @@ Current item-2 users are:
 
 The action executor is intentionally narrow in this rollout item:
 
-- immediate jobs now send straight to the executor worker channel instead of spawning a zero-delay helper thread first
-- delayed jobs still sleep off-worker before sending, so timer/jitter waits do not block immediate jobs that are already queued
+- immediate jobs still send straight to the executor worker lane
+- delayed jobs now wait inside the executor-owned scheduler before being forwarded to the worker lane
+- the delayed path now uses one long-lived `ActionExecutor` delayed scheduler thread instead of spawning a per-job helper thread
 - keyboard-triggered Shadow Fiend sequences now enqueue onto their own dedicated worker in `src/actions/heroes/shadow_fiend.rs` instead of spawning one raw thread per intercept
 - `src/input/simulation.rs` still owns the actual synthetic input emission for those Shadow Fiend sequences
 - Largo keeps its own long-lived scheduled beat worker; it sleeps until the next beat deadline or a state-change wake-up and uses a cached beat-config snapshot instead of locking shared settings every cycle
@@ -220,11 +221,11 @@ Largo no longer uses a tight polling loop. Its dedicated worker blocks on a time
 | `src/main.rs` | `spawn_blocking(check_for_update)` | Only when `updates.check_on_startup` is true | Writes `UpdateCheckState` |
 | `src/main.rs` | Hotkey consumer thread | Always | Handles `HotkeyEvent`s from the keyboard hook |
 | `src/input/keyboard.rs` | `rdev::grab` thread | Always | Global hook; blocks forever |
-| `src/actions/executor.rs` | ActionExecutor worker thread | When `ActionDispatcher::new(...)` constructs the executor | Runs queued short GSI-driven jobs FIFO; immediate jobs go straight to this worker |
+| `src/actions/executor.rs` | ActionExecutor worker thread | When `ActionDispatcher::new(...)` constructs the executor | Runs ready action jobs FIFO; immediate jobs go straight to this worker |
+| `src/actions/executor.rs` | ActionExecutor delayed scheduler thread | When `ActionDispatcher::new(...)` constructs the executor | Owns delayed-job deadlines inside the executor and forwards due work onto the worker lane |
 | `src/input/simulation.rs` | Synthetic-input worker thread | First call to a simulation helper | Owns `Enigo`; drains one unbounded FIFO queue |
 | `src/input/keyboard.rs` | Soul Ring replay worker thread | First intercepted Soul Ring key | Long-lived lazy singleton; drains one unbounded FIFO queue of `SoulRingReplayRequest`s; uses `rdev::simulate` for replay |
 | `src/input/keyboard.rs` | Broodmother callback worker thread | First Broodmother callback action | Long-lived lazy singleton; drains one unbounded FIFO queue of `BroodmotherCallbackRequest`s; handles both Space+right-click auto-items/abilities and middle-mouse spider micro |
-| `src/actions/executor.rs` | Delayed enqueue helper thread | Per non-zero `enqueue_after(...)` job | Short-lived; sleeps off-worker before sending the job to the executor lane |
 | `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend request worker thread | First SF intercept or standalone trigger | Long-lived lazy singleton; drains FIFO raze/ultimate/standalone requests instead of spawning one raw thread per intercept; actual synthetic input emission still runs through `src/input/simulation.rs`; standalone-key conflict is unchanged |
 | `src/actions/heroes/largo.rs` | Largo scheduled beat worker | Once in `LargoScript::new()` | Long-lived singleton guarded by `BEAT_THREAD_STARTED`; timed wait until next beat or state-change wake-up |
 | `src/ui/app.rs` | Update apply thread | User clicks **Update Now** | Calls `apply_update()` then `restart_application()` |
