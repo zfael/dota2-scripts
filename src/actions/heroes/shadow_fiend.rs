@@ -331,4 +331,13 @@ mod tests {
         assert_eq!(slot_to_common_key("slot5"), Some('n'));
         assert_eq!(slot_to_common_key("neutral0"), None);
     }
+
+    #[test]
+    fn build_ultimate_request_sets_auto_d_flag() {
+        let request = build_ultimate_request(true);
+        assert_eq!(
+            request,
+            ShadowFiendRequest::Ultimate { auto_d_on_ultimate: true },
+        );
+    }
 }
