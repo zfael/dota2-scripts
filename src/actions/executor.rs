@@ -125,11 +125,10 @@ impl ActionExecutor {
             DispatchMode::Delayed(d) => {
                 #[cfg(test)]
                 {
-                    let sequence = self
-                        .sequence
-                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-
                     if test_delay_capture_enabled() {
+                        let sequence = self
+                            .sequence
+                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         capture_test_delayed_action(ScheduledAction {
                             due_at: test_delayed_due_at(d),
                             sequence,
