@@ -124,6 +124,12 @@ Each delayed job should be wrapped in a small scheduled item containing:
 
 The sequence counter exists only to preserve stable FIFO ordering for jobs with the same due time or near-identical timing after conversion from `Duration` to `Instant`.
 
+That ordering contract should be defined as:
+
+- FIFO relative to accepted `enqueue_after(...)` call order inside one process
+- `sequence` assigned before the job is sent to the scheduler command channel
+- scheduler tie-breaking based on `(due_at, sequence)` so later internal wake-ups do not reorder already-accepted equal-deadline jobs
+
 The scheduler thread should maintain a min-ordered collection keyed by `(due_at, sequence)`.
 
 ### Scheduler behavior
@@ -136,6 +142,8 @@ The scheduler thread should:
    - that item becomes due, or
    - a new scheduling request arrives that may have an earlier deadline
 4. when one or more items are due, forward them to the executor worker channel in due-order / sequence-order
+
+The implementation should recompute the next wait target after every scheduler-channel receive so a newly accepted earlier deadline can preempt a longer outstanding wait.
 
 This keeps the waiting centralized without requiring a helper thread per delayed job.
 
@@ -159,6 +167,12 @@ That preserves the current guarantee tested today: a delayed job scheduled first
 - If sending a delayed job to the scheduler command channel fails, log a warning and fail soft.
 - If the scheduler cannot forward a due job to the executor worker channel, log a warning and drop that job rather than recreating raw thread fallbacks.
 
+Shutdown behavior should be explicit:
+
+- once the scheduler command channel is disconnected, the scheduler should stop accepting new work but continue processing already-accepted delayed jobs still held in its queue
+- after the command channel is disconnected and the delayed queue is empty, the scheduler thread should exit cleanly
+- if the executor worker channel is disconnected, the scheduler should log the failure, drop any remaining queued delayed jobs, and exit rather than hanging on work that can no longer run
+
 This slice is specifically about removing routine spawn behavior, so it should not silently reintroduce helper threads as a fallback path.
 
 ## Testing strategy
@@ -168,8 +182,10 @@ Add focused executor tests where behavior is deterministic:
 - zero delay still uses the immediate path
 - delayed jobs wait before execution
 - delayed jobs do not block a later immediate job
-- multiple delayed jobs with the same target time preserve FIFO order
+- a newly queued earlier deadline preempts a longer existing wait
+- multiple delayed jobs with the same target time preserve FIFO order relative to accepted `enqueue_after(...)` call order
 - the executor still survives a panicking job
+- shutdown behavior is covered either directly or through small scheduler-helper seams if a full thread-lifecycle test would be too brittle
 
 Prefer helper seams for ordering or scheduler-item comparison if they make the tests clearer, but avoid over-abstracting the runtime just for tests.
 
