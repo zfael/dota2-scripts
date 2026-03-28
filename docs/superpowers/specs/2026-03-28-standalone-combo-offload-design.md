@@ -97,7 +97,7 @@ Instead, it should hand the standalone combo execution off to an async lane imme
 
 `ActionDispatcher` should remain the central place that knows how to route a standalone trigger to the correct hero script.
 
-This slice should add an async-aware standalone dispatch path rather than pushing hero lookup logic into `main.rs`.
+This slice should add an async-aware standalone dispatch path for the specific heroes in scope rather than pushing hero lookup logic into `main.rs`.
 
 That keeps responsibilities clear:
 
@@ -114,6 +114,13 @@ The practical hotspot is the long sleep-heavy combo logic in:
 
 These combos currently run inline through `handle_standalone_trigger()`. After the offload, their internal combo timing can stay the same, but they should no longer execute on the hotkey consumer thread.
 
+The async offload path should therefore be explicitly scoped to:
+
+- `npc_dota_hero_tiny`
+- `npc_dota_hero_legion_commander`
+
+All other standalone-routing behavior should stay on its current path in this slice unless the implementation requires a tiny shared helper with unchanged behavior.
+
 Shadow Fiend and Largo remain out of scope because they already use special handling:
 
 - Shadow Fiend already has a dedicated request worker
@@ -123,7 +130,7 @@ Shadow Fiend and Largo remain out of scope because they already use special hand
 
 ### Preferred lane
 
-Standalone combo execution should enqueue onto `ActionExecutor` using an immediate job.
+Standalone combo execution for Tiny and Legion Commander should enqueue onto `ActionExecutor` using an immediate job.
 
 That gives this slice:
 
@@ -146,16 +153,19 @@ If later gameplay testing shows that long standalone combos interfere too much w
 
 - The trigger key and selected-hero gating stay unchanged.
 - Tiny and Legion combo step order and existing sleeps remain unchanged in this slice.
+- Tiny and Legion should continue using their existing latest cached GSI context at execution time rather than introducing a new event snapshot contract at hotkey-press time.
 - If no hero is selected or no event context exists, behavior should still fail the same way it does today (log / no-op according to current hero behavior).
 - Shadow Fiend and Largo standalone behavior remain unchanged.
+- Heroes already using specialized standalone handling should not gain an extra `ActionExecutor` hop in this slice.
 
 ## Testing strategy
 
 Add deterministic tests where the current behavior can be expressed clearly:
 
-- hotkey-trigger routing chooses async standalone execution instead of inline long-running execution
-- dispatcher standalone offload still routes the correct hero name
+- Tiny/Legion standalone routing chooses off-thread execution instead of inline long-running execution
+- the scoped async path still routes the correct hero names
 - Tiny and Legion standalone trigger entry points no longer require the hotkey thread to stay blocked for the whole combo path
+- Shadow Fiend and Largo remain on their current standalone path
 
 Testing should stay focused on the routing/offload contract, not on re-validating the full gameplay timing of every combo step.
 
