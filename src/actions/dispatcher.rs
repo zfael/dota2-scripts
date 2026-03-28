@@ -17,6 +17,21 @@ lazy_static! {
     static ref DISCOVERED_NEUTRAL_ITEMS: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StandaloneDispatchMode {
+    Inline,
+    Executor,
+}
+
+fn standalone_dispatch_mode(hero_name: &str) -> StandaloneDispatchMode {
+    match hero_name {
+        "npc_dota_hero_tiny" | "npc_dota_hero_legion_commander" => {
+            StandaloneDispatchMode::Executor
+        }
+        _ => StandaloneDispatchMode::Inline,
+    }
+}
+
 fn log_neutral_item_discovery(event: &GsiWebhookEvent, settings: &Settings) {
     // Skip if logging is disabled
     if !settings.neutral_items.log_discoveries {
@@ -146,5 +161,174 @@ impl ActionDispatcher {
             debug!("Dispatching standalone trigger to {}", hero_name);
             hero_script.handle_standalone_trigger();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        standalone_dispatch_mode, ActionDispatcher, StandaloneDispatchMode,
+    };
+    use crate::actions::common::SurvivabilityActions;
+    use crate::actions::executor::ActionExecutor;
+    use crate::actions::heroes::HeroScript;
+    use crate::config::Settings;
+    use crate::models::GsiWebhookEvent;
+    use std::any::Any;
+    use std::collections::HashMap;
+    use std::sync::mpsc;
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+    use std::time::Duration;
+
+    struct BlockingStandaloneScript {
+        hero_name: &'static str,
+        started_tx: mpsc::Sender<&'static str>,
+        release_rx: Mutex<mpsc::Receiver<()>>,
+        finished_tx: mpsc::Sender<&'static str>,
+    }
+
+    impl HeroScript for BlockingStandaloneScript {
+        fn handle_gsi_event(&self, _event: &GsiWebhookEvent) {}
+
+        fn handle_standalone_trigger(&self) {
+            let _ = self.started_tx.send(self.hero_name);
+            let _ = self.release_rx.lock().unwrap().recv();
+            let _ = self.finished_tx.send(self.hero_name);
+        }
+
+        fn hero_name(&self) -> &'static str {
+            self.hero_name
+        }
+
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+    }
+
+    fn dispatcher_with_script(script: Arc<dyn HeroScript>) -> ActionDispatcher {
+        let executor = ActionExecutor::new();
+        let settings = Arc::new(Mutex::new(Settings::default()));
+        let mut hero_scripts = HashMap::new();
+        hero_scripts.insert(script.hero_name().to_string(), script);
+
+        ActionDispatcher {
+            hero_scripts,
+            executor: executor.clone(),
+            survivability: SurvivabilityActions::new(settings, executor),
+        }
+    }
+
+    #[test]
+    fn tiny_and_legion_use_executor_standalone_mode() {
+        assert_eq!(
+            standalone_dispatch_mode("npc_dota_hero_tiny"),
+            StandaloneDispatchMode::Executor
+        );
+        assert_eq!(
+            standalone_dispatch_mode("npc_dota_hero_legion_commander"),
+            StandaloneDispatchMode::Executor
+        );
+    }
+
+    #[test]
+    fn shadow_fiend_and_huskar_keep_existing_standalone_mode() {
+        assert_eq!(
+            standalone_dispatch_mode("npc_dota_hero_nevermore"),
+            StandaloneDispatchMode::Inline
+        );
+        assert_eq!(
+            standalone_dispatch_mode("npc_dota_hero_huskar"),
+            StandaloneDispatchMode::Inline
+        );
+    }
+
+    #[test]
+    fn executor_standalone_dispatch_returns_before_blocking_script_finishes() {
+        let (started_tx, started_rx) = mpsc::channel::<&'static str>();
+        let (release_tx, release_rx) = mpsc::channel::<()>();
+        let (finished_tx, finished_rx) = mpsc::channel::<&'static str>();
+        let (returned_tx, returned_rx) = mpsc::channel::<()>();
+
+        let dispatcher = dispatcher_with_script(Arc::new(BlockingStandaloneScript {
+            hero_name: "npc_dota_hero_tiny",
+            started_tx,
+            release_rx: Mutex::new(release_rx),
+            finished_tx,
+        }));
+
+        let dispatch_handle = thread::spawn(move || {
+            dispatcher.dispatch_standalone_trigger("npc_dota_hero_tiny");
+            let _ = returned_tx.send(());
+        });
+
+        started_rx
+            .recv_timeout(Duration::from_millis(100))
+            .expect("blocking script should start");
+
+        match returned_rx.recv_timeout(Duration::from_millis(50)) {
+            Ok(()) => {}
+            Err(error) => {
+                let _ = release_tx.send(());
+                dispatch_handle
+                    .join()
+                    .expect("dispatch thread should finish after release");
+                panic!(
+                    "Tiny standalone dispatch should return before the blocking script finishes: {}",
+                    error
+                );
+            }
+        }
+
+        let _ = release_tx.send(());
+        dispatch_handle
+            .join()
+            .expect("dispatch thread should finish after release");
+
+        finished_rx
+            .recv_timeout(Duration::from_millis(100))
+            .expect("blocking script should finish after release");
+    }
+
+    #[test]
+    fn inline_standalone_dispatch_keeps_existing_behavior_for_other_heroes() {
+        let (started_tx, started_rx) = mpsc::channel::<&'static str>();
+        let (release_tx, release_rx) = mpsc::channel::<()>();
+        let (finished_tx, finished_rx) = mpsc::channel::<&'static str>();
+        let (returned_tx, returned_rx) = mpsc::channel::<()>();
+
+        let dispatcher = dispatcher_with_script(Arc::new(BlockingStandaloneScript {
+            hero_name: "npc_dota_hero_largo",
+            started_tx,
+            release_rx: Mutex::new(release_rx),
+            finished_tx,
+        }));
+
+        let dispatch_handle = thread::spawn(move || {
+            dispatcher.dispatch_standalone_trigger("npc_dota_hero_largo");
+            let _ = returned_tx.send(());
+        });
+
+        started_rx
+            .recv_timeout(Duration::from_millis(100))
+            .expect("blocking script should start");
+
+        assert!(
+            returned_rx.recv_timeout(Duration::from_millis(50)).is_err(),
+            "Largo should still run inline and remain blocked until the script is released"
+        );
+
+        let _ = release_tx.send(());
+        dispatch_handle
+            .join()
+            .expect("dispatch thread should finish after release");
+
+        returned_rx
+            .recv_timeout(Duration::from_millis(100))
+            .expect("dispatch should complete after the blocking script is released");
+
+        finished_rx
+            .recv_timeout(Duration::from_millis(100))
+            .expect("blocking script should finish after release");
     }
 }
