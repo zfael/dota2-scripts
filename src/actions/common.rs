@@ -203,6 +203,7 @@ impl SurvivabilityActions {
         self.use_neutral_item_if_danger_with_snapshot(event, in_danger);
     }
 
+    #[allow(dead_code)]
     /// Check if hero needs healing and use appropriate items
     pub fn check_and_use_healing_items(&self, event: &GsiWebhookEvent) {
         let in_danger = crate::actions::danger_detector::is_in_danger();
@@ -292,6 +293,7 @@ impl SurvivabilityActions {
         }
     }
 
+    #[allow(dead_code)]
     /// Use defensive items when in danger
     pub fn use_defensive_items_if_danger(&self, event: &GsiWebhookEvent) {
         let in_danger = crate::actions::danger_detector::is_in_danger();
@@ -394,6 +396,7 @@ impl SurvivabilityActions {
         }
     }
 
+    #[allow(dead_code)]
     /// Use neutral items when in danger
     pub fn use_neutral_item_if_danger(&self, event: &GsiWebhookEvent) {
         let in_danger = crate::actions::danger_detector::is_in_danger();
