@@ -16,6 +16,49 @@ lazy_static! {
 }
 
 /// Shadow Fiend raze execution helper
+
+#[derive(Debug, PartialEq, Eq)]
+enum ShadowFiendRequest {
+    Raze { raze_key: char, raze_delay_ms: u64 },
+    Ultimate { auto_d_on_ultimate: bool },
+    Standalone { auto_bkb_on_ultimate: bool, auto_d_on_ultimate: bool },
+}
+
+/// Build a Raze request payload for the worker
+fn build_raze_request(raze_key: char, raze_delay_ms: u64) -> ShadowFiendRequest {
+    ShadowFiendRequest::Raze {
+        raze_key,
+        raze_delay_ms,
+    }
+}
+
+/// Build an Ultimate request payload for the worker
+fn build_ultimate_request(auto_d_on_ultimate: bool) -> ShadowFiendRequest {
+    ShadowFiendRequest::Ultimate { auto_d_on_ultimate }
+}
+
+/// Build a Standalone request payload by copying relevant runtime flags from Settings
+fn build_standalone_request(settings: &Settings) -> ShadowFiendRequest {
+    let sf = &settings.heroes.shadow_fiend;
+    ShadowFiendRequest::Standalone {
+        auto_bkb_on_ultimate: sf.auto_bkb_on_ultimate,
+        auto_d_on_ultimate: sf.auto_d_on_ultimate,
+    }
+}
+
+/// Map an inventory slot string (e.g. "slot0") to the common keybinding character
+fn slot_to_common_key(slot: &str) -> Option<char> {
+    match slot {
+        "slot0" => Some('z'),
+        "slot1" => Some('x'),
+        "slot2" => Some('c'),
+        "slot3" => Some('v'),
+        "slot4" => Some('b'),
+        "slot5" => Some('n'),
+        _ => None,
+    }
+}
+
 pub struct ShadowFiendState;
 
 impl ShadowFiendState {
@@ -23,24 +66,24 @@ impl ShadowFiendState {
     /// This spawns a thread to handle the timing-sensitive sequence
     pub fn execute_raze(raze_key: char, raze_delay_ms: u64) {
         let delay_ms = raze_delay_ms;
-        
+
         // Spawn raze execution in separate thread
         thread::spawn(move || {
             thread::sleep(Duration::from_millis(50));
-            
+
             // Hold ALT (for cl_dota_alt_unit_movetodirection)
             crate::input::simulation::alt_down();
-            
+
             // Right-click to face direction
             crate::input::simulation::mouse_click();
-            
+
             // Small delay then release ALT
             thread::sleep(Duration::from_millis(50));
             crate::input::simulation::alt_up();
-            
+
             // Wait for direction to register
             thread::sleep(Duration::from_millis(delay_ms));
-            
+
             // Press the raze key
             crate::input::simulation::press_key(raze_key);
         });
@@ -51,17 +94,22 @@ impl ShadowFiendState {
     pub fn execute_ultimate_combo(auto_d_on_ultimate: bool) {
         // Spawn in thread to handle timing-sensitive sequence
         let auto_d = auto_d_on_ultimate;
-        
+
         thread::spawn(move || {
             // Get last GSI event to check for BKB
             let event_guard = SF_LAST_EVENT.lock().unwrap();
-            
+
             if let Some(event) = event_guard.as_ref() {
                 // Check for BKB in inventory
-                let bkb_slot = event.items.all_slots().iter()
-                    .find(|(_, item)| item.name.contains("black_king_bar") && item.can_cast == Some(true))
+                let bkb_slot = event
+                    .items
+                    .all_slots()
+                    .iter()
+                    .find(|(_, item)| {
+                        item.name.contains("black_king_bar") && item.can_cast == Some(true)
+                    })
                     .map(|(slot, _)| *slot);
-                
+
                 if let Some(slot) = bkb_slot {
                     // Map slot to key (simplified - use hardcoded mapping based on common keybindings)
                     let key = match slot {
@@ -73,7 +121,7 @@ impl ShadowFiendState {
                         "slot5" => Some('n'),
                         _ => None,
                     };
-                    
+
                     if let Some(bkb_key) = key {
                         info!("👻 SF Ultimate: Using BKB ({}) before Requiem", bkb_key);
                         // Double-tap for self-cast
@@ -88,16 +136,16 @@ impl ShadowFiendState {
             } else {
                 info!("👻 SF Ultimate: No GSI event available, skipping BKB");
             }
-            
+
             drop(event_guard); // Release lock
-            
+
             // Press D if enabled
             if auto_d {
                 info!("👻 SF Ultimate: Using D ability");
                 press_key('d');
                 thread::sleep(Duration::from_millis(50));
             }
-            
+
             // Press R for ultimate
             info!("👻 SF Ultimate: Casting Requiem of Souls (R)");
             press_key('r');
@@ -110,11 +158,11 @@ impl ShadowFiendState {
         let sf_config = &settings.heroes.shadow_fiend;
         let auto_bkb = sf_config.auto_bkb_on_ultimate;
         let auto_d = sf_config.auto_d_on_ultimate;
-        
+
         thread::spawn(move || {
             // Get last GSI event to check for Blink and Ultimate
             let event_guard = SF_LAST_EVENT.lock().unwrap();
-            
+
             if let Some(event) = event_guard.as_ref() {
                 // Check if Ultimate (R) is ready - ability5 is usually the ultimate
                 // Shadow Fiend's ultimate is "nevermore_requiem"
@@ -123,17 +171,20 @@ impl ShadowFiendState {
                     info!("👻 SF Standalone: Ultimate on cooldown, skipping combo");
                     return;
                 }
-                
+
                 // Check for Blink Dagger in inventory (must be off cooldown)
-                let blink_slot = event.items.all_slots().iter()
+                let blink_slot = event
+                    .items
+                    .all_slots()
+                    .iter()
                     .find(|(_, item)| item.name.contains("blink") && item.can_cast == Some(true))
                     .map(|(slot, _)| *slot);
-                
+
                 if blink_slot.is_none() {
                     info!("👻 SF Standalone: Blink not found or on cooldown, skipping combo");
                     return;
                 }
-                
+
                 let blink_key = blink_slot.and_then(|slot| match slot {
                     "slot0" => Some('z'),
                     "slot1" => Some('x'),
@@ -143,11 +194,16 @@ impl ShadowFiendState {
                     "slot5" => Some('n'),
                     _ => None,
                 });
-                
+
                 // Check for BKB if enabled
                 let bkb_key = if auto_bkb {
-                    event.items.all_slots().iter()
-                        .find(|(_, item)| item.name.contains("black_king_bar") && item.can_cast == Some(true))
+                    event
+                        .items
+                        .all_slots()
+                        .iter()
+                        .find(|(_, item)| {
+                            item.name.contains("black_king_bar") && item.can_cast == Some(true)
+                        })
                         .and_then(|(slot, _)| match *slot {
                             "slot0" => Some('z'),
                             "slot1" => Some('x'),
@@ -160,16 +216,16 @@ impl ShadowFiendState {
                 } else {
                     None
                 };
-                
+
                 drop(event_guard); // Release lock before sleeping
-                
+
                 // Execute combo: Blink → BKB (if available) → D (if enabled) → R
                 if let Some(key) = blink_key {
                     info!("👻 SF Standalone: Using Blink ({})", key);
                     press_key(key);
                     thread::sleep(Duration::from_millis(50));
                 }
-                
+
                 // Use BKB if available
                 if let Some(key) = bkb_key {
                     info!("👻 SF Standalone: Using BKB ({})", key);
@@ -178,14 +234,14 @@ impl ShadowFiendState {
                     press_key(key); // Double-tap for self-cast
                     thread::sleep(Duration::from_millis(50));
                 }
-                
+
                 // Press D if enabled
                 if auto_d {
                     info!("👻 SF Standalone: Using D ability");
                     press_key('d');
                     thread::sleep(Duration::from_millis(50));
                 }
-                
+
                 // Press R for ultimate
                 info!("👻 SF Standalone: Casting Requiem of Souls (R)");
                 press_key('r');
@@ -197,16 +253,16 @@ impl ShadowFiendState {
 }
 
 /// Shadow Fiend script
-/// 
+///
 /// Raze interception flow:
 /// 1. keyboard.rs intercepts Q/W/E when SF is enabled (via app_state.sf_enabled)
-/// 2. Calls ShadowFiendState::execute_raze() 
+/// 2. Calls ShadowFiendState::execute_raze()
 /// 3. execute_raze spawns thread that:
 ///    - Holds ALT (for cl_dota_alt_unit_movetodirection)
 ///    - Right-clicks to face direction
 ///    - Releases ALT, waits for direction to register
 ///    - Presses the raze key
-/// 
+///
 /// Auto-BKB on Ultimate flow:
 /// 1. keyboard.rs intercepts R when SF is enabled and auto_bkb_on_ultimate is enabled
 /// 2. Calls ShadowFiendState::execute_ultimate_combo()
@@ -229,13 +285,13 @@ impl ShadowFiendScript {
 impl HeroScript for ShadowFiendScript {
     fn handle_gsi_event(&self, event: &GsiWebhookEvent) {
         let settings = self.settings.lock().unwrap();
-        
+
         // Store last event for ultimate combo (BKB lookup)
         {
             let mut last_event = SF_LAST_EVENT.lock().unwrap();
             *last_event = Some(event.clone());
         }
-        
+
         // Use common survivability actions (danger detection, healing, defensive items)
         let survivability = SurvivabilityActions::new(self.settings.clone(), self.executor.clone());
         let in_danger = crate::actions::danger_detector::update(event, &settings.danger_detection);
@@ -257,5 +313,40 @@ impl HeroScript for ShadowFiendScript {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Settings;
+
+    #[test]
+    fn build_raze_request_preserves_key_and_delay() {
+        let request = build_raze_request('q', 120);
+        assert_eq!(
+            request,
+            ShadowFiendRequest::Raze {
+                raze_key: 'q',
+                raze_delay_ms: 120,
+            }
+        );
+    }
+
+    #[test]
+    fn build_standalone_request_copies_runtime_flags_from_settings() {
+        let settings = Settings::default();
+        let request = build_standalone_request(&settings);
+        assert!(matches!(
+            request,
+            ShadowFiendRequest::Standalone { auto_bkb_on_ultimate: _, auto_d_on_ultimate: _ }
+        ));
+    }
+
+    #[test]
+    fn slot_to_common_key_maps_inventory_slots_consistently() {
+        assert_eq!(slot_to_common_key("slot0"), Some('z'));
+        assert_eq!(slot_to_common_key("slot5"), Some('n'));
+        assert_eq!(slot_to_common_key("neutral0"), None);
     }
 }
