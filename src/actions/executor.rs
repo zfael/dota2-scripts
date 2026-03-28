@@ -1,10 +1,10 @@
 use std::cmp::Ordering;
-use std::sync::mpsc::{self, Sender};
+use std::collections::BinaryHeap;
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
 #[cfg(test)]
 use std::cell::RefCell;
-#[cfg(test)]
-use std::sync::atomic::AtomicU64;
 use std::thread;
 use std::time::{Duration, Instant};
 use tracing::{debug, warn};
@@ -15,7 +15,6 @@ enum ActionMessage {
     Run { label: &'static str, job: ActionJob },
 }
 
-#[allow(dead_code)]
 struct ScheduledAction {
     due_at: Instant,
     sequence: u64,
@@ -36,11 +35,34 @@ impl ScheduledAction {
     }
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 fn scheduled_action_cmp(left: &ScheduledAction, right: &ScheduledAction) -> Ordering {
     left.due_at
         .cmp(&right.due_at)
         .then_with(|| left.sequence.cmp(&right.sequence))
+}
+
+impl Ord for ScheduledAction {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other
+            .due_at
+            .cmp(&self.due_at)
+            .then_with(|| other.sequence.cmp(&self.sequence))
+    }
+}
+
+impl PartialOrd for ScheduledAction {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Eq for ScheduledAction {}
+
+impl PartialEq for ScheduledAction {
+    fn eq(&self, other: &Self) -> bool {
+        self.due_at == other.due_at && self.sequence == other.sequence
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,46 +80,30 @@ fn dispatch_mode_for_delay(delay: Duration) -> DispatchMode {
 }
 
 pub struct ActionExecutor {
-    tx: Sender<ActionMessage>,
-    #[cfg(test)]
+    ready_tx: Sender<ActionMessage>,
+    delayed_tx: Sender<ScheduledAction>,
     sequence: AtomicU64,
 }
 
 impl ActionExecutor {
     pub fn new() -> Arc<Self> {
-        let (tx, rx) = mpsc::channel::<ActionMessage>();
+        let (ready_tx, ready_rx) = mpsc::channel::<ActionMessage>();
+        let (delayed_tx, delayed_rx) = mpsc::channel::<ScheduledAction>();
 
-        thread::spawn(move || {
-            while let Ok(message) = rx.recv() {
-                match message {
-                    ActionMessage::Run { label, job } => {
-                        debug!("Running action job: {}", label);
-                        if let Err(panic_payload) =
-                            std::panic::catch_unwind(std::panic::AssertUnwindSafe(job))
-                        {
-                            let panic_message = if let Some(message) =
-                                panic_payload.downcast_ref::<&str>()
-                            {
-                                *message
-                            } else if let Some(message) = panic_payload.downcast_ref::<String>() {
-                                message.as_str()
-                            } else {
-                                "unknown panic payload"
-                            };
+        let ready_worker_tx = ready_tx.clone();
+        thread::Builder::new()
+            .name("action-ready-worker".to_string())
+            .spawn(move || run_ready_worker(ready_rx))
+            .expect("failed to spawn ready worker thread");
 
-                            warn!(
-                                "Action job {} panicked; executor will continue running: {}",
-                                label, panic_message
-                            );
-                        }
-                    }
-                }
-            }
-        });
+        thread::Builder::new()
+            .name("action-delayed-scheduler".to_string())
+            .spawn(move || run_delayed_scheduler(delayed_rx, ready_worker_tx))
+            .expect("failed to spawn delayed scheduler thread");
 
         Arc::new(Self {
-            tx,
-            #[cfg(test)]
+            ready_tx,
+            delayed_tx,
             sequence: AtomicU64::new(0),
         })
     }
@@ -113,12 +119,11 @@ impl ActionExecutor {
     where
         F: FnOnce() + Send + 'static,
     {
-        let tx = self.tx.clone();
         let job = Box::new(job) as ActionJob;
 
         match dispatch_mode_for_delay(delay) {
             DispatchMode::Immediate => {
-                if let Err(error) = tx.send(ActionMessage::Run { label, job }) {
+                if let Err(error) = self.ready_tx.send(ActionMessage::Run { label, job }) {
                     warn!("Failed to enqueue action job {}: {}", label, error);
                 }
             }
@@ -126,9 +131,7 @@ impl ActionExecutor {
                 #[cfg(test)]
                 {
                     if test_delay_capture_enabled() {
-                        let sequence = self
-                            .sequence
-                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        let sequence = self.sequence.fetch_add(1, AtomicOrdering::Relaxed);
                         capture_test_delayed_action(ScheduledAction {
                             due_at: test_delayed_due_at(d),
                             sequence,
@@ -136,24 +139,106 @@ impl ActionExecutor {
                         });
                         return;
                     }
-
-                    thread::spawn(move || {
-                        thread::sleep(d);
-                        if let Err(error) = tx.send(ActionMessage::Run { label, job }) {
-                            warn!("Failed to enqueue delayed action job {}: {}", label, error);
-                        }
-                    });
-                    return;
                 }
 
-                #[cfg(not(test))]
+                let sequence = self.sequence.fetch_add(1, AtomicOrdering::Relaxed);
+                if let Err(error) = self.delayed_tx.send(ScheduledAction {
+                    due_at: Instant::now() + d,
+                    sequence,
+                    message: ActionMessage::Run { label, job },
+                }) {
+                    warn!("Failed to enqueue delayed action job {}: {}", label, error);
+                }
+            }
+        }
+    }
+}
+
+fn run_ready_worker(rx: Receiver<ActionMessage>) {
+    while let Ok(message) = rx.recv() {
+        match message {
+            ActionMessage::Run { label, job } => {
+                debug!("Running action job: {}", label);
+                if let Err(panic_payload) =
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(job))
                 {
-                    thread::spawn(move || {
-                        thread::sleep(d);
-                        if let Err(error) = tx.send(ActionMessage::Run { label, job }) {
-                            warn!("Failed to enqueue delayed action job {}: {}", label, error);
-                        }
-                    });
+                    let panic_message = if let Some(message) = panic_payload.downcast_ref::<&str>()
+                    {
+                        *message
+                    } else if let Some(message) = panic_payload.downcast_ref::<String>() {
+                        message.as_str()
+                    } else {
+                        "unknown panic payload"
+                    };
+
+                    warn!(
+                        "Action job {} panicked; executor will continue running: {}",
+                        label, panic_message
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn run_delayed_scheduler(delayed_rx: Receiver<ScheduledAction>, ready_tx: Sender<ActionMessage>) {
+    let mut pending_heap = BinaryHeap::<ScheduledAction>::new();
+    let mut delayed_disconnected = false;
+
+    loop {
+        while let Some(next_due) = pending_heap.peek().map(|action| action.due_at) {
+            if next_due > Instant::now() {
+                break;
+            }
+
+            let due_action = pending_heap
+                .pop()
+                .expect("pending heap should contain the peeked action");
+            if ready_tx.send(due_action.message).is_err() {
+                warn!("Ready channel disconnected; dropping remaining delayed actions");
+                return;
+            }
+        }
+
+        if delayed_disconnected {
+            if pending_heap.is_empty() {
+                return;
+            }
+
+            let next_due = pending_heap
+                .peek()
+                .expect("pending heap should contain the next delayed action")
+                .due_at;
+            if let Some(wait_for) = next_due.checked_duration_since(Instant::now()) {
+                thread::sleep(wait_for);
+            }
+            continue;
+        }
+
+        if pending_heap.is_empty() {
+            match delayed_rx.recv() {
+                Ok(action) => pending_heap.push(action),
+                Err(_) => {
+                    delayed_disconnected = true;
+                }
+            }
+        } else {
+            let next_due = pending_heap
+                .peek()
+                .expect("pending heap should contain the next delayed action")
+                .due_at;
+            let now = Instant::now();
+            let timeout = if next_due > now {
+                next_due.duration_since(now)
+            } else {
+                Duration::ZERO
+            };
+
+            match delayed_rx.recv_timeout(timeout) {
+                Ok(action) => pending_heap.push(action),
+                Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    delayed_disconnected = true;
                 }
             }
         }
@@ -206,7 +291,7 @@ fn flush_test_delayed_actions(executor: &ActionExecutor) {
 
     for action in actions {
         let ActionMessage::Run { label, job } = action.message;
-        if let Err(error) = executor.tx.send(ActionMessage::Run { label, job }) {
+        if let Err(error) = executor.ready_tx.send(ActionMessage::Run { label, job }) {
             warn!("Failed to flush delayed action job {}: {}", label, error);
         }
     }
@@ -216,11 +301,12 @@ fn flush_test_delayed_actions(executor: &ActionExecutor) {
 mod tests {
     use super::{
         dispatch_mode_for_delay, flush_test_delayed_actions, scheduled_action_cmp,
-        set_test_delay_capture, ActionExecutor, DispatchMode, ScheduledAction,
+        set_test_delay_capture, ActionExecutor, ActionMessage, DispatchMode, ScheduledAction,
     };
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::sync::mpsc;
     use std::sync::Arc;
+    use std::thread;
     use std::time::{Duration, Instant};
 
     struct TestDelayCaptureGuard;
@@ -452,5 +538,110 @@ mod tests {
             .recv_timeout(Duration::from_millis(100))
             .expect("executor should continue after a panicking job");
         assert_eq!(message, "still-running");
+    }
+
+    #[test]
+    fn delayed_channel_disconnect_drains_accepted_work() {
+        let (ready_tx, ready_rx) = mpsc::channel::<ActionMessage>();
+        let (delayed_tx, delayed_rx) = mpsc::channel::<ScheduledAction>();
+        let (result_tx, result_rx) = mpsc::channel::<&'static str>();
+
+        thread::spawn({
+            let ready_tx = ready_tx.clone();
+            move || super::run_delayed_scheduler(delayed_rx, ready_tx)
+        });
+
+        let first_tx = result_tx.clone();
+        let _ = delayed_tx.send(ScheduledAction {
+            due_at: Instant::now() + Duration::from_millis(50),
+            sequence: 0,
+            message: ActionMessage::Run {
+                label: "test-first",
+                job: Box::new(move || {
+                    let _ = first_tx.send("first");
+                }),
+            },
+        });
+
+        let second_tx = result_tx.clone();
+        let _ = delayed_tx.send(ScheduledAction {
+            due_at: Instant::now() + Duration::from_millis(100),
+            sequence: 1,
+            message: ActionMessage::Run {
+                label: "test-second",
+                job: Box::new(move || {
+                    let _ = second_tx.send("second");
+                }),
+            },
+        });
+
+        drop(delayed_tx);
+
+        let first_message = ready_rx
+            .recv_timeout(Duration::from_millis(200))
+            .expect("scheduler should drain first action");
+        let ActionMessage::Run { job, .. } = first_message;
+        job();
+
+        let second_message = ready_rx
+            .recv_timeout(Duration::from_millis(200))
+            .expect("scheduler should drain second action");
+        let ActionMessage::Run { job, .. } = second_message;
+        job();
+
+        assert_eq!(
+            result_rx.recv_timeout(Duration::from_millis(50)).unwrap(),
+            "first"
+        );
+        assert_eq!(
+            result_rx.recv_timeout(Duration::from_millis(50)).unwrap(),
+            "second"
+        );
+    }
+
+    #[test]
+    fn ready_channel_disconnect_drops_remaining_delayed_work() {
+        let (ready_tx, ready_rx) = mpsc::channel::<ActionMessage>();
+        let (delayed_tx, delayed_rx) = mpsc::channel::<ScheduledAction>();
+
+        thread::spawn({
+            let ready_tx = ready_tx.clone();
+            move || super::run_delayed_scheduler(delayed_rx, ready_tx)
+        });
+
+        let _ = delayed_tx.send(ScheduledAction {
+            due_at: Instant::now() + Duration::from_millis(50),
+            sequence: 0,
+            message: ActionMessage::Run {
+                label: "test-first",
+                job: Box::new(|| {}),
+            },
+        });
+
+        let _ = delayed_tx.send(ScheduledAction {
+            due_at: Instant::now() + Duration::from_millis(100),
+            sequence: 1,
+            message: ActionMessage::Run {
+                label: "test-second",
+                job: Box::new(|| {}),
+            },
+        });
+
+        drop(ready_rx);
+
+        std::thread::sleep(Duration::from_millis(150));
+
+        assert!(
+            delayed_tx.send(ScheduledAction {
+                due_at: Instant::now(),
+                sequence: 2,
+                message: ActionMessage::Run {
+                    label: "test-after-disconnect",
+                    job: Box::new(|| {}),
+                },
+            })
+            .is_err(),
+            "scheduler thread should exit when ready channel disconnects"
+        );
     }
 }
