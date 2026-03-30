@@ -1,8 +1,8 @@
-use crate::actions::common::SurvivabilityActions;
+use crate::actions::{armlet, common::SurvivabilityActions};
 use crate::actions::executor::ActionExecutor;
 use crate::actions::heroes::{
     BroodmotherScript, HeroScript, HuskarScript, LargoScript, LegionCommanderScript,
-    ShadowFiendScript, TinyScript,
+    OutworldDestroyerScript, ShadowFiendScript, TinyScript,
 };
 use crate::config::Settings;
 use crate::models::GsiWebhookEvent;
@@ -25,7 +25,9 @@ enum StandaloneDispatchMode {
 
 fn standalone_dispatch_mode(hero_name: &str) -> StandaloneDispatchMode {
     match hero_name {
-        "npc_dota_hero_tiny" | "npc_dota_hero_legion_commander" => {
+        "npc_dota_hero_tiny"
+        | "npc_dota_hero_legion_commander"
+        | "npc_dota_hero_obsidian_destroyer" => {
             StandaloneDispatchMode::Executor
         }
         _ => StandaloneDispatchMode::Inline,
@@ -121,6 +123,13 @@ impl ActionDispatcher {
         let broodmother = Arc::new(BroodmotherScript::new(settings.clone(), executor.clone()));
         hero_scripts.insert(broodmother.hero_name().to_string(), broodmother);
 
+        let outworld_destroyer =
+            Arc::new(OutworldDestroyerScript::new(settings.clone(), executor.clone()));
+        hero_scripts.insert(
+            outworld_destroyer.hero_name().to_string(),
+            outworld_destroyer,
+        );
+
         Self {
             hero_scripts,
             executor: executor.clone(),
@@ -132,7 +141,10 @@ impl ActionDispatcher {
         // Shared keyboard/runtime caches are refreshed upstream in process_gsi_events().
         // Dispatcher only runs dispatch-local hooks and routes automation work.
         let settings = self.survivability.settings.lock().unwrap();
-        
+
+        // Armlet is the most time-sensitive survivability action, so evaluate it first.
+        armlet::maybe_toggle(event, &settings);
+
         // Log neutral item discovery
         log_neutral_item_discovery(event, &settings);
 

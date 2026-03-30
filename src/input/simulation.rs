@@ -1,4 +1,5 @@
 use enigo::{Button, Direction, Enigo, Key, Keyboard, Mouse, Settings};
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Mutex, OnceLock};
@@ -71,6 +72,7 @@ struct SyntheticInputCommand {
 struct SyntheticInputJob {
     command: SyntheticInputCommand,
     completion_tx: Sender<()>,
+    priority: SyntheticInputPriority,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,6 +88,12 @@ struct WorkerGuardState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SyntheticInputPriority {
+    Normal,
+    Armlet,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct GuardExecutionPlan {
     set_simulating_before: Option<bool>,
     post_action_delay_ms: Option<u64>,
@@ -94,30 +102,30 @@ struct GuardExecutionPlan {
 
 /// Press a single key (sets SIMULATING_KEYS flag to prevent re-interception)
 pub fn press_key(key_char: char) {
-    enqueue_command_and_wait(press_key_command(key_char));
+    enqueue_command_and_wait(press_key_command(key_char), SyntheticInputPriority::Normal);
 }
 
 /// Press a key down (hold)
 #[allow(dead_code)]
 pub fn key_down(key_char: char) {
-    enqueue_command_and_wait(key_down_command(key_char));
+    enqueue_command_and_wait(key_down_command(key_char), SyntheticInputPriority::Normal);
 }
 
 /// Release a key
 #[allow(dead_code)]
 pub fn key_up(key_char: char) {
-    enqueue_command_and_wait(key_up_command(key_char));
+    enqueue_command_and_wait(key_up_command(key_char), SyntheticInputPriority::Normal);
 }
 
 /// Perform a right mouse click
 pub fn mouse_click() {
-    enqueue_command_and_wait(mouse_click_command());
+    enqueue_command_and_wait(mouse_click_command(), SyntheticInputPriority::Normal);
 }
 
 /// Perform a left mouse click
 #[allow(dead_code)]
 pub fn left_click() {
-    enqueue_command_and_wait(left_click_command());
+    enqueue_command_and_wait(left_click_command(), SyntheticInputPriority::Normal);
 }
 
 /// Hold ALT key down
@@ -131,15 +139,18 @@ pub fn alt_up() {
 }
 
 pub fn modifier_down(modifier: ModifierKey) {
-    enqueue_command_and_wait(modifier_down_command(modifier));
+    enqueue_command_and_wait(modifier_down_command(modifier), SyntheticInputPriority::Normal);
 }
 
 pub fn modifier_up(modifier: ModifierKey) {
-    enqueue_command_and_wait(modifier_up_command(modifier));
+    enqueue_command_and_wait(modifier_up_command(modifier), SyntheticInputPriority::Normal);
 }
 
 pub fn armlet_chord(slot_key: char, modifier: ModifierKey) {
-    enqueue_command_and_wait(armlet_chord_command(slot_key, modifier));
+    enqueue_command_and_wait(
+        armlet_chord_command(slot_key, modifier),
+        SyntheticInputPriority::Armlet,
+    );
 }
 
 fn press_key_command(key_char: char) -> SyntheticInputCommand {
@@ -219,12 +230,13 @@ fn armlet_chord_command(slot_key: char, modifier: ModifierKey) -> SyntheticInput
     }
 }
 
-fn enqueue_command_and_wait(command: SyntheticInputCommand) {
+fn enqueue_command_and_wait(command: SyntheticInputCommand, priority: SyntheticInputPriority) {
     let (completion_tx, completion_rx) = mpsc::channel();
     let action = command.action;
     let job = SyntheticInputJob {
         command,
         completion_tx,
+        priority,
     };
 
     if !enqueue_with_sender(worker_sender(), job, action) {
@@ -335,8 +347,10 @@ fn spawn_worker() -> Sender<SyntheticInputJob> {
 
 fn run_worker(rx: Receiver<SyntheticInputJob>, mut enigo: Enigo) {
     let mut guard_state = WorkerGuardState::default();
+    let mut armlet_backlog = VecDeque::new();
+    let mut normal_backlog = VecDeque::new();
 
-    while let Ok(job) = rx.recv() {
+    while let Some(job) = next_job(&rx, &mut armlet_backlog, &mut normal_backlog) {
         execute_command(&mut enigo, job.command, &mut guard_state);
         
         let mut state = metrics_store().lock().unwrap();
@@ -345,6 +359,60 @@ fn run_worker(rx: Receiver<SyntheticInputJob>, mut enigo: Enigo) {
         
         let _ = job.completion_tx.send(());
     }
+}
+
+fn next_job(
+    rx: &Receiver<SyntheticInputJob>,
+    armlet_backlog: &mut VecDeque<SyntheticInputJob>,
+    normal_backlog: &mut VecDeque<SyntheticInputJob>,
+) -> Option<SyntheticInputJob> {
+    if armlet_backlog.is_empty() && normal_backlog.is_empty() {
+        let first_job = rx.recv().ok()?;
+        queue_job(first_job, armlet_backlog, normal_backlog);
+    }
+
+    let disconnected = drain_pending_jobs(rx, armlet_backlog, normal_backlog);
+    let next = dequeue_next_job(armlet_backlog, normal_backlog);
+
+    if next.is_none() && disconnected {
+        return None;
+    }
+
+    next
+}
+
+fn drain_pending_jobs(
+    rx: &Receiver<SyntheticInputJob>,
+    armlet_backlog: &mut VecDeque<SyntheticInputJob>,
+    normal_backlog: &mut VecDeque<SyntheticInputJob>,
+) -> bool {
+    loop {
+        match rx.try_recv() {
+            Ok(job) => queue_job(job, armlet_backlog, normal_backlog),
+            Err(mpsc::TryRecvError::Empty) => return false,
+            Err(mpsc::TryRecvError::Disconnected) => return true,
+        }
+    }
+}
+
+fn queue_job(
+    job: SyntheticInputJob,
+    armlet_backlog: &mut VecDeque<SyntheticInputJob>,
+    normal_backlog: &mut VecDeque<SyntheticInputJob>,
+) {
+    match job.priority {
+        SyntheticInputPriority::Normal => normal_backlog.push_back(job),
+        SyntheticInputPriority::Armlet => armlet_backlog.push_back(job),
+    }
+}
+
+fn dequeue_next_job(
+    armlet_backlog: &mut VecDeque<SyntheticInputJob>,
+    normal_backlog: &mut VecDeque<SyntheticInputJob>,
+) -> Option<SyntheticInputJob> {
+    armlet_backlog
+        .pop_front()
+        .or_else(|| normal_backlog.pop_front())
 }
 
 fn execute_command(
@@ -552,10 +620,18 @@ mod tests {
     static METRICS_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     fn test_job(command: SyntheticInputCommand) -> SyntheticInputJob {
+        test_job_with_priority(command, SyntheticInputPriority::Normal)
+    }
+
+    fn test_job_with_priority(
+        command: SyntheticInputCommand,
+        priority: SyntheticInputPriority,
+    ) -> SyntheticInputJob {
         let (completion_tx, _completion_rx) = mpsc::channel();
         SyntheticInputJob {
             command,
             completion_tx,
+            priority,
         }
     }
 
@@ -859,5 +935,45 @@ mod tests {
         assert_eq!(snapshot.dropped_total, state.dropped_total);
         assert_eq!(snapshot.current_depth, state.current_depth);
         assert_eq!(snapshot.peak_depth, state.peak_depth);
+    }
+
+    #[test]
+    fn dequeued_jobs_prioritize_armlet_lane_before_older_normal_backlog() {
+        let mut armlet_backlog = VecDeque::new();
+        let mut normal_backlog = VecDeque::new();
+
+        queue_job(
+            test_job(press_key_command('q')),
+            &mut armlet_backlog,
+            &mut normal_backlog,
+        );
+        queue_job(
+            test_job(mouse_click_command()),
+            &mut armlet_backlog,
+            &mut normal_backlog,
+        );
+        queue_job(
+            test_job_with_priority(
+                armlet_chord_command('x', ModifierKey::Alt),
+                SyntheticInputPriority::Armlet,
+            ),
+            &mut armlet_backlog,
+            &mut normal_backlog,
+        );
+
+        let first = dequeue_next_job(&mut armlet_backlog, &mut normal_backlog)
+            .expect("armlet job should be scheduled first");
+        assert_eq!(
+            first.command,
+            armlet_chord_command('x', ModifierKey::Alt)
+        );
+
+        let second = dequeue_next_job(&mut armlet_backlog, &mut normal_backlog)
+            .expect("first normal job should remain queued");
+        assert_eq!(second.command, press_key_command('q'));
+
+        let third = dequeue_next_job(&mut armlet_backlog, &mut normal_backlog)
+            .expect("second normal job should remain queued");
+        assert_eq!(third.command, mouse_click_command());
     }
 }
