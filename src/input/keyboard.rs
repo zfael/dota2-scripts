@@ -8,6 +8,9 @@ use tracing::{debug, error, info, warn};
 
 use crate::actions::auto_items::MODIFIER_KEY_HELD;
 use crate::actions::heroes::broodmother::BROODMOTHER_ACTIVE;
+use crate::actions::heroes::outworld_destroyer::{
+    build_keyboard_combo_config, OutworldDestroyerComboConfig, OutworldDestroyerState,
+};
 use crate::actions::heroes::shadow_fiend::ShadowFiendState;
 use crate::actions::SOUL_RING_STATE;
 use crate::actions::soul_ring::{SoulRingKeyboardConfig, SoulRingState};
@@ -396,6 +399,43 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                     return None;
                 }
 
+                if snapshot.od_enabled {
+                    if snapshot.outworld_destroyer.ultimate_intercept_enabled && key == Key::KeyR {
+                        if OutworldDestroyerState::can_intercept_ultimate() {
+                            info!("R key pressed - OD ultimate combo");
+                            OutworldDestroyerState::execute_ultimate_combo(
+                                snapshot.outworld_destroyer.combo_config.clone(),
+                            );
+                            return None;
+                        }
+                    }
+
+                    if snapshot.outworld_destroyer.astral_self_cast_enabled {
+                        if let Some(astral_self_cast_key) =
+                            snapshot.outworld_destroyer.astral_self_cast_key
+                        {
+                            if key == astral_self_cast_key {
+                                if OutworldDestroyerState::can_self_cast_astral() {
+                                    info!("{:?} key pressed - OD self-Astral", astral_self_cast_key);
+                                    OutworldDestroyerState::execute_self_astral(
+                                        snapshot
+                                            .outworld_destroyer
+                                            .combo_config
+                                            .astral_imprisonment_key,
+                                    );
+                                } else {
+                                    info!(
+                                        "{:?} key pressed - OD self-Astral unavailable",
+                                        astral_self_cast_key
+                                    );
+                                }
+
+                                return None;
+                            }
+                        }
+                    }
+                }
+
                 // Handle Largo Q/W/E/R keys and other ability keys with Soul Ring
                 match key {
                     Key::KeyQ | Key::KeyW | Key::KeyE | Key::KeyR | Key::KeyD | Key::KeyF => {
@@ -459,6 +499,14 @@ pub struct ShadowFiendKeyboardSnapshot {
     pub auto_d_on_ultimate: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct OutworldDestroyerKeyboardSnapshot {
+    pub ultimate_intercept_enabled: bool,
+    pub astral_self_cast_enabled: bool,
+    pub astral_self_cast_key: Option<Key>,
+    pub combo_config: OutworldDestroyerComboConfig,
+}
+
 /// Snapshot of the Broodmother keyboard-relevant config.
 #[derive(Debug, Clone)]
 pub struct BroodmotherKeyboardSnapshot {
@@ -489,7 +537,9 @@ pub struct KeyboardSnapshot {
     pub trigger_key: Option<Key>,
     /// Whether Shadow Fiend raze interception is active.
     pub sf_enabled: bool,
+    pub od_enabled: bool,
     pub shadow_fiend: ShadowFiendKeyboardSnapshot,
+    pub outworld_destroyer: OutworldDestroyerKeyboardSnapshot,
     pub broodmother: BroodmotherKeyboardSnapshot,
     /// Static Soul Ring keyboard config (thresholds, key sets, delays).
     pub soul_ring: SoulRingKeyboardConfig,
@@ -602,18 +652,27 @@ impl KeyboardSnapshot {
         let trigger_key_str = state.trigger_key.lock().unwrap().clone();
         let trigger_key = parse_key_string(&trigger_key_str);
         let sf_enabled = *state.sf_enabled.lock().unwrap();
+        let od_enabled = *state.od_enabled.lock().unwrap();
 
         let sf = &settings.heroes.shadow_fiend;
+        let od = &settings.heroes.outworld_destroyer;
         let bm = &settings.heroes.broodmother;
 
         Self {
             trigger_key,
             sf_enabled,
+            od_enabled,
             shadow_fiend: ShadowFiendKeyboardSnapshot {
                 raze_intercept_enabled: sf.raze_intercept_enabled,
                 auto_bkb_on_ultimate: sf.auto_bkb_on_ultimate,
                 raze_delay_ms: sf.raze_delay_ms,
                 auto_d_on_ultimate: sf.auto_d_on_ultimate,
+            },
+            outworld_destroyer: OutworldDestroyerKeyboardSnapshot {
+                ultimate_intercept_enabled: od.ultimate_intercept_enabled,
+                astral_self_cast_enabled: od.astral_self_cast_enabled,
+                astral_self_cast_key: parse_key_string(&od.astral_self_cast_key),
+                combo_config: build_keyboard_combo_config(settings),
             },
             broodmother: BroodmotherKeyboardSnapshot {
                 spider_micro_enabled: bm.spider_micro_enabled,
@@ -679,11 +738,18 @@ mod tests {
         KeyboardSnapshot {
             trigger_key: None,
             sf_enabled: false,
+            od_enabled: false,
             shadow_fiend: ShadowFiendKeyboardSnapshot {
                 raze_intercept_enabled: false,
                 auto_bkb_on_ultimate: false,
                 raze_delay_ms: 0,
                 auto_d_on_ultimate: false,
+            },
+            outworld_destroyer: OutworldDestroyerKeyboardSnapshot {
+                ultimate_intercept_enabled: false,
+                astral_self_cast_enabled: false,
+                astral_self_cast_key: None,
+                combo_config: build_keyboard_combo_config(&Settings::default()),
             },
             broodmother: BroodmotherKeyboardSnapshot {
                 spider_micro_enabled: true,
@@ -710,6 +776,7 @@ mod tests {
             metrics: QueueMetrics::default(),
             trigger_key: Arc::new(Mutex::new("Home".to_string())),
             sf_enabled: Arc::new(Mutex::new(true)),
+            od_enabled: Arc::new(Mutex::new(false)),
             update_state: Arc::new(Mutex::new(UpdateCheckState::Idle)),
         };
 
@@ -718,6 +785,28 @@ mod tests {
         assert_eq!(snapshot.trigger_key, Some(Key::Home));
         assert!(snapshot.sf_enabled);
         assert!(snapshot.shadow_fiend.raze_intercept_enabled);
+    }
+
+    #[test]
+    fn keyboard_snapshot_parses_od_flags_and_astral_hotkey() {
+        let settings = Settings::default();
+        let state = AppState {
+            selected_hero: Some(HeroType::OutworldDestroyer),
+            gsi_enabled: true,
+            standalone_enabled: true,
+            last_event: None,
+            metrics: QueueMetrics::default(),
+            trigger_key: Arc::new(Mutex::new("Home".to_string())),
+            sf_enabled: Arc::new(Mutex::new(false)),
+            od_enabled: Arc::new(Mutex::new(true)),
+            update_state: Arc::new(Mutex::new(UpdateCheckState::Idle)),
+        };
+
+        let snapshot = KeyboardSnapshot::from_runtime(&settings, &state);
+
+        assert!(snapshot.od_enabled);
+        assert!(snapshot.outworld_destroyer.ultimate_intercept_enabled);
+        assert_eq!(snapshot.outworld_destroyer.astral_self_cast_key, Some(Key::F5));
     }
 
     #[test]
@@ -735,6 +824,7 @@ mod tests {
         let state = AppState::default();
         let snapshot = KeyboardSnapshot::from_runtime(&Settings::default(), &state);
         assert!(!snapshot.sf_enabled);
+        assert!(!snapshot.od_enabled);
     }
 
     #[test]

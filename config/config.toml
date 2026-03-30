@@ -61,6 +61,28 @@ standalone_key = "Home"
 [heroes.tiny]
 standalone_key = "Home"
 
+[heroes.outworld_destroyer]
+standalone_key = "Home"
+objurgation_key = "e"
+arcane_orb_key = "q"
+astral_imprisonment_key = "w"
+auto_objurgation_on_danger = true
+objurgation_hp_threshold_percent = 55
+objurgation_min_mana_percent = 25
+objurgation_trigger_cooldown_ms = 1500
+ultimate_intercept_enabled = true
+auto_bkb_on_ultimate = true
+auto_objurgation_on_ultimate = true
+post_bkb_delay_ms = 50
+post_blink_delay_ms = 100
+astral_self_cast_enabled = false
+astral_self_cast_key = "F5"
+combo_items = ["sheepstick", "bloodthorn"]
+combo_item_spam_count = 1
+combo_item_delay_ms = 50
+post_ultimate_arcane_orb_presses = 0
+arcane_orb_press_interval_ms = 30
+
 [danger_detection]
 enabled = true
 hp_threshold_percent = 70

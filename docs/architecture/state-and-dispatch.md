@@ -10,13 +10,14 @@
 
 | Field | Type | Owner / meaning |
 |---|---|---|
-| `selected_hero` | `Option<HeroType>` | UI + hotkey routing for `Huskar`, `Largo`, `LegionCommander`, `ShadowFiend`, `Tiny` |
+| `selected_hero` | `Option<HeroType>` | UI + hotkey routing for `Huskar`, `Largo`, `LegionCommander`, `OutworldDestroyer`, `ShadowFiend`, `Tiny` |
 | `gsi_enabled` | `bool` | Master gate for async dispatch from `process_gsi_events()` |
 | `standalone_enabled` | `bool` | Master gate for hotkey-triggered standalone combos |
 | `last_event` | `Option<GsiWebhookEvent>` | Latest GSI payload for UI/status rendering |
 | `metrics` | `QueueMetrics` | `events_processed`, `events_dropped`, `current_queue_depth` |
 | `trigger_key` | `Arc<Mutex<String>>` | Current standalone hotkey string, updated when the active hero changes |
 | `sf_enabled` | `Arc<Mutex<bool>>` | Fast flag for Shadow Fiend keyboard interception |
+| `od_enabled` | `Arc<Mutex<bool>>` | Fast flag for Outworld Destroyer keyboard interception |
 | `update_state` | `Arc<Mutex<UpdateCheckState>>` | UI-visible update status machine |
 
 ### Current caveats
@@ -40,6 +41,7 @@
 | `Arc<ActionExecutor>` | `src/actions/executor.rs` | `src/main.rs`, dispatcher, common survivability helpers, hero scripts that compose survivability |
 | `Arc<Mutex<String>>` (`trigger_key`) | inside `AppState` | keyboard hook + UI + main hotkey consumer |
 | `Arc<Mutex<bool>>` (`sf_enabled`) | inside `AppState` | keyboard hook + UI/GSI hero selection |
+| `Arc<Mutex<bool>>` (`od_enabled`) | inside `AppState` | keyboard hook + UI/GSI hero selection |
 | `Arc<Mutex<UpdateCheckState>>` | inside `AppState` | startup update task + UI |
 
 ### Feature-specific shared state
@@ -50,6 +52,7 @@ These are not part of `AppState`, but they matter when tracing dispatch:
 |---|---|---|
 | `SOUL_RING_STATE` | `src/actions/soul_ring.rs` | Shared Soul Ring inventory/health/mana snapshot used by GSI + keyboard paths |
 | `SF_LAST_EVENT` | `src/actions/heroes/shadow_fiend.rs` | Cached event for BKB/Blink checks during intercepted SF combos |
+| `OD_LAST_EVENT` | `src/actions/heroes/outworld_destroyer.rs` | Cached event for OD ultimate interception, self-Astral, and standalone combo checks |
 | `HP_TRACKER` | `src/actions/danger_detector.rs` | Global danger heuristic state |
 | `LATEST_GSI_EVENT` | `src/actions/auto_items.rs` | Cached inventory/ability state for Broodmother auto-items |
 | `DISPEL_TRIGGERED` | `src/actions/dispel.rs` | Prevent repeated Manta/Lotus usage during one silence |
@@ -91,6 +94,7 @@ Hero registration happens once in `ActionDispatcher::new(...)`:
 - `HuskarScript`
 - `LargoScript`
 - `LegionCommanderScript`
+- `OutworldDestroyerScript`
 - `ShadowFiendScript`
 - `TinyScript`
 - `BroodmotherScript`
@@ -142,7 +146,7 @@ The current executor scope is intentionally limited to the hot GSI-driven short 
 - shared survivability timed self-casts in `src/actions/common.rs` (Glimmer Cape follow-up tap and neutral-item self-cast)
 - silence dispel jitter in `src/actions/dispel.rs`
 - Huskar armlet handling in `src/actions/heroes/huskar.rs`
-- Tiny and Legion Commander standalone combo execution in `src/actions/heroes/tiny.rs` and `src/actions/heroes/legion_commander.rs`
+- Tiny, Legion Commander, and Outworld Destroyer standalone combo execution in `src/actions/heroes/tiny.rs`, `src/actions/heroes/legion_commander.rs`, and `src/actions/heroes/outworld_destroyer.rs`
 
 Notably unchanged in this item:
 
@@ -176,12 +180,13 @@ Standalone flow is split across `AppState`, the keyboard hook, the dispatcher, a
 2. `src/main.rs` reads `AppState.selected_hero` and `standalone_enabled`
 3. `src/main.rs` converts `HeroType` into the game's hero name string
 4. `ActionDispatcher::dispatch_standalone_trigger(hero_name)` calls the matching script
-5. Tiny and Legion Commander standalone triggers enqueue onto `ActionExecutor`
+5. Tiny, Legion Commander, and Outworld Destroyer standalone triggers enqueue onto `ActionExecutor`
 6. Largo manual `Q/W/E/R` hotkeys still bypass `handle_standalone_trigger()` and use the concrete `LargoScript` methods
 
 Special cases:
 
 - Shadow Fiend standalone handling stays on its existing specialized path inside the hero script
+- Outworld Destroyer also layers direct `R` interception and an optional self-Astral hotkey in `src/input/keyboard.rs`
 - Broodmother callback actions stay in `src/input/keyboard.rs`, which uses `BROODMOTHER_ACTIVE` and a dedicated callback worker instead of the `HotkeyEvent` channel
 
 ---

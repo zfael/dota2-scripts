@@ -193,6 +193,33 @@ See `docs/heroes/shadow_fiend.md` and `docs/features/keyboard-interception.md`.
 
 See `docs/heroes/tiny.md`.
 
+## `[heroes.outworld_destroyer]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `standalone_key` | `"Home"` | `"Home"` | Generic combo-trigger key used for the OD engage combo. |
+| `objurgation_key` | `"e"` | `"e"` | One-character synthetic key used whenever the script casts `Objurgation`. |
+| `arcane_orb_key` | `"q"` | `"q"` | One-character synthetic key used for optional post-ultimate Orb presses. |
+| `astral_imprisonment_key` | `"w"` | `"w"` | One-character synthetic key used for the self-Astral helper. |
+| `auto_objurgation_on_danger` | `true` | `true` | Enables danger-driven passive `Objurgation`. |
+| `objurgation_hp_threshold_percent` | `55` | `55` | HP% gate for passive `Objurgation`. |
+| `objurgation_min_mana_percent` | `25` | `25` | Minimum mana% required before passive `Objurgation` is allowed. |
+| `objurgation_trigger_cooldown_ms` | `1500` | `1500` | Local anti-spam cooldown between passive `Objurgation` attempts. |
+| `ultimate_intercept_enabled` | `true` | `true` | If true, `src/input/keyboard.rs` checks OD's `R` before the generic Soul Ring / Largo path. |
+| `auto_bkb_on_ultimate` | `true` | `true` | If true, OD attempts BKB before `Sanity's Eclipse`. |
+| `auto_objurgation_on_ultimate` | `true` | `true` | If true, OD attempts `Objurgation` before `Sanity's Eclipse`. |
+| `post_bkb_delay_ms` | `50` | `50` | Delay after BKB in the intercepted or standalone combo. |
+| `post_blink_delay_ms` | `100` | `100` | Delay after Blink in the standalone combo. |
+| `astral_self_cast_enabled` | `false` | `false` | Enables the dedicated self-Astral panic hotkey. |
+| `astral_self_cast_key` | `"F5"` | `"F5"` | Parsed by `parse_key_string()` and intercepted separately from the main combo trigger. |
+| `combo_items` | `["sheepstick","bloodthorn"]` | empty list | Ordered item-name substrings used during the standalone combo. |
+| `combo_item_spam_count` | `1` | `1` | Number of presses per configured combo item. |
+| `combo_item_delay_ms` | `50` | `50` | Delay between combo-item presses. |
+| `post_ultimate_arcane_orb_presses` | `0` | `0` | Optional number of Arcane Orb presses after the ultimate. |
+| `arcane_orb_press_interval_ms` | `30` | `30` | Delay between post-ultimate Orb presses. |
+
+See `docs/heroes/outworld_destroyer.md` and `docs/features/keyboard-interception.md`.
+
 ## `[heroes.largo]`
 
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |

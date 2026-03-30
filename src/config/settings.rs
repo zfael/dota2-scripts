@@ -163,6 +163,52 @@ pub struct TinyConfig {
     pub armlet: HeroArmletOverrideConfig,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OutworldDestroyerConfig {
+    #[serde(default = "default_standalone_key")]
+    pub standalone_key: String,
+    #[serde(default = "default_od_objurgation_key")]
+    pub objurgation_key: char,
+    #[serde(default = "default_od_arcane_orb_key")]
+    pub arcane_orb_key: char,
+    #[serde(default = "default_od_astral_imprisonment_key")]
+    pub astral_imprisonment_key: char,
+    #[serde(default = "default_od_auto_objurgation_on_danger")]
+    pub auto_objurgation_on_danger: bool,
+    #[serde(default = "default_od_objurgation_hp_threshold_percent")]
+    pub objurgation_hp_threshold_percent: u32,
+    #[serde(default = "default_od_objurgation_min_mana_percent")]
+    pub objurgation_min_mana_percent: u32,
+    #[serde(default = "default_od_objurgation_trigger_cooldown_ms")]
+    pub objurgation_trigger_cooldown_ms: u64,
+    #[serde(default = "default_od_ultimate_intercept_enabled")]
+    pub ultimate_intercept_enabled: bool,
+    #[serde(default = "default_od_auto_bkb_on_ultimate")]
+    pub auto_bkb_on_ultimate: bool,
+    #[serde(default = "default_od_auto_objurgation_on_ultimate")]
+    pub auto_objurgation_on_ultimate: bool,
+    #[serde(default = "default_od_post_bkb_delay_ms")]
+    pub post_bkb_delay_ms: u64,
+    #[serde(default = "default_od_post_blink_delay_ms")]
+    pub post_blink_delay_ms: u64,
+    #[serde(default = "default_od_astral_self_cast_enabled")]
+    pub astral_self_cast_enabled: bool,
+    #[serde(default = "default_od_astral_self_cast_key")]
+    pub astral_self_cast_key: String,
+    #[serde(default = "default_od_combo_items")]
+    pub combo_items: Vec<String>,
+    #[serde(default = "default_od_combo_item_spam_count")]
+    pub combo_item_spam_count: u32,
+    #[serde(default = "default_od_combo_item_delay_ms")]
+    pub combo_item_delay_ms: u64,
+    #[serde(default = "default_od_post_ultimate_arcane_orb_presses")]
+    pub post_ultimate_arcane_orb_presses: u32,
+    #[serde(default = "default_od_arcane_orb_press_interval_ms")]
+    pub arcane_orb_press_interval_ms: u64,
+    #[serde(default)]
+    pub armlet: HeroArmletOverrideConfig,
+}
+
 /// Configuration for auto-casting an ability during Space+Right-click combo
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutoAbilityConfig {
@@ -240,6 +286,8 @@ pub struct HeroesConfig {
     pub shadow_fiend: ShadowFiendConfig,
     #[serde(default)]
     pub tiny: TinyConfig,
+    #[serde(default)]
+    pub outworld_destroyer: OutworldDestroyerConfig,
     #[serde(default)]
     pub largo: LargoConfig,
     #[serde(default)]
@@ -443,6 +491,63 @@ fn default_sf_auto_bkb_on_ultimate() -> bool {
 }
 fn default_sf_auto_d_on_ultimate() -> bool {
     false
+}
+fn default_od_objurgation_key() -> char {
+    'e'
+}
+fn default_od_arcane_orb_key() -> char {
+    'q'
+}
+fn default_od_astral_imprisonment_key() -> char {
+    'w'
+}
+fn default_od_auto_objurgation_on_danger() -> bool {
+    true
+}
+fn default_od_objurgation_hp_threshold_percent() -> u32 {
+    55
+}
+fn default_od_objurgation_min_mana_percent() -> u32 {
+    25
+}
+fn default_od_objurgation_trigger_cooldown_ms() -> u64 {
+    1500
+}
+fn default_od_ultimate_intercept_enabled() -> bool {
+    true
+}
+fn default_od_auto_bkb_on_ultimate() -> bool {
+    true
+}
+fn default_od_auto_objurgation_on_ultimate() -> bool {
+    true
+}
+fn default_od_post_bkb_delay_ms() -> u64 {
+    50
+}
+fn default_od_post_blink_delay_ms() -> u64 {
+    100
+}
+fn default_od_astral_self_cast_enabled() -> bool {
+    false
+}
+fn default_od_astral_self_cast_key() -> String {
+    "F5".to_string()
+}
+fn default_od_combo_items() -> Vec<String> {
+    vec![]
+}
+fn default_od_combo_item_spam_count() -> u32 {
+    1
+}
+fn default_od_combo_item_delay_ms() -> u64 {
+    50
+}
+fn default_od_post_ultimate_arcane_orb_presses() -> u32 {
+    0
+}
+fn default_od_arcane_orb_press_interval_ms() -> u64 {
+    30
 }
 
 fn default_broodmother_enabled() -> bool {
@@ -692,6 +797,34 @@ impl Default for ShadowFiendConfig {
     }
 }
 
+impl Default for OutworldDestroyerConfig {
+    fn default() -> Self {
+        Self {
+            standalone_key: default_standalone_key(),
+            objurgation_key: default_od_objurgation_key(),
+            arcane_orb_key: default_od_arcane_orb_key(),
+            astral_imprisonment_key: default_od_astral_imprisonment_key(),
+            auto_objurgation_on_danger: default_od_auto_objurgation_on_danger(),
+            objurgation_hp_threshold_percent: default_od_objurgation_hp_threshold_percent(),
+            objurgation_min_mana_percent: default_od_objurgation_min_mana_percent(),
+            objurgation_trigger_cooldown_ms: default_od_objurgation_trigger_cooldown_ms(),
+            ultimate_intercept_enabled: default_od_ultimate_intercept_enabled(),
+            auto_bkb_on_ultimate: default_od_auto_bkb_on_ultimate(),
+            auto_objurgation_on_ultimate: default_od_auto_objurgation_on_ultimate(),
+            post_bkb_delay_ms: default_od_post_bkb_delay_ms(),
+            post_blink_delay_ms: default_od_post_blink_delay_ms(),
+            astral_self_cast_enabled: default_od_astral_self_cast_enabled(),
+            astral_self_cast_key: default_od_astral_self_cast_key(),
+            combo_items: default_od_combo_items(),
+            combo_item_spam_count: default_od_combo_item_spam_count(),
+            combo_item_delay_ms: default_od_combo_item_delay_ms(),
+            post_ultimate_arcane_orb_presses: default_od_post_ultimate_arcane_orb_presses(),
+            arcane_orb_press_interval_ms: default_od_arcane_orb_press_interval_ms(),
+            armlet: HeroArmletOverrideConfig::default(),
+        }
+    }
+}
+
 impl Default for BroodmotherConfig {
     fn default() -> Self {
         Self {
@@ -745,6 +878,7 @@ impl Default for HeroesConfig {
             legion_commander: LegionCommanderConfig::default(),
             shadow_fiend: ShadowFiendConfig::default(),
             tiny: TinyConfig::default(),
+            outworld_destroyer: OutworldDestroyerConfig::default(),
             largo: LargoConfig::default(),
             broodmother: BroodmotherConfig::default(),
         }
@@ -909,6 +1043,9 @@ impl Settings {
             "npc_dota_hero_legion_commander" => Some(self.heroes.legion_commander.armlet.clone()),
             "npc_dota_hero_nevermore" => Some(self.heroes.shadow_fiend.armlet.clone()),
             "npc_dota_hero_tiny" => Some(self.heroes.tiny.armlet.clone()),
+            "npc_dota_hero_obsidian_destroyer" => {
+                Some(self.heroes.outworld_destroyer.armlet.clone())
+            }
             "npc_dota_hero_largo" => Some(self.heroes.largo.armlet.clone()),
             "npc_dota_hero_broodmother" => Some(self.heroes.broodmother.armlet.clone()),
             _ => None,
@@ -948,6 +1085,7 @@ impl Settings {
             "legion_commander" => self.heroes.legion_commander.standalone_key.clone(),
             "shadow_fiend" => "q".to_string(), // SF uses Q/W/E interception
             "tiny" => self.heroes.tiny.standalone_key.clone(),
+            "outworld_destroyer" => self.heroes.outworld_destroyer.standalone_key.clone(),
             _ => default_standalone_key(),
         }
     }

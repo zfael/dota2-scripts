@@ -87,10 +87,11 @@ Fields such as `hero.magicimmune`, `hero.break`, positions, talents, and buyback
 |---|---|---|
 | `abilities.ability0.name` | `src/actions/heroes/largo.rs` | Detect whether Largo ultimate is active and which song occupies `Q` |
 | `abilities.ability0`-`ability3` | `src/actions/heroes/huskar.rs` | Scan for `huskar_berserkers_blood` by ability name |
+| `abilities.ability0`-`ability4` | `src/actions/heroes/outworld_destroyer.rs` | Scan for Arcane Orb, Astral Imprisonment, Sanity's Eclipse, and Objurgation readiness by ability name |
 | `abilities.get_by_index(index)` | `src/actions/auto_items.rs` | Broodmother auto-abilities by configured slot index |
-| `ability.can_cast` | `src/actions/heroes/huskar.rs`, `src/actions/auto_items.rs`, `src/actions/heroes/shadow_fiend.rs` | Ability readiness checks |
+| `ability.can_cast` | `src/actions/heroes/huskar.rs`, `src/actions/auto_items.rs`, `src/actions/heroes/shadow_fiend.rs`, `src/actions/heroes/outworld_destroyer.rs` | Ability readiness checks |
 | `ability.cooldown` | `src/actions/heroes/huskar.rs`, `src/actions/auto_items.rs` | Additional readiness checks |
-| `ability.level` | `src/actions/heroes/huskar.rs`, `src/actions/auto_items.rs` | Skip unlearned abilities |
+| `ability.level` | `src/actions/heroes/huskar.rs`, `src/actions/auto_items.rs`, `src/actions/heroes/outworld_destroyer.rs` | Skip unlearned abilities |
 | `abilities.ability5.can_cast` | `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend standalone combo only fires when the ultimate is ready |
 
 `ability.ultimate` exists in the schema but is not currently read by runtime code.
@@ -112,7 +113,7 @@ Those slots feed these behaviors:
 | GSI path / field | Current readers | What it drives |
 |---|---|---|
 | `item.name` | `src/actions/common.rs`, `src/actions/dispatcher.rs`, `src/actions/dispel.rs`, `src/actions/soul_ring.rs`, `src/actions/auto_items.rs`, hero scripts, tests | Item presence, slot lookup, skip lists, fixture assertions |
-| `item.can_cast` | shared actions, Soul Ring, Shadow Fiend, Broodmother, tests | Readiness checks |
+| `item.can_cast` | shared actions, Soul Ring, Shadow Fiend, Broodmother, Outworld Destroyer, tests | Readiness checks |
 | `item.cooldown` | `src/actions/auto_items.rs`, `src/actions/dispel.rs` | Readiness checks for auto-items and silence dispels |
 | `item.charges` | tests | Covered by fixture assertions today; current runtime logic does not branch on charges directly |
 | `item.passive` | `src/actions/dispatcher.rs` | Neutral-item discovery logging |

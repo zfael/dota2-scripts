@@ -18,7 +18,7 @@ Start here. Follow links to the source or doc file relevant to your task.
 | Entry point | `src/main.rs` |
 | Tests | `tests/gsi_handler_tests.rs`, `src/actions/soul_ring.rs` unit test, fixtures in `tests/fixtures/` |
 
-Supported heroes: **Broodmother, Huskar, Largo, Legion Commander, Shadow Fiend, Tiny**
+Supported heroes: **Broodmother, Huskar, Largo, Legion Commander, Outworld Destroyer, Shadow Fiend, Tiny**
 
 ---
 
@@ -50,6 +50,7 @@ Supported heroes: **Broodmother, Huskar, Largo, Legion Commander, Shadow Fiend, 
 | Huskar | `npc_dota_hero_huskar` | `docs/heroes/huskar.md` | `src/actions/heroes/huskar.rs` |
 | Largo | `npc_dota_hero_largo` | `docs/heroes/largo.md` | `src/actions/heroes/largo.rs` |
 | Legion Commander | `npc_dota_hero_legion_commander` | `docs/heroes/legion_commander.md` | `src/actions/heroes/legion_commander.rs` |
+| Outworld Destroyer | `npc_dota_hero_obsidian_destroyer` | `docs/heroes/outworld_destroyer.md` | `src/actions/heroes/outworld_destroyer.rs` |
 | Shadow Fiend | `npc_dota_hero_nevermore` | `docs/heroes/shadow_fiend.md` | `src/actions/heroes/shadow_fiend.rs` |
 | Tiny | `npc_dota_hero_tiny` | `docs/heroes/tiny.md` | `src/actions/heroes/tiny.rs` |
 
@@ -72,6 +73,7 @@ Supported heroes: **Broodmother, Huskar, Largo, Legion Commander, Shadow Fiend, 
 | `actions/heroes/huskar.rs` | Huskar armlet + Berserker Blood automation |
 | `actions/heroes/largo.rs` | Largo Amphibian Rhapsody beat-timing automation |
 | `actions/heroes/legion_commander.rs` | Legion Commander combo automation |
+| `actions/heroes/outworld_destroyer.rs` | Outworld Destroyer barrier, ultimate, self-Astral, and combo automation |
 | `actions/heroes/shadow_fiend.rs` | SF raze direction-facing + BKB-on-ultimate |
 | `actions/heroes/tiny.rs` | Tiny standalone combo |
 
@@ -151,6 +153,7 @@ Supported heroes: **Broodmother, Huskar, Largo, Legion Commander, Shadow Fiend, 
 | `docs/heroes/huskar.md` | Huskar hero doc |
 | `docs/heroes/largo.md` | Largo hero doc |
 | `docs/heroes/legion_commander.md` | Legion Commander hero doc |
+| `docs/heroes/outworld_destroyer.md` | Outworld Destroyer hero doc |
 | `docs/heroes/shadow_fiend.md` | Shadow Fiend hero doc |
 | `docs/heroes/tiny.md` | Tiny hero doc |
 | `docs/heroes/hero-template.md` | Template for new hero docs |
