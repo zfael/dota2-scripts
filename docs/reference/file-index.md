@@ -69,6 +69,9 @@
 | `src/actions/heroes/huskar.rs` | Huskar Berserker Blood cleanse plus shared armlet-survivability wiring | `docs/heroes/huskar.md` |
 | `src/actions/heroes/largo.rs` | Largo ultimate state, beat timing, manual song hooks | `docs/heroes/largo.md` |
 | `src/actions/heroes/legion_commander.rs` | Legion Commander combo automation | `docs/heroes/legion_commander.md` |
+| `src/actions/heroes/meepo_macro.rs` | Meepo farm-assist macro state, gating, and pulse decisions | `docs/heroes/meepo.md` |
+| `src/actions/heroes/meepo.rs` | Meepo standalone combo, GSI-driven Dig / MegaMeepo, and survivability wiring | `docs/heroes/meepo.md` |
+| `src/actions/heroes/meepo_state.rs` | Read-only Meepo observed-state derivation and cache | `docs/heroes/meepo.md`, `docs/reference/gsi-schema-and-usage.md` |
 | `src/actions/heroes/outworld_destroyer.rs` | Outworld Destroyer barrier, combo worker, ultimate interception support, and self-Astral helper | `docs/heroes/outworld_destroyer.md`, `docs/features/keyboard-interception.md` |
 | `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend raze / ultimate / standalone combo logic | `docs/heroes/shadow_fiend.md`, `docs/features/keyboard-interception.md` |
 | `src/actions/heroes/tiny.rs` | Tiny standalone combo | `docs/heroes/tiny.md` |
@@ -78,7 +81,7 @@
 | File | Purpose | Linked Doc |
 |---|---|---|
 | `src/gsi/server.rs` | Axum HTTP server on `127.0.0.1:<port>` plus bounded queue setup | `docs/architecture/runtime-flow.md`, `docs/reference/gsi-schema-and-usage.md` |
-| `src/gsi/handler.rs` | Deserialize `GsiWebhookEvent`, log JSONL, update `AppState`, and dispatch | `docs/architecture/runtime-flow.md`, `docs/reference/gsi-schema-and-usage.md` |
+| `src/gsi/handler.rs` | Deserialize `GsiWebhookEvent`, log JSONL, update `AppState`, refresh shared caches, and dispatch | `docs/architecture/runtime-flow.md`, `docs/reference/gsi-schema-and-usage.md` |
 | `src/gsi/mod.rs` | Module re-exports | — |
 
 ## `src/input/`
@@ -131,7 +134,7 @@
 | File | Purpose | Linked Doc |
 |---|---|---|
 | `tests/gsi_handler_tests.rs` | Fixture-backed GSI deserialization smoke tests | `docs/workflows/testing-and-debugging.md`, `docs/reference/gsi-schema-and-usage.md` |
-| `tests/fixtures/` | Sample JSON payloads for Huskar, Tiny, and Outworld Destroyer | `docs/workflows/testing-and-debugging.md`, `docs/reference/gsi-schema-and-usage.md` |
+| `tests/fixtures/` | Sample JSON payloads for Huskar, Tiny, Meepo, and Outworld Destroyer | `docs/workflows/testing-and-debugging.md`, `docs/reference/gsi-schema-and-usage.md` |
 
 ## `assets/`
 
@@ -157,6 +160,7 @@
 | `docs/features/soul-ring.md` | Soul Ring state and trigger rules |
 | `docs/features/survivability.md` | Shared healing, dispel, neutral items |
 | `docs/features/updates.md` | Update check/apply/restart flow |
+| `docs/heroes/meepo.md` | Meepo automation doc |
 | `docs/heroes/hero-template.md` | Template for new hero docs |
 | `docs/heroes/*.md` | Hero-specific automation docs |
 | `docs/heroes/outworld_destroyer.md` | Outworld Destroyer automation doc |

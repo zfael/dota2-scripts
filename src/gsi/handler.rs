@@ -42,6 +42,19 @@ fn refresh_keyboard_runtime_state(event: &GsiWebhookEvent, settings: &Settings) 
             .unwrap();
         *last_event = Some(event.clone());
     }
+
+    if event.hero.name == Hero::Meepo.to_game_name() {
+        crate::actions::heroes::meepo_state::refresh_meepo_observed_state(
+            event,
+            settings,
+            crate::actions::danger_detector::is_in_danger(),
+        );
+    } else {
+        crate::actions::heroes::meepo_state::clear_meepo_observed_state();
+        crate::actions::heroes::meepo_macro::suspend_meepo_macro(
+            crate::actions::heroes::meepo_macro::MeepoMacroSuspendReason::HeroChanged,
+        );
+    }
 }
 
 pub async fn gsi_webhook_handler(
@@ -148,6 +161,10 @@ mod tests {
     use crate::actions::auto_items::LATEST_GSI_EVENT;
     use crate::actions::executor::ActionExecutor;
     use crate::actions::heroes::broodmother::BROODMOTHER_ACTIVE;
+    use crate::actions::heroes::meepo_macro::{
+        clear_meepo_macro_state, latest_meepo_macro_status, meepo_macro_test_lock,
+    };
+    use crate::actions::heroes::meepo_state::latest_meepo_observed_state;
     use crate::actions::heroes::shadow_fiend::SF_LAST_EVENT;
     use crate::actions::soul_ring::{SoulRingState, SOUL_RING_STATE};
     use crate::actions::ActionDispatcher;
@@ -174,6 +191,8 @@ mod tests {
         *SF_LAST_EVENT.lock().unwrap() = None;
         *SOUL_RING_STATE.lock().unwrap() = SoulRingState::new();
         BROODMOTHER_ACTIVE.store(false, std::sync::atomic::Ordering::SeqCst);
+        clear_meepo_macro_state();
+        crate::actions::heroes::meepo_state::clear_meepo_observed_state();
     }
 
     #[tokio::test]
@@ -356,5 +375,46 @@ mod tests {
                 .map(|event| event.hero.name.as_str()),
             Some(crate::models::Hero::Nevermore.to_game_name())
         );
+    }
+
+    #[tokio::test]
+    async fn process_gsi_events_refreshes_and_clears_meepo_observed_state() {
+        let _guard = shared_test_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _meepo_guard = meepo_macro_test_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        reset_keyboard_runtime_state();
+
+        let meepo_event = load_fixture_event("tests/fixtures/meepo_event.json");
+        let huskar_event = load_fixture_event("tests/fixtures/huskar_event.json");
+
+        let app_state = AppState::new();
+        app_state.lock().unwrap().gsi_enabled = false;
+
+        let settings = std::sync::Arc::new(std::sync::Mutex::new(Settings::default()));
+        let dispatcher = std::sync::Arc::new(ActionDispatcher::new(
+            settings.clone(),
+            ActionExecutor::new(),
+        ));
+        let (tx, rx) = mpsc::channel(2);
+
+        tx.send(meepo_event).await.expect("meepo event should send");
+        tx.send(huskar_event).await.expect("huskar event should send");
+        drop(tx);
+
+        process_gsi_events(rx, app_state, dispatcher, settings).await;
+
+        assert!(
+            latest_meepo_observed_state().is_none(),
+            "non-Meepo events should clear the Meepo observed-state cache"
+        );
+        assert!(matches!(
+            latest_meepo_macro_status().mode,
+            crate::actions::heroes::meepo_macro::MeepoMacroMode::Suspended(
+                crate::actions::heroes::meepo_macro::MeepoMacroSuspendReason::HeroChanged
+            )
+        ));
     }
 }

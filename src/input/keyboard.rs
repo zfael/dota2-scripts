@@ -20,6 +20,7 @@ use crate::state::app_state::AppState;
 
 pub enum HotkeyEvent {
     ComboTrigger,
+    MeepoFarmToggle,
     LargoQ,
     LargoW,
     LargoE,
@@ -466,13 +467,21 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                     return None; // Block original
                 }
                 
-                // Check for combo trigger key
-                if let Some(trigger_key) = snapshot.trigger_key {
-                    if key == trigger_key {
-                        info!("{:?} key pressed - triggering combo", trigger_key);
-                        let _ = event_tx.send(HotkeyEvent::ComboTrigger);
-                        // Pass through - combo trigger doesn't need to be blocked
+                if let Some(hotkey_event) = plan_global_hotkey_event(key, &snapshot) {
+                    match hotkey_event {
+                        HotkeyEvent::ComboTrigger => {
+                            info!("{:?} key pressed - triggering combo", snapshot.trigger_key);
+                        }
+                        HotkeyEvent::MeepoFarmToggle => {
+                            info!(
+                                "{:?} key pressed - toggling Meepo farm assist",
+                                snapshot.meepo_farm_toggle_key
+                            );
+                        }
+                        _ => {}
                     }
+
+                    let _ = event_tx.send(hotkey_event);
                 }
             }
             
@@ -535,6 +544,8 @@ pub struct KeyboardSnapshot {
     /// The parsed combo-trigger key, or `None` if the configured string is
     /// not a recognised key name.
     pub trigger_key: Option<Key>,
+    /// Parsed Meepo farm-assist toggle key for the current hero, if active.
+    pub meepo_farm_toggle_key: Option<Key>,
     /// Whether Shadow Fiend raze interception is active.
     pub sf_enabled: bool,
     pub od_enabled: bool,
@@ -660,6 +671,14 @@ impl KeyboardSnapshot {
 
         Self {
             trigger_key,
+            meepo_farm_toggle_key: if state.selected_hero == Some(crate::state::HeroType::Meepo)
+                && state.standalone_enabled
+                && settings.heroes.meepo.farm_assist.enabled
+            {
+                parse_key_string(&settings.heroes.meepo.farm_assist.toggle_key)
+            } else {
+                None
+            },
             sf_enabled,
             od_enabled,
             shadow_fiend: ShadowFiendKeyboardSnapshot {
@@ -725,6 +744,21 @@ fn plan_broodmother_callback_action(
     }
 }
 
+fn plan_global_hotkey_event(key: Key, snapshot: &KeyboardSnapshot) -> Option<HotkeyEvent> {
+    if snapshot
+        .meepo_farm_toggle_key
+        .is_some_and(|toggle_key| key == toggle_key)
+    {
+        return Some(HotkeyEvent::MeepoFarmToggle);
+    }
+
+    if snapshot.trigger_key.is_some_and(|trigger_key| key == trigger_key) {
+        return Some(HotkeyEvent::ComboTrigger);
+    }
+
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -737,6 +771,7 @@ mod tests {
     fn broodmother_test_snapshot() -> KeyboardSnapshot {
         KeyboardSnapshot {
             trigger_key: None,
+            meepo_farm_toggle_key: None,
             sf_enabled: false,
             od_enabled: false,
             shadow_fiend: ShadowFiendKeyboardSnapshot {
@@ -783,6 +818,7 @@ mod tests {
         let snapshot = KeyboardSnapshot::from_runtime(&settings, &state);
 
         assert_eq!(snapshot.trigger_key, Some(Key::Home));
+        assert_eq!(snapshot.meepo_farm_toggle_key, None);
         assert!(snapshot.sf_enabled);
         assert!(snapshot.shadow_fiend.raze_intercept_enabled);
     }
@@ -817,6 +853,7 @@ mod tests {
         let snapshot = KeyboardSnapshot::from_runtime(&Settings::default(), &state);
 
         assert_eq!(snapshot.trigger_key, None);
+        assert_eq!(snapshot.meepo_farm_toggle_key, None);
     }
 
     #[test]
@@ -825,6 +862,7 @@ mod tests {
         let snapshot = KeyboardSnapshot::from_runtime(&Settings::default(), &state);
         assert!(!snapshot.sf_enabled);
         assert!(!snapshot.od_enabled);
+        assert_eq!(snapshot.meepo_farm_toggle_key, None);
     }
 
     #[test]
@@ -833,6 +871,30 @@ mod tests {
         *state.trigger_key.lock().unwrap() = "F5".to_string();
         let snapshot = KeyboardSnapshot::from_runtime(&Settings::default(), &state);
         assert_eq!(snapshot.trigger_key, Some(Key::F5));
+    }
+
+    #[test]
+    fn keyboard_snapshot_exposes_meepo_farm_toggle_key_only_for_meepo() {
+        let settings = Settings::default();
+        let mut meepo_state = AppState::default();
+        meepo_state.selected_hero = Some(HeroType::Meepo);
+
+        let meepo_snapshot = KeyboardSnapshot::from_runtime(&settings, &meepo_state);
+        assert_eq!(meepo_snapshot.meepo_farm_toggle_key, Some(Key::End));
+
+        let other_snapshot = KeyboardSnapshot::from_runtime(&settings, &AppState::default());
+        assert_eq!(other_snapshot.meepo_farm_toggle_key, None);
+    }
+
+    #[test]
+    fn meepo_farm_toggle_key_plans_hotkey_event() {
+        let mut snapshot = broodmother_test_snapshot();
+        snapshot.meepo_farm_toggle_key = Some(Key::End);
+
+        assert!(matches!(
+            plan_global_hotkey_event(Key::End, &snapshot),
+            Some(HotkeyEvent::MeepoFarmToggle)
+        ));
     }
 
     // Soul Ring replay-plan tests

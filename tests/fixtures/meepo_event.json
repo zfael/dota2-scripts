@@ -1,0 +1,272 @@
+{
+  "hero": {
+    "aghanims_scepter": true,
+    "aghanims_shard": true,
+    "alive": true,
+    "attributes_level": 0,
+    "break": false,
+    "buyback_cooldown": 0,
+    "buyback_cost": 0,
+    "disarmed": false,
+    "facet": 0,
+    "has_debuff": false,
+    "health": 1350,
+    "health_percent": 43,
+    "hexed": false,
+    "id": 82,
+    "level": 18,
+    "magicimmune": false,
+    "mana": 820,
+    "mana_percent": 61,
+    "max_health": 3120,
+    "max_mana": 1340,
+    "muted": false,
+    "name": "npc_dota_hero_meepo",
+    "respawn_seconds": 0,
+    "silenced": false,
+    "smoked": false,
+    "stunned": false,
+    "talent_1": true,
+    "talent_2": true,
+    "talent_3": true,
+    "talent_4": false,
+    "talent_5": false,
+    "talent_6": false,
+    "talent_7": false,
+    "talent_8": false,
+    "xp": 0,
+    "xpos": 1240,
+    "ypos": -880
+  },
+  "abilities": {
+    "ability0": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 4,
+      "name": "meepo_earthbind",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability1": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 4,
+      "name": "meepo_poof",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability2": {
+      "ability_active": true,
+      "can_cast": false,
+      "cooldown": 0,
+      "level": 4,
+      "name": "meepo_ransack",
+      "passive": true,
+      "ultimate": false
+    },
+    "ability3": {
+      "ability_active": false,
+      "can_cast": false,
+      "cooldown": 0,
+      "level": 3,
+      "name": "meepo_divided_we_stand",
+      "passive": true,
+      "ultimate": true
+    },
+    "ability4": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 1,
+      "name": "meepo_petrify",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability5": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 1,
+      "name": "meepo_megameepo",
+      "passive": false,
+      "ultimate": false
+    }
+  },
+  "items": {
+    "neutral0": {
+      "name": "empty",
+      "can_cast": false,
+      "cooldown": 0,
+      "item_level": 0,
+      "passive": false,
+      "purchaser": 0,
+      "charges": 0,
+      "item_charges": 0
+    },
+    "slot0": {
+      "name": "item_arcane_blink",
+      "can_cast": true,
+      "cooldown": 0,
+      "item_level": 1,
+      "passive": false,
+      "purchaser": 0,
+      "charges": 0,
+      "item_charges": 0
+    },
+    "slot1": {
+      "name": "item_sheepstick",
+      "can_cast": true,
+      "cooldown": 0,
+      "item_level": 1,
+      "passive": false,
+      "purchaser": 0,
+      "charges": 0,
+      "item_charges": 0
+    },
+    "slot2": {
+      "name": "item_disperser",
+      "can_cast": true,
+      "cooldown": 0,
+      "item_level": 1,
+      "passive": false,
+      "purchaser": 0,
+      "charges": 0,
+      "item_charges": 0
+    },
+    "slot3": {
+      "name": "item_power_treads",
+      "can_cast": false,
+      "cooldown": 0,
+      "item_level": 1,
+      "passive": false,
+      "purchaser": 0,
+      "charges": 0,
+      "item_charges": 0
+    },
+    "slot4": {
+      "name": "item_skadi",
+      "can_cast": false,
+      "cooldown": 0,
+      "item_level": 1,
+      "passive": false,
+      "purchaser": 0,
+      "charges": 0,
+      "item_charges": 0
+    },
+    "slot5": {
+      "name": "item_black_king_bar",
+      "can_cast": true,
+      "cooldown": 0,
+      "item_level": 1,
+      "passive": false,
+      "purchaser": 0,
+      "charges": 0,
+      "item_charges": 0
+    },
+    "slot6": {
+      "name": "empty",
+      "can_cast": false,
+      "cooldown": 0,
+      "item_level": 0,
+      "passive": false,
+      "purchaser": 0,
+      "charges": 0,
+      "item_charges": 0
+    },
+    "slot7": {
+      "name": "empty",
+      "can_cast": false,
+      "cooldown": 0,
+      "item_level": 0,
+      "passive": false,
+      "purchaser": 0,
+      "charges": 0,
+      "item_charges": 0
+    },
+    "slot8": {
+      "name": "empty",
+      "can_cast": false,
+      "cooldown": 0,
+      "item_level": 0,
+      "passive": false,
+      "purchaser": 0,
+      "charges": 0,
+      "item_charges": 0
+    },
+    "stash0": {
+      "name": "empty",
+      "can_cast": false,
+      "cooldown": 0,
+      "item_level": 0,
+      "passive": false,
+      "purchaser": 0,
+      "charges": 0,
+      "item_charges": 0
+    },
+    "stash1": {
+      "name": "empty",
+      "can_cast": false,
+      "cooldown": 0,
+      "item_level": 0,
+      "passive": false,
+      "purchaser": 0,
+      "charges": 0,
+      "item_charges": 0
+    },
+    "stash2": {
+      "name": "empty",
+      "can_cast": false,
+      "cooldown": 0,
+      "item_level": 0,
+      "passive": false,
+      "purchaser": 0,
+      "charges": 0,
+      "item_charges": 0
+    },
+    "stash3": {
+      "name": "empty",
+      "can_cast": false,
+      "cooldown": 0,
+      "item_level": 0,
+      "passive": false,
+      "purchaser": 0,
+      "charges": 0,
+      "item_charges": 0
+    },
+    "stash4": {
+      "name": "empty",
+      "can_cast": false,
+      "cooldown": 0,
+      "item_level": 0,
+      "passive": false,
+      "purchaser": 0,
+      "charges": 0,
+      "item_charges": 0
+    },
+    "stash5": {
+      "name": "empty",
+      "can_cast": false,
+      "cooldown": 0,
+      "item_level": 0,
+      "passive": false,
+      "purchaser": 0,
+      "charges": 0,
+      "item_charges": 0
+    },
+    "teleport0": {
+      "name": "empty",
+      "can_cast": false,
+      "cooldown": 0,
+      "item_level": 0,
+      "passive": false,
+      "purchaser": 0,
+      "charges": 0,
+      "item_charges": 0
+    }
+  },
+  "map": {
+    "clock_time": 1280
+  }
+}

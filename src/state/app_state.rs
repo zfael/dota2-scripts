@@ -6,6 +6,7 @@ pub enum HeroType {
     Huskar,
     Largo,
     LegionCommander,
+    Meepo,
     OutworldDestroyer,
     ShadowFiend,
     Tiny,
@@ -37,6 +38,7 @@ impl HeroType {
             name if name == Hero::Huskar.to_game_name() => Some(HeroType::Huskar),
             name if name == Hero::Largo.to_game_name() => Some(HeroType::Largo),
             name if name == Hero::LegionCommander.to_game_name() => Some(HeroType::LegionCommander),
+            name if name == Hero::Meepo.to_game_name() => Some(HeroType::Meepo),
             name if name == Hero::ObsidianDestroyer.to_game_name() => {
                 Some(HeroType::OutworldDestroyer)
             }
@@ -51,6 +53,7 @@ impl HeroType {
             HeroType::Huskar => "Huskar",
             HeroType::Largo => "Largo",
             HeroType::LegionCommander => "Legion Commander",
+            HeroType::Meepo => "Meepo",
             HeroType::OutworldDestroyer => "Outworld Destroyer",
             HeroType::ShadowFiend => "Shadow Fiend",
             HeroType::Tiny => "Tiny",
@@ -112,7 +115,7 @@ impl AppState {
     pub fn update_from_gsi(&mut self, event: GsiWebhookEvent) {
         // Update hero selection based on the GSI event if it changed
         let hero_type = HeroType::from_hero_name(&event.hero.name);
-        
+
         if self.selected_hero != hero_type {
             self.selected_hero = hero_type;
             *self.sf_enabled.lock().unwrap() = hero_type == Some(HeroType::ShadowFiend);
@@ -121,5 +124,18 @@ impl AppState {
 
         self.last_event = Some(event);
         self.metrics.events_processed += 1;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{HeroType};
+    use crate::models::Hero;
+
+    #[test]
+    fn meepo_maps_into_hero_type() {
+        let game_name = Hero::Meepo.to_game_name();
+        assert_eq!(HeroType::from_hero_name(game_name), Some(HeroType::Meepo));
+        assert_eq!(HeroType::Meepo.to_display_name(), "Meepo");
     }
 }

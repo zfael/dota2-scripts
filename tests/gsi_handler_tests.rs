@@ -5,10 +5,10 @@ use std::fs;
 async fn test_load_huskar_fixture() {
     let json_data = fs::read_to_string("tests/fixtures/huskar_event.json")
         .expect("Failed to read huskar fixture");
-    
-    let event: GsiWebhookEvent = serde_json::from_str(&json_data)
-        .expect("Failed to deserialize huskar event");
-    
+
+    let event: GsiWebhookEvent =
+        serde_json::from_str(&json_data).expect("Failed to deserialize huskar event");
+
     assert_eq!(event.hero.name, "npc_dota_hero_huskar");
     assert_eq!(event.hero.health, 280);
     assert_eq!(event.hero.health_percent, 25);
@@ -17,12 +17,12 @@ async fn test_load_huskar_fixture() {
 
 #[tokio::test]
 async fn test_load_tiny_fixture() {
-    let json_data = fs::read_to_string("tests/fixtures/tiny_event.json")
-        .expect("Failed to read tiny fixture");
-    
-    let event: GsiWebhookEvent = serde_json::from_str(&json_data)
-        .expect("Failed to deserialize tiny event");
-    
+    let json_data =
+        fs::read_to_string("tests/fixtures/tiny_event.json").expect("Failed to read tiny fixture");
+
+    let event: GsiWebhookEvent =
+        serde_json::from_str(&json_data).expect("Failed to deserialize tiny event");
+
     assert_eq!(event.hero.name, "npc_dota_hero_tiny");
     assert_eq!(event.hero.level, 15);
     assert!(event.hero.aghanims_scepter);
@@ -32,10 +32,10 @@ async fn test_load_tiny_fixture() {
 async fn test_huskar_armlet_detection() {
     let json_data = fs::read_to_string("tests/fixtures/huskar_event.json")
         .expect("Failed to read huskar fixture");
-    
-    let event: GsiWebhookEvent = serde_json::from_str(&json_data)
-        .expect("Failed to deserialize huskar event");
-    
+
+    let event: GsiWebhookEvent =
+        serde_json::from_str(&json_data).expect("Failed to deserialize huskar event");
+
     // Check that armlet is in slot1
     assert_eq!(event.items.slot1.name, "item_armlet");
     assert_eq!(event.items.slot1.can_cast, Some(true));
@@ -45,10 +45,10 @@ async fn test_huskar_armlet_detection() {
 async fn test_healing_item_detection() {
     let json_data = fs::read_to_string("tests/fixtures/huskar_event.json")
         .expect("Failed to read huskar fixture");
-    
-    let event: GsiWebhookEvent = serde_json::from_str(&json_data)
-        .expect("Failed to deserialize huskar event");
-    
+
+    let event: GsiWebhookEvent =
+        serde_json::from_str(&json_data).expect("Failed to deserialize huskar event");
+
     // Check that magic_wand is in slot2
     assert_eq!(event.items.slot2.name, "item_magic_wand");
     assert_eq!(event.items.slot2.can_cast, Some(true));
@@ -60,13 +60,19 @@ async fn test_load_outworld_destroyer_fixture() {
     let json_data = fs::read_to_string("tests/fixtures/outworld_destroyer_event.json")
         .expect("Failed to read OD fixture");
 
-    let event: GsiWebhookEvent = serde_json::from_str(&json_data)
-        .expect("Failed to deserialize OD event");
+    let event: GsiWebhookEvent =
+        serde_json::from_str(&json_data).expect("Failed to deserialize OD event");
 
     assert_eq!(event.hero.name, "npc_dota_hero_obsidian_destroyer");
     assert_eq!(event.hero.level, 18);
-    assert_eq!(event.abilities.ability3.name, "obsidian_destroyer_sanity_eclipse");
-    assert_eq!(event.abilities.ability4.name, "obsidian_destroyer_objurgation");
+    assert_eq!(
+        event.abilities.ability3.name,
+        "obsidian_destroyer_sanity_eclipse"
+    );
+    assert_eq!(
+        event.abilities.ability4.name,
+        "obsidian_destroyer_objurgation"
+    );
 }
 
 #[tokio::test]
@@ -74,11 +80,52 @@ async fn test_od_combo_item_fixture_slots() {
     let json_data = fs::read_to_string("tests/fixtures/outworld_destroyer_event.json")
         .expect("Failed to read OD fixture");
 
-    let event: GsiWebhookEvent = serde_json::from_str(&json_data)
-        .expect("Failed to deserialize OD event");
+    let event: GsiWebhookEvent =
+        serde_json::from_str(&json_data).expect("Failed to deserialize OD event");
 
     assert_eq!(event.items.slot0.name, "item_arcane_blink");
     assert_eq!(event.items.slot1.name, "item_black_king_bar");
     assert_eq!(event.items.slot2.name, "item_sheepstick");
     assert_eq!(event.items.slot3.name, "item_bloodthorn");
+}
+
+#[tokio::test]
+async fn test_load_meepo_fixture() {
+    let json_data =
+        fs::read_to_string("tests/fixtures/meepo_event.json").expect("Failed to read Meepo fixture");
+
+    let event: GsiWebhookEvent =
+        serde_json::from_str(&json_data).expect("Failed to deserialize Meepo event");
+
+    assert_eq!(event.hero.name, "npc_dota_hero_meepo");
+    assert_eq!(event.hero.level, 18);
+    assert!(event.hero.aghanims_scepter);
+    assert!(event.hero.aghanims_shard);
+}
+
+#[tokio::test]
+async fn test_meepo_fixture_exposes_phase_one_abilities() {
+    let json_data =
+        fs::read_to_string("tests/fixtures/meepo_event.json").expect("Failed to read Meepo fixture");
+
+    let event: GsiWebhookEvent =
+        serde_json::from_str(&json_data).expect("Failed to deserialize Meepo event");
+
+    assert_eq!(event.abilities.ability0.name, "meepo_earthbind");
+    assert_eq!(event.abilities.ability1.name, "meepo_poof");
+    assert_eq!(event.abilities.ability4.name, "meepo_petrify");
+    assert_eq!(event.abilities.ability5.name, "meepo_megameepo");
+}
+
+#[tokio::test]
+async fn test_meepo_fixture_exposes_combo_items() {
+    let json_data =
+        fs::read_to_string("tests/fixtures/meepo_event.json").expect("Failed to read Meepo fixture");
+
+    let event: GsiWebhookEvent =
+        serde_json::from_str(&json_data).expect("Failed to deserialize Meepo event");
+
+    assert_eq!(event.items.slot0.name, "item_arcane_blink");
+    assert_eq!(event.items.slot1.name, "item_sheepstick");
+    assert_eq!(event.items.slot2.name, "item_disperser");
 }

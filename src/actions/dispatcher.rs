@@ -1,9 +1,9 @@
-use crate::actions::{armlet, common::SurvivabilityActions};
 use crate::actions::executor::ActionExecutor;
 use crate::actions::heroes::{
     BroodmotherScript, HeroScript, HuskarScript, LargoScript, LegionCommanderScript,
-    OutworldDestroyerScript, ShadowFiendScript, TinyScript,
+    MeepoScript, OutworldDestroyerScript, ShadowFiendScript, TinyScript,
 };
+use crate::actions::{armlet, common::SurvivabilityActions};
 use crate::config::Settings;
 use crate::models::GsiWebhookEvent;
 use lazy_static::lazy_static;
@@ -27,9 +27,8 @@ fn standalone_dispatch_mode(hero_name: &str) -> StandaloneDispatchMode {
     match hero_name {
         "npc_dota_hero_tiny"
         | "npc_dota_hero_legion_commander"
-        | "npc_dota_hero_obsidian_destroyer" => {
-            StandaloneDispatchMode::Executor
-        }
+        | "npc_dota_hero_obsidian_destroyer"
+        | "npc_dota_hero_meepo" => StandaloneDispatchMode::Executor,
         _ => StandaloneDispatchMode::Inline,
     }
 }
@@ -123,12 +122,17 @@ impl ActionDispatcher {
         let broodmother = Arc::new(BroodmotherScript::new(settings.clone(), executor.clone()));
         hero_scripts.insert(broodmother.hero_name().to_string(), broodmother);
 
-        let outworld_destroyer =
-            Arc::new(OutworldDestroyerScript::new(settings.clone(), executor.clone()));
+        let outworld_destroyer = Arc::new(OutworldDestroyerScript::new(
+            settings.clone(),
+            executor.clone(),
+        ));
         hero_scripts.insert(
             outworld_destroyer.hero_name().to_string(),
             outworld_destroyer,
         );
+
+        let meepo = Arc::new(MeepoScript::new(settings.clone(), executor.clone()));
+        hero_scripts.insert(meepo.hero_name().to_string(), meepo);
 
         Self {
             hero_scripts,
@@ -188,9 +192,7 @@ impl ActionDispatcher {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        standalone_dispatch_mode, ActionDispatcher, StandaloneDispatchMode,
-    };
+    use super::{standalone_dispatch_mode, ActionDispatcher, StandaloneDispatchMode};
     use crate::actions::common::SurvivabilityActions;
     use crate::actions::executor::ActionExecutor;
     use crate::actions::heroes::HeroScript;
@@ -253,6 +255,10 @@ mod tests {
         );
         assert_eq!(
             standalone_dispatch_mode("npc_dota_hero_obsidian_destroyer"),
+            StandaloneDispatchMode::Executor
+        );
+        assert_eq!(
+            standalone_dispatch_mode("npc_dota_hero_meepo"),
             StandaloneDispatchMode::Executor
         );
     }

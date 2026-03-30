@@ -25,25 +25,26 @@ use tracing_subscriber;
 async fn main() {
     // Load settings first to get log level
     let settings = Arc::new(Mutex::new(Settings::load()));
-    
+
     // Initialize logging with config level or environment variable
     let log_level = std::env::var("RUST_LOG")
         .unwrap_or_else(|_| settings.lock().unwrap().logging.level.clone());
-    tracing_subscriber::fmt()
-        .with_env_filter(log_level)
-        .init();
+    tracing_subscriber::fmt().with_env_filter(log_level).init();
 
     info!("Starting Dota 2 Script Automation...");
     info!("Server port: {}", settings.lock().unwrap().server.port);
 
     // Initialize shared state
     let app_state = AppState::new();
-    
+
     // Build the initial keyboard snapshot before starting the listener
     let initial_snapshot = {
         let settings_guard = settings.lock().unwrap();
         let state_guard = app_state.lock().unwrap();
-        Arc::new(RwLock::new(KeyboardSnapshot::from_runtime(&settings_guard, &state_guard)))
+        Arc::new(RwLock::new(KeyboardSnapshot::from_runtime(
+            &settings_guard,
+            &state_guard,
+        )))
     };
 
     // Initialize action dispatcher
@@ -76,20 +77,18 @@ async fn main() {
             let update_state = app_state.lock().unwrap().update_state.clone();
             *update_state.lock().unwrap() = UpdateCheckState::Checking;
 
-            tokio::task::spawn_blocking(move || {
-                match check_for_update(include_prereleases) {
-                    UpdateCheckResult::Available(info) => {
-                        *update_state.lock().unwrap() = UpdateCheckState::Available {
-                            version: info.version,
-                            release_notes: info.release_notes,
-                        };
-                    }
-                    UpdateCheckResult::UpToDate => {
-                        *update_state.lock().unwrap() = UpdateCheckState::UpToDate;
-                    }
-                    UpdateCheckResult::Error(msg) => {
-                        *update_state.lock().unwrap() = UpdateCheckState::Error(msg);
-                    }
+            tokio::task::spawn_blocking(move || match check_for_update(include_prereleases) {
+                UpdateCheckResult::Available(info) => {
+                    *update_state.lock().unwrap() = UpdateCheckState::Available {
+                        version: info.version,
+                        release_notes: info.release_notes,
+                    };
+                }
+                UpdateCheckResult::UpToDate => {
+                    *update_state.lock().unwrap() = UpdateCheckState::UpToDate;
+                }
+                UpdateCheckResult::Error(msg) => {
+                    *update_state.lock().unwrap() = UpdateCheckState::Error(msg);
                 }
             });
         }
@@ -108,9 +107,16 @@ async fn main() {
                             let hero_name = match hero_type {
                                 state::HeroType::Huskar => models::Hero::Huskar.to_game_name(),
                                 state::HeroType::Largo => models::Hero::Largo.to_game_name(),
-                                state::HeroType::LegionCommander => models::Hero::LegionCommander.to_game_name(),
-                                state::HeroType::OutworldDestroyer => models::Hero::ObsidianDestroyer.to_game_name(),
-                                state::HeroType::ShadowFiend => models::Hero::Nevermore.to_game_name(),
+                                state::HeroType::LegionCommander => {
+                                    models::Hero::LegionCommander.to_game_name()
+                                }
+                                state::HeroType::Meepo => models::Hero::Meepo.to_game_name(),
+                                state::HeroType::OutworldDestroyer => {
+                                    models::Hero::ObsidianDestroyer.to_game_name()
+                                }
+                                state::HeroType::ShadowFiend => {
+                                    models::Hero::Nevermore.to_game_name()
+                                }
                                 state::HeroType::Tiny => models::Hero::Tiny.to_game_name(),
                             };
                             info!("Triggering standalone combo for {}", hero_name);
@@ -123,35 +129,84 @@ async fn main() {
                         info!("Standalone scripts disabled");
                     }
                 }
+                input::keyboard::HotkeyEvent::MeepoFarmToggle => {
+                    let state = app_state_clone2.lock().unwrap();
+                    if state.standalone_enabled
+                        && state.selected_hero == Some(state::HeroType::Meepo)
+                    {
+                        drop(state);
+                        if let Some(script) = dispatcher_clone2
+                            .hero_scripts
+                            .get(models::Hero::Meepo.to_game_name())
+                        {
+                            if let Some(meepo_script) = script
+                                .as_any()
+                                .downcast_ref::<crate::actions::heroes::MeepoScript>()
+                            {
+                                meepo_script.toggle_farm_assist();
+                            }
+                        }
+                    }
+                }
                 input::keyboard::HotkeyEvent::LargoQ => {
                     let state = app_state_clone2.lock().unwrap();
-                    if state.standalone_enabled && state.selected_hero == Some(state::HeroType::Largo) {
+                    if state.standalone_enabled
+                        && state.selected_hero == Some(state::HeroType::Largo)
+                    {
                         drop(state);
-                        if let Some(script) = dispatcher_clone2.hero_scripts.get(models::Hero::Largo.to_game_name()) {
-                            if let Some(largo_script) = script.as_any().downcast_ref::<crate::actions::heroes::LargoScript>() {
-                                largo_script.select_song_manually(crate::actions::heroes::largo::Song::Bullbelly);
+                        if let Some(script) = dispatcher_clone2
+                            .hero_scripts
+                            .get(models::Hero::Largo.to_game_name())
+                        {
+                            if let Some(largo_script) = script
+                                .as_any()
+                                .downcast_ref::<crate::actions::heroes::LargoScript>(
+                            ) {
+                                largo_script.select_song_manually(
+                                    crate::actions::heroes::largo::Song::Bullbelly,
+                                );
                             }
                         }
                     }
                 }
                 input::keyboard::HotkeyEvent::LargoW => {
                     let state = app_state_clone2.lock().unwrap();
-                    if state.standalone_enabled && state.selected_hero == Some(state::HeroType::Largo) {
+                    if state.standalone_enabled
+                        && state.selected_hero == Some(state::HeroType::Largo)
+                    {
                         drop(state);
-                        if let Some(script) = dispatcher_clone2.hero_scripts.get(models::Hero::Largo.to_game_name()) {
-                            if let Some(largo_script) = script.as_any().downcast_ref::<crate::actions::heroes::LargoScript>() {
-                                largo_script.select_song_manually(crate::actions::heroes::largo::Song::Hotfeet);
+                        if let Some(script) = dispatcher_clone2
+                            .hero_scripts
+                            .get(models::Hero::Largo.to_game_name())
+                        {
+                            if let Some(largo_script) = script
+                                .as_any()
+                                .downcast_ref::<crate::actions::heroes::LargoScript>(
+                            ) {
+                                largo_script.select_song_manually(
+                                    crate::actions::heroes::largo::Song::Hotfeet,
+                                );
                             }
                         }
                     }
                 }
                 input::keyboard::HotkeyEvent::LargoE => {
                     let state = app_state_clone2.lock().unwrap();
-                    if state.standalone_enabled && state.selected_hero == Some(state::HeroType::Largo) {
+                    if state.standalone_enabled
+                        && state.selected_hero == Some(state::HeroType::Largo)
+                    {
                         drop(state);
-                        if let Some(script) = dispatcher_clone2.hero_scripts.get(models::Hero::Largo.to_game_name()) {
-                            if let Some(largo_script) = script.as_any().downcast_ref::<crate::actions::heroes::LargoScript>() {
-                                largo_script.select_song_manually(crate::actions::heroes::largo::Song::IslandElixir);
+                        if let Some(script) = dispatcher_clone2
+                            .hero_scripts
+                            .get(models::Hero::Largo.to_game_name())
+                        {
+                            if let Some(largo_script) = script
+                                .as_any()
+                                .downcast_ref::<crate::actions::heroes::LargoScript>(
+                            ) {
+                                largo_script.select_song_manually(
+                                    crate::actions::heroes::largo::Song::IslandElixir,
+                                );
                             }
                         }
                     }
@@ -160,10 +215,18 @@ async fn main() {
                     // R key pressed - immediately stop the beat loop to prevent stale key presses
                     // GSI will confirm the state change shortly after
                     let state = app_state_clone2.lock().unwrap();
-                    if state.standalone_enabled && state.selected_hero == Some(state::HeroType::Largo) {
+                    if state.standalone_enabled
+                        && state.selected_hero == Some(state::HeroType::Largo)
+                    {
                         drop(state);
-                        if let Some(script) = dispatcher_clone2.hero_scripts.get(models::Hero::Largo.to_game_name()) {
-                            if let Some(largo_script) = script.as_any().downcast_ref::<crate::actions::heroes::LargoScript>() {
+                        if let Some(script) = dispatcher_clone2
+                            .hero_scripts
+                            .get(models::Hero::Largo.to_game_name())
+                        {
+                            if let Some(largo_script) = script
+                                .as_any()
+                                .downcast_ref::<crate::actions::heroes::LargoScript>(
+                            ) {
                                 largo_script.deactivate_ultimate();
                             }
                         }
@@ -175,10 +238,10 @@ async fn main() {
 
     // Start UI on main thread
     info!("Starting GUI...");
-    
+
     // Load window icon
     let icon = load_icon();
-    
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([600.0, 700.0])
@@ -201,7 +264,7 @@ async fn main() {
 fn load_icon() -> egui::IconData {
     // Use PNG for better quality - ICO parsing can pick wrong resolution
     let icon_bytes = include_bytes!("../assets/icon.png");
-    
+
     match image::load_from_memory(icon_bytes) {
         Ok(icon) => {
             let image = icon.into_rgba8();
@@ -220,7 +283,7 @@ fn load_icon() -> egui::IconData {
             let rgba: Vec<u8> = (0..size * size)
                 .flat_map(|_| vec![200u8, 50, 50, 255]) // Red-ish color
                 .collect();
-            
+
             egui::IconData {
                 rgba,
                 width: size,

@@ -161,6 +161,38 @@ auto_abilities = [
 # Execution order: false = items first (default), true = abilities first
 auto_abilities_first = false
 
+[heroes.meepo]
+standalone_key = "Home"
+earthbind_key = "q"
+poof_key = "w"
+dig_key = "d"
+megameepo_key = "f"
+post_blink_delay_ms = 80
+combo_items = ["sheepstick", "disperser"]
+combo_item_spam_count = 1
+combo_item_delay_ms = 40
+earthbind_press_count = 2
+earthbind_press_interval_ms = 30
+poof_press_count = 3
+poof_press_interval_ms = 35
+auto_dig_on_danger = true
+dig_hp_threshold_percent = 32
+auto_megameepo_on_danger = true
+megameepo_hp_threshold_percent = 45
+defensive_trigger_cooldown_ms = 1500
+
+[heroes.meepo.farm_assist]
+enabled = true
+toggle_key = "End"
+pulse_interval_ms = 700
+minimum_mana_percent = 35
+minimum_health_percent = 45
+right_click_after_poof = true
+suspend_on_danger = true
+suspend_after_manual_combo_ms = 2500
+poof_press_count = 1
+poof_press_interval_ms = 35
+
 [gsi_logging]
 enabled = false
 output_dir = "logs/gsi_events"

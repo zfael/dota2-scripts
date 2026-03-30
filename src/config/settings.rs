@@ -259,9 +259,9 @@ pub struct LargoConfig {
     #[serde(default = "default_beat_interval_ms")]
     pub beat_interval_ms: u32,
     #[serde(default = "default_beat_correction_ms")]
-    pub beat_correction_ms: i32,  // Correction to apply (can be negative)
+    pub beat_correction_ms: i32, // Correction to apply (can be negative)
     #[serde(default = "default_beat_correction_every_n_beats")]
-    pub beat_correction_every_n_beats: u32,  // Apply correction every N beats (0 = disabled)
+    pub beat_correction_every_n_beats: u32, // Apply correction every N beats (0 = disabled)
     #[serde(default = "default_largo_q_key")]
     pub q_ability_key: char,
     #[serde(default = "default_largo_w_key")]
@@ -272,6 +272,74 @@ pub struct LargoConfig {
     pub r_ability_key: char,
     #[serde(default = "default_standalone_key")]
     pub standalone_key: String,
+    #[serde(default)]
+    pub armlet: HeroArmletOverrideConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MeepoFarmAssistConfig {
+    #[serde(default = "default_meepo_farm_assist_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_meepo_farm_assist_toggle_key")]
+    pub toggle_key: String,
+    #[serde(default = "default_meepo_farm_assist_pulse_interval_ms")]
+    pub pulse_interval_ms: u64,
+    #[serde(default = "default_meepo_farm_assist_minimum_mana_percent")]
+    pub minimum_mana_percent: u32,
+    #[serde(default = "default_meepo_farm_assist_minimum_health_percent")]
+    pub minimum_health_percent: u32,
+    #[serde(default = "default_meepo_farm_assist_right_click_after_poof")]
+    pub right_click_after_poof: bool,
+    #[serde(default = "default_meepo_farm_assist_suspend_on_danger")]
+    pub suspend_on_danger: bool,
+    #[serde(default = "default_meepo_farm_assist_suspend_after_manual_combo_ms")]
+    pub suspend_after_manual_combo_ms: u64,
+    #[serde(default = "default_meepo_farm_assist_poof_press_count")]
+    pub poof_press_count: u32,
+    #[serde(default = "default_meepo_farm_assist_poof_press_interval_ms")]
+    pub poof_press_interval_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MeepoConfig {
+    #[serde(default = "default_standalone_key")]
+    pub standalone_key: String,
+    #[serde(default = "default_meepo_earthbind_key")]
+    pub earthbind_key: char,
+    #[serde(default = "default_meepo_poof_key")]
+    pub poof_key: char,
+    #[serde(default = "default_meepo_dig_key")]
+    pub dig_key: char,
+    #[serde(default = "default_meepo_megameepo_key")]
+    pub megameepo_key: char,
+    #[serde(default = "default_meepo_post_blink_delay_ms")]
+    pub post_blink_delay_ms: u64,
+    #[serde(default = "default_meepo_combo_items")]
+    pub combo_items: Vec<String>,
+    #[serde(default = "default_meepo_combo_item_spam_count")]
+    pub combo_item_spam_count: u32,
+    #[serde(default = "default_meepo_combo_item_delay_ms")]
+    pub combo_item_delay_ms: u64,
+    #[serde(default = "default_meepo_earthbind_press_count")]
+    pub earthbind_press_count: u32,
+    #[serde(default = "default_meepo_earthbind_press_interval_ms")]
+    pub earthbind_press_interval_ms: u64,
+    #[serde(default = "default_meepo_poof_press_count")]
+    pub poof_press_count: u32,
+    #[serde(default = "default_meepo_poof_press_interval_ms")]
+    pub poof_press_interval_ms: u64,
+    #[serde(default = "default_meepo_auto_dig_on_danger")]
+    pub auto_dig_on_danger: bool,
+    #[serde(default = "default_meepo_dig_hp_threshold_percent")]
+    pub dig_hp_threshold_percent: u32,
+    #[serde(default = "default_meepo_auto_megameepo_on_danger")]
+    pub auto_megameepo_on_danger: bool,
+    #[serde(default = "default_meepo_megameepo_hp_threshold_percent")]
+    pub megameepo_hp_threshold_percent: u32,
+    #[serde(default = "default_meepo_defensive_trigger_cooldown_ms")]
+    pub defensive_trigger_cooldown_ms: u64,
+    #[serde(default)]
+    pub farm_assist: MeepoFarmAssistConfig,
     #[serde(default)]
     pub armlet: HeroArmletOverrideConfig,
 }
@@ -292,6 +360,8 @@ pub struct HeroesConfig {
     pub largo: LargoConfig,
     #[serde(default)]
     pub broodmother: BroodmotherConfig,
+    #[serde(default)]
+    pub meepo: MeepoConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -576,7 +646,7 @@ fn default_auto_abilities() -> Vec<AutoAbilityConfig> {
     vec![]
 }
 fn default_auto_abilities_first() -> bool {
-    false  // Items first by default
+    false // Items first by default
 }
 
 fn default_amphibian_enabled() -> bool {
@@ -595,10 +665,10 @@ fn default_beat_interval_ms() -> u32 {
     995
 }
 fn default_beat_correction_ms() -> i32 {
-    -10  // Subtract 10ms every N beats (speeds up to compensate for delay)
+    -10 // Subtract 10ms every N beats (speeds up to compensate for delay)
 }
 fn default_beat_correction_every_n_beats() -> u32 {
-    5  // Apply correction every 5 beats
+    5 // Apply correction every 5 beats
 }
 fn default_largo_q_key() -> char {
     'q'
@@ -611,6 +681,88 @@ fn default_largo_e_key() -> char {
 }
 fn default_largo_r_key() -> char {
     'r'
+}
+
+fn default_meepo_earthbind_key() -> char {
+    'q'
+}
+fn default_meepo_poof_key() -> char {
+    'w'
+}
+fn default_meepo_dig_key() -> char {
+    'd'
+}
+fn default_meepo_megameepo_key() -> char {
+    'f'
+}
+fn default_meepo_post_blink_delay_ms() -> u64 {
+    80
+}
+fn default_meepo_combo_items() -> Vec<String> {
+    vec!["sheepstick".to_string(), "disperser".to_string()]
+}
+fn default_meepo_combo_item_spam_count() -> u32 {
+    1
+}
+fn default_meepo_combo_item_delay_ms() -> u64 {
+    40
+}
+fn default_meepo_earthbind_press_count() -> u32 {
+    2
+}
+fn default_meepo_earthbind_press_interval_ms() -> u64 {
+    30
+}
+fn default_meepo_poof_press_count() -> u32 {
+    3
+}
+fn default_meepo_poof_press_interval_ms() -> u64 {
+    35
+}
+fn default_meepo_auto_dig_on_danger() -> bool {
+    true
+}
+fn default_meepo_dig_hp_threshold_percent() -> u32 {
+    32
+}
+fn default_meepo_auto_megameepo_on_danger() -> bool {
+    true
+}
+fn default_meepo_megameepo_hp_threshold_percent() -> u32 {
+    45
+}
+fn default_meepo_defensive_trigger_cooldown_ms() -> u64 {
+    1500
+}
+fn default_meepo_farm_assist_enabled() -> bool {
+    true
+}
+fn default_meepo_farm_assist_toggle_key() -> String {
+    "End".to_string()
+}
+fn default_meepo_farm_assist_pulse_interval_ms() -> u64 {
+    700
+}
+fn default_meepo_farm_assist_minimum_mana_percent() -> u32 {
+    35
+}
+fn default_meepo_farm_assist_minimum_health_percent() -> u32 {
+    45
+}
+fn default_meepo_farm_assist_right_click_after_poof() -> bool {
+    true
+}
+fn default_meepo_farm_assist_suspend_on_danger() -> bool {
+    true
+}
+fn default_meepo_farm_assist_suspend_after_manual_combo_ms() -> u64 {
+    2500
+}
+fn default_meepo_farm_assist_poof_press_count() -> u32 {
+    1
+}
+fn default_meepo_farm_assist_poof_press_interval_ms() -> u64 {
+    35
 }
 
 fn default_danger_enabled() -> bool {
@@ -704,7 +856,14 @@ fn default_soul_ring_cooldown_ms() -> u64 {
     500
 }
 fn default_soul_ring_ability_keys() -> Vec<String> {
-    vec!["q".to_string(), "w".to_string(), "e".to_string(), "r".to_string(), "d".to_string(), "f".to_string()]
+    vec![
+        "q".to_string(),
+        "w".to_string(),
+        "e".to_string(),
+        "r".to_string(),
+        "d".to_string(),
+        "f".to_string(),
+    ]
 }
 fn default_soul_ring_intercept_items() -> bool {
     true
@@ -871,6 +1030,50 @@ impl Default for LargoConfig {
     }
 }
 
+impl Default for MeepoFarmAssistConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_meepo_farm_assist_enabled(),
+            toggle_key: default_meepo_farm_assist_toggle_key(),
+            pulse_interval_ms: default_meepo_farm_assist_pulse_interval_ms(),
+            minimum_mana_percent: default_meepo_farm_assist_minimum_mana_percent(),
+            minimum_health_percent: default_meepo_farm_assist_minimum_health_percent(),
+            right_click_after_poof: default_meepo_farm_assist_right_click_after_poof(),
+            suspend_on_danger: default_meepo_farm_assist_suspend_on_danger(),
+            suspend_after_manual_combo_ms: default_meepo_farm_assist_suspend_after_manual_combo_ms(),
+            poof_press_count: default_meepo_farm_assist_poof_press_count(),
+            poof_press_interval_ms: default_meepo_farm_assist_poof_press_interval_ms(),
+        }
+    }
+}
+
+impl Default for MeepoConfig {
+    fn default() -> Self {
+        Self {
+            standalone_key: default_standalone_key(),
+            earthbind_key: default_meepo_earthbind_key(),
+            poof_key: default_meepo_poof_key(),
+            dig_key: default_meepo_dig_key(),
+            megameepo_key: default_meepo_megameepo_key(),
+            post_blink_delay_ms: default_meepo_post_blink_delay_ms(),
+            combo_items: default_meepo_combo_items(),
+            combo_item_spam_count: default_meepo_combo_item_spam_count(),
+            combo_item_delay_ms: default_meepo_combo_item_delay_ms(),
+            earthbind_press_count: default_meepo_earthbind_press_count(),
+            earthbind_press_interval_ms: default_meepo_earthbind_press_interval_ms(),
+            poof_press_count: default_meepo_poof_press_count(),
+            poof_press_interval_ms: default_meepo_poof_press_interval_ms(),
+            auto_dig_on_danger: default_meepo_auto_dig_on_danger(),
+            dig_hp_threshold_percent: default_meepo_dig_hp_threshold_percent(),
+            auto_megameepo_on_danger: default_meepo_auto_megameepo_on_danger(),
+            megameepo_hp_threshold_percent: default_meepo_megameepo_hp_threshold_percent(),
+            defensive_trigger_cooldown_ms: default_meepo_defensive_trigger_cooldown_ms(),
+            farm_assist: MeepoFarmAssistConfig::default(),
+            armlet: HeroArmletOverrideConfig::default(),
+        }
+    }
+}
+
 impl Default for HeroesConfig {
     fn default() -> Self {
         Self {
@@ -881,6 +1084,7 @@ impl Default for HeroesConfig {
             outworld_destroyer: OutworldDestroyerConfig::default(),
             largo: LargoConfig::default(),
             broodmother: BroodmotherConfig::default(),
+            meepo: MeepoConfig::default(),
         }
     }
 }
@@ -1048,6 +1252,7 @@ impl Settings {
             }
             "npc_dota_hero_largo" => Some(self.heroes.largo.armlet.clone()),
             "npc_dota_hero_broodmother" => Some(self.heroes.broodmother.armlet.clone()),
+            "npc_dota_hero_meepo" => Some(self.heroes.meepo.armlet.clone()),
             _ => None,
         }
     }
@@ -1086,15 +1291,65 @@ impl Settings {
             "shadow_fiend" => "q".to_string(), // SF uses Q/W/E interception
             "tiny" => self.heroes.tiny.standalone_key.clone(),
             "outworld_destroyer" => self.heroes.outworld_destroyer.standalone_key.clone(),
+            "meepo" => self.heroes.meepo.standalone_key.clone(),
             _ => default_standalone_key(),
         }
     }
-    
+
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
         let config_path = "config/config.toml";
         let toml_string = toml::to_string_pretty(self)?;
         fs::write(config_path, toml_string)?;
         info!("Settings saved to {}", config_path);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn meepo_defaults_are_exposed_through_settings() {
+        let settings = Settings::default();
+
+        // Verify all Meepo defaults match the spec
+        assert_eq!(settings.heroes.meepo.standalone_key, "Home");
+        assert_eq!(settings.heroes.meepo.earthbind_key, 'q');
+        assert_eq!(settings.heroes.meepo.poof_key, 'w');
+        assert_eq!(settings.heroes.meepo.dig_key, 'd');
+        assert_eq!(settings.heroes.meepo.megameepo_key, 'f');
+        assert_eq!(settings.heroes.meepo.post_blink_delay_ms, 80);
+        assert_eq!(
+            settings.heroes.meepo.combo_items,
+            vec!["sheepstick", "disperser"]
+        );
+        assert_eq!(settings.heroes.meepo.combo_item_spam_count, 1);
+        assert_eq!(settings.heroes.meepo.combo_item_delay_ms, 40);
+        assert_eq!(settings.heroes.meepo.earthbind_press_count, 2);
+        assert_eq!(settings.heroes.meepo.earthbind_press_interval_ms, 30);
+        assert_eq!(settings.heroes.meepo.poof_press_count, 3);
+        assert_eq!(settings.heroes.meepo.poof_press_interval_ms, 35);
+        assert_eq!(settings.heroes.meepo.auto_dig_on_danger, true);
+        assert_eq!(settings.heroes.meepo.dig_hp_threshold_percent, 32);
+        assert_eq!(settings.heroes.meepo.auto_megameepo_on_danger, true);
+        assert_eq!(settings.heroes.meepo.megameepo_hp_threshold_percent, 45);
+        assert_eq!(settings.heroes.meepo.defensive_trigger_cooldown_ms, 1500);
+        assert!(settings.heroes.meepo.farm_assist.enabled);
+        assert_eq!(settings.heroes.meepo.farm_assist.toggle_key, "End");
+        assert_eq!(settings.heroes.meepo.farm_assist.pulse_interval_ms, 700);
+        assert_eq!(settings.heroes.meepo.farm_assist.minimum_mana_percent, 35);
+        assert_eq!(settings.heroes.meepo.farm_assist.minimum_health_percent, 45);
+        assert!(settings.heroes.meepo.farm_assist.right_click_after_poof);
+        assert!(settings.heroes.meepo.farm_assist.suspend_on_danger);
+        assert_eq!(
+            settings.heroes.meepo.farm_assist.suspend_after_manual_combo_ms,
+            2500
+        );
+        assert_eq!(settings.heroes.meepo.farm_assist.poof_press_count, 1);
+        assert_eq!(settings.heroes.meepo.farm_assist.poof_press_interval_ms, 35);
+
+        // Verify get_standalone_key returns the correct value for meepo
+        assert_eq!(settings.get_standalone_key("meepo"), "Home");
     }
 }

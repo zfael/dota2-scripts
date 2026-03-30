@@ -61,6 +61,18 @@ pub fn find_item_slot(event: &GsiWebhookEvent, settings: &Settings, item: Item) 
     find_item_slot_by_name(event, settings, item.to_game_name())
 }
 
+fn item_name_matches_lookup(item_name: &str, lookup_name: &str) -> bool {
+    if item_name.contains(lookup_name) {
+        return true;
+    }
+
+    lookup_name == "item_blink"
+        && matches!(
+            item_name,
+            "item_arcane_blink" | "item_overwhelming_blink" | "item_swift_blink"
+        )
+}
+
 /// Find item slot key by item name string from GSI event (for backward compatibility)
 pub fn find_item_slot_by_name(
     event: &GsiWebhookEvent,
@@ -70,25 +82,25 @@ pub fn find_item_slot_by_name(
     let items = &event.items;
 
     // Check all inventory slots
-    if items.slot0.name.contains(item_name) {
+    if item_name_matches_lookup(&items.slot0.name, item_name) {
         return settings.get_key_for_slot("slot0");
     }
-    if items.slot1.name.contains(item_name) {
+    if item_name_matches_lookup(&items.slot1.name, item_name) {
         return settings.get_key_for_slot("slot1");
     }
-    if items.slot2.name.contains(item_name) {
+    if item_name_matches_lookup(&items.slot2.name, item_name) {
         return settings.get_key_for_slot("slot2");
     }
-    if items.slot3.name.contains(item_name) {
+    if item_name_matches_lookup(&items.slot3.name, item_name) {
         return settings.get_key_for_slot("slot3");
     }
-    if items.slot4.name.contains(item_name) {
+    if item_name_matches_lookup(&items.slot4.name, item_name) {
         return settings.get_key_for_slot("slot4");
     }
-    if items.slot5.name.contains(item_name) {
+    if item_name_matches_lookup(&items.slot5.name, item_name) {
         return settings.get_key_for_slot("slot5");
     }
-    if items.neutral0.name.contains(item_name) {
+    if item_name_matches_lookup(&items.neutral0.name, item_name) {
         return settings.get_key_for_slot("neutral0");
     }
 
@@ -455,9 +467,104 @@ impl SurvivabilityActions {
 #[cfg(test)]
 mod tests {
     use super::{
-        plan_defensive_item_key_sequence, plan_item_key_sequence, plan_neutral_item_key_sequence,
-        PlannedKeyPress, SELF_CAST_DELAY_MS,
+        find_item_slot, plan_defensive_item_key_sequence, plan_item_key_sequence,
+        plan_neutral_item_key_sequence, PlannedKeyPress, SELF_CAST_DELAY_MS,
     };
+    use crate::config::Settings;
+    use crate::models::gsi_event::{Abilities, Ability, GsiWebhookEvent, Hero, Item as GsiItem, Items, Map};
+    use crate::models::Item;
+
+    fn empty_ability() -> Ability {
+        Ability {
+            ability_active: false,
+            can_cast: false,
+            cooldown: 0,
+            level: 0,
+            name: String::new(),
+            passive: false,
+            ultimate: false,
+        }
+    }
+
+    fn empty_hero() -> Hero {
+        Hero {
+            aghanims_scepter: false,
+            aghanims_shard: false,
+            alive: true,
+            attributes_level: 0,
+            is_break: false,
+            buyback_cooldown: 0,
+            buyback_cost: 0,
+            disarmed: false,
+            facet: 0,
+            has_debuff: false,
+            health: 100,
+            health_percent: 100,
+            hexed: false,
+            id: 0,
+            level: 1,
+            magicimmune: false,
+            mana: 0,
+            mana_percent: 0,
+            max_health: 100,
+            max_mana: 0,
+            muted: false,
+            name: String::new(),
+            respawn_seconds: 0,
+            silenced: false,
+            smoked: false,
+            stunned: false,
+            talent_1: false,
+            talent_2: false,
+            talent_3: false,
+            talent_4: false,
+            talent_5: false,
+            talent_6: false,
+            talent_7: false,
+            talent_8: false,
+            xp: 0,
+            xpos: 0,
+            ypos: 0,
+        }
+    }
+
+    fn empty_items() -> Items {
+        Items {
+            neutral0: GsiItem::default(),
+            slot0: GsiItem::default(),
+            slot1: GsiItem::default(),
+            slot2: GsiItem::default(),
+            slot3: GsiItem::default(),
+            slot4: GsiItem::default(),
+            slot5: GsiItem::default(),
+            slot6: GsiItem::default(),
+            slot7: GsiItem::default(),
+            slot8: GsiItem::default(),
+            stash0: GsiItem::default(),
+            stash1: GsiItem::default(),
+            stash2: GsiItem::default(),
+            stash3: GsiItem::default(),
+            stash4: GsiItem::default(),
+            stash5: GsiItem::default(),
+            teleport0: GsiItem::default(),
+        }
+    }
+
+    fn base_event(items: Items) -> GsiWebhookEvent {
+        GsiWebhookEvent {
+            hero: empty_hero(),
+            abilities: Abilities {
+                ability0: empty_ability(),
+                ability1: empty_ability(),
+                ability2: empty_ability(),
+                ability3: empty_ability(),
+                ability4: empty_ability(),
+                ability5: empty_ability(),
+            },
+            items,
+            map: Map { clock_time: 0 },
+        }
+    }
 
     #[test]
     fn glimmer_plan_double_taps_for_self_cast() {
@@ -503,6 +610,21 @@ mod tests {
                 PlannedKeyPress::new('n', SELF_CAST_DELAY_MS),
                 PlannedKeyPress::new('a', 0),
             ]
+        );
+    }
+
+    #[test]
+    fn blink_lookup_accepts_arcane_blink_variant() {
+        let settings = Settings::default();
+        let mut items = empty_items();
+        items.slot0 = GsiItem {
+            name: "item_arcane_blink".to_string(),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            find_item_slot(&base_event(items), &settings, Item::Blink),
+            settings.get_key_for_slot("slot0")
         );
     }
 }

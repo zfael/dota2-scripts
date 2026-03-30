@@ -26,7 +26,7 @@
    - optionally writes JSONL when `[gsi_logging].enabled = true`
    - updates `AppState.last_event`
    - updates `AppState.metrics.current_queue_depth`
-   - refreshes all shared keyboard-supporting and runtime caches from the latest GSI event (e.g., Soul Ring, auto-items, Broodmother, Shadow Fiend), even if GSI automation is disabled
+   - refreshes all shared keyboard-supporting and runtime caches from the latest GSI event (e.g., Soul Ring, auto-items, Broodmother, Shadow Fiend, Meepo observed state), even if GSI automation is disabled
    - logs death/respawn transitions
    - checks `AppState.gsi_enabled`
    - if enabled, calls `ActionDispatcher::dispatch_gsi_event(...)` with the already-refreshed event
@@ -63,20 +63,20 @@ The model includes many fields, but the runtime currently reads this subset:
 
 | GSI path | Current readers | What it drives |
 |---|---|---|
-| `hero.name` | `src/state/app_state.rs`, `src/actions/dispatcher.rs`, `src/gsi/handler.rs`, UI | Hero detection, dispatcher routing, debug logs |
-| `hero.alive` | `src/gsi/handler.rs`, `src/actions/common.rs`, `src/actions/dispel.rs`, `src/actions/soul_ring.rs`, UI | Death/respawn logs, action gating, status display |
+| `hero.name` | `src/state/app_state.rs`, `src/actions/dispatcher.rs`, `src/gsi/handler.rs`, `src/actions/heroes/meepo_state.rs`, UI | Hero detection, dispatcher routing, Meepo cache refresh/clear, debug logs |
+| `hero.alive` | `src/gsi/handler.rs`, `src/actions/common.rs`, `src/actions/dispel.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs`, `src/actions/soul_ring.rs`, UI | Death/respawn logs, action gating, Meepo defensive-cast gating, Meepo farm-assist gating, status display |
 | `hero.health` | `src/actions/common.rs`, `src/actions/danger_detector.rs`, `src/gsi/handler.rs`, UI | Armlet logic, danger calculations, HP bars |
-| `hero.health_percent` | `src/actions/common.rs`, `src/actions/danger_detector.rs`, `src/actions/auto_items.rs`, `src/actions/heroes/largo.rs`, `src/actions/soul_ring.rs` | Healing thresholds, danger checks, auto-abilities, Largo song choice, Soul Ring safety |
+| `hero.health_percent` | `src/actions/common.rs`, `src/actions/danger_detector.rs`, `src/actions/auto_items.rs`, `src/actions/heroes/largo.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs`, `src/actions/soul_ring.rs` | Healing thresholds, danger checks, auto-abilities, Largo song choice, Meepo Dig/MegaMeepo thresholds, Meepo observed-state UI, Soul Ring safety |
 | `hero.max_health` | `src/actions/common.rs`, `src/actions/danger_detector.rs`, UI | HP percentage math and progress bars |
 | `hero.mana` | UI | Mana bar text |
-| `hero.mana_percent` | `src/actions/heroes/largo.rs`, `src/actions/soul_ring.rs` | Largo low-mana shutdown and Soul Ring gating |
+| `hero.mana_percent` | `src/actions/heroes/largo.rs`, `src/actions/heroes/meepo_state.rs`, `src/actions/soul_ring.rs` | Largo low-mana shutdown, Meepo observed-state UI, and Soul Ring gating |
 | `hero.max_mana` | UI | Mana percentage display |
-| `hero.stunned` | `src/actions/common.rs`, UI | Skip armlet toggles; status display |
-| `hero.silenced` | `src/actions/dispel.rs`, UI | Silence dispel logic and status display |
+| `hero.stunned` | `src/actions/common.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs`, UI | Skip armlet toggles, gate Meepo defensive casts, gate Meepo farm assist, status display |
+| `hero.silenced` | `src/actions/dispel.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs`, UI | Silence dispel logic, gate Meepo defensive casts, gate Meepo farm assist, and drive status display |
 | `hero.has_debuff` | `src/actions/heroes/huskar.rs` | Huskar Berserker Blood cleanse timing |
-| `hero.aghanims_scepter` | `src/actions/heroes/largo.rs`, tests | Largo dual-song mode detection |
-| `hero.aghanims_shard` | `src/actions/heroes/largo.rs` | Largo dual-song mode detection |
-| `hero.level` | UI, tests | Status display and fixture assertions |
+| `hero.aghanims_scepter` | `src/actions/heroes/largo.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs`, tests | Largo dual-song mode detection; Meepo MegaMeepo gate; Meepo observed-state UI |
+| `hero.aghanims_shard` | `src/actions/heroes/largo.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs` | Largo dual-song mode detection; Meepo Dig gate; Meepo observed-state UI |
+| `hero.level` | `src/actions/heroes/meepo_state.rs`, UI, tests | Status display, Meepo observed-state UI, and fixture assertions |
 | `hero.respawn_seconds` | UI | Respawn countdown text |
 
 Fields such as `hero.magicimmune`, `hero.break`, positions, talents, and buyback data are modeled but not currently consumed by runtime logic.
@@ -88,10 +88,11 @@ Fields such as `hero.magicimmune`, `hero.break`, positions, talents, and buyback
 | `abilities.ability0.name` | `src/actions/heroes/largo.rs` | Detect whether Largo ultimate is active and which song occupies `Q` |
 | `abilities.ability0`-`ability3` | `src/actions/heroes/huskar.rs` | Scan for `huskar_berserkers_blood` by ability name |
 | `abilities.ability0`-`ability4` | `src/actions/heroes/outworld_destroyer.rs` | Scan for Arcane Orb, Astral Imprisonment, Sanity's Eclipse, and Objurgation readiness by ability name |
+| `abilities.ability0`-`ability5` | `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs` | Scan for `meepo_poof`, `meepo_petrify` (Dig), and `meepo_megameepo` readiness by ability name; expose Meepo readiness in the UI and gate Meepo farm-assist pulses |
 | `abilities.get_by_index(index)` | `src/actions/auto_items.rs` | Broodmother auto-abilities by configured slot index |
-| `ability.can_cast` | `src/actions/heroes/huskar.rs`, `src/actions/auto_items.rs`, `src/actions/heroes/shadow_fiend.rs`, `src/actions/heroes/outworld_destroyer.rs` | Ability readiness checks |
+| `ability.can_cast` | `src/actions/heroes/huskar.rs`, `src/actions/auto_items.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/shadow_fiend.rs`, `src/actions/heroes/outworld_destroyer.rs` | Ability readiness checks |
 | `ability.cooldown` | `src/actions/heroes/huskar.rs`, `src/actions/auto_items.rs` | Additional readiness checks |
-| `ability.level` | `src/actions/heroes/huskar.rs`, `src/actions/auto_items.rs`, `src/actions/heroes/outworld_destroyer.rs` | Skip unlearned abilities |
+| `ability.level` | `src/actions/heroes/huskar.rs`, `src/actions/auto_items.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/outworld_destroyer.rs` | Skip unlearned abilities |
 | `abilities.ability5.can_cast` | `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend standalone combo only fires when the ultimate is ready |
 
 `ability.ultimate` exists in the schema but is not currently read by runtime code.
@@ -112,14 +113,18 @@ Those slots feed these behaviors:
 
 | GSI path / field | Current readers | What it drives |
 |---|---|---|
-| `item.name` | `src/actions/common.rs`, `src/actions/dispatcher.rs`, `src/actions/dispel.rs`, `src/actions/soul_ring.rs`, `src/actions/auto_items.rs`, hero scripts, tests | Item presence, slot lookup, skip lists, fixture assertions |
-| `item.can_cast` | shared actions, Soul Ring, Shadow Fiend, Broodmother, Outworld Destroyer, tests | Readiness checks |
+| `item.name` | `src/actions/common.rs`, `src/actions/dispatcher.rs`, `src/actions/dispel.rs`, `src/actions/soul_ring.rs`, `src/actions/auto_items.rs`, hero scripts, tests | Item presence, slot lookup, skip lists, Meepo observed combo-item keys, fixture assertions |
+| `item.can_cast` | shared actions, Soul Ring, Shadow Fiend, Broodmother, Outworld Destroyer, Meepo observed state, tests | Readiness checks |
 | `item.cooldown` | `src/actions/auto_items.rs`, `src/actions/dispel.rs` | Readiness checks for auto-items and silence dispels |
 | `item.charges` | tests | Covered by fixture assertions today; current runtime logic does not branch on charges directly |
 | `item.passive` | `src/actions/dispatcher.rs` | Neutral-item discovery logging |
 | `items.neutral0.name` | `src/actions/dispatcher.rs`, `src/actions/common.rs`, tests | Neutral discovery logging and neutral-item auto-use |
 
 The model also includes `slot6`-`slot8`, `stash0`-`stash5`, and `teleport0`, but current action logic does not consult them.
+
+## Meepo-specific constraint
+
+The current GSI model still exposes only a single `hero` snapshot. It does **not** include explicit per-clone Meepo telemetry such as clone count, clone HP, clone positions, or clone-specific inventories. The new `MeepoObservedState` layer models that honestly by surfacing clone state as `Unavailable` instead of guessing.
 
 ### `map`
 

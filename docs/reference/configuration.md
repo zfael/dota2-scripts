@@ -255,6 +255,53 @@ See `docs/heroes/largo.md`.
 
 See `docs/heroes/broodmother.md` and `docs/reference/gsi-schema-and-usage.md`.
 
+## `[heroes.meepo]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `standalone_key` | `"Home"` | `"Home"` | Generic combo-trigger key for Meepo's standalone combo. |
+| `earthbind_key` | `"q"` | `"q"` | One-character key for Earthbind ability. |
+| `poof_key` | `"w"` | `"w"` | One-character key for Poof ability. |
+| `dig_key` | `"d"` | `"d"` | One-character key for Dig ability. |
+| `megameepo_key` | `"f"` | `"f"` | One-character key for Megameepo ability. |
+| `post_blink_delay_ms` | `80` | `80` | Delay after Blink before continuing combo sequence. |
+| `combo_items` | `["sheepstick", "disperser"]` | same list | Ordered item-name substrings used during standalone combo. |
+| `combo_item_spam_count` | `1` | `1` | Number of presses per configured combo item. |
+| `combo_item_delay_ms` | `40` | `40` | Delay between combo-item presses. |
+| `earthbind_press_count` | `2` | `2` | Number of Earthbind presses in combo sequence. |
+| `earthbind_press_interval_ms` | `30` | `30` | Delay between Earthbind presses. |
+| `poof_press_count` | `3` | `3` | Number of Poof presses in combo sequence. |
+| `poof_press_interval_ms` | `35` | `35` | Delay between Poof presses. |
+| `auto_dig_on_danger` | `true` | `true` | Enables automatic Dig cast when in danger state. |
+| `dig_hp_threshold_percent` | `32` | `32` | HP% threshold for auto-Dig when danger-triggered. |
+| `auto_megameepo_on_danger` | `true` | `true` | Enables automatic Megameepo cast when in danger state. |
+| `megameepo_hp_threshold_percent` | `45` | `45` | HP% threshold for auto-Megameepo when danger-triggered. |
+| `defensive_trigger_cooldown_ms` | `1500` | `1500` | Local anti-spam cooldown between defensive ability attempts. |
+
+### `[heroes.meepo.farm_assist]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `enabled` | `true` | `true` | Master switch for Meepo's manual farm-assist mode. The mode still stays idle until the toggle hotkey is pressed. |
+| `toggle_key` | `"End"` | `"End"` | Parsed by `parse_key_string()` and only exposed when Meepo is the selected hero. |
+| `pulse_interval_ms` | `700` | `700` | Minimum delay between farm-assist pulses. |
+| `minimum_mana_percent` | `35` | `35` | Farm pulses suspend when current mana% drops below this threshold. |
+| `minimum_health_percent` | `45` | `45` | Farm pulses suspend when current HP% drops below this threshold. |
+| `right_click_after_poof` | `true` | `true` | If true, a right-click at current cursor position follows each successful Poof pulse. |
+| `suspend_on_danger` | `true` | `true` | If true, `in_danger` suspends farm assist immediately. |
+| `suspend_after_manual_combo_ms` | `2500` | `2500` | Cooldown window after the manual standalone combo before farm assist can rearm. |
+| `poof_press_count` | `1` | `1` | Number of Poof presses per farm pulse. |
+| `poof_press_interval_ms` | `35` | `35` | Delay between Poof presses inside one farm pulse. |
+
+### `[heroes.meepo.armlet]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `enabled` | omitted | inherits `[armlet].enabled` | Optional per-hero override for the shared armlet master switch. |
+| `toggle_threshold` | omitted | inherits `[armlet].toggle_threshold` | Optional per-hero override for the shared armlet base threshold. |
+| `predictive_offset` | omitted | inherits `[armlet].predictive_offset` | Optional per-hero override for the shared predictive buffer. |
+| `toggle_cooldown_ms` | omitted | inherits `[armlet].toggle_cooldown_ms` | Optional per-hero override for the shared cooldown. |
+
 ---
 
 ## When you change config surface area
