@@ -109,6 +109,7 @@ async fn main() {
                                 state::HeroType::Huskar => models::Hero::Huskar.to_game_name(),
                                 state::HeroType::Largo => models::Hero::Largo.to_game_name(),
                                 state::HeroType::LegionCommander => models::Hero::LegionCommander.to_game_name(),
+                                state::HeroType::OutworldDestroyer => models::Hero::ObsidianDestroyer.to_game_name(),
                                 state::HeroType::ShadowFiend => models::Hero::Nevermore.to_game_name(),
                                 state::HeroType::Tiny => models::Hero::Tiny.to_game_name(),
                             };

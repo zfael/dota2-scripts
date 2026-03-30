@@ -14,6 +14,7 @@ The app combines:
 - Huskar
 - Largo
 - Legion Commander
+- Outworld Destroyer
 - Shadow Fiend
 - Tiny
 
@@ -28,6 +29,7 @@ Hero-specific behavior lives under `src/actions/heroes/`, with matching docs in 
   - Huskar armlet + Berserker Blood handling
   - Largo Amphibian Rhapsody beat timing and song control
   - Legion Commander standalone combo
+  - Outworld Destroyer danger-triggered barrier, ultimate interception, self-Astral helper, and standalone combo
   - Shadow Fiend raze/ultimate interception plus standalone combo
   - Tiny standalone combo
   - Broodmother spider micro and Space+right-click auto-items/abilities
@@ -109,6 +111,7 @@ The current checked-in config surface includes:
 - `[heroes.legion_commander]`
 - `[heroes.shadow_fiend]`
 - `[heroes.tiny]`
+- `[heroes.outworld_destroyer]`
 - `[heroes.largo]`
 - `[heroes.broodmother]`
 

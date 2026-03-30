@@ -112,6 +112,9 @@ impl Dota2ScriptApp {
                         if ui.selectable_label(state.selected_hero == Some(HeroType::LegionCommander), "Legion Commander").clicked() {
                             state.selected_hero = Some(HeroType::LegionCommander);
                         }
+                        if ui.selectable_label(state.selected_hero == Some(HeroType::OutworldDestroyer), "Outworld Destroyer").clicked() {
+                            state.selected_hero = Some(HeroType::OutworldDestroyer);
+                        }
                         if ui.selectable_label(state.selected_hero == Some(HeroType::ShadowFiend), "Shadow Fiend").clicked() {
                             state.selected_hero = Some(HeroType::ShadowFiend);
                         }
@@ -123,14 +126,16 @@ impl Dota2ScriptApp {
                 
                 // Update trigger key when hero changes
                 if state.selected_hero != prev_hero {
-                    // Update SF enabled flag for keyboard listener
                     *state.sf_enabled.lock().unwrap() = state.selected_hero == Some(HeroType::ShadowFiend);
+                    *state.od_enabled.lock().unwrap() =
+                        state.selected_hero == Some(HeroType::OutworldDestroyer);
                     
                     if let Some(hero_type) = state.selected_hero {
                         let _hero_name = match hero_type {
                             HeroType::Huskar => "huskar",
                             HeroType::Largo => "largo",
                             HeroType::LegionCommander => "legion_commander",
+                            HeroType::OutworldDestroyer => "outworld_destroyer",
                             HeroType::ShadowFiend => "shadow_fiend",
                             HeroType::Tiny => "tiny",
                         };
@@ -139,6 +144,7 @@ impl Dota2ScriptApp {
                                 HeroType::Huskar => "huskar",
                                 HeroType::Largo => "largo",
                                 HeroType::LegionCommander => "legion_commander",
+                                HeroType::OutworldDestroyer => "outworld_destroyer",
                                 HeroType::ShadowFiend => "shadow_fiend",
                                 HeroType::Tiny => "tiny",
                             }
@@ -157,6 +163,17 @@ impl Dota2ScriptApp {
                 
                 if let Some(hero_type) = state.selected_hero {
                     match hero_type {
+                        HeroType::OutworldDestroyer => {
+                            let current_key = state.trigger_key.lock().unwrap().clone();
+                            ui.label("Outworld Destroyer automation:");
+                            ui.label(format!("  Standalone combo: {}", current_key));
+                            ui.label(format!(
+                                "  Self-Astral panic key: {}",
+                                settings.heroes.outworld_destroyer.astral_self_cast_key
+                            ));
+                            ui.label("  R: BKB -> Objurgation -> Sanity's Eclipse when enabled");
+                            ui.label("Edit in config/config.toml under [heroes.outworld_destroyer]");
+                        }
                         HeroType::ShadowFiend => {
                             ui.label("Shadow Fiend uses Q/W/E interception:");
                             ui.label("  Q: Right-click + L (close raze)");

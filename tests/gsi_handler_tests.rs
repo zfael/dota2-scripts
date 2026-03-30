@@ -54,3 +54,31 @@ async fn test_healing_item_detection() {
     assert_eq!(event.items.slot2.can_cast, Some(true));
     assert_eq!(event.items.slot2.charges, Some(15));
 }
+
+#[tokio::test]
+async fn test_load_outworld_destroyer_fixture() {
+    let json_data = fs::read_to_string("tests/fixtures/outworld_destroyer_event.json")
+        .expect("Failed to read OD fixture");
+
+    let event: GsiWebhookEvent = serde_json::from_str(&json_data)
+        .expect("Failed to deserialize OD event");
+
+    assert_eq!(event.hero.name, "npc_dota_hero_obsidian_destroyer");
+    assert_eq!(event.hero.level, 18);
+    assert_eq!(event.abilities.ability3.name, "obsidian_destroyer_sanity_eclipse");
+    assert_eq!(event.abilities.ability4.name, "obsidian_destroyer_objurgation");
+}
+
+#[tokio::test]
+async fn test_od_combo_item_fixture_slots() {
+    let json_data = fs::read_to_string("tests/fixtures/outworld_destroyer_event.json")
+        .expect("Failed to read OD fixture");
+
+    let event: GsiWebhookEvent = serde_json::from_str(&json_data)
+        .expect("Failed to deserialize OD event");
+
+    assert_eq!(event.items.slot0.name, "item_arcane_blink");
+    assert_eq!(event.items.slot1.name, "item_black_king_bar");
+    assert_eq!(event.items.slot2.name, "item_sheepstick");
+    assert_eq!(event.items.slot3.name, "item_bloodthorn");
+}

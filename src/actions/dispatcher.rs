@@ -242,13 +242,17 @@ mod tests {
     }
 
     #[test]
-    fn tiny_and_legion_use_executor_standalone_mode() {
+    fn tiny_legion_and_od_use_executor_standalone_mode() {
         assert_eq!(
             standalone_dispatch_mode("npc_dota_hero_tiny"),
             StandaloneDispatchMode::Executor
         );
         assert_eq!(
             standalone_dispatch_mode("npc_dota_hero_legion_commander"),
+            StandaloneDispatchMode::Executor
+        );
+        assert_eq!(
+            standalone_dispatch_mode("npc_dota_hero_obsidian_destroyer"),
             StandaloneDispatchMode::Executor
         );
     }

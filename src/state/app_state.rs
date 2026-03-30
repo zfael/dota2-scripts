@@ -6,6 +6,7 @@ pub enum HeroType {
     Huskar,
     Largo,
     LegionCommander,
+    OutworldDestroyer,
     ShadowFiend,
     Tiny,
 }
@@ -36,6 +37,9 @@ impl HeroType {
             name if name == Hero::Huskar.to_game_name() => Some(HeroType::Huskar),
             name if name == Hero::Largo.to_game_name() => Some(HeroType::Largo),
             name if name == Hero::LegionCommander.to_game_name() => Some(HeroType::LegionCommander),
+            name if name == Hero::ObsidianDestroyer.to_game_name() => {
+                Some(HeroType::OutworldDestroyer)
+            }
             name if name == Hero::Nevermore.to_game_name() => Some(HeroType::ShadowFiend),
             name if name == Hero::Tiny.to_game_name() => Some(HeroType::Tiny),
             _ => None,
@@ -47,6 +51,7 @@ impl HeroType {
             HeroType::Huskar => "Huskar",
             HeroType::Largo => "Largo",
             HeroType::LegionCommander => "Legion Commander",
+            HeroType::OutworldDestroyer => "Outworld Destroyer",
             HeroType::ShadowFiend => "Shadow Fiend",
             HeroType::Tiny => "Tiny",
         }
@@ -79,6 +84,7 @@ pub struct AppState {
     pub metrics: QueueMetrics,
     pub trigger_key: Arc<Mutex<String>>,
     pub sf_enabled: Arc<Mutex<bool>>,
+    pub od_enabled: Arc<Mutex<bool>>,
     pub update_state: Arc<Mutex<UpdateCheckState>>,
 }
 
@@ -92,6 +98,7 @@ impl Default for AppState {
             metrics: QueueMetrics::default(),
             trigger_key: Arc::new(Mutex::new("Home".to_string())),
             sf_enabled: Arc::new(Mutex::new(false)),
+            od_enabled: Arc::new(Mutex::new(false)),
             update_state: Arc::new(Mutex::new(UpdateCheckState::Idle)),
         }
     }
@@ -108,9 +115,8 @@ impl AppState {
         
         if self.selected_hero != hero_type {
             self.selected_hero = hero_type;
-            // Update sf_enabled flag when hero changes via GSI
-            // Must be explicitly set to false when not SF to avoid stale state
             *self.sf_enabled.lock().unwrap() = hero_type == Some(HeroType::ShadowFiend);
+            *self.od_enabled.lock().unwrap() = hero_type == Some(HeroType::OutworldDestroyer);
         }
 
         self.last_event = Some(event);

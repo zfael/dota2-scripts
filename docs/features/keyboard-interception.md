@@ -9,6 +9,7 @@
 | Path | What it owns |
 |---|---|
 | `src/input/keyboard.rs` | Global `rdev::grab` hook, decision tree, `HotkeyEvent` channel, Soul Ring replay helper |
+| `src/actions/heroes/outworld_destroyer.rs` | Outworld Destroyer intercepted-sequence planning and dedicated request worker (`R` combo, self-Astral, standalone combo) |
 | `src/actions/soul_ring.rs` | Soul Ring shared state, key eligibility rules, health/mana/cooldown gates |
 | `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend intercepted-sequence planning and dedicated request worker (`Q/W/E` razes, `R` ultimate combo, standalone combo) |
 | `src/input/simulation.rs` | High-level synthetic keys/mouse emission + `SIMULATING_KEYS` guard |
@@ -18,7 +19,7 @@ Related but not primary owners:
 
 - `src/actions/heroes/largo.rs` receives `HotkeyEvent::LargoQ/W/E/R`
 - `src/actions/heroes/broodmother.rs` uses mouse interception plus `BROODMOTHER_ACTIVE`
-- `src/state/app_state.rs` exposes `trigger_key` and `sf_enabled`
+- `src/state/app_state.rs` exposes `trigger_key`, `sf_enabled`, and `od_enabled`
 
 ---
 
@@ -46,6 +47,7 @@ The snapshot holds only static keyboard-facing facts:
 
 - parsed combo-trigger key
 - Shadow Fiend interception flags and delays
+- Outworld Destroyer interception flags, keys, and combo config
 - Broodmother callback-facing config and pre-parsed keys
 - Soul Ring thresholds, ability keys, and item-slot keys
 
@@ -85,15 +87,20 @@ Current callback order on key/button input:
     - if `snapshot.sf_enabled` and `snapshot.shadow_fiend.auto_bkb_on_ultimate`
     - block `R`
     - enqueue the ultimate sequence onto the same dedicated worker
-9. **Largo / generic ability-key path**
-   - emit `HotkeyEvent::LargoQ/W/E/R`
-   - if Soul Ring should trigger, block and replay
-   - otherwise pass through
-10. **Item-slot Soul Ring interception**
-   - blocks configured item keys when the item is mana-using and Soul Ring should fire first
-11. **Standalone combo key**
-   - sends `HotkeyEvent::ComboTrigger`
-   - does not block the original key
+9. **Outworld Destroyer intercepts**
+    - if `snapshot.od_enabled` and `heroes.outworld_destroyer.ultimate_intercept_enabled`
+    - block `R` only when `Sanity's Eclipse` is ready
+    - enqueue `BKB -> Objurgation -> R` onto the dedicated OD worker
+    - optionally block the configured self-Astral panic hotkey and double-tap Astral on self
+10. **Largo / generic ability-key path**
+    - emit `HotkeyEvent::LargoQ/W/E/R`
+    - if Soul Ring should trigger, block and replay
+    - otherwise pass through
+11. **Item-slot Soul Ring interception**
+    - blocks configured item keys when the item is mana-using and Soul Ring should fire first
+12. **Standalone combo key**
+    - sends `HotkeyEvent::ComboTrigger`
+    - does not block the original key
 
 Because this logic is ordered, a new intercept can easily shadow an older one. Preserve ordering deliberately.
 
@@ -137,6 +144,7 @@ Used by:
 
 - Shadow Fiend raze facing (`ALT` + right-click + raze key)
 - Shadow Fiend ultimate / standalone combo
+- Outworld Destroyer ultimate / self-Astral / standalone combo
 - Broodmother auto-items and spider control
 - self-cast item helpers like Glimmer double-tap
 
@@ -246,6 +254,50 @@ That helper:
 The standalone hotkey is **not** a blocked-key intercept. It travels through the `HotkeyEvent` channel and ends up at `handle_standalone_trigger()`.
 
 That standalone-key conflict remains unchanged in this slice and is still out of scope here: the checked-in config exposes `heroes.shadow_fiend.standalone_key`, but current runtime wiring still conflicts with the raze-intercept path when that path uses `Q`.
+
+---
+
+## Outworld Destroyer interception
+
+### Activation gate
+
+The callback reads `snapshot.od_enabled`, which is rebuilt from `AppState.od_enabled`.
+
+That source flag is updated when:
+
+- `AppState::update_from_gsi(...)` detects `npc_dota_hero_obsidian_destroyer`
+- the UI manually changes `selected_hero`
+
+### `R` ultimate path
+
+If `heroes.outworld_destroyer.ultimate_intercept_enabled = true`, the hook checks `R` before the generic ability-key path.
+
+When `Sanity's Eclipse` is ready, the hook:
+
+1. blocks the original `R`
+2. enqueues one `Ultimate` request onto the OD worker
+3. optionally uses BKB
+4. optionally uses `Objurgation`
+5. presses `R`
+6. optionally presses Arcane Orb after the ultimate
+
+If the ultimate is not ready, the hook does not swallow `R`.
+
+### Self-Astral path
+
+If `heroes.outworld_destroyer.astral_self_cast_enabled = true`, the hook also watches the configured `astral_self_cast_key`.
+
+That path:
+
+1. blocks the dedicated panic hotkey
+2. checks whether `Astral Imprisonment` is ready from cached GSI state
+3. enqueues a request that double-taps the configured Astral key
+
+### Standalone combo
+
+Like Tiny and Legion Commander, OD also uses the generic standalone combo trigger routed through `HotkeyEvent::ComboTrigger` and `handle_standalone_trigger()`.
+
+The standalone combo itself runs on the OD worker and currently sequences Blink, optional BKB, configured combo items, optional `Objurgation`, `Sanity's Eclipse`, and optional Arcane Orb follow-up presses.
 
 ---
 

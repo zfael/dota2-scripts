@@ -1,0 +1,176 @@
+{
+  "hero": {
+    "aghanims_scepter": false,
+    "aghanims_shard": false,
+    "alive": true,
+    "attributes_level": 0,
+    "break": false,
+    "buyback_cooldown": 0,
+    "buyback_cost": 1424,
+    "disarmed": false,
+    "facet": 0,
+    "has_debuff": false,
+    "health": 890,
+    "health_percent": 48,
+    "hexed": false,
+    "id": 76,
+    "level": 18,
+    "magicimmune": false,
+    "mana": 1890,
+    "mana_percent": 66,
+    "max_health": 1860,
+    "max_mana": 2860,
+    "muted": false,
+    "name": "npc_dota_hero_obsidian_destroyer",
+    "respawn_seconds": 0,
+    "silenced": false,
+    "smoked": false,
+    "stunned": false,
+    "talent_1": true,
+    "talent_2": false,
+    "talent_3": true,
+    "talent_4": false,
+    "talent_5": true,
+    "talent_6": false,
+    "talent_7": false,
+    "talent_8": false,
+    "xp": 18420,
+    "xpos": 1520,
+    "ypos": -310
+  },
+  "abilities": {
+    "ability0": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 4,
+      "name": "obsidian_destroyer_arcane_orb",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability1": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 4,
+      "name": "obsidian_destroyer_astral_imprisonment",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability2": {
+      "ability_active": false,
+      "can_cast": false,
+      "cooldown": 0,
+      "level": 4,
+      "name": "obsidian_destroyer_essence_flux",
+      "passive": true,
+      "ultimate": false
+    },
+    "ability3": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 3,
+      "name": "obsidian_destroyer_sanity_eclipse",
+      "passive": false,
+      "ultimate": true
+    },
+    "ability4": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 3,
+      "name": "obsidian_destroyer_objurgation",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability5": {
+      "ability_active": false,
+      "can_cast": false,
+      "cooldown": 0,
+      "level": 0,
+      "name": "empty",
+      "passive": false,
+      "ultimate": false
+    }
+  },
+  "items": {
+    "neutral0": {
+      "name": "item_psychic_headband",
+      "can_cast": true,
+      "cooldown": 0,
+      "passive": false
+    },
+    "slot0": {
+      "name": "item_arcane_blink",
+      "can_cast": true,
+      "cooldown": 0,
+      "passive": false
+    },
+    "slot1": {
+      "name": "item_black_king_bar",
+      "can_cast": true,
+      "cooldown": 0,
+      "passive": false
+    },
+    "slot2": {
+      "name": "item_sheepstick",
+      "can_cast": true,
+      "cooldown": 0,
+      "passive": false
+    },
+    "slot3": {
+      "name": "item_bloodthorn",
+      "can_cast": true,
+      "cooldown": 0,
+      "passive": false
+    },
+    "slot4": {
+      "name": "item_hurricane_pike",
+      "can_cast": true,
+      "cooldown": 0,
+      "passive": false
+    },
+    "slot5": {
+      "name": "item_witch_blade",
+      "can_cast": false,
+      "cooldown": 0,
+      "passive": true
+    },
+    "slot6": {
+      "name": "empty"
+    },
+    "slot7": {
+      "name": "empty"
+    },
+    "slot8": {
+      "name": "empty"
+    },
+    "stash0": {
+      "name": "empty"
+    },
+    "stash1": {
+      "name": "empty"
+    },
+    "stash2": {
+      "name": "empty"
+    },
+    "stash3": {
+      "name": "empty"
+    },
+    "stash4": {
+      "name": "empty"
+    },
+    "stash5": {
+      "name": "empty"
+    },
+    "teleport0": {
+      "name": "item_tpscroll",
+      "can_cast": true,
+      "cooldown": 0
+    }
+  },
+  "map": {
+    "clock_time": 2136
+  }
+}
