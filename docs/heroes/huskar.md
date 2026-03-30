@@ -71,12 +71,14 @@ Legacy flat Huskar keys (`armlet_toggle_threshold`, `armlet_predictive_offset`, 
 
 Armlet of Mordiggian is a toggle item that drains HP continuously but provides large offensive stats. Huskar benefits from low HP because of his passive, so armlet toggling remains a key survival mechanic.
 
-Huskar no longer owns a separate armlet implementation. On each GSI event, `src/actions/heroes/huskar.rs` enqueues the shared armlet check, and `src/actions/armlet.rs` handles:
+Huskar no longer owns a separate armlet implementation. On each GSI event, `src/actions/dispatcher.rs` runs the shared Armlet check inline before Huskar-specific survivability or cleanse logic, and `src/actions/armlet.rs` handles:
 
 1. resolving shared `[armlet]` defaults
 2. applying Huskar overrides from `[heroes.huskar.armlet]`
 3. checking HP, stun state, cooldown, and equipped Armlet
 4. emitting the dual-trigger toggle sequence
+
+Because the dispatcher now runs Armlet first and `src/input/simulation.rs` gives Armlet chords their own fast lane, Huskar Armlet toggles can jump ahead of queued normal synthetic inputs after the current atomic input command finishes.
 
 #### Dual-trigger sequence
 

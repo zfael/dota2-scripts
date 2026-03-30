@@ -1,5 +1,4 @@
 use crate::actions::heroes::traits::HeroScript;
-use crate::actions::armlet;
 use crate::actions::common::SurvivabilityActions;
 use crate::actions::executor::ActionExecutor;
 use crate::config::Settings;
@@ -94,20 +93,12 @@ impl HuskarScript {
 
 impl HeroScript for HuskarScript {
     fn handle_gsi_event(&self, event: &GsiWebhookEvent) {
-        // PRIORITY 1: Shared armlet toggle path
-        let settings_clone = self.settings.clone();
-        let event_clone = event.clone();
-        self.executor.enqueue("huskar-armlet-toggle", move || {
-            let settings = settings_clone.lock().unwrap();
-            armlet::maybe_toggle(&event_clone, &settings);
-        });
-
-        // PRIORITY 2: Update danger detection state
+        // PRIORITY 1: Update danger detection state
         let settings = self.settings.lock().unwrap();
         let in_danger = crate::actions::danger_detector::update(event, &settings.danger_detection);
         drop(settings);
 
-        // PRIORITY 3: Create survivability actions for healing and defensive items
+        // PRIORITY 2: Create survivability actions for healing and defensive items
         let survivability = SurvivabilityActions::new(self.settings.clone(), self.executor.clone());
         
         // Check healing items (danger-aware)
@@ -119,7 +110,7 @@ impl HeroScript for HuskarScript {
         // Use neutral items if in danger
         survivability.use_neutral_item_if_danger_with_snapshot(event, in_danger);
 
-        // PRIORITY 4: Huskar-specific berserker blood cleanse
+        // PRIORITY 3: Huskar-specific berserker blood cleanse
         self.berserker_blood_cleanse(event);
     }
 

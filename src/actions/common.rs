@@ -1,4 +1,3 @@
-use crate::actions::armlet;
 use crate::actions::executor::ActionExecutor;
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Item};
@@ -164,42 +163,21 @@ impl SurvivabilityActions {
         Self { settings, executor }
     }
 
-    /// Execute default GSI strategy (survivability + armlet + danger detection)
+    /// Execute default GSI strategy (danger detection + survivability)
     pub fn execute_default_strategy(&self, event: &GsiWebhookEvent) {
-        // PRIORITY 1: Check for armlet and toggle if needed (non-blocking)
-        // Clone event for thread safety
-        let event_clone = event.clone();
-        let settings_clone = self.settings.clone();
-        self.executor.enqueue("default-armlet-toggle", move || {
-            let settings = settings_clone.lock().unwrap();
-
-            // Check if hero has armlet in inventory
-            let has_armlet = event_clone
-                .items
-                .all_slots()
-                .iter()
-                .any(|(_, item)| item.name == "item_armlet");
-
-            if !has_armlet {
-                return;
-            }
-
-            armlet::maybe_toggle(&event_clone, &settings);
-        });
-
-        // PRIORITY 2: Update danger detection state
+        // PRIORITY 1: Update danger detection state
         let in_danger = {
             let settings = self.settings.lock().unwrap();
             crate::actions::danger_detector::update(event, &settings.danger_detection)
         };
 
-        // PRIORITY 3: Always check survivability first
+        // PRIORITY 2: Always check survivability first
         self.check_and_use_healing_items_with_danger(event, in_danger);
 
-        // PRIORITY 4: Use defensive items if in danger
+        // PRIORITY 3: Use defensive items if in danger
         self.use_defensive_items_if_danger_with_snapshot(event, in_danger);
 
-        // PRIORITY 5: Use neutral items if in danger
+        // PRIORITY 4: Use neutral items if in danger
         self.use_neutral_item_if_danger_with_snapshot(event, in_danger);
     }
 
@@ -471,25 +449,6 @@ impl SurvivabilityActions {
         self.executor.enqueue("common-neutral-self-cast", move || {
             execute_key_sequence(sequence);
         });
-    }
-
-    /// Check and toggle armlet with default configuration
-    #[allow(dead_code)]
-    fn check_and_toggle_armlet(&self, event: &GsiWebhookEvent) {
-        let settings = self.settings.lock().unwrap();
-
-        // Check if hero has armlet in inventory
-        let has_armlet = event
-            .items
-            .all_slots()
-            .iter()
-            .any(|(_, item)| item.name == "item_armlet");
-
-        if !has_armlet {
-            return;
-        }
-
-        armlet::maybe_toggle(event, &settings);
     }
 }
 

@@ -20,19 +20,20 @@
 
 ## Shared GSI survivability pipeline
 
+Before hero-specific or fallback survivability logic runs, `src/actions/dispatcher.rs::dispatch_gsi_event()` now evaluates shared Armlet automation inline as the highest-priority GSI hook. That keeps Armlet off `ActionExecutor` and lets it reach the synthetic-input worker before neutral-item logging, silence dispel jitter, danger detection, healing, or other survivability actions.
+
 ### Fallback path
 
 For heroes without a registered script, `src/actions/common.rs::SurvivabilityActions::execute_default_strategy()` runs:
 
-1. armlet handling (short background thread)
-2. `danger_detector::update(...)`
-3. `check_and_use_healing_items(...)`
-4. `use_defensive_items_if_danger(...)`
-5. `use_neutral_item_if_danger(...)`
+1. `danger_detector::update(...)`
+2. `check_and_use_healing_items(...)`
+3. `use_defensive_items_if_danger(...)`
+4. `use_neutral_item_if_danger(...)`
 
 ### Hero-script path
 
-Registered hero scripts currently call the same shared helpers manually from their own `handle_gsi_event(...)` implementations.
+Registered hero scripts currently rely on the dispatcher-owned Armlet pre-hook, then call the same shared survivability helpers manually from their own `handle_gsi_event(...)` implementations.
 
 That means survivability changes often affect both:
 
@@ -113,6 +114,15 @@ The runtime now sends that as one dedicated serialized worker-owned chord:
 4. modifier up
 
 That means the two casts are still **not** truly simultaneous, but Armlet no longer pays the old extra queue handoff / guard pulse between those four steps. The whole chord executes inside one synthetic-input worker command, so the second cast follows the modifier press as quickly as that worker can emit it, and the short replay-safety guard is applied once after the full chord instead of once after the first click.
+
+### Fast-lane scheduling
+
+Armlet now has two priority advantages over the rest of the survivability stack:
+
+1. `dispatch_gsi_event()` evaluates `src/actions/armlet.rs::maybe_toggle(...)` inline before silence dispel, danger detection, or hero-specific survivability helpers run.
+2. `src/input/simulation.rs` places Armlet chords onto an Armlet-priority backlog that the single `Enigo` worker drains before older normal queued inputs.
+
+The worker still does **not** interrupt an input command that is already mid-execution. Instead, it preserves atomic execution of the current command and then runs the pending Armlet chord next before resuming older normal queue backlog.
 
 Supported modifier strings are:
 

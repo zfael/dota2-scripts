@@ -75,10 +75,11 @@ Boot starts in `src/main.rs::main()`:
 
 ### 4. Dispatcher responsibilities
 
-`src/actions/dispatcher.rs::dispatch_gsi_event()` always runs these pre-dispatch hooks first:
+`src/actions/dispatcher.rs::dispatch_gsi_event()` now runs these pre-dispatch hooks first:
 
-1. `log_neutral_item_discovery(event, &settings)`
-2. `dispel::check_and_dispel_silence(event, &settings, &executor)`
+1. `armlet::maybe_toggle(event, &settings)` inline as the highest-priority shared survivability hook
+2. `log_neutral_item_discovery(event, &settings)`
+3. `dispel::check_and_dispel_silence(event, &settings, &executor)`
 
 Then it routes by hero name:
 
@@ -94,7 +95,7 @@ Current hero scripts in `src/actions/heroes/*.rs` all compose shared survivabili
 - `SurvivabilityActions::use_defensive_items_if_danger_with_snapshot(..., in_danger)`
 - `SurvivabilityActions::use_neutral_item_if_danger_with_snapshot(..., in_danger)`
 
-The fallback path for unsupported heroes calls `execute_default_strategy()` instead, which now follows the same pattern internally: compute one event-local danger result, reuse it through the shared survivability pipeline, and still handle per-event armlet work.
+The fallback path for unsupported heroes calls `execute_default_strategy()` instead, which now follows the same pattern internally after the dispatcher-owned Armlet hook has already run: compute one event-local danger result and reuse it through the shared survivability pipeline.
 
 ### 6. Action executor lane
 
@@ -102,9 +103,7 @@ The fallback path for unsupported heroes calls `execute_default_strategy()` inst
 
 Current item-2 users are:
 
-- default/common armlet handling in `SurvivabilityActions::execute_default_strategy(...)`
 - silence dispel jitter in `dispel::check_and_dispel_silence(...)`
-- Huskar armlet handling in `HuskarScript::handle_gsi_event(...)`
 
 The action executor is intentionally narrow in this rollout item:
 
@@ -184,11 +183,12 @@ Two emitters are used:
 | `src/input/keyboard.rs` | `simulate_key()` via `rdev::simulate` | Replaying the exact blocked key after Soul Ring |
 | `src/input/simulation.rs` | `press_key`, `mouse_click`, `left_click`, `alt_down`, `alt_up` submit work to a lazy worker thread and wait for completion | Higher-level combos like SF raze facing, BKB double-tap, right-click macros |
 
-`src/input/simulation.rs` now owns one explicit synthetic-input lane:
+`src/input/simulation.rs` now owns one explicit synthetic-input worker with two scheduling classes:
 
 - the first helper call lazily starts a dedicated worker thread
 - that worker owns the single `Enigo` instance for the process
-- callers submit commands onto an unbounded FIFO `std::sync::mpsc` queue, then wait for the worker to finish that command
+- callers submit commands onto one channel, then wait for the worker to finish that command
+- the worker drains Armlet-priority jobs ahead of older normal queued commands between atomic command boundaries
 - the worker, not the caller thread, performs the small post-action guard delays for replay-safe input, so helper timing semantics stay stable while lane ownership is centralized
 - `alt_down()` keeps `SIMULATING_KEYS` active across later queued commands until the matching queued `alt_up()` runs
 - the synthetic-input worker now exposes queue metrics via `synthetic_input_metrics()`: current depth, queued total, peak depth, completed total, and dropped total are visible in the debug UI
@@ -225,7 +225,7 @@ Largo no longer uses a tight polling loop. Its dedicated worker blocks on a time
 | `src/input/keyboard.rs` | `rdev::grab` thread | Always | Global hook; blocks forever |
 | `src/actions/executor.rs` | ActionExecutor worker thread | When `ActionDispatcher::new(...)` constructs the executor | Runs ready action jobs FIFO; immediate jobs, including Tiny and Legion Commander standalone combo jobs, go straight to this worker |
 | `src/actions/executor.rs` | ActionExecutor delayed scheduler thread | When `ActionDispatcher::new(...)` constructs the executor | Owns delayed-job deadlines inside the executor and forwards due work onto the worker lane |
-| `src/input/simulation.rs` | Synthetic-input worker thread | First call to a simulation helper | Owns `Enigo`; drains one unbounded FIFO queue |
+| `src/input/simulation.rs` | Synthetic-input worker thread | First call to a simulation helper | Owns `Enigo`; drains Armlet-priority work ahead of older normal queued commands without interrupting an in-flight atomic command |
 | `src/input/keyboard.rs` | Soul Ring replay worker thread | First intercepted Soul Ring key | Long-lived lazy singleton; drains one unbounded FIFO queue of `SoulRingReplayRequest`s; uses `rdev::simulate` for replay |
 | `src/input/keyboard.rs` | Broodmother callback worker thread | First Broodmother callback action | Long-lived lazy singleton; drains one unbounded FIFO queue of `BroodmotherCallbackRequest`s; handles both Space+right-click auto-items/abilities and middle-mouse spider micro |
 | `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend request worker thread | First SF intercept or standalone trigger | Long-lived lazy singleton; drains FIFO raze/ultimate/standalone requests instead of spawning one raw thread per intercept; actual synthetic input emission still runs through `src/input/simulation.rs`; standalone-key conflict is unchanged |
