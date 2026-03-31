@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { isTauri } from "../lib/tauri";
 
 interface UIStore {
   sidebarCollapsed: boolean;
@@ -7,6 +8,7 @@ interface UIStore {
   standaloneEnabled: boolean;
   setGsiEnabled: (enabled: boolean) => void;
   setStandaloneEnabled: (enabled: boolean) => void;
+  loadInitialState: () => Promise<void>;
 }
 
 export const useUIStore = create<UIStore>((set) => ({
@@ -14,6 +16,40 @@ export const useUIStore = create<UIStore>((set) => ({
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   gsiEnabled: true,
   standaloneEnabled: false,
-  setGsiEnabled: (enabled) => set({ gsiEnabled: enabled }),
-  setStandaloneEnabled: (enabled) => set({ standaloneEnabled: enabled }),
+
+  setGsiEnabled: (enabled) => {
+    set({ gsiEnabled: enabled });
+    if (isTauri()) {
+      import("@tauri-apps/api/core").then(({ invoke }) => {
+        invoke("set_gsi_enabled", { enabled }).catch(console.error);
+      });
+    }
+  },
+
+  setStandaloneEnabled: (enabled) => {
+    set({ standaloneEnabled: enabled });
+    if (isTauri()) {
+      import("@tauri-apps/api/core").then(({ invoke }) => {
+        invoke("set_standalone_enabled", { enabled }).catch(console.error);
+      });
+    }
+  },
+
+  loadInitialState: async () => {
+    if (!isTauri()) return;
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const state = await invoke<{
+        selectedHero: string | null;
+        gsiEnabled: boolean;
+        standaloneEnabled: boolean;
+      }>("get_app_state");
+      set({
+        gsiEnabled: state.gsiEnabled,
+        standaloneEnabled: state.standaloneEnabled,
+      });
+    } catch (e) {
+      console.error("Failed to load app state:", e);
+    }
+  },
 }));
