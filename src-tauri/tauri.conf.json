@@ -1,0 +1,27 @@
+{
+  "productName": "Dota 2 Scripts",
+  "version": "0.1.0",
+  "identifier": "com.dota2scripts.app",
+  "build": {
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../src-ui/dist",
+    "beforeDevCommand": "",
+    "beforeBuildCommand": ""
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Dota 2 Script Automation",
+        "width": 1024,
+        "height": 700,
+        "minWidth": 900,
+        "minHeight": 650,
+        "resizable": true,
+        "decorations": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}
