@@ -2,6 +2,10 @@ use dota2_scripts::config::Settings;
 use dota2_scripts::observability::minimap_artifacts::{
     should_persist_sample, MinimapArtifactMetadata,
 };
+use dota2_scripts::config::MinimapCaptureConfig;
+use dota2_scripts::observability::minimap_capture::{
+    process_capture_attempt, CaptureAttemptResult,
+};
 use dota2_scripts::observability::minimap_capture_state::{
     MinimapCaptureHealth, MinimapCaptureStatusSnapshot,
 };
@@ -75,4 +79,24 @@ fn artifact_metadata_carries_capture_context() {
 fn app_state_defaults_without_minimap_capture_status() {
     let state = AppState::default();
     assert!(state.minimap_capture.is_none());
+}
+
+#[test]
+fn failed_window_binding_marks_status_unhealthy() {
+    let config = MinimapCaptureConfig {
+        enabled: true,
+        minimap_x: 10,
+        minimap_y: 20,
+        minimap_width: 300,
+        minimap_height: 200,
+        capture_interval_ms: 1000,
+        sample_every_n: 30,
+        artifact_output_dir: "logs/minimap_capture".to_string(),
+    };
+
+    let status = process_capture_attempt(&config, CaptureAttemptResult::WindowNotFound, None, 0);
+
+    assert_eq!(status.window_binding_status, "window-not-found");
+    assert_eq!(status.consecutive_failures, 1);
+    assert_eq!(status.health.as_str(), "unhealthy");
 }

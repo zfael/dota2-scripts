@@ -5,6 +5,16 @@ pub enum MinimapCaptureHealth {
     Unhealthy,
 }
 
+impl MinimapCaptureHealth {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Idle => "idle",
+            Self::Healthy => "healthy",
+            Self::Unhealthy => "unhealthy",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MinimapCaptureStatusSnapshot {
     pub enabled: bool,

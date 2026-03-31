@@ -95,6 +95,15 @@ async fn main() {
         }
     }
 
+    let minimap_settings = settings.clone();
+    let minimap_state = app_state.clone();
+    std::thread::spawn(move || {
+        crate::observability::minimap_capture::start_minimap_capture_worker(
+            minimap_settings,
+            minimap_state,
+        );
+    });
+
     // Start hotkey event handler in background
     let app_state_clone2 = app_state.clone();
     let dispatcher_clone2 = dispatcher.clone();

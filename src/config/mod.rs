@@ -2,5 +2,6 @@ pub mod constants;
 pub mod settings;
 
 pub use settings::{
-    AutoAbilityConfig, DangerDetectionConfig, OutworldDestroyerConfig, RuneAlertConfig, Settings,
+    AutoAbilityConfig, DangerDetectionConfig, MinimapCaptureConfig, OutworldDestroyerConfig,
+    RuneAlertConfig, Settings,
 };
