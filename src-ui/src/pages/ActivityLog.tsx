@@ -25,6 +25,7 @@ export default function ActivityLog() {
   const setFilter = useActivityStore((s) => s.setFilter);
   const clear = useActivityStore((s) => s.clear);
   const [paused, setPaused] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -73,14 +74,23 @@ export default function ActivityLog() {
         ) : (
           <div className="space-y-0.5">
             {entries.map((entry) => (
-              <div key={entry.id} className="flex gap-3">
-                <span className="shrink-0 text-muted">&gt; {entry.timestamp}</span>
-                <span className={`shrink-0 w-16 uppercase ${categoryColors[entry.category]}`}>
-                  [{entry.category}]
-                </span>
-                <span className={categoryColors[entry.category]}>
-                  {entry.message}
-                </span>
+              <div
+                key={entry.id}
+                onClick={() => setExpandedId(expandedId === entry.id ? null : entry.id)}
+                className="cursor-pointer rounded px-2 py-1 hover:bg-elevated"
+              >
+                <div className="flex gap-3">
+                  <span className="shrink-0 text-muted">&gt; {entry.timestamp}</span>
+                  <span className={`shrink-0 w-16 uppercase ${categoryColors[entry.category]}`}>
+                    [{entry.category}]
+                  </span>
+                  <span className={categoryColors[entry.category]}>
+                    {entry.message}
+                  </span>
+                </div>
+                {expandedId === entry.id && entry.details && (
+                  <div className="mt-1 pl-20 text-xs text-subtle">{entry.details}</div>
+                )}
               </div>
             ))}
             <div ref={endRef} />

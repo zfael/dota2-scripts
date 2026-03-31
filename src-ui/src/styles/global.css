@@ -65,6 +65,16 @@ body {
   background: var(--color-subtle);
 }
 
+/* Page transitions */
+@keyframes page-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.page-transition {
+  animation: page-fade-in 150ms ease-out;
+}
+
 /* Focus ring */
 *:focus-visible {
   outline: 2px solid var(--color-border-accent);

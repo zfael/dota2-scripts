@@ -55,7 +55,7 @@ export default function App() {
             respawnTimer={game.respawnTimer}
           />
           <UpdateBanner />
-          <main className="flex-1 overflow-y-auto">
+          <main className="flex-1 overflow-y-auto page-transition">
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/heroes" element={<Heroes />} />
