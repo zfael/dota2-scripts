@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@theme {
+  /* Surfaces */
+  --color-base: #0D0F12;
+  --color-surface: #161A21;
+  --color-elevated: #1E2330;
+  --color-input: #12151B;
+
+  /* Borders */
+  --color-border: #2A3040;
+  --color-border-accent: #C8AA6E;
+
+  /* Text */
+  --color-content: #E8E6E3;
+  --color-subtle: #8B9BB4;
+  --color-muted: #4A5568;
+
+  /* Accents */
+  --color-gold: #C8AA6E;
+  --color-danger: #E74C3C;
+  --color-success: #2ECC71;
+  --color-info: #3498DB;
+  --color-warning: #F39C12;
+
+  /* Terminal */
+  --color-terminal: #00FF88;
+  --color-terminal-bg: #0A0E14;
+
+  /* Fonts */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Border Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
+
+/* Google Fonts */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap");
+
+/* Base reset */
+body {
+  @apply bg-base text-content font-sans antialiased;
+  margin: 0;
+  min-width: 900px;
+  min-height: 650px;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-base);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-muted);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-subtle);
+}
+
+/* Focus ring */
+*:focus-visible {
+  outline: 2px solid var(--color-border-accent);
+  outline-offset: 2px;
+}
