@@ -1,4 +1,5 @@
 use crate::models::{GsiWebhookEvent, Hero};
+use crate::observability::minimap_capture_state::MinimapCaptureStatusSnapshot;
 use crate::observability::rune_alerts::RuneAlertSnapshot;
 use std::sync::{Arc, Mutex};
 
@@ -91,6 +92,7 @@ pub struct AppState {
     pub od_enabled: Arc<Mutex<bool>>,
     pub update_state: Arc<Mutex<UpdateCheckState>>,
     pub rune_alerts: Option<RuneAlertSnapshot>,
+    pub minimap_capture: Option<MinimapCaptureStatusSnapshot>,
 }
 
 impl Default for AppState {
@@ -106,6 +108,7 @@ impl Default for AppState {
             od_enabled: Arc::new(Mutex::new(false)),
             update_state: Arc::new(Mutex::new(UpdateCheckState::Idle)),
             rune_alerts: None,
+            minimap_capture: None,
         }
     }
 }

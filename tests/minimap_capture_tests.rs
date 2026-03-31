@@ -5,6 +5,7 @@ use dota2_scripts::observability::minimap_artifacts::{
 use dota2_scripts::observability::minimap_capture_state::{
     MinimapCaptureHealth, MinimapCaptureStatusSnapshot,
 };
+use dota2_scripts::state::AppState;
 
 #[test]
 fn minimap_capture_defaults_are_exposed_through_settings() {
@@ -68,4 +69,10 @@ fn artifact_metadata_carries_capture_context() {
     assert_eq!(metadata.window_binding_status, "bound");
     assert_eq!(metadata.minimap_width, 300);
     assert_eq!(metadata.capture_result, "success");
+}
+
+#[test]
+fn app_state_defaults_without_minimap_capture_status() {
+    let state = AppState::default();
+    assert!(state.minimap_capture.is_none());
 }
