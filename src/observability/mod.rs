@@ -10,3 +10,4 @@ pub mod minimap_capture_backend;
 pub mod minimap_capture_state;
 pub mod minimap_zones;
 pub mod rune_alerts;
+pub mod lane_heat;

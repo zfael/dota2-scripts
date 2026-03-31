@@ -1,5 +1,5 @@
 /// A region of the Dota 2 minimap.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MapZone {
     TopLane,
     MidLane,

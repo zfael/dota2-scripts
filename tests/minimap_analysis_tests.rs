@@ -465,3 +465,102 @@ fn gsi_event_deserializes_with_player_team() {
     assert_eq!(player.team_name.as_deref(), Some("dire"));
 }
 
+// Layer 1: Zone Activity Classifier Tests
+use dota2_scripts::observability::lane_heat::{
+    classify_zone_activity, ActivityLevel, TeamSide,
+};
+
+#[test]
+fn team_side_from_dire() {
+    let side = TeamSide::from_team_name("dire");
+    assert_eq!(side.ally_color, TeamColor::Red);
+    assert_eq!(side.enemy_color, TeamColor::Green);
+}
+
+#[test]
+fn team_side_from_radiant() {
+    let side = TeamSide::from_team_name("radiant");
+    assert_eq!(side.ally_color, TeamColor::Green);
+    assert_eq!(side.enemy_color, TeamColor::Red);
+}
+
+#[test]
+fn classify_empty_heroes_returns_empty() {
+    let side = TeamSide::from_team_name("dire");
+    let result = classify_zone_activity(&[], &side);
+    assert!(result.is_empty());
+}
+
+#[test]
+fn classify_single_ally_in_zone() {
+    use dota2_scripts::observability::minimap_analysis::DetectedHero;
+    let side = TeamSide::from_team_name("dire"); // ally=Red
+    let heroes = vec![DetectedHero {
+        x: 10,
+        y: 10,
+        zone: MapZone::TopLane,
+        team_color: TeamColor::Red,
+        cluster_size: 30,
+    }];
+    let result = classify_zone_activity(&heroes, &side);
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].zone, MapZone::TopLane);
+    assert_eq!(result[0].ally_count, 1);
+    assert_eq!(result[0].enemy_count, 0);
+    assert_eq!(result[0].activity, ActivityLevel::Active);
+}
+
+#[test]
+fn classify_fight_both_teams() {
+    use dota2_scripts::observability::minimap_analysis::DetectedHero;
+    let side = TeamSide::from_team_name("dire"); // ally=Red, enemy=Green
+    let heroes = vec![
+        DetectedHero {
+            x: 10, y: 10, zone: MapZone::TopLane,
+            team_color: TeamColor::Red, cluster_size: 30,
+        },
+        DetectedHero {
+            x: 15, y: 15, zone: MapZone::TopLane,
+            team_color: TeamColor::Green, cluster_size: 25,
+        },
+    ];
+    let result = classify_zone_activity(&heroes, &side);
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].zone, MapZone::TopLane);
+    assert_eq!(result[0].ally_count, 1);
+    assert_eq!(result[0].enemy_count, 1);
+    assert_eq!(result[0].activity, ActivityLevel::Fight);
+}
+
+#[test]
+fn classify_multiple_zones() {
+    use dota2_scripts::observability::minimap_analysis::DetectedHero;
+    let side = TeamSide::from_team_name("radiant"); // ally=Green, enemy=Red
+    let heroes = vec![
+        DetectedHero {
+            x: 10, y: 10, zone: MapZone::TopLane,
+            team_color: TeamColor::Green, cluster_size: 30,
+        },
+        DetectedHero {
+            x: 12, y: 12, zone: MapZone::TopLane,
+            team_color: TeamColor::Green, cluster_size: 28,
+        },
+        DetectedHero {
+            x: 200, y: 200, zone: MapZone::BotLane,
+            team_color: TeamColor::Red, cluster_size: 35,
+        },
+    ];
+    let result = classify_zone_activity(&heroes, &side);
+    assert_eq!(result.len(), 2);
+
+    let top = result.iter().find(|s| s.zone == MapZone::TopLane).unwrap();
+    assert_eq!(top.ally_count, 2);
+    assert_eq!(top.enemy_count, 0);
+    assert_eq!(top.activity, ActivityLevel::Active);
+
+    let bot = result.iter().find(|s| s.zone == MapZone::BotLane).unwrap();
+    assert_eq!(bot.ally_count, 0);
+    assert_eq!(bot.enemy_count, 1);
+    assert_eq!(bot.activity, ActivityLevel::Active);
+}
+
