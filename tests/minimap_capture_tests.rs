@@ -185,3 +185,62 @@ fn capture_rejects_zero_dimension_region() {
     let result = capture_window_region(0, 0, 0, 0);
     assert!(matches!(result, CaptureBackendResult::CaptureError(_)));
 }
+
+#[test]
+fn save_capture_artifact_creates_png_file() {
+    use dota2_scripts::observability::minimap_artifacts::save_capture_artifact;
+
+    let dir = std::env::temp_dir().join("minimap_test_png");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    // Create a 2x2 RGBA test image (red, green, blue, yellow pixels)
+    let pixels: Vec<u8> = vec![
+        255, 0, 0, 255,    // pixel (0,0) red
+        0, 255, 0, 255,    // pixel (1,0) green
+        0, 0, 255, 255,    // pixel (0,1) blue
+        255, 255, 0, 255,  // pixel (1,1) yellow
+    ];
+
+    let result = save_capture_artifact(dir.to_str().unwrap(), "test-capture", &pixels, 2, 2);
+
+    assert!(result.is_ok());
+    let saved_path = result.unwrap();
+    assert!(saved_path.ends_with("test-capture.png"));
+    assert!(std::path::Path::new(&saved_path).exists());
+
+    // Cleanup
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn save_metadata_json_creates_sidecar_file() {
+    use dota2_scripts::observability::minimap_artifacts::{
+        build_artifact_metadata, save_metadata_json,
+    };
+
+    let dir = std::env::temp_dir().join("minimap_test_json");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let metadata = build_artifact_metadata(
+        "1711843200".to_string(),
+        "bound".to_string(),
+        10, 700, 260, 260,
+        260, 260,
+        12,
+        "success".to_string(),
+        None,
+    );
+
+    let result = save_metadata_json(dir.to_str().unwrap(), "test-capture", &metadata);
+    assert!(result.is_ok());
+
+    let json_path = dir.join("test-capture.json");
+    assert!(json_path.exists());
+
+    let content = std::fs::read_to_string(&json_path).unwrap();
+    assert!(content.contains("\"capture_result\": \"success\""));
+    assert!(content.contains("\"minimap_width\": 260"));
+
+    // Cleanup
+    let _ = std::fs::remove_dir_all(&dir);
+}
