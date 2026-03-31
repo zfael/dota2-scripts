@@ -523,6 +523,114 @@ impl Default for GsiLoggingConfig {
     }
 }
 
+fn default_minimap_analysis_enabled() -> bool {
+    false
+}
+fn default_baseline_frames() -> u32 {
+    10
+}
+fn default_baseline_threshold() -> f32 {
+    0.8
+}
+fn default_analysis_min_cluster_size() -> usize {
+    20
+}
+fn default_analysis_max_cluster_size() -> usize {
+    200
+}
+fn default_red_hue_max() -> f32 {
+    15.0
+}
+fn default_red_hue_min_wrap() -> f32 {
+    340.0
+}
+fn default_red_min_saturation() -> f32 {
+    40.0
+}
+fn default_red_min_value() -> f32 {
+    30.0
+}
+fn default_green_hue_min() -> f32 {
+    80.0
+}
+fn default_green_hue_max() -> f32 {
+    160.0
+}
+fn default_green_min_saturation() -> f32 {
+    35.0
+}
+fn default_green_min_value() -> f32 {
+    25.0
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MinimapAnalysisConfig {
+    #[serde(default = "default_minimap_analysis_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_baseline_frames")]
+    pub baseline_frames: u32,
+    #[serde(default = "default_baseline_threshold")]
+    pub baseline_threshold: f32,
+    #[serde(default = "default_analysis_min_cluster_size")]
+    pub min_cluster_size: usize,
+    #[serde(default = "default_analysis_max_cluster_size")]
+    pub max_cluster_size: usize,
+    #[serde(default = "default_red_hue_max")]
+    pub red_hue_max: f32,
+    #[serde(default = "default_red_hue_min_wrap")]
+    pub red_hue_min_wrap: f32,
+    #[serde(default = "default_red_min_saturation")]
+    pub red_min_saturation: f32,
+    #[serde(default = "default_red_min_value")]
+    pub red_min_value: f32,
+    #[serde(default = "default_green_hue_min")]
+    pub green_hue_min: f32,
+    #[serde(default = "default_green_hue_max")]
+    pub green_hue_max: f32,
+    #[serde(default = "default_green_min_saturation")]
+    pub green_min_saturation: f32,
+    #[serde(default = "default_green_min_value")]
+    pub green_min_value: f32,
+}
+
+impl Default for MinimapAnalysisConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_minimap_analysis_enabled(),
+            baseline_frames: default_baseline_frames(),
+            baseline_threshold: default_baseline_threshold(),
+            min_cluster_size: default_analysis_min_cluster_size(),
+            max_cluster_size: default_analysis_max_cluster_size(),
+            red_hue_max: default_red_hue_max(),
+            red_hue_min_wrap: default_red_hue_min_wrap(),
+            red_min_saturation: default_red_min_saturation(),
+            red_min_value: default_red_min_value(),
+            green_hue_min: default_green_hue_min(),
+            green_hue_max: default_green_hue_max(),
+            green_min_saturation: default_green_min_saturation(),
+            green_min_value: default_green_min_value(),
+        }
+    }
+}
+
+impl MinimapAnalysisConfig {
+    /// Convert config values into the `ColorThresholds` used by the analysis engine.
+    pub fn to_color_thresholds(&self) -> crate::observability::minimap_analysis::ColorThresholds {
+        crate::observability::minimap_analysis::ColorThresholds {
+            red_hue_max: self.red_hue_max,
+            red_hue_min_wrap: self.red_hue_min_wrap,
+            red_min_saturation: self.red_min_saturation,
+            red_min_value: self.red_min_value,
+            green_hue_min: self.green_hue_min,
+            green_hue_max: self.green_hue_max,
+            green_min_saturation: self.green_min_saturation,
+            green_min_value: self.green_min_value,
+            min_cluster_size: self.min_cluster_size,
+            max_cluster_size: self.max_cluster_size,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     #[serde(default)]
@@ -551,6 +659,8 @@ pub struct Settings {
     pub rune_alerts: RuneAlertConfig,
     #[serde(default)]
     pub minimap_capture: MinimapCaptureConfig,
+    #[serde(default)]
+    pub minimap_analysis: MinimapAnalysisConfig,
 }
 
 // Default functions
@@ -1241,6 +1351,7 @@ impl Default for Settings {
             updates: UpdateConfig::default(),
             rune_alerts: RuneAlertConfig::default(),
             minimap_capture: MinimapCaptureConfig::default(),
+            minimap_analysis: MinimapAnalysisConfig::default(),
         }
     }
 }

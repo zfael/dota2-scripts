@@ -4,6 +4,8 @@ use dota2_scripts::observability::minimap_analysis::{
     ColorThresholds, TeamColor,
 };
 use dota2_scripts::observability::minimap_baseline::BaselineMask;
+use dota2_scripts::config::MinimapAnalysisConfig;
+use dota2_scripts::models::gsi_event::Player;
 
 #[test]
 fn classify_zone_top_lane() {
@@ -377,5 +379,89 @@ fn detect_heroes_empty_image_returns_empty() {
     let pixels = vec![0u8; 100 * 100 * 4];
     let heroes = detect_heroes(&pixels, 100, 100, None, &ColorThresholds::default());
     assert!(heroes.is_empty());
+}
+
+#[test]
+fn minimap_analysis_config_defaults() {
+    let config = MinimapAnalysisConfig::default();
+    assert!(!config.enabled);
+    assert_eq!(config.baseline_frames, 10);
+    assert!((config.baseline_threshold - 0.8).abs() < 0.01);
+    assert_eq!(config.min_cluster_size, 20);
+    assert_eq!(config.max_cluster_size, 200);
+    assert!((config.red_hue_max - 15.0).abs() < 0.01);
+}
+
+#[test]
+fn minimap_analysis_config_to_color_thresholds() {
+    let config = MinimapAnalysisConfig::default();
+    let t = config.to_color_thresholds();
+    assert!((t.red_hue_max - 15.0).abs() < 0.01);
+    assert!((t.red_hue_min_wrap - 340.0).abs() < 0.01);
+    assert!((t.green_hue_min - 80.0).abs() < 0.01);
+    assert!((t.green_hue_max - 160.0).abs() < 0.01);
+    assert_eq!(t.min_cluster_size, 20);
+    assert_eq!(t.max_cluster_size, 200);
+}
+
+#[test]
+fn gsi_event_deserializes_without_player() {
+    let json = std::fs::read_to_string("tests/fixtures/huskar_event.json").unwrap();
+    let event: dota2_scripts::models::gsi_event::GsiWebhookEvent =
+        serde_json::from_str(&json).unwrap();
+    assert!(event.player.is_none());
+}
+
+#[test]
+fn gsi_event_deserializes_with_player_team() {
+    let json = r#"{
+        "hero": {
+            "aghanims_scepter": false, "aghanims_shard": false, "alive": true,
+            "attributes_level": 0, "break": false, "buyback_cooldown": 0,
+            "buyback_cost": 0, "disarmed": false, "facet": 0, "has_debuff": false,
+            "health": 1000, "health_percent": 100, "hexed": false, "id": 1,
+            "level": 1, "magicimmune": false, "mana": 500, "mana_percent": 100,
+            "max_health": 1000, "max_mana": 500, "muted": false,
+            "name": "npc_dota_hero_huskar", "respawn_seconds": 0, "silenced": false,
+            "smoked": false, "stunned": false,
+            "talent_1": false, "talent_2": false, "talent_3": false, "talent_4": false,
+            "talent_5": false, "talent_6": false, "talent_7": false, "talent_8": false,
+            "xp": 0, "xpos": 0, "ypos": 0
+        },
+        "abilities": {
+            "ability0": {"ability_active":true,"can_cast":true,"cooldown":0,"level":1,"name":"huskar_inner_fire","passive":false,"ultimate":false},
+            "ability1": {"ability_active":true,"can_cast":true,"cooldown":0,"level":0,"name":"huskar_burning_spear","passive":false,"ultimate":false},
+            "ability2": {"ability_active":true,"can_cast":true,"cooldown":0,"level":0,"name":"huskar_berserkers_blood","passive":true,"ultimate":false},
+            "ability3": {"ability_active":true,"can_cast":true,"cooldown":0,"level":0,"name":"huskar_inner_vitality","passive":false,"ultimate":false},
+            "ability4": {"ability_active":true,"can_cast":true,"cooldown":0,"level":0,"name":"huskar_life_break","passive":false,"ultimate":true},
+            "ability5": {"ability_active":true,"can_cast":true,"cooldown":0,"level":0,"name":"empty","passive":false,"ultimate":false}
+        },
+        "items": {
+            "neutral0":{"name":"empty","can_cast":null,"cooldown":null,"item_level":null,"passive":null,"purchaser":null,"charges":null,"item_charges":null},
+            "slot0":{"name":"empty","can_cast":null,"cooldown":null,"item_level":null,"passive":null,"purchaser":null,"charges":null,"item_charges":null},
+            "slot1":{"name":"empty","can_cast":null,"cooldown":null,"item_level":null,"passive":null,"purchaser":null,"charges":null,"item_charges":null},
+            "slot2":{"name":"empty","can_cast":null,"cooldown":null,"item_level":null,"passive":null,"purchaser":null,"charges":null,"item_charges":null},
+            "slot3":{"name":"empty","can_cast":null,"cooldown":null,"item_level":null,"passive":null,"purchaser":null,"charges":null,"item_charges":null},
+            "slot4":{"name":"empty","can_cast":null,"cooldown":null,"item_level":null,"passive":null,"purchaser":null,"charges":null,"item_charges":null},
+            "slot5":{"name":"empty","can_cast":null,"cooldown":null,"item_level":null,"passive":null,"purchaser":null,"charges":null,"item_charges":null},
+            "slot6":{"name":"empty","can_cast":null,"cooldown":null,"item_level":null,"passive":null,"purchaser":null,"charges":null,"item_charges":null},
+            "slot7":{"name":"empty","can_cast":null,"cooldown":null,"item_level":null,"passive":null,"purchaser":null,"charges":null,"item_charges":null},
+            "slot8":{"name":"empty","can_cast":null,"cooldown":null,"item_level":null,"passive":null,"purchaser":null,"charges":null,"item_charges":null},
+            "stash0":{"name":"empty","can_cast":null,"cooldown":null,"item_level":null,"passive":null,"purchaser":null,"charges":null,"item_charges":null},
+            "stash1":{"name":"empty","can_cast":null,"cooldown":null,"item_level":null,"passive":null,"purchaser":null,"charges":null,"item_charges":null},
+            "stash2":{"name":"empty","can_cast":null,"cooldown":null,"item_level":null,"passive":null,"purchaser":null,"charges":null,"item_charges":null},
+            "stash3":{"name":"empty","can_cast":null,"cooldown":null,"item_level":null,"passive":null,"purchaser":null,"charges":null,"item_charges":null},
+            "stash4":{"name":"empty","can_cast":null,"cooldown":null,"item_level":null,"passive":null,"purchaser":null,"charges":null,"item_charges":null},
+            "stash5":{"name":"empty","can_cast":null,"cooldown":null,"item_level":null,"passive":null,"purchaser":null,"charges":null,"item_charges":null},
+            "teleport0":{"name":"empty","can_cast":null,"cooldown":null,"item_level":null,"passive":null,"purchaser":null,"charges":null,"item_charges":null}
+        },
+        "map": {"clock_time": 0},
+        "player": {"team_name": "dire"}
+    }"#;
+
+    let event: dota2_scripts::models::gsi_event::GsiWebhookEvent =
+        serde_json::from_str(json).unwrap();
+    let player = event.player.unwrap();
+    assert_eq!(player.team_name.as_deref(), Some("dire"));
 }
 

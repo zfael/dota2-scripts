@@ -157,9 +157,16 @@ pub struct Map {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Player {
+    pub team_name: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GsiWebhookEvent {
     pub hero: Hero,
     pub abilities: Abilities,
     pub items: Items,
     pub map: Map,
+    #[serde(default)]
+    pub player: Option<Player>,
 }

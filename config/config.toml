@@ -228,3 +228,18 @@ trigger_cooldown_ms = 10
 ability_keys = ["q", "w", "e", "r", "d", "f"]
 # Also trigger Soul Ring before item key presses (items that cost mana)
 intercept_item_keys = true
+
+[minimap_analysis]
+enabled = false
+baseline_frames = 10
+baseline_threshold = 0.8
+min_cluster_size = 20
+max_cluster_size = 200
+red_hue_max = 15.0
+red_hue_min_wrap = 340.0
+red_min_saturation = 40.0
+red_min_value = 30.0
+green_hue_min = 80.0
+green_hue_max = 160.0
+green_min_saturation = 35.0
+green_min_value = 25.0

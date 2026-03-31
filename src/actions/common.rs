@@ -563,6 +563,7 @@ mod tests {
             },
             items,
             map: Map { clock_time: 0 },
+            player: None,
         }
     }
 
@@ -735,6 +736,7 @@ mod snapshot_tests {
             abilities: empty_abilities(),
             items,
             map: Map { clock_time: 0 },
+            player: None,
         }
     }
 

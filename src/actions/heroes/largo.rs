@@ -725,6 +725,7 @@ mod tests {
                 teleport0: GsiItem::default(),
             },
             map: Map { clock_time: 0 },
+            player: None,
         }
     }
 
