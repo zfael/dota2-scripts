@@ -3,9 +3,13 @@ use dota2_scripts::observability::minimap_artifacts::{
     artifact_metadata_path, build_artifact_metadata, should_persist_sample, MinimapArtifactMetadata,
 };
 use dota2_scripts::config::MinimapCaptureConfig;
-use dota2_scripts::observability::minimap_capture::{
-    process_capture_attempt, CaptureAttemptResult,
+use dota2_scripts::observability::minimap_capture_backend::{
+    CaptureBackendResult, capture_window_region, find_dota2_window_rect,
 };
+use dota2_scripts::observability::minimap_capture::{
+    process_capture_attempt, map_backend_result_to_attempt, CaptureAttemptResult,
+};
+use dota2_scripts::observability::minimap_capture_backend::WindowRect;
 use dota2_scripts::observability::minimap_capture_state::{
     MinimapCaptureHealth, MinimapCaptureStatusSnapshot,
 };
@@ -16,10 +20,10 @@ fn minimap_capture_defaults_are_exposed_through_settings() {
     let settings = Settings::default();
 
     assert!(!settings.minimap_capture.enabled);
-    assert_eq!(settings.minimap_capture.minimap_x, 0);
-    assert_eq!(settings.minimap_capture.minimap_y, 0);
-    assert_eq!(settings.minimap_capture.minimap_width, 0);
-    assert_eq!(settings.minimap_capture.minimap_height, 0);
+    assert_eq!(settings.minimap_capture.minimap_x, 10);
+    assert_eq!(settings.minimap_capture.minimap_y, 815);
+    assert_eq!(settings.minimap_capture.minimap_width, 260);
+    assert_eq!(settings.minimap_capture.minimap_height, 260);
     assert_eq!(settings.minimap_capture.capture_interval_ms, 1000);
     assert_eq!(settings.minimap_capture.sample_every_n, 30);
     assert_eq!(
@@ -169,4 +173,124 @@ fn minimap_capture_status_formats_window_binding_label() {
     };
 
     assert_eq!(snapshot.window_binding_status, "window-not-found");
+}
+
+#[test]
+#[ignore] // Only valid when Dota 2 is not running
+fn find_dota2_window_returns_not_found_when_dota_not_running() {
+    let result = find_dota2_window_rect();
+    assert!(matches!(result, CaptureBackendResult::WindowNotFound));
+}
+
+#[test]
+fn capture_rejects_zero_dimension_region() {
+    let result = capture_window_region(0, 0, 0, 0);
+    assert!(matches!(result, CaptureBackendResult::CaptureError(_)));
+}
+
+#[test]
+fn save_capture_artifact_creates_png_file() {
+    use dota2_scripts::observability::minimap_artifacts::save_capture_artifact;
+
+    let dir = std::env::temp_dir().join("minimap_test_png");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    // Create a 2x2 RGBA test image (red, green, blue, yellow pixels)
+    let pixels: Vec<u8> = vec![
+        255, 0, 0, 255,    // pixel (0,0) red
+        0, 255, 0, 255,    // pixel (1,0) green
+        0, 0, 255, 255,    // pixel (0,1) blue
+        255, 255, 0, 255,  // pixel (1,1) yellow
+    ];
+
+    let result = save_capture_artifact(dir.to_str().unwrap(), "test-capture", &pixels, 2, 2);
+
+    assert!(result.is_ok());
+    let saved_path = result.unwrap();
+    assert!(saved_path.ends_with("test-capture.png"));
+    assert!(std::path::Path::new(&saved_path).exists());
+
+    // Cleanup
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn save_metadata_json_creates_sidecar_file() {
+    use dota2_scripts::observability::minimap_artifacts::{
+        build_artifact_metadata, save_metadata_json,
+    };
+
+    let dir = std::env::temp_dir().join("minimap_test_json");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let metadata = build_artifact_metadata(
+        "1711843200".to_string(),
+        "bound".to_string(),
+        10, 700, 260, 260,
+        260, 260,
+        12,
+        "success".to_string(),
+        None,
+    );
+
+    let result = save_metadata_json(dir.to_str().unwrap(), "test-capture", &metadata);
+    assert!(result.is_ok());
+
+    let json_path = dir.join("test-capture.json");
+    assert!(json_path.exists());
+
+    let content = std::fs::read_to_string(&json_path).unwrap();
+    assert!(content.contains("\"capture_result\": \"success\""));
+    assert!(content.contains("\"minimap_width\": 260"));
+
+    // Cleanup
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn worker_maps_backend_window_not_found_to_unhealthy() {
+    use dota2_scripts::observability::minimap_capture_backend::CaptureBackendResult;
+
+    let backend_result = CaptureBackendResult::WindowNotFound;
+    let attempt = map_backend_result_to_attempt(backend_result);
+
+    assert_eq!(attempt, CaptureAttemptResult::WindowNotFound);
+}
+
+#[test]
+fn worker_maps_backend_capture_error_to_failed() {
+    use dota2_scripts::observability::minimap_capture_backend::CaptureBackendResult;
+
+    let backend_result = CaptureBackendResult::CaptureError("test error".to_string());
+    let attempt = map_backend_result_to_attempt(backend_result);
+
+    assert!(matches!(attempt, CaptureAttemptResult::CaptureFailed(_)));
+}
+
+#[test]
+fn worker_maps_backend_success_to_success_with_frame() {
+    use dota2_scripts::observability::minimap_capture_backend::CaptureBackendResult;
+
+    let backend_result = CaptureBackendResult::Success {
+        window_rect: WindowRect {
+            x: 0,
+            y: 0,
+            width: 1920,
+            height: 1080,
+        },
+        pixels: vec![0u8; 300 * 200 * 4],
+        width: 300,
+        height: 200,
+    };
+
+    let attempt = map_backend_result_to_attempt(backend_result);
+
+    match attempt {
+        CaptureAttemptResult::SuccessWithFrame(frame) => {
+            assert_eq!(frame.width, 300);
+            assert_eq!(frame.height, 200);
+            assert_eq!(frame.pixels.len(), 300 * 200 * 4);
+        }
+        other => panic!("expected SuccessWithFrame, got {:?}", other),
+    }
 }

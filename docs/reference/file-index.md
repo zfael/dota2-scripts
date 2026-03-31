@@ -135,6 +135,7 @@
 |---|---|---|
 | `src/observability/minimap_capture.rs` | Minimap capture worker lifecycle and status publication | `docs/reference/configuration.md` |
 | `src/observability/minimap_capture_state.rs` | Minimap capture status snapshot types | `docs/architecture/state-and-dispatch.md` |
+| `src/observability/minimap_capture_backend.rs` | Win32 window binding and BitBlt screen capture | `docs/reference/configuration.md` |
 | `src/observability/minimap_artifacts.rs` | Artifact metadata and persistence helpers | `docs/reference/configuration.md` |
 
 ## `tests/`

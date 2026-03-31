@@ -32,3 +32,6 @@ Cargo.lock
 .idea/
 
 .worktrees/
+
+# Minimap capture artifacts
+logs/

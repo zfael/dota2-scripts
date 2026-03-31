@@ -472,13 +472,13 @@ pub struct RuneAlertConfig {
 pub struct MinimapCaptureConfig {
     #[serde(default = "default_minimap_capture_enabled")]
     pub enabled: bool,
-    #[serde(default)]
+    #[serde(default = "default_minimap_x")]
     pub minimap_x: u32,
-    #[serde(default)]
+    #[serde(default = "default_minimap_y")]
     pub minimap_y: u32,
-    #[serde(default)]
+    #[serde(default = "default_minimap_width")]
     pub minimap_width: u32,
-    #[serde(default)]
+    #[serde(default = "default_minimap_height")]
     pub minimap_height: u32,
     #[serde(default = "default_minimap_capture_interval_ms")]
     pub capture_interval_ms: u64,
@@ -492,10 +492,10 @@ impl Default for MinimapCaptureConfig {
     fn default() -> Self {
         Self {
             enabled: default_minimap_capture_enabled(),
-            minimap_x: 0,
-            minimap_y: 0,
-            minimap_width: 0,
-            minimap_height: 0,
+            minimap_x: default_minimap_x(),
+            minimap_y: default_minimap_y(),
+            minimap_width: default_minimap_width(),
+            minimap_height: default_minimap_height(),
             capture_interval_ms: default_minimap_capture_interval_ms(),
             sample_every_n: default_minimap_capture_sample_every_n(),
             artifact_output_dir: default_minimap_capture_output_dir(),
@@ -925,6 +925,18 @@ fn default_minimap_capture_sample_every_n() -> u32 {
 }
 fn default_minimap_capture_output_dir() -> String {
     "logs/minimap_capture".to_string()
+}
+fn default_minimap_x() -> u32 {
+    10
+}
+fn default_minimap_y() -> u32 {
+    815
+}
+fn default_minimap_width() -> u32 {
+    260
+}
+fn default_minimap_height() -> u32 {
+    260
 }
 
 // Soul Ring defaults
