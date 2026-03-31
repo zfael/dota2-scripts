@@ -34,6 +34,16 @@ export function StatusHeader({
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-4 border-b border-border bg-surface px-4">
+      <div className="flex items-center gap-1.5">
+        <span
+          className={`inline-block h-2 w-2 rounded-full ${
+            connected ? "bg-success" : "bg-danger animate-pulse"
+          }`}
+        />
+        <span className="text-xs text-subtle">
+          {connected ? "GSI Connected" : "Disconnected"}
+        </span>
+      </div>
       {inGame ? (
         <>
           <div className="flex items-center gap-2">
