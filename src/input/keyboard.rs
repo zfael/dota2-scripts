@@ -813,6 +813,7 @@ mod tests {
             sf_enabled: Arc::new(Mutex::new(true)),
             od_enabled: Arc::new(Mutex::new(false)),
             update_state: Arc::new(Mutex::new(UpdateCheckState::Idle)),
+            rune_alerts: None,
         };
 
         let snapshot = KeyboardSnapshot::from_runtime(&settings, &state);
@@ -836,6 +837,7 @@ mod tests {
             sf_enabled: Arc::new(Mutex::new(false)),
             od_enabled: Arc::new(Mutex::new(true)),
             update_state: Arc::new(Mutex::new(UpdateCheckState::Idle)),
+            rune_alerts: None,
         };
 
         let snapshot = KeyboardSnapshot::from_runtime(&settings, &state);

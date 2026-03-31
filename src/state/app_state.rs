@@ -1,4 +1,5 @@
 use crate::models::{GsiWebhookEvent, Hero};
+use crate::observability::rune_alerts::RuneAlertSnapshot;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -89,6 +90,7 @@ pub struct AppState {
     pub sf_enabled: Arc<Mutex<bool>>,
     pub od_enabled: Arc<Mutex<bool>>,
     pub update_state: Arc<Mutex<UpdateCheckState>>,
+    pub rune_alerts: Option<RuneAlertSnapshot>,
 }
 
 impl Default for AppState {
@@ -103,6 +105,7 @@ impl Default for AppState {
             sf_enabled: Arc::new(Mutex::new(false)),
             od_enabled: Arc::new(Mutex::new(false)),
             update_state: Arc::new(Mutex::new(UpdateCheckState::Idle)),
+            rune_alerts: None,
         }
     }
 }

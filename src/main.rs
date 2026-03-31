@@ -5,6 +5,7 @@ mod config;
 mod gsi;
 mod input;
 mod models;
+mod observability;
 mod state;
 mod ui;
 mod update;

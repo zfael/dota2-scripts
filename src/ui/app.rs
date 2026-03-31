@@ -389,6 +389,32 @@ impl Dota2ScriptApp {
             if let Some(event) = &state.last_event {
                 ui.label(format!("Current Hero: {}", event.hero.name));
                 ui.label(format!("Level: {}", event.hero.level));
+                if let Some(rune_alerts) = &state.rune_alerts {
+                    ui.label("Rune Alerts:");
+                    match (
+                        rune_alerts.next_rune_time_seconds,
+                        rune_alerts.seconds_until_next_rune,
+                    ) {
+                        (Some(next_time), Some(seconds_until)) => {
+                            ui.label(format!(
+                                "  Next rune: {}:{:02} (in {}s)",
+                                next_time / 60,
+                                next_time % 60,
+                                seconds_until
+                            ));
+                        }
+                        _ => {
+                            ui.label("  Next rune: unavailable");
+                        }
+                    };
+                    if let Some(last_rune_time) = rune_alerts.last_alerted_rune_time_seconds {
+                        ui.label(format!(
+                            "  Last alert fired for {}:{:02}",
+                            last_rune_time / 60,
+                            last_rune_time % 60
+                        ));
+                    }
+                }
 
                 // HP Bar
                 ui.horizontal(|ui| {
@@ -819,6 +845,39 @@ impl Dota2ScriptApp {
             }
             _ => {}
         }
+
+        ui.add_space(20.0);
+        ui.separator();
+
+        ui.heading("Rune Alerts");
+        ui.add_space(5.0);
+        ui.checkbox(&mut settings.rune_alerts.enabled, "Enable rune timer alerts");
+        ui.label("Remind shortly before each configured rune interval");
+
+        ui.add_space(5.0);
+        ui.checkbox(
+            &mut settings.rune_alerts.audio_enabled,
+            "Play alert sound on rune reminder",
+        );
+        ui.label("Uses the default Windows notification beep");
+
+        ui.add_space(5.0);
+        ui.horizontal(|ui| {
+            ui.label("Alert lead time:");
+            ui.add(
+                egui::Slider::new(&mut settings.rune_alerts.alert_lead_seconds, 1..=30)
+                    .suffix(" s"),
+            );
+        });
+
+        ui.add_space(5.0);
+        ui.horizontal(|ui| {
+            ui.label("Rune interval:");
+            ui.add(
+                egui::Slider::new(&mut settings.rune_alerts.interval_seconds, 30..=180)
+                    .suffix(" s"),
+            );
+        });
 
         ui.add_space(20.0);
         ui.separator();

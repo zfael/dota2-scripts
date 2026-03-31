@@ -456,13 +456,16 @@ pub struct GsiLoggingConfig {
     pub output_dir: String,
 }
 
-impl Default for GsiLoggingConfig {
-    fn default() -> Self {
-        Self {
-            enabled: default_gsi_logging_enabled(),
-            output_dir: default_gsi_logging_dir(),
-        }
-    }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuneAlertConfig {
+    #[serde(default = "default_rune_alerts_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_rune_alert_lead_seconds")]
+    pub alert_lead_seconds: i32,
+    #[serde(default = "default_rune_alert_interval_seconds")]
+    pub interval_seconds: i32,
+    #[serde(default = "default_rune_alert_audio_enabled")]
+    pub audio_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -500,6 +503,26 @@ impl Default for MinimapCaptureConfig {
     }
 }
 
+impl Default for RuneAlertConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_rune_alerts_enabled(),
+            alert_lead_seconds: default_rune_alert_lead_seconds(),
+            interval_seconds: default_rune_alert_interval_seconds(),
+            audio_enabled: default_rune_alert_audio_enabled(),
+        }
+    }
+}
+
+impl Default for GsiLoggingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_gsi_logging_enabled(),
+            output_dir: default_gsi_logging_dir(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     #[serde(default)]
@@ -524,6 +547,8 @@ pub struct Settings {
     pub gsi_logging: GsiLoggingConfig,
     #[serde(default)]
     pub updates: UpdateConfig,
+    #[serde(default)]
+    pub rune_alerts: RuneAlertConfig,
     #[serde(default)]
     pub minimap_capture: MinimapCaptureConfig,
 }
@@ -876,6 +901,32 @@ fn default_gsi_logging_dir() -> String {
     "logs/gsi_events".to_string()
 }
 
+fn default_rune_alerts_enabled() -> bool {
+    true
+}
+fn default_rune_alert_lead_seconds() -> i32 {
+    10
+}
+fn default_rune_alert_interval_seconds() -> i32 {
+    120
+}
+fn default_rune_alert_audio_enabled() -> bool {
+    true
+}
+
+fn default_minimap_capture_enabled() -> bool {
+    false
+}
+fn default_minimap_capture_interval_ms() -> u64 {
+    1000
+}
+fn default_minimap_capture_sample_every_n() -> u32 {
+    30
+}
+fn default_minimap_capture_output_dir() -> String {
+    "logs/minimap_capture".to_string()
+}
+
 // Soul Ring defaults
 fn default_soul_ring_enabled() -> bool {
     true
@@ -904,22 +955,6 @@ fn default_soul_ring_ability_keys() -> Vec<String> {
 }
 fn default_soul_ring_intercept_items() -> bool {
     true
-}
-
-fn default_minimap_capture_enabled() -> bool {
-    false
-}
-
-fn default_minimap_capture_interval_ms() -> u64 {
-    1000
-}
-
-fn default_minimap_capture_sample_every_n() -> u32 {
-    30
-}
-
-fn default_minimap_capture_output_dir() -> String {
-    "logs/minimap_capture".to_string()
 }
 
 impl Default for ServerConfig {
@@ -1192,6 +1227,7 @@ impl Default for Settings {
             soul_ring: SoulRingConfig::default(),
             gsi_logging: GsiLoggingConfig::default(),
             updates: UpdateConfig::default(),
+            rune_alerts: RuneAlertConfig::default(),
             minimap_capture: MinimapCaptureConfig::default(),
         }
     }
@@ -1405,5 +1441,15 @@ mod tests {
 
         // Verify get_standalone_key returns the correct value for meepo
         assert_eq!(settings.get_standalone_key("meepo"), "Home");
+    }
+
+    #[test]
+    fn rune_alert_defaults_are_exposed_through_settings() {
+        let settings = Settings::default();
+
+        assert!(settings.rune_alerts.enabled);
+        assert_eq!(settings.rune_alerts.alert_lead_seconds, 10);
+        assert_eq!(settings.rune_alerts.interval_seconds, 120);
+        assert!(settings.rune_alerts.audio_enabled);
     }
 }

@@ -57,6 +57,20 @@ fn refresh_keyboard_runtime_state(event: &GsiWebhookEvent, settings: &Settings) 
     }
 }
 
+fn refresh_observability_state(
+    event: &GsiWebhookEvent,
+    app_state: &Arc<Mutex<AppState>>,
+    settings: &Settings,
+) {
+    let snapshot = crate::observability::rune_alerts::process_clock_time(
+        event.map.clock_time,
+        &settings.rune_alerts,
+    );
+    if let Ok(mut state) = app_state.lock() {
+        state.rune_alerts = Some(snapshot);
+    }
+}
+
 pub async fn gsi_webhook_handler(
     State(server_state): State<GsiServerState>,
     Json(event): Json<GsiWebhookEvent>,
@@ -128,6 +142,7 @@ pub async fn process_gsi_events(
         {
             let settings = settings.lock().unwrap();
             refresh_keyboard_runtime_state(&event, &settings);
+            refresh_observability_state(&event, &app_state, &settings);
         }
 
         // Detect hero death (transition from alive to dead)
@@ -170,6 +185,9 @@ mod tests {
     use crate::actions::ActionDispatcher;
     use crate::config::Settings;
     use crate::models::GsiWebhookEvent;
+    use crate::observability::rune_alerts::{
+        latest_rune_alert_snapshot, reset_rune_alert_state_for_tests,
+    };
     use crate::state::AppState;
     use axum::{extract::State, http::StatusCode, Json};
     use std::fs;
@@ -193,6 +211,7 @@ mod tests {
         BROODMOTHER_ACTIVE.store(false, std::sync::atomic::Ordering::SeqCst);
         clear_meepo_macro_state();
         crate::actions::heroes::meepo_state::clear_meepo_observed_state();
+        reset_rune_alert_state_for_tests();
     }
 
     #[tokio::test]
@@ -375,6 +394,38 @@ mod tests {
                 .map(|event| event.hero.name.as_str()),
             Some(crate::models::Hero::Nevermore.to_game_name())
         );
+    }
+
+    #[tokio::test]
+    async fn process_gsi_events_updates_rune_alert_snapshot_from_map_clock_time() {
+        let _guard = shared_test_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        reset_keyboard_runtime_state();
+
+        let mut event = load_fixture_event("tests/fixtures/huskar_event.json");
+        event.map.clock_time = 110;
+
+        let app_state = AppState::new();
+        app_state.lock().unwrap().gsi_enabled = false;
+
+        let settings = std::sync::Arc::new(std::sync::Mutex::new(Settings::default()));
+        let dispatcher = std::sync::Arc::new(ActionDispatcher::new(
+            settings.clone(),
+            ActionExecutor::new(),
+        ));
+        let (tx, rx) = mpsc::channel(1);
+
+        tx.send(event).await.expect("test event should send");
+        drop(tx);
+
+        process_gsi_events(rx, app_state, dispatcher, settings).await;
+
+        let snapshot = latest_rune_alert_snapshot().expect("rune snapshot should exist");
+        assert_eq!(snapshot.next_rune_time_seconds, Some(120));
+        assert_eq!(snapshot.seconds_until_next_rune, Some(10));
+        assert_eq!(snapshot.last_alerted_rune_time_seconds, Some(120));
+        assert_eq!(snapshot.last_alert_clock_time_seconds, Some(110));
     }
 
     #[tokio::test]
