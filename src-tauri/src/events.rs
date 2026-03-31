@@ -1,5 +1,6 @@
 use crate::ipc_types::GameStateDto;
 use crate::TauriAppState;
+use dota2_scripts::actions::danger_detector;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -48,7 +49,7 @@ fn build_game_state_dto(state: &dota2_scripts::state::AppState) -> GameStateDto 
             hero_level: event.hero.level,
             hp_percent: event.hero.health_percent,
             mana_percent: event.hero.mana_percent,
-            in_danger: false,
+            in_danger: danger_detector::is_in_danger(),
             connected: true,
             alive: event.hero.alive,
             stunned: event.hero.stunned,

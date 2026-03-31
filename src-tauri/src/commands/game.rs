@@ -1,5 +1,6 @@
 use crate::ipc_types::GameStateDto;
 use crate::TauriAppState;
+use dota2_scripts::actions::danger_detector;
 
 /// Returns current game state from the latest GSI event
 #[tauri::command]
@@ -22,7 +23,7 @@ pub fn get_game_state(state: tauri::State<'_, TauriAppState>) -> Result<GameStat
             hero_level: event.hero.level,
             hp_percent: event.hero.health_percent,
             mana_percent: event.hero.mana_percent,
-            in_danger: false, // TODO: wire to danger detector
+            in_danger: danger_detector::is_in_danger(),
             connected: true,
             alive: event.hero.alive,
             stunned: event.hero.stunned,

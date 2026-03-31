@@ -7,7 +7,7 @@ interface GameStore {
   diagnostics: DiagnosticsState;
   setGame: (game: Partial<GameState>) => void;
   setDiagnostics: (diagnostics: DiagnosticsState) => void;
-  startListening: () => Promise<void>;
+  startListening: () => Promise<() => void>;
 }
 
 export const useGameStore = create<GameStore>((set) => ({
@@ -51,12 +51,12 @@ export const useGameStore = create<GameStore>((set) => ({
   setDiagnostics: (diagnostics) => set({ diagnostics }),
 
   startListening: async () => {
-    if (!isTauri()) return;
+    if (!isTauri()) return () => {};
 
     const { listen } = await import("@tauri-apps/api/event");
 
     // Subscribe to real-time game state updates from Rust
-    listen<GameState>("gsi_update", (event) => {
+    const unlisten = await listen<GameState>("gsi_update", (event) => {
       set({ game: event.payload });
     });
 
@@ -68,5 +68,7 @@ export const useGameStore = create<GameStore>((set) => ({
     } catch (e) {
       console.error("Failed to fetch diagnostics:", e);
     }
+
+    return unlisten;
   },
 }));

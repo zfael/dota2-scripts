@@ -17,17 +17,23 @@ export function useTauriEvent<T>(
     if (!isTauri()) return;
 
     let unlisten: (() => void) | undefined;
+    let cancelled = false;
 
     const setup = async () => {
       const { listen } = await import('@tauri-apps/api/event');
+      if (cancelled) return;
       unlisten = await listen<T>(eventName, (event) => {
         handlerRef.current(event.payload);
       });
+      if (cancelled) {
+        unlisten();
+      }
     };
 
     setup();
 
     return () => {
+      cancelled = true;
       unlisten?.();
     };
   }, [eventName]);

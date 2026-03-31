@@ -1,5 +1,6 @@
 use crate::ipc_types::{DiagnosticsDto, QueueMetricsDto, SyntheticInputDto};
 use crate::TauriAppState;
+use dota2_scripts::actions::SOUL_RING_STATE;
 
 /// Returns diagnostics: GSI metrics, synthetic input, keyboard state
 #[tauri::command]
@@ -25,7 +26,36 @@ pub fn get_diagnostics(state: tauri::State<'_, TauriAppState>) -> Result<Diagnos
             completions: 0,
             drops: 0,
         },
-        soul_ring_state: "ready".to_string(),
-        blocked_keys: vec![],
+        soul_ring_state: {
+            match SOUL_RING_STATE.lock() {
+                Ok(sr) => {
+                    if !sr.available {
+                        "unavailable".to_string()
+                    } else if !sr.can_cast {
+                        "cooldown".to_string()
+                    } else {
+                        "ready".to_string()
+                    }
+                }
+                Err(_) => "unknown".to_string(),
+            }
+        },
+        blocked_keys: {
+            let mut keys = Vec::new();
+            if app.sf_enabled.lock().map(|v| *v).unwrap_or(false) {
+                keys.extend(["Q", "W", "E"].iter().map(|s| s.to_string()));
+            }
+            if app.od_enabled.lock().map(|v| *v).unwrap_or(false) {
+                keys.push("R".to_string());
+            }
+            if let Ok(sr) = SOUL_RING_STATE.lock() {
+                if sr.available && sr.can_cast {
+                    if let Some(key) = sr.slot_key {
+                        keys.push(format!("SoulRing({})", key));
+                    }
+                }
+            }
+            keys
+        },
     })
 }
