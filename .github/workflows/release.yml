@@ -27,6 +27,13 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: src-ui/package-lock.json
+
       - name: Sync Cargo.toml version with git tag
         shell: pwsh
         run: |
@@ -36,7 +43,7 @@ jobs:
           
           Write-Host "Syncing Cargo.toml version to: $VERSION"
           
-          # Read Cargo.toml and update ONLY the package version (first occurrence after [package])
+          # Update root Cargo.toml [package] version
           $lines = Get-Content "Cargo.toml"
           $inPackage = $false
           $versionUpdated = $false
@@ -46,32 +53,51 @@ jobs:
               $inPackage = $true
             }
             elseif ($lines[$i] -match '^\[' -and $inPackage) {
-              # Hit another section, stop looking
               break
             }
             elseif ($inPackage -and -not $versionUpdated -and $lines[$i] -match '^version\s*=') {
               $lines[$i] = "version = `"$VERSION`""
               $versionUpdated = $true
-              Write-Host "Updated line $($i + 1): $($lines[$i])"
+              Write-Host "Updated root Cargo.toml line $($i + 1): $($lines[$i])"
             }
           }
           
           if (-not $versionUpdated) {
-            Write-Error "Failed to find version in [package] section"
+            Write-Error "Failed to find version in root [package] section"
             exit 1
           }
-          
-          # Write back
           $lines | Set-Content "Cargo.toml"
           
-          # Verify the change
-          Write-Host "Cargo.toml [package] section:"
-          Get-Content "Cargo.toml" | Select-Object -First 10
+          # Update src-tauri/Cargo.toml [package] version
+          $tauriLines = Get-Content "src-tauri/Cargo.toml"
+          $inPackage = $false
+          $versionUpdated = $false
+          
+          for ($i = 0; $i -lt $tauriLines.Count; $i++) {
+            if ($tauriLines[$i] -match '^\[package\]') {
+              $inPackage = $true
+            }
+            elseif ($tauriLines[$i] -match '^\[' -and $inPackage) {
+              break
+            }
+            elseif ($inPackage -and -not $versionUpdated -and $tauriLines[$i] -match '^version\s*=') {
+              $tauriLines[$i] = "version = `"$VERSION`""
+              $versionUpdated = $true
+              Write-Host "Updated src-tauri/Cargo.toml line $($i + 1): $($tauriLines[$i])"
+            }
+          }
+          $tauriLines | Set-Content "src-tauri/Cargo.toml"
+          
+          # Update src-tauri/tauri.conf.json version
+          $conf = Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json
+          $conf.version = $VERSION
+          $conf | ConvertTo-Json -Depth 10 | Set-Content "src-tauri/tauri.conf.json"
+          Write-Host "Updated tauri.conf.json version to: $VERSION"
 
       - name: Generate Cargo.lock
         run: cargo generate-lockfile
 
-      - name: Cache cargo registrycies
+      - name: Cache cargo registry
         uses: actions/cache@v4
         with:
           path: |
@@ -83,35 +109,64 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-cargo-
 
-      - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: src-ui
 
-      - name: Package artifact with config
+      - name: Build Tauri app
+        run: npx tauri build --target ${{ matrix.target }}
+
+      - name: Package ZIP artifact
         shell: pwsh
         run: |
           $VERSION = "${{ github.ref_name }}"
           $TARGET = "${{ matrix.target }}"
           $PACKAGE_DIR = "artifacts/dota2-scripts-${VERSION}-${TARGET}"
           
-          # Create package directory structure
           New-Item -ItemType Directory -Force -Path $PACKAGE_DIR
           New-Item -ItemType Directory -Force -Path "$PACKAGE_DIR/config"
           
-          # Copy executable and config
-          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" -Destination "$PACKAGE_DIR/dota2-scripts.exe"
+          # Copy executable from Tauri build output
+          Copy-Item "src-tauri/target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" -Destination "$PACKAGE_DIR/dota2-scripts.exe"
           Copy-Item "config/config.toml" -Destination "$PACKAGE_DIR/config/config.example.toml"
           
-          # Create ZIP archive with target triple in name for self_update compatibility
           Compress-Archive -Path "$PACKAGE_DIR/*" -DestinationPath "artifacts/dota2-scripts-${VERSION}-${TARGET}.zip" -Force
           
-          Write-Host "Package contents:"
+          Write-Host "ZIP package contents:"
           Get-ChildItem -Recurse $PACKAGE_DIR
 
-      - name: Upload artifact
+      - name: Collect MSI installer
+        shell: pwsh
+        run: |
+          $VERSION = "${{ github.ref_name }}"
+          $TARGET = "${{ matrix.target }}"
+          $MSI_DIR = "src-tauri/target/${{ matrix.target }}/release/bundle/msi"
+          
+          if (Test-Path $MSI_DIR) {
+            $msi = Get-ChildItem "$MSI_DIR/*.msi" | Select-Object -First 1
+            if ($msi) {
+              $dest = "artifacts/dota2-scripts-${VERSION}-${TARGET}.msi"
+              Copy-Item $msi.FullName $dest
+              Write-Host "MSI installer: $dest"
+            } else {
+              Write-Host "No MSI found in $MSI_DIR"
+            }
+          } else {
+            Write-Host "MSI directory not found: $MSI_DIR"
+          }
+
+      - name: Upload ZIP artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dota2-scripts-${{ github.ref_name }}-${{ matrix.target }}
+          name: dota2-scripts-${{ github.ref_name }}-${{ matrix.target }}-zip
           path: artifacts/dota2-scripts-${{ github.ref_name }}-${{ matrix.target }}.zip
+
+      - name: Upload MSI artifact
+        uses: actions/upload-artifact@v4
+        if: hashFiles(format('artifacts/dota2-scripts-{0}-{1}.msi', github.ref_name, matrix.target)) != ''
+        with:
+          name: dota2-scripts-${{ github.ref_name }}-${{ matrix.target }}-msi
+          path: artifacts/dota2-scripts-${{ github.ref_name }}-${{ matrix.target }}.msi
 
   release:
     name: Create Release
@@ -234,7 +289,8 @@ jobs:
           ⚠️ **WARNING**: Using game automation scripts may violate Terms of Service and result in account bans. Use at your own risk!
           
           ### 📥 Downloads
-          - **Windows**: `dota2-scripts-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip` (includes exe + example config)
+          - **Windows (ZIP)**: `dota2-scripts-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip` (includes exe + example config)
+          - **Windows (MSI)**: `dota2-scripts-${{ github.ref_name }}-x86_64-pc-windows-msvc.msi` (installer)
           
           ### 📋 Requirements
           - Windows 10/11
@@ -242,10 +298,11 @@ jobs:
           - Dota 2 with GSI configured
           
           ### ⚡ Features
-          - Automatic armlet toggling
-          - Hero-specific combos (Huskar, Legion Commander, Shadow Fiend, Tiny)
-          - GSI event-based automation
+          - Hero-specific automation (Broodmother, Huskar, Largo, Legion Commander, Meepo, Outworld Destroyer, Shadow Fiend, Tiny)
+          - GSI event-based action dispatch
+          - Danger detection and survivability automation
           - Standalone hotkey triggers
+          - React-based UI with live game state
           
           See [README.md](https://github.com/${{ github.repository }}/blob/main/README.md) for setup and usage instructions.
           FOOTER
@@ -257,7 +314,8 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/dota2-scripts-${{ github.ref_name }}-x86_64-pc-windows-msvc/dota2-scripts-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip
+            artifacts/dota2-scripts-${{ github.ref_name }}-x86_64-pc-windows-msvc-zip/dota2-scripts-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip
+            artifacts/dota2-scripts-${{ github.ref_name }}-x86_64-pc-windows-msvc-msi/dota2-scripts-${{ github.ref_name }}-x86_64-pc-windows-msvc.msi
           body_path: release_body.md
           draft: false
           prerelease: ${{ contains(github.ref, '-rc') }}
