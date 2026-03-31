@@ -533,7 +533,7 @@ fn default_baseline_threshold() -> f32 {
     0.8
 }
 fn default_analysis_min_cluster_size() -> usize {
-    20
+    40
 }
 fn default_analysis_max_cluster_size() -> usize {
     200

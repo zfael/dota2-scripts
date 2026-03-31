@@ -36,7 +36,7 @@ impl Default for ColorThresholds {
             green_hue_max: 160.0,
             green_min_saturation: 35.0,
             green_min_value: 25.0,
-            min_cluster_size: 20,
+            min_cluster_size: 40,
             max_cluster_size: 200,
         }
     }

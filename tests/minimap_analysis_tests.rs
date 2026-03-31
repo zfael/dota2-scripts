@@ -387,7 +387,7 @@ fn minimap_analysis_config_defaults() {
     assert!(!config.enabled);
     assert_eq!(config.baseline_frames, 10);
     assert!((config.baseline_threshold - 0.8).abs() < 0.01);
-    assert_eq!(config.min_cluster_size, 20);
+    assert_eq!(config.min_cluster_size, 40);
     assert_eq!(config.max_cluster_size, 200);
     assert!((config.red_hue_max - 15.0).abs() < 0.01);
 }
@@ -400,7 +400,7 @@ fn minimap_analysis_config_to_color_thresholds() {
     assert!((t.red_hue_min_wrap - 340.0).abs() < 0.01);
     assert!((t.green_hue_min - 80.0).abs() < 0.01);
     assert!((t.green_hue_max - 160.0).abs() < 0.01);
-    assert_eq!(t.min_cluster_size, 20);
+    assert_eq!(t.min_cluster_size, 40);
     assert_eq!(t.max_cluster_size, 200);
 }
 

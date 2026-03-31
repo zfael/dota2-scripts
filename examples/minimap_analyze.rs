@@ -193,8 +193,8 @@ impl Args {
     fn parse() -> Self {
         let mut args = Self {
             dir: "logs/minimap_capture".to_string(),
-            baseline_frames: 5,
-            min_cluster: 20,
+            baseline_frames: 10,
+            min_cluster: 40,
             max_cluster: 200,
             team: "dire".to_string(),
             window: 5,
