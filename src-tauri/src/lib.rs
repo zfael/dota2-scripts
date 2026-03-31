@@ -1,3 +1,5 @@
+pub mod ipc_types;
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
