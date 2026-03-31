@@ -1,6 +1,6 @@
 use dota2_scripts::config::Settings;
 use dota2_scripts::observability::minimap_artifacts::{
-    should_persist_sample, MinimapArtifactMetadata,
+    artifact_metadata_path, build_artifact_metadata, should_persist_sample, MinimapArtifactMetadata,
 };
 use dota2_scripts::config::MinimapCaptureConfig;
 use dota2_scripts::observability::minimap_capture::{
@@ -73,6 +73,34 @@ fn artifact_metadata_carries_capture_context() {
     assert_eq!(metadata.window_binding_status, "bound");
     assert_eq!(metadata.minimap_width, 300);
     assert_eq!(metadata.capture_result, "success");
+}
+
+#[test]
+fn failure_artifacts_are_always_persisted() {
+    let metadata = build_artifact_metadata(
+        "2026-03-31T01:00:00Z".to_string(),
+        "window-not-found".to_string(),
+        10,
+        20,
+        300,
+        200,
+        0,
+        0,
+        5,
+        "failure".to_string(),
+        Some("window-not-found".to_string()),
+    );
+
+    assert_eq!(metadata.capture_result, "failure");
+    assert_eq!(metadata.failure_reason.as_deref(), Some("window-not-found"));
+    assert!(!should_persist_sample(1, 30));
+}
+
+#[test]
+fn artifact_metadata_path_uses_json_sidecar_name() {
+    let path = artifact_metadata_path("logs/minimap_capture", "capture-001");
+
+    assert_eq!(path, "logs/minimap_capture/capture-001.json");
 }
 
 #[test]
