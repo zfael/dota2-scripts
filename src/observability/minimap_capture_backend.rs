@@ -103,11 +103,11 @@ fn capture_window_region_win32(
     region_height: u32,
 ) -> CaptureBackendResult {
     use windows::core::w;
-    use windows::Win32::Foundation::RECT;
+    use windows::Win32::Foundation::{HWND, POINT, RECT};
     use windows::Win32::Graphics::Gdi::{
-        BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDC,
-        GetDIBits, ReleaseDC, SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS,
-        SRCCOPY,
+        BitBlt, ClientToScreen, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject,
+        GetDC, GetDIBits, ReleaseDC, SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB,
+        DIB_RGB_COLORS, SRCCOPY,
     };
     use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, GetClientRect, IsWindow};
 
@@ -138,32 +138,45 @@ fn capture_window_region_win32(
         ));
     }
 
-    // Get the window DC
-    let hdc_window = unsafe { GetDC(hwnd) };
-    if hdc_window.is_invalid() {
-        return CaptureBackendResult::CaptureError("GetDC returned invalid handle".to_string());
+    // Convert client-area coordinates to screen coordinates.
+    // We capture from the screen DC because GPU-accelerated windows
+    // (DirectX/Vulkan) return blank pixels from their window DC.
+    let mut screen_pt = POINT {
+        x: region_x as i32,
+        y: region_y as i32,
+    };
+    if !unsafe { ClientToScreen(hwnd, &mut screen_pt) }.as_bool() {
+        return CaptureBackendResult::CaptureError("ClientToScreen failed".to_string());
+    }
+
+    // Get the screen DC (null HWND = entire desktop)
+    let hdc_screen = unsafe { GetDC(HWND::default()) };
+    if hdc_screen.is_invalid() {
+        return CaptureBackendResult::CaptureError(
+            "GetDC(screen) returned invalid handle".to_string(),
+        );
     }
 
     // Create compatible DC and bitmap
-    let hdc_mem = unsafe { CreateCompatibleDC(hdc_window) };
+    let hdc_mem = unsafe { CreateCompatibleDC(hdc_screen) };
     if hdc_mem.is_invalid() {
-        unsafe { ReleaseDC(hwnd, hdc_window) };
+        unsafe { ReleaseDC(HWND::default(), hdc_screen) };
         return CaptureBackendResult::CaptureError("CreateCompatibleDC failed".to_string());
     }
 
     let hbm =
-        unsafe { CreateCompatibleBitmap(hdc_window, region_width as i32, region_height as i32) };
+        unsafe { CreateCompatibleBitmap(hdc_screen, region_width as i32, region_height as i32) };
     if hbm.is_invalid() {
         unsafe {
             let _ = DeleteDC(hdc_mem);
-            ReleaseDC(hwnd, hdc_window);
+            ReleaseDC(HWND::default(), hdc_screen);
         };
         return CaptureBackendResult::CaptureError("CreateCompatibleBitmap failed".to_string());
     }
 
     let old_bm = unsafe { SelectObject(hdc_mem, hbm) };
 
-    // BitBlt the region
+    // BitBlt from screen DC at the computed screen coordinates
     let blt_result = unsafe {
         BitBlt(
             hdc_mem,
@@ -171,9 +184,9 @@ fn capture_window_region_win32(
             0,
             region_width as i32,
             region_height as i32,
-            hdc_window,
-            region_x as i32,
-            region_y as i32,
+            hdc_screen,
+            screen_pt.x,
+            screen_pt.y,
             SRCCOPY,
         )
     };
@@ -183,7 +196,7 @@ fn capture_window_region_win32(
             SelectObject(hdc_mem, old_bm);
             let _ = DeleteObject(hbm);
             let _ = DeleteDC(hdc_mem);
-            ReleaseDC(hwnd, hdc_window);
+            ReleaseDC(HWND::default(), hdc_screen);
         };
         return CaptureBackendResult::CaptureError(format!("BitBlt failed: {}", e));
     }
@@ -225,7 +238,7 @@ fn capture_window_region_win32(
         SelectObject(hdc_mem, old_bm);
         let _ = DeleteObject(hbm);
         let _ = DeleteDC(hdc_mem);
-        ReleaseDC(hwnd, hdc_window);
+        ReleaseDC(HWND::default(), hdc_screen);
     };
 
     if lines == 0 {
