@@ -3,6 +3,9 @@ use dota2_scripts::observability::minimap_artifacts::{
     artifact_metadata_path, build_artifact_metadata, should_persist_sample, MinimapArtifactMetadata,
 };
 use dota2_scripts::config::MinimapCaptureConfig;
+use dota2_scripts::observability::minimap_capture_backend::{
+    CaptureBackendResult, capture_window_region, find_dota2_window_rect,
+};
 use dota2_scripts::observability::minimap_capture::{
     process_capture_attempt, CaptureAttemptResult,
 };
@@ -169,4 +172,16 @@ fn minimap_capture_status_formats_window_binding_label() {
     };
 
     assert_eq!(snapshot.window_binding_status, "window-not-found");
+}
+
+#[test]
+fn find_dota2_window_returns_not_found_when_dota_not_running() {
+    let result = find_dota2_window_rect();
+    assert!(matches!(result, CaptureBackendResult::WindowNotFound));
+}
+
+#[test]
+fn capture_rejects_zero_dimension_region() {
+    let result = capture_window_region(0, 0, 0, 0);
+    assert!(matches!(result, CaptureBackendResult::CaptureError(_)));
 }
