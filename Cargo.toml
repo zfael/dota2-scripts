@@ -1,3 +1,7 @@
+[workspace]
+members = [".", "src-tauri"]
+resolver = "2"
+
 [package]
 name = "dota2-scripts"
 version = "0.1.0"
