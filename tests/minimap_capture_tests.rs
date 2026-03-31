@@ -7,8 +7,9 @@ use dota2_scripts::observability::minimap_capture_backend::{
     CaptureBackendResult, capture_window_region, find_dota2_window_rect,
 };
 use dota2_scripts::observability::minimap_capture::{
-    process_capture_attempt, CaptureAttemptResult,
+    process_capture_attempt, map_backend_result_to_attempt, CaptureAttemptResult,
 };
+use dota2_scripts::observability::minimap_capture_backend::WindowRect;
 use dota2_scripts::observability::minimap_capture_state::{
     MinimapCaptureHealth, MinimapCaptureStatusSnapshot,
 };
@@ -243,4 +244,52 @@ fn save_metadata_json_creates_sidecar_file() {
 
     // Cleanup
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn worker_maps_backend_window_not_found_to_unhealthy() {
+    use dota2_scripts::observability::minimap_capture_backend::CaptureBackendResult;
+
+    let backend_result = CaptureBackendResult::WindowNotFound;
+    let attempt = map_backend_result_to_attempt(backend_result);
+
+    assert_eq!(attempt, CaptureAttemptResult::WindowNotFound);
+}
+
+#[test]
+fn worker_maps_backend_capture_error_to_failed() {
+    use dota2_scripts::observability::minimap_capture_backend::CaptureBackendResult;
+
+    let backend_result = CaptureBackendResult::CaptureError("test error".to_string());
+    let attempt = map_backend_result_to_attempt(backend_result);
+
+    assert!(matches!(attempt, CaptureAttemptResult::CaptureFailed(_)));
+}
+
+#[test]
+fn worker_maps_backend_success_to_success_with_frame() {
+    use dota2_scripts::observability::minimap_capture_backend::CaptureBackendResult;
+
+    let backend_result = CaptureBackendResult::Success {
+        window_rect: WindowRect {
+            x: 0,
+            y: 0,
+            width: 1920,
+            height: 1080,
+        },
+        pixels: vec![0u8; 300 * 200 * 4],
+        width: 300,
+        height: 200,
+    };
+
+    let attempt = map_backend_result_to_attempt(backend_result);
+
+    match attempt {
+        CaptureAttemptResult::SuccessWithFrame(frame) => {
+            assert_eq!(frame.width, 300);
+            assert_eq!(frame.height, 200);
+            assert_eq!(frame.pixels.len(), 300 * 200 * 4);
+        }
+        other => panic!("expected SuccessWithFrame, got {:?}", other),
+    }
 }
