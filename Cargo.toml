@@ -15,6 +15,10 @@ path = "src/lib.rs"
 name = "dota2-scripts"
 path = "src/main.rs"
 
+[features]
+default = ["egui-ui"]
+egui-ui = ["egui", "eframe"]
+
 [dependencies]
 # Web server
 axum = "0.7"
@@ -33,8 +37,8 @@ toml = "0.8"
 enigo = "0.2"
 
 # UI
-egui = "0.29"
-eframe = { version = "0.29", features = ["default"] }
+egui = { version = "0.29", optional = true }
+eframe = { version = "0.29", features = ["default"], optional = true }
 
 # Logging
 tracing = "0.1"

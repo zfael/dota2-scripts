@@ -5,5 +5,6 @@ pub mod input;
 pub mod models;
 pub mod observability;
 pub mod state;
+#[cfg(feature = "egui-ui")]
 pub mod ui;
 pub mod update;

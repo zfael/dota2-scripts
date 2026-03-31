@@ -7,6 +7,7 @@ mod input;
 mod models;
 mod observability;
 mod state;
+#[cfg(feature = "egui-ui")]
 mod ui;
 mod update;
 
@@ -16,6 +17,7 @@ use crate::config::Settings;
 use crate::gsi::start_gsi_server;
 use crate::input::keyboard::{start_keyboard_listener, KeyboardSnapshot};
 use crate::state::{AppState, UpdateCheckState};
+#[cfg(feature = "egui-ui")]
 use crate::ui::Dota2ScriptApp;
 use crate::update::{check_for_update, UpdateCheckResult};
 use std::sync::{Arc, Mutex, RwLock};
@@ -247,30 +249,43 @@ async fn main() {
     });
 
     // Start UI on main thread
-    info!("Starting GUI...");
+    #[cfg(feature = "egui-ui")]
+    {
+        info!("Starting GUI...");
 
-    // Load window icon
-    let icon = load_icon();
+        // Load window icon
+        let icon = load_icon();
 
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([600.0, 700.0])
-            .with_title("Dota 2 Script Automation")
-            .with_icon(icon),
-        ..Default::default()
-    };
+        let options = eframe::NativeOptions {
+            viewport: egui::ViewportBuilder::default()
+                .with_inner_size([600.0, 700.0])
+                .with_title("Dota 2 Script Automation")
+                .with_icon(icon),
+            ..Default::default()
+        };
 
-    let app = Dota2ScriptApp::new(app_state, settings, initial_snapshot);
+        let app = Dota2ScriptApp::new(app_state, settings, initial_snapshot);
 
-    if let Err(e) = eframe::run_native(
-        "Dota 2 Script Automation",
-        options,
-        Box::new(|_cc| Ok(Box::new(app))),
-    ) {
-        eprintln!("Failed to start GUI: {}", e);
+        if let Err(e) = eframe::run_native(
+            "Dota 2 Script Automation",
+            options,
+            Box::new(|_cc| Ok(Box::new(app))),
+        ) {
+            eprintln!("Failed to start GUI: {}", e);
+        }
+    }
+
+    #[cfg(not(feature = "egui-ui"))]
+    {
+        info!("Running without GUI (egui-ui feature disabled)");
+        // Block the main thread so background tasks keep running
+        loop {
+            std::thread::park();
+        }
     }
 }
 
+#[cfg(feature = "egui-ui")]
 fn load_icon() -> egui::IconData {
     // Use PNG for better quality - ICO parsing can pick wrong resolution
     let icon_bytes = include_bytes!("../assets/icon.png");
