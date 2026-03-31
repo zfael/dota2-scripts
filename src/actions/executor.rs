@@ -11,6 +11,45 @@ use tracing::{debug, warn};
 
 type ActionJob = Box<dyn FnOnce() + Send + 'static>;
 
+/// Shared atomic counters for monitoring executor throughput.
+#[derive(Debug)]
+pub struct ExecutorMetrics {
+    pub total_enqueued: AtomicU64,
+    pub completions: AtomicU64,
+    pub drops: AtomicU64,
+}
+
+/// Point-in-time snapshot of executor metrics.
+#[derive(Debug, Clone)]
+pub struct ExecutorMetricsSnapshot {
+    pub total_queued: u64,
+    pub completions: u64,
+    pub drops: u64,
+    pub queue_depth: u64,
+}
+
+impl ExecutorMetrics {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            total_enqueued: AtomicU64::new(0),
+            completions: AtomicU64::new(0),
+            drops: AtomicU64::new(0),
+        })
+    }
+
+    pub fn snapshot(&self) -> ExecutorMetricsSnapshot {
+        let enqueued = self.total_enqueued.load(AtomicOrdering::Relaxed);
+        let completed = self.completions.load(AtomicOrdering::Relaxed);
+        let dropped = self.drops.load(AtomicOrdering::Relaxed);
+        ExecutorMetricsSnapshot {
+            total_queued: enqueued,
+            completions: completed,
+            drops: dropped,
+            queue_depth: enqueued.saturating_sub(completed + dropped),
+        }
+    }
+}
+
 enum ActionMessage {
     Run { label: &'static str, job: ActionJob },
 }
@@ -83,17 +122,20 @@ pub struct ActionExecutor {
     ready_tx: Sender<ActionMessage>,
     delayed_tx: Sender<ScheduledAction>,
     sequence: AtomicU64,
+    metrics: Arc<ExecutorMetrics>,
 }
 
 impl ActionExecutor {
     pub fn new() -> Arc<Self> {
         let (ready_tx, ready_rx) = mpsc::channel::<ActionMessage>();
         let (delayed_tx, delayed_rx) = mpsc::channel::<ScheduledAction>();
+        let metrics = ExecutorMetrics::new();
 
+        let worker_metrics = metrics.clone();
         let ready_worker_tx = ready_tx.clone();
         thread::Builder::new()
             .name("action-ready-worker".to_string())
-            .spawn(move || run_ready_worker(ready_rx))
+            .spawn(move || run_ready_worker(ready_rx, worker_metrics))
             .expect("failed to spawn ready worker thread");
 
         thread::Builder::new()
@@ -105,7 +147,13 @@ impl ActionExecutor {
             ready_tx,
             delayed_tx,
             sequence: AtomicU64::new(0),
+            metrics,
         })
+    }
+
+    /// Returns a clone of the metrics handle for external monitoring.
+    pub fn metrics(&self) -> Arc<ExecutorMetrics> {
+        self.metrics.clone()
     }
 
     pub fn enqueue<F>(&self, label: &'static str, job: F)
@@ -124,7 +172,10 @@ impl ActionExecutor {
         match dispatch_mode_for_delay(delay) {
             DispatchMode::Immediate => {
                 if let Err(error) = self.ready_tx.send(ActionMessage::Run { label, job }) {
+                    self.metrics.drops.fetch_add(1, AtomicOrdering::Relaxed);
                     warn!("Failed to enqueue action job {}: {}", label, error);
+                } else {
+                    self.metrics.total_enqueued.fetch_add(1, AtomicOrdering::Relaxed);
                 }
             }
             DispatchMode::Delayed(d) => {
@@ -147,14 +198,17 @@ impl ActionExecutor {
                     sequence,
                     message: ActionMessage::Run { label, job },
                 }) {
+                    self.metrics.drops.fetch_add(1, AtomicOrdering::Relaxed);
                     warn!("Failed to enqueue delayed action job {}: {}", label, error);
+                } else {
+                    self.metrics.total_enqueued.fetch_add(1, AtomicOrdering::Relaxed);
                 }
             }
         }
     }
 }
 
-fn run_ready_worker(rx: Receiver<ActionMessage>) {
+fn run_ready_worker(rx: Receiver<ActionMessage>, metrics: Arc<ExecutorMetrics>) {
     while let Ok(message) = rx.recv() {
         match message {
             ActionMessage::Run { label, job } => {
@@ -176,6 +230,7 @@ fn run_ready_worker(rx: Receiver<ActionMessage>) {
                         label, panic_message
                     );
                 }
+                metrics.completions.fetch_add(1, AtomicOrdering::Relaxed);
             }
         }
     }

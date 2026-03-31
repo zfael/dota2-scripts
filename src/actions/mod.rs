@@ -1,3 +1,4 @@
+pub mod activity;
 pub mod armlet;
 pub mod auto_items;
 pub mod common;

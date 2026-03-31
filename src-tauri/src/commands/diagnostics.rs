@@ -19,12 +19,15 @@ pub fn get_diagnostics(state: tauri::State<'_, TauriAppState>) -> Result<Diagnos
             current_queue_depth: app.metrics.current_queue_depth,
             max_queue_depth: 10,
         },
-        synthetic_input: SyntheticInputDto {
-            queue_depth: 0,
-            total_queued: 0,
-            peak_depth: 0,
-            completions: 0,
-            drops: 0,
+        synthetic_input: {
+            let snap = state.executor_metrics.snapshot();
+            SyntheticInputDto {
+                queue_depth: snap.queue_depth as usize,
+                total_queued: snap.total_queued,
+                peak_depth: 0,
+                completions: snap.completions,
+                drops: snap.drops,
+            }
         },
         soul_ring_state: {
             match SOUL_RING_STATE.lock() {

@@ -2,7 +2,7 @@ pub mod commands;
 pub mod events;
 pub mod ipc_types;
 
-use dota2_scripts::actions::executor::ActionExecutor;
+use dota2_scripts::actions::executor::{ActionExecutor, ExecutorMetrics};
 use dota2_scripts::actions::heroes::{LargoScript, MeepoScript};
 use dota2_scripts::actions::ActionDispatcher;
 use dota2_scripts::config::Settings;
@@ -20,6 +20,7 @@ use tracing::info;
 pub struct TauriAppState {
     pub app_state: Arc<Mutex<AppState>>,
     pub settings: Arc<Mutex<Settings>>,
+    pub executor_metrics: Arc<ExecutorMetrics>,
 }
 
 pub fn run() {
@@ -49,6 +50,7 @@ pub fn run() {
 
     // Initialize action executor and dispatcher
     let action_executor = ActionExecutor::new();
+    let executor_metrics = action_executor.metrics();
     let dispatcher = Arc::new(ActionDispatcher::new(settings.clone(), action_executor));
 
     // Start keyboard listener with snapshot-based config
@@ -117,6 +119,7 @@ pub fn run() {
         .manage(TauriAppState {
             app_state: app_state.clone(),
             settings: settings.clone(),
+            executor_metrics,
         })
         .setup(|app| {
             let handle = app.handle().clone();

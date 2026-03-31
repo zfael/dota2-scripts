@@ -3,6 +3,42 @@ use dota2_scripts::config::Settings;
 use std::fs;
 use tracing::info;
 
+fn validate_settings(settings: &Settings) -> Result<(), String> {
+    if settings.server.port == 0 {
+        return Err("Server port must be greater than 0".to_string());
+    }
+
+    let dd = &settings.danger_detection;
+    if dd.hp_threshold_percent > 100 {
+        return Err("Danger HP threshold must be 0-100".to_string());
+    }
+    if dd.satanic_hp_threshold > 100 {
+        return Err("Satanic HP threshold must be 0-100".to_string());
+    }
+
+    if settings.common.survivability_hp_threshold > 100 {
+        return Err("Survivability HP threshold must be 0-100".to_string());
+    }
+
+    let sr = &settings.soul_ring;
+    if sr.min_mana_percent > 100 {
+        return Err("Soul Ring min mana must be 0-100".to_string());
+    }
+    if sr.min_health_percent > 100 {
+        return Err("Soul Ring min health must be 0-100".to_string());
+    }
+
+    let meepo = &settings.heroes.meepo;
+    if meepo.dig_hp_threshold_percent > 100 {
+        return Err("Meepo dig HP threshold must be 0-100".to_string());
+    }
+    if meepo.megameepo_hp_threshold_percent > 100 {
+        return Err("Meepo MegaMeepo HP threshold must be 0-100".to_string());
+    }
+
+    Ok(())
+}
+
 /// Returns the full config as JSON (snake_case keys matching config.toml)
 #[tauri::command]
 pub fn get_config(state: tauri::State<'_, TauriAppState>) -> Result<Settings, String> {
@@ -42,6 +78,8 @@ pub fn update_config(
 
     let new_settings: Settings =
         serde_json::from_value(config_value).map_err(|e| format!("Deserialize error: {}", e))?;
+
+    validate_settings(&new_settings)?;
 
     let toml_str =
         toml::to_string_pretty(&new_settings).map_err(|e| format!("TOML error: {}", e))?;
@@ -88,6 +126,8 @@ pub fn update_hero_config(
 
     let new_settings: Settings =
         serde_json::from_value(config_value).map_err(|e| format!("Deserialize error: {}", e))?;
+
+    validate_settings(&new_settings)?;
 
     let toml_str =
         toml::to_string_pretty(&new_settings).map_err(|e| format!("TOML error: {}", e))?;
