@@ -140,6 +140,7 @@
 | `src/observability/minimap_zones.rs` | Map zone definitions and point-to-zone classification | `docs/superpowers/specs/2026-03-31-minimap-hero-detection-design.md` |
 | `src/observability/minimap_analysis.rs` | HSV color segmentation, BFS clustering, hero detection pipeline | `docs/superpowers/specs/2026-03-31-minimap-hero-detection-design.md` |
 | `src/observability/minimap_baseline.rs` | Static baseline mask accumulator for filtering map fixtures | `docs/superpowers/specs/2026-03-31-minimap-hero-detection-design.md` |
+| `src/observability/lane_heat.rs` | Zone activity classifier, rolling lane heat tracker, and event detection | `docs/superpowers/specs/2026-03-31-lane-heat-analysis-design.md` |
 
 ## `tests/`
 
