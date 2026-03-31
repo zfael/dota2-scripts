@@ -183,3 +183,77 @@ fn find_clusters_empty_mask_returns_empty() {
     let clusters = find_clusters(&mask, 5, 5, 1, 100);
     assert!(clusters.is_empty());
 }
+
+use dota2_scripts::observability::minimap_baseline::BaselineMask;
+
+#[test]
+fn baseline_marks_consistent_red_as_static() {
+    let mut bl = BaselineMask::new(3, 3, 0.8);
+    // 10 frames: pixel 0 is always red
+    for _ in 0..10 {
+        let red = vec![true, false, false, false, false, false, false, false, false];
+        let green = vec![false; 9];
+        bl.accumulate_frame(&red, &green);
+    }
+    bl.build();
+    assert!(bl.is_built());
+    assert!(bl.is_static_red(0));  // 10/10 = 100% > 80%
+    assert!(!bl.is_static_red(1)); // 0/10 = 0%
+}
+
+#[test]
+fn baseline_marks_consistent_green_as_static() {
+    let mut bl = BaselineMask::new(2, 2, 0.8);
+    for _ in 0..10 {
+        let red = vec![false; 4];
+        let green = vec![false, false, false, true]; // pixel 3 always green
+        bl.accumulate_frame(&red, &green);
+    }
+    bl.build();
+    assert!(bl.is_static_green(3));
+    assert!(!bl.is_static_green(0));
+}
+
+#[test]
+fn baseline_excludes_infrequent_pixels() {
+    let mut bl = BaselineMask::new(3, 3, 0.8);
+    // Only 3/10 frames have pixel 4 (center) as red → 30% < 80%
+    for i in 0..10 {
+        let mut red = vec![false; 9];
+        if i < 3 {
+            red[4] = true;
+        }
+        let green = vec![false; 9];
+        bl.accumulate_frame(&red, &green);
+    }
+    bl.build();
+    assert!(!bl.is_static_red(4));
+}
+
+#[test]
+fn baseline_not_built_returns_false() {
+    let bl = BaselineMask::new(2, 2, 0.8);
+    assert!(!bl.is_built());
+    assert!(!bl.is_static_red(0));
+    assert!(!bl.is_static_green(0));
+}
+
+#[test]
+fn baseline_frame_count_tracks_accumulation() {
+    let mut bl = BaselineMask::new(2, 2, 0.8);
+    assert_eq!(bl.frame_count(), 0);
+    bl.accumulate_frame(&[false; 4], &[false; 4]);
+    assert_eq!(bl.frame_count(), 1);
+    bl.accumulate_frame(&[false; 4], &[false; 4]);
+    assert_eq!(bl.frame_count(), 2);
+}
+
+#[test]
+fn baseline_out_of_bounds_index_returns_false() {
+    let mut bl = BaselineMask::new(2, 2, 0.8);
+    for _ in 0..5 {
+        bl.accumulate_frame(&[true; 4], &[false; 4]);
+    }
+    bl.build();
+    assert!(!bl.is_static_red(99)); // out of bounds
+}
