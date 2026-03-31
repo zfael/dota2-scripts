@@ -129,12 +129,21 @@
 |---|---|---|
 | `src/update/mod.rs` | Update check, download/apply, and restart flow | `docs/features/updates.md` |
 
+## `src/observability/`
+
+| File | Purpose | Linked Doc |
+|---|---|---|
+| `src/observability/minimap_capture.rs` | Minimap capture worker lifecycle and status publication | `docs/reference/configuration.md` |
+| `src/observability/minimap_capture_state.rs` | Minimap capture status snapshot types | `docs/architecture/state-and-dispatch.md` |
+| `src/observability/minimap_artifacts.rs` | Artifact metadata and persistence helpers | `docs/reference/configuration.md` |
+
 ## `tests/`
 
 | File | Purpose | Linked Doc |
 |---|---|---|
 | `tests/gsi_handler_tests.rs` | Fixture-backed GSI deserialization smoke tests | `docs/workflows/testing-and-debugging.md`, `docs/reference/gsi-schema-and-usage.md` |
 | `tests/fixtures/` | Sample JSON payloads for Huskar, Tiny, Meepo, and Outworld Destroyer | `docs/workflows/testing-and-debugging.md`, `docs/reference/gsi-schema-and-usage.md` |
+| `tests/minimap_capture_tests.rs` | Minimap capture integration tests | `docs/reference/configuration.md` |
 
 ## `assets/`
 

@@ -140,6 +140,19 @@ See `docs/reference/gsi-schema-and-usage.md`.
 
 See `docs/features/soul-ring.md` and `docs/features/keyboard-interception.md`.
 
+## `[minimap_capture]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `enabled` | `false` | `false` | Enables the read-only minimap capture worker. |
+| `minimap_x` | `0` | `0` | Minimap crop X offset relative to the Dota 2 client area. |
+| `minimap_y` | `0` | `0` | Minimap crop Y offset relative to the Dota 2 client area. |
+| `minimap_width` | `0` | `0` | Minimap crop width relative to the Dota 2 client area. |
+| `minimap_height` | `0` | `0` | Minimap crop height relative to the Dota 2 client area. |
+| `capture_interval_ms` | `1000` | `1000` | Worker capture cadence. |
+| `sample_every_n` | `30` | `30` | Persist every Nth successful capture. |
+| `artifact_output_dir` | `"logs/minimap_capture"` | `"logs/minimap_capture"` | Output directory for sampled captures and diagnostics. |
+
 ---
 
 ## Hero sections

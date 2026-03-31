@@ -46,6 +46,7 @@ At runtime, Dota 2 sends GSI payloads, the app updates shared state, dispatches 
 | Input simulation | `src/input/simulation.rs` | Emit synthetic keys/mouse and guard against self-reinterception with `SIMULATING_KEYS` |
 | UI and config | `src/ui/app.rs`, `src/config/settings.rs`, `config/config.toml` | Show status, edit settings, save config |
 | Auto-update | `src/update/mod.rs`, `src/main.rs`, `src/ui/app.rs` | Startup checks, download/apply, restart, banner/state reporting |
+| Observability | `src/observability/minimap_capture.rs` | Minimap capture worker; runs on its own background thread independent of GSI dispatch |
 
 ---
 

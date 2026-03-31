@@ -132,6 +132,8 @@ The current GSI model still exposes only a single `hero` snapshot. It does **not
 |---|---|---|
 | `map.clock_time` | none today | Present in the schema and fixtures, but not currently used by runtime logic |
 
+> **Note:** `map.clock_time` powers rune reminders, but minimap capture is a separate observability worker and is not derived from GSI payload fields.
+
 ---
 
 ## Where to edit when behavior is GSI-driven

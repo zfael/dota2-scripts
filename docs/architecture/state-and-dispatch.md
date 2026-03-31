@@ -19,6 +19,7 @@
 | `sf_enabled` | `Arc<Mutex<bool>>` | Fast flag for Shadow Fiend keyboard interception |
 | `od_enabled` | `Arc<Mutex<bool>>` | Fast flag for Outworld Destroyer keyboard interception |
 | `update_state` | `Arc<Mutex<UpdateCheckState>>` | UI-visible update status machine |
+| `minimap_capture` | `Option<MinimapCaptureStatusSnapshot>` | Updated by the minimap capture worker thread; read by UI for status display. The worker publishes status on each capture cycle, independent of GSI events. |
 
 ### Current caveats
 
