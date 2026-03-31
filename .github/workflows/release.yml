@@ -17,7 +17,7 @@ jobs:
       matrix:
         include:
           - target: x86_64-pc-windows-msvc
-            artifact_name: dota2-scripts.exe
+            artifact_name: dota2-scripts-tauri.exe
 
     steps:
       - uses: actions/checkout@v4
@@ -125,8 +125,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path $PACKAGE_DIR
           New-Item -ItemType Directory -Force -Path "$PACKAGE_DIR/config"
           
-          # Copy executable from Tauri build output
-          Copy-Item "src-tauri/target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" -Destination "$PACKAGE_DIR/dota2-scripts.exe"
+          # Copy executable from Tauri build output (workspace target dir)
+          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" -Destination "$PACKAGE_DIR/dota2-scripts.exe"
           Copy-Item "config/config.toml" -Destination "$PACKAGE_DIR/config/config.example.toml"
           
           Compress-Archive -Path "$PACKAGE_DIR/*" -DestinationPath "artifacts/dota2-scripts-${VERSION}-${TARGET}.zip" -Force
@@ -139,7 +139,7 @@ jobs:
         run: |
           $VERSION = "${{ github.ref_name }}"
           $TARGET = "${{ matrix.target }}"
-          $MSI_DIR = "src-tauri/target/${{ matrix.target }}/release/bundle/msi"
+          $MSI_DIR = "target/${{ matrix.target }}/release/bundle/msi"
           
           if (Test-Path $MSI_DIR) {
             $msi = Get-ChildItem "$MSI_DIR/*.msi" | Select-Object -First 1
