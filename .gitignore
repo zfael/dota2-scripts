@@ -30,3 +30,5 @@ Cargo.lock
 *~
 .vscode/
 .idea/
+
+.worktrees/
