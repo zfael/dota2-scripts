@@ -134,6 +134,28 @@ pub fn start_minimap_capture_worker(
 
         let attempt = map_backend_result_to_attempt(backend_result);
 
+        match &attempt {
+            CaptureAttemptResult::WindowNotFound => {
+                if previous_failures == 0 {
+                    tracing::warn!("minimap capture: Dota 2 window not found");
+                }
+            }
+            CaptureAttemptResult::CaptureFailed(reason) => {
+                tracing::warn!("minimap capture failed: {}", reason);
+            }
+            CaptureAttemptResult::SuccessWithFrame(frame) => {
+                if previous_failures > 0 {
+                    tracing::info!(
+                        "minimap capture recovered after {} failures ({}x{})",
+                        previous_failures,
+                        frame.width,
+                        frame.height
+                    );
+                }
+            }
+            CaptureAttemptResult::Success => {}
+        }
+
         let mut artifact_path: Option<String> = None;
 
         if let CaptureAttemptResult::SuccessWithFrame(ref frame) = attempt {
