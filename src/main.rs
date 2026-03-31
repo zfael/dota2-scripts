@@ -7,8 +7,7 @@ mod input;
 mod models;
 mod observability;
 mod state;
-#[cfg(feature = "egui-ui")]
-mod ui;
+
 mod update;
 
 use crate::actions::executor::ActionExecutor;
@@ -17,8 +16,7 @@ use crate::config::Settings;
 use crate::gsi::start_gsi_server;
 use crate::input::keyboard::{start_keyboard_listener, KeyboardSnapshot};
 use crate::state::{AppState, UpdateCheckState};
-#[cfg(feature = "egui-ui")]
-use crate::ui::Dota2ScriptApp;
+
 use crate::update::{check_for_update, UpdateCheckResult};
 use std::sync::{Arc, Mutex, RwLock};
 use tracing::info;
@@ -248,72 +246,12 @@ async fn main() {
         }
     });
 
-    // Start UI on main thread
-    #[cfg(feature = "egui-ui")]
-    {
-        info!("Starting GUI...");
-
-        // Load window icon
-        let icon = load_icon();
-
-        let options = eframe::NativeOptions {
-            viewport: egui::ViewportBuilder::default()
-                .with_inner_size([600.0, 700.0])
-                .with_title("Dota 2 Script Automation")
-                .with_icon(icon),
-            ..Default::default()
-        };
-
-        let app = Dota2ScriptApp::new(app_state, settings, initial_snapshot);
-
-        if let Err(e) = eframe::run_native(
-            "Dota 2 Script Automation",
-            options,
-            Box::new(|_cc| Ok(Box::new(app))),
-        ) {
-            eprintln!("Failed to start GUI: {}", e);
-        }
-    }
-
-    #[cfg(not(feature = "egui-ui"))]
-    {
-        info!("Running without GUI (egui-ui feature disabled)");
-        // Block the main thread so background tasks keep running
-        loop {
-            std::thread::park();
-        }
+    // Block the main thread so background tasks keep running
+    // (The Tauri binary in src-tauri/ provides the GUI)
+    info!("Backend running (headless mode). Use the Tauri app for the GUI.");
+    loop {
+        std::thread::park();
     }
 }
 
-#[cfg(feature = "egui-ui")]
-fn load_icon() -> egui::IconData {
-    // Use PNG for better quality - ICO parsing can pick wrong resolution
-    let icon_bytes = include_bytes!("../assets/icon.png");
 
-    match image::load_from_memory(icon_bytes) {
-        Ok(icon) => {
-            let image = icon.into_rgba8();
-            let (width, height) = image.dimensions();
-            println!("Loaded icon: {}x{} pixels", width, height);
-            egui::IconData {
-                rgba: image.into_raw(),
-                width,
-                height,
-            }
-        }
-        Err(e) => {
-            eprintln!("Failed to load icon: {}", e);
-            // Fallback: create a simple colored icon
-            let size = 32u32;
-            let rgba: Vec<u8> = (0..size * size)
-                .flat_map(|_| vec![200u8, 50, 50, 255]) // Red-ish color
-                .collect();
-
-            egui::IconData {
-                rgba,
-                width: size,
-                height: size,
-            }
-        }
-    }
-}
