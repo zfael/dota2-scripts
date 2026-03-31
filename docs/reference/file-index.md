@@ -137,6 +137,9 @@
 | `src/observability/minimap_capture_state.rs` | Minimap capture status snapshot types | `docs/architecture/state-and-dispatch.md` |
 | `src/observability/minimap_capture_backend.rs` | Win32 window binding and BitBlt screen capture | `docs/reference/configuration.md` |
 | `src/observability/minimap_artifacts.rs` | Artifact metadata and persistence helpers | `docs/reference/configuration.md` |
+| `src/observability/minimap_zones.rs` | Map zone definitions and point-to-zone classification | `docs/superpowers/specs/2026-03-31-minimap-hero-detection-design.md` |
+| `src/observability/minimap_analysis.rs` | HSV color segmentation, BFS clustering, hero detection pipeline | `docs/superpowers/specs/2026-03-31-minimap-hero-detection-design.md` |
+| `src/observability/minimap_baseline.rs` | Static baseline mask accumulator for filtering map fixtures | `docs/superpowers/specs/2026-03-31-minimap-hero-detection-design.md` |
 
 ## `tests/`
 
@@ -145,6 +148,7 @@
 | `tests/gsi_handler_tests.rs` | Fixture-backed GSI deserialization smoke tests | `docs/workflows/testing-and-debugging.md`, `docs/reference/gsi-schema-and-usage.md` |
 | `tests/fixtures/` | Sample JSON payloads for Huskar, Tiny, Meepo, and Outworld Destroyer | `docs/workflows/testing-and-debugging.md`, `docs/reference/gsi-schema-and-usage.md` |
 | `tests/minimap_capture_tests.rs` | Minimap capture integration tests | `docs/reference/configuration.md` |
+| `tests/minimap_analysis_tests.rs` | Tests for zone mapping, color analysis, clustering, baseline, detection | `docs/superpowers/specs/2026-03-31-minimap-hero-detection-design.md` |
 
 ## `assets/`
 
@@ -157,6 +161,7 @@
 | File | Purpose | Linked Doc |
 |---|---|---|
 | `examples/mouse_test.rs` | Local helper binary for inspecting `rdev` mouse button events | `docs/workflows/testing-and-debugging.md` |
+| `examples/minimap_analyze.rs` | Standalone CLI for running hero detection on PNG captures | `docs/superpowers/specs/2026-03-31-minimap-hero-detection-design.md` |
 
 ## `docs/`
 

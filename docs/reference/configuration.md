@@ -153,6 +153,24 @@ See `docs/features/soul-ring.md` and `docs/features/keyboard-interception.md`.
 | `sample_every_n` | `30` | `30` | Persist every Nth successful capture. |
 | `artifact_output_dir` | `"logs/minimap_capture"` | `"logs/minimap_capture"` | Output directory for sampled captures and diagnostics. |
 
+## `[minimap_analysis]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `enabled` | `false` | `false` | Enable hero detection analysis on captured frames |
+| `baseline_frames` | `10` | `10` | Number of initial frames used to build the static baseline mask |
+| `baseline_threshold` | `0.8` | `0.8` | Fraction of frames a pixel must appear in to be considered static |
+| `min_cluster_size` | `20` | `20` | Minimum pixel count for a cluster to be considered a hero icon |
+| `max_cluster_size` | `200` | `200` | Maximum pixel count (larger clusters are not hero icons) |
+| `red_hue_max` | `15.0` | `15.0` | Upper bound of red hue range (0–15) |
+| `red_hue_min_wrap` | `340.0` | `340.0` | Lower bound of red hue wrap range (340–360) |
+| `red_min_saturation` | `40.0` | `40.0` | Minimum HSV saturation for red detection |
+| `red_min_value` | `30.0` | `30.0` | Minimum HSV brightness for red detection |
+| `green_hue_min` | `80.0` | `80.0` | Lower bound of green hue range |
+| `green_hue_max` | `160.0` | `160.0` | Upper bound of green hue range |
+| `green_min_saturation` | `35.0` | `35.0` | Minimum HSV saturation for green detection |
+| `green_min_value` | `25.0` | `25.0` | Minimum HSV brightness for green detection |
+
 ---
 
 ## Hero sections
