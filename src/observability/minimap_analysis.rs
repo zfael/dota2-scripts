@@ -1,4 +1,6 @@
 use std::collections::VecDeque;
+use crate::observability::minimap_baseline::BaselineMask;
+use crate::observability::minimap_zones::{classify_zone, MapZone};
 
 /// HSV color value (hue 0–360, saturation 0–100, value 0–100).
 #[derive(Debug, Clone, Copy)]
@@ -181,3 +183,93 @@ pub fn find_clusters(
 
     clusters
 }
+
+/// Which color team was detected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TeamColor {
+    Red,
+    Green,
+}
+
+impl std::fmt::Display for TeamColor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TeamColor::Red => write!(f, "Red"),
+            TeamColor::Green => write!(f, "Green"),
+        }
+    }
+}
+
+/// A detected hero position on the minimap.
+#[derive(Debug, Clone)]
+pub struct DetectedHero {
+    pub x: u32,
+    pub y: u32,
+    pub zone: MapZone,
+    pub team_color: TeamColor,
+    pub cluster_size: usize,
+}
+
+/// Run the full hero detection pipeline on a captured RGBA frame.
+///
+/// 1. Build red/green color masks from pixel data.
+/// 2. Subtract static baseline positions (if provided).
+/// 3. Find connected clusters in the remaining masks.
+/// 4. Map each cluster centroid to a map zone.
+pub fn detect_heroes(
+    pixels: &[u8],
+    width: u32,
+    height: u32,
+    baseline: Option<&BaselineMask>,
+    thresholds: &ColorThresholds,
+) -> Vec<DetectedHero> {
+    let (mut red_mask, mut green_mask) = build_color_masks(pixels, width, height, thresholds);
+
+    if let Some(bl) = baseline {
+        for i in 0..red_mask.len() {
+            if bl.is_static_red(i) {
+                red_mask[i] = false;
+            }
+            if bl.is_static_green(i) {
+                green_mask[i] = false;
+            }
+        }
+    }
+
+    let red_clusters = find_clusters(
+        &red_mask,
+        width,
+        height,
+        thresholds.min_cluster_size,
+        thresholds.max_cluster_size,
+    );
+    let green_clusters = find_clusters(
+        &green_mask,
+        width,
+        height,
+        thresholds.min_cluster_size,
+        thresholds.max_cluster_size,
+    );
+
+    let mut heroes = Vec::new();
+    for c in red_clusters {
+        heroes.push(DetectedHero {
+            x: c.center_x,
+            y: c.center_y,
+            zone: classify_zone(c.center_x, c.center_y, width, height),
+            team_color: TeamColor::Red,
+            cluster_size: c.size,
+        });
+    }
+    for c in green_clusters {
+        heroes.push(DetectedHero {
+            x: c.center_x,
+            y: c.center_y,
+            zone: classify_zone(c.center_x, c.center_y, width, height),
+            team_color: TeamColor::Green,
+            cluster_size: c.size,
+        });
+    }
+    heroes
+}
+

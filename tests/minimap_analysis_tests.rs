@@ -1,7 +1,9 @@
 use dota2_scripts::observability::minimap_zones::{classify_zone, MapZone};
 use dota2_scripts::observability::minimap_analysis::{
-    build_color_masks, find_clusters, is_green_pixel, is_red_pixel, rgb_to_hsv, ColorThresholds,
+    build_color_masks, detect_heroes, find_clusters, is_green_pixel, is_red_pixel, rgb_to_hsv, 
+    ColorThresholds, TeamColor,
 };
+use dota2_scripts::observability::minimap_baseline::BaselineMask;
 
 #[test]
 fn classify_zone_top_lane() {
@@ -184,8 +186,6 @@ fn find_clusters_empty_mask_returns_empty() {
     assert!(clusters.is_empty());
 }
 
-use dota2_scripts::observability::minimap_baseline::BaselineMask;
-
 #[test]
 fn baseline_marks_consistent_red_as_static() {
     let mut bl = BaselineMask::new(3, 3, 0.8);
@@ -257,3 +257,125 @@ fn baseline_out_of_bounds_index_returns_false() {
     bl.build();
     assert!(!bl.is_static_red(99)); // out of bounds
 }
+
+#[test]
+fn detect_heroes_finds_red_and_green_clusters() {
+    let width = 20u32;
+    let height = 20u32;
+    let mut pixels = vec![0u8; (width * height * 4) as usize];
+
+    // Red 2×3 block at (2,2)-(3,4) → 6 pixels
+    for y in 2..=4 {
+        for x in 2..=3 {
+            let idx = ((y * width + x) * 4) as usize;
+            pixels[idx] = 200;
+            pixels[idx + 1] = 40;
+            pixels[idx + 2] = 40;
+            pixels[idx + 3] = 255;
+        }
+    }
+
+    // Green 2×3 block at (17,17)-(18,19) → 6 pixels
+    for y in 17..=19 {
+        for x in 17..=18 {
+            let idx = ((y * width + x) * 4) as usize;
+            pixels[idx] = 40;
+            pixels[idx + 1] = 200;
+            pixels[idx + 2] = 40;
+            pixels[idx + 3] = 255;
+        }
+    }
+
+    let thresholds = ColorThresholds {
+        min_cluster_size: 3,
+        max_cluster_size: 50,
+        ..ColorThresholds::default()
+    };
+
+    let heroes = detect_heroes(&pixels, width, height, None, &thresholds);
+    assert_eq!(heroes.len(), 2);
+
+    let reds: Vec<_> = heroes.iter().filter(|h| h.team_color == TeamColor::Red).collect();
+    let greens: Vec<_> = heroes.iter().filter(|h| h.team_color == TeamColor::Green).collect();
+    assert_eq!(reds.len(), 1);
+    assert_eq!(greens.len(), 1);
+    assert_eq!(reds[0].cluster_size, 6);
+    assert_eq!(greens[0].cluster_size, 6);
+}
+
+#[test]
+fn detect_heroes_subtracts_baseline_static_elements() {
+    let width = 10u32;
+    let height = 10u32;
+    let mut pixels = vec![0u8; (width * height * 4) as usize];
+
+    // Red 2×2 block at (0,0)-(1,1)
+    for y in 0..=1 {
+        for x in 0..=1 {
+            let idx = ((y * width + x) * 4) as usize;
+            pixels[idx] = 200;
+            pixels[idx + 1] = 40;
+            pixels[idx + 2] = 40;
+            pixels[idx + 3] = 255;
+        }
+    }
+
+    let thresholds = ColorThresholds {
+        min_cluster_size: 3,
+        max_cluster_size: 50,
+        ..ColorThresholds::default()
+    };
+
+    // Without baseline: cluster is detected
+    let heroes_no_bl = detect_heroes(&pixels, width, height, None, &thresholds);
+    assert_eq!(heroes_no_bl.len(), 1);
+
+    // Build baseline that marks (0,0)-(1,1) as static red
+    let mut bl = BaselineMask::new(width, height, 0.8);
+    for _ in 0..10 {
+        let (red, green) = build_color_masks(&pixels, width, height, &thresholds);
+        bl.accumulate_frame(&red, &green);
+    }
+    bl.build();
+
+    // With baseline: static cluster is subtracted
+    let heroes_with_bl = detect_heroes(&pixels, width, height, Some(&bl), &thresholds);
+    assert_eq!(heroes_with_bl.len(), 0);
+}
+
+#[test]
+fn detect_heroes_maps_to_zones() {
+    let width = 240u32;
+    let height = 245u32;
+    let mut pixels = vec![0u8; (width * height * 4) as usize];
+
+    // 5×5 green block centered at (90,90): Roshan area
+    for y in 88..=92 {
+        for x in 88..=92 {
+            let idx = ((y * width + x) * 4) as usize;
+            pixels[idx] = 40;
+            pixels[idx + 1] = 200;
+            pixels[idx + 2] = 40;
+            pixels[idx + 3] = 255;
+        }
+    }
+
+    let thresholds = ColorThresholds {
+        min_cluster_size: 5,
+        max_cluster_size: 200,
+        ..ColorThresholds::default()
+    };
+
+    let heroes = detect_heroes(&pixels, width, height, None, &thresholds);
+    assert_eq!(heroes.len(), 1);
+    assert_eq!(heroes[0].zone, MapZone::Roshan);
+    assert_eq!(heroes[0].team_color, TeamColor::Green);
+}
+
+#[test]
+fn detect_heroes_empty_image_returns_empty() {
+    let pixels = vec![0u8; 100 * 100 * 4];
+    let heroes = detect_heroes(&pixels, 100, 100, None, &ColorThresholds::default());
+    assert!(heroes.is_empty());
+}
+
