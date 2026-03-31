@@ -1,8 +1,13 @@
+import { useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Sidebar } from "./components/layout/Sidebar";
 import { StatusHeader } from "./components/layout/StatusHeader";
+import { UpdateBanner } from "./components/layout/UpdateBanner";
 import { ActivityTicker } from "./components/layout/ActivityTicker";
+import { useConfigStore } from "./stores/configStore";
 import { useGameStore } from "./stores/gameStore";
+import { useUIStore } from "./stores/uiStore";
+import { useUpdateStore } from "./stores/updateStore";
 import { useActivityStore } from "./stores/activityStore";
 import Dashboard from "./pages/Dashboard";
 import Heroes from "./pages/Heroes";
@@ -15,6 +20,13 @@ import Diagnostics from "./pages/Diagnostics";
 import Settings from "./pages/Settings";
 
 export default function App() {
+  useEffect(() => {
+    useConfigStore.getState().loadConfig();
+    useUIStore.getState().loadInitialState();
+    useGameStore.getState().startListening();
+    useUpdateStore.getState().loadInitialState();
+  }, []);
+
   const game = useGameStore((s) => s.game);
   const entries = useActivityStore((s) => s.entries);
   const tickerEntries = entries.slice(-3).map((e) => ({
@@ -42,6 +54,7 @@ export default function App() {
             alive={game.alive}
             respawnTimer={game.respawnTimer}
           />
+          <UpdateBanner />
           <main className="flex-1 overflow-y-auto">
             <Routes>
               <Route path="/" element={<Dashboard />} />
