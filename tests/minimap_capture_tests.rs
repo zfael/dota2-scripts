@@ -176,6 +176,7 @@ fn minimap_capture_status_formats_window_binding_label() {
 }
 
 #[test]
+#[ignore] // Only valid when Dota 2 is not running
 fn find_dota2_window_returns_not_found_when_dota_not_running() {
     let result = find_dota2_window_rect();
     assert!(matches!(result, CaptureBackendResult::WindowNotFound));
