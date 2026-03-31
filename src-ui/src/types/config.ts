@@ -233,6 +233,22 @@ export interface MinimapCaptureConfig {
   artifact_output_dir: string;
 }
 
+export interface MinimapAnalysisConfig {
+  enabled: boolean;
+  baseline_frames: number;
+  baseline_threshold: number;
+  min_cluster_size: number;
+  max_cluster_size: number;
+  red_hue_max: number;
+  red_hue_min_wrap: number;
+  red_min_saturation: number;
+  red_min_value: number;
+  green_hue_min: number;
+  green_hue_max: number;
+  green_min_saturation: number;
+  green_min_value: number;
+}
+
 export interface Settings {
   server: ServerConfig;
   keybindings: KeybindingsConfig;
@@ -246,4 +262,5 @@ export interface Settings {
   updates: UpdateConfig;
   rune_alerts: RuneAlertConfig;
   minimap_capture: MinimapCaptureConfig;
+  minimap_analysis: MinimapAnalysisConfig;
 }

@@ -112,6 +112,19 @@ pub struct MeepoStateDto {
     pub combo_items: Vec<String>,
 }
 
+/// Minimap capture status for frontend display
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MinimapStatusDto {
+    pub enabled: bool,
+    pub health: String,
+    pub capture_interval_ms: u64,
+    pub window_binding_status: String,
+    pub consecutive_failures: u32,
+    pub last_capture_duration_ms: Option<u64>,
+    pub sampling_mode: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -158,6 +171,25 @@ mod tests {
         let up_to_date = UpdateStateDto::UpToDate;
         let json = serde_json::to_value(&up_to_date).unwrap();
         assert_eq!(json["kind"], "upToDate");
+    }
+
+    #[test]
+    fn minimap_status_dto_serializes_camel_case() {
+        let dto = MinimapStatusDto {
+            enabled: true,
+            health: "healthy".to_string(),
+            capture_interval_ms: 1000,
+            window_binding_status: "bound".to_string(),
+            consecutive_failures: 0,
+            last_capture_duration_ms: Some(42),
+            sampling_mode: "every-5".to_string(),
+        };
+        let json = serde_json::to_value(&dto).unwrap();
+        assert_eq!(json["enabled"], true);
+        assert_eq!(json["captureIntervalMs"], 1000);
+        assert_eq!(json["windowBindingStatus"], "bound");
+        assert_eq!(json["lastCaptureDurationMs"], 42);
+        assert!(json.get("capture_interval_ms").is_none());
     }
 
     #[test]

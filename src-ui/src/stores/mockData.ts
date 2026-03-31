@@ -108,6 +108,21 @@ export const mockConfig: Settings = {
     capture_interval_ms: 1000, sample_every_n: 5,
     artifact_output_dir: "artifacts/minimap",
   },
+  minimap_analysis: {
+    enabled: true,
+    baseline_frames: 10,
+    baseline_threshold: 0.8,
+    min_cluster_size: 40,
+    max_cluster_size: 200,
+    red_hue_max: 15.0,
+    red_hue_min_wrap: 340.0,
+    red_min_saturation: 40.0,
+    red_min_value: 30.0,
+    green_hue_min: 80.0,
+    green_hue_max: 160.0,
+    green_min_saturation: 35.0,
+    green_min_value: 25.0,
+  },
 };
 
 export const mockActivityLog: ActivityEntry[] = [

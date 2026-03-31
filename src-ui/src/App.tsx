@@ -18,6 +18,7 @@ import Armlet from "./pages/Armlet";
 import ActivityLog from "./pages/ActivityLog";
 import Diagnostics from "./pages/Diagnostics";
 import Settings from "./pages/Settings";
+import MinimapIntelligence from "./pages/MinimapIntelligence";
 
 function useRuneAlert(runeTimer: number | null) {
   const lastAlertRef = useRef<number | null>(null);
@@ -105,6 +106,7 @@ export default function App() {
               <Route path="/soul-ring" element={<SoulRing />} />
               <Route path="/armlet" element={<Armlet />} />
               <Route path="/activity" element={<ActivityLog />} />
+              <Route path="/minimap" element={<MinimapIntelligence />} />
               <Route path="/diagnostics" element={<Diagnostics />} />
               <Route path="/settings" element={<Settings />} />
             </Routes>
