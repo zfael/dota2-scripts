@@ -461,6 +461,28 @@ impl Dota2ScriptApp {
             } else {
                 ui.label("No GSI events received yet");
             }
+
+            // Minimap Capture status
+            if let Some(minimap_capture) = &state.minimap_capture {
+                ui.separator();
+                ui.label("Minimap Capture:");
+                ui.label(format!("  Health: {}", minimap_capture.health.as_str()));
+                ui.label(format!(
+                    "  Window binding: {}",
+                    minimap_capture.window_binding_status
+                ));
+                ui.label(format!(
+                    "  Capture interval: {} ms",
+                    minimap_capture.capture_interval_ms
+                ));
+                ui.label(format!(
+                    "  Consecutive failures: {}",
+                    minimap_capture.consecutive_failures
+                ));
+                if let Some(path) = &minimap_capture.last_artifact_path {
+                    ui.label(format!("  Last artifact: {}", path));
+                }
+            }
         }
 
         self.render_meepo_observed_state(ui);
@@ -877,6 +899,35 @@ impl Dota2ScriptApp {
                 egui::Slider::new(&mut settings.rune_alerts.interval_seconds, 30..=180)
                     .suffix(" s"),
             );
+        });
+
+        ui.add_space(20.0);
+        ui.separator();
+
+        ui.heading("Minimap Capture");
+        ui.add_space(5.0);
+        ui.checkbox(
+            &mut settings.minimap_capture.enabled,
+            "Enable minimap capture",
+        );
+        ui.label("Periodically captures the minimap region for observability");
+
+        ui.add_space(5.0);
+        ui.horizontal(|ui| {
+            ui.label("Capture interval:");
+            ui.add(
+                egui::Slider::new(&mut settings.minimap_capture.capture_interval_ms, 200..=5000)
+                    .suffix(" ms"),
+            );
+        });
+
+        ui.add_space(5.0);
+        ui.horizontal(|ui| {
+            ui.label("Sample every N captures:");
+            ui.add(egui::Slider::new(
+                &mut settings.minimap_capture.sample_every_n,
+                1..=300,
+            ));
         });
 
         ui.add_space(20.0);

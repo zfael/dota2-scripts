@@ -152,3 +152,21 @@ fn capture_attempt_success_builds_healthy_status() {
     assert_eq!(status.consecutive_failures, 0);
     assert_eq!(status.health, MinimapCaptureHealth::Healthy);
 }
+
+#[test]
+fn minimap_capture_status_formats_window_binding_label() {
+    let snapshot = MinimapCaptureStatusSnapshot {
+        enabled: true,
+        capture_interval_ms: 1000,
+        last_success_at: None,
+        last_failure_at: Some("window-not-found".to_string()),
+        consecutive_failures: 2,
+        last_capture_duration_ms: None,
+        last_artifact_path: None,
+        sampling_mode: "every-30".to_string(),
+        window_binding_status: "window-not-found".to_string(),
+        health: MinimapCaptureHealth::Unhealthy,
+    };
+
+    assert_eq!(snapshot.window_binding_status, "window-not-found");
+}
