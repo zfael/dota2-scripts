@@ -466,6 +466,41 @@ impl Default for GsiLoggingConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MinimapCaptureConfig {
+    #[serde(default = "default_minimap_capture_enabled")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub minimap_x: u32,
+    #[serde(default)]
+    pub minimap_y: u32,
+    #[serde(default)]
+    pub minimap_width: u32,
+    #[serde(default)]
+    pub minimap_height: u32,
+    #[serde(default = "default_minimap_capture_interval_ms")]
+    pub capture_interval_ms: u64,
+    #[serde(default = "default_minimap_capture_sample_every_n")]
+    pub sample_every_n: u32,
+    #[serde(default = "default_minimap_capture_output_dir")]
+    pub artifact_output_dir: String,
+}
+
+impl Default for MinimapCaptureConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_minimap_capture_enabled(),
+            minimap_x: 0,
+            minimap_y: 0,
+            minimap_width: 0,
+            minimap_height: 0,
+            capture_interval_ms: default_minimap_capture_interval_ms(),
+            sample_every_n: default_minimap_capture_sample_every_n(),
+            artifact_output_dir: default_minimap_capture_output_dir(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     #[serde(default)]
     pub server: ServerConfig,
@@ -489,6 +524,8 @@ pub struct Settings {
     pub gsi_logging: GsiLoggingConfig,
     #[serde(default)]
     pub updates: UpdateConfig,
+    #[serde(default)]
+    pub minimap_capture: MinimapCaptureConfig,
 }
 
 // Default functions
@@ -869,6 +906,22 @@ fn default_soul_ring_intercept_items() -> bool {
     true
 }
 
+fn default_minimap_capture_enabled() -> bool {
+    false
+}
+
+fn default_minimap_capture_interval_ms() -> u64 {
+    1000
+}
+
+fn default_minimap_capture_sample_every_n() -> u32 {
+    30
+}
+
+fn default_minimap_capture_output_dir() -> String {
+    "logs/minimap_capture".to_string()
+}
+
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
@@ -1139,6 +1192,7 @@ impl Default for Settings {
             soul_ring: SoulRingConfig::default(),
             gsi_logging: GsiLoggingConfig::default(),
             updates: UpdateConfig::default(),
+            minimap_capture: MinimapCaptureConfig::default(),
         }
     }
 }

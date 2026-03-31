@@ -197,6 +197,7 @@ poof_press_interval_ms = 35
 enabled = false
 output_dir = "logs/gsi_events"
 
+# Soul Ring automation
 [soul_ring]
 # Master toggle for Soul Ring automation
 enabled = true
@@ -212,3 +213,13 @@ trigger_cooldown_ms = 10
 ability_keys = ["q", "w", "e", "r", "d", "f"]
 # Also trigger Soul Ring before item key presses (items that cost mana)
 intercept_item_keys = true
+
+[minimap_capture]
+enabled = false
+minimap_x = 0
+minimap_y = 0
+minimap_width = 0
+minimap_height = 0
+capture_interval_ms = 1000
+sample_every_n = 30
+artifact_output_dir = "logs/minimap_capture"
