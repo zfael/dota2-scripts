@@ -38,3 +38,7 @@ logs/
 
 # Tauri auto-generated files
 src-tauri/gen/
+
+# Node.js
+node_modules/
+src-ui/dist/

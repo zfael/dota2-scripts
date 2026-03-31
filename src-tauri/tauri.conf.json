@@ -5,8 +5,8 @@
   "build": {
     "devUrl": "http://localhost:5173",
     "frontendDist": "../src-ui/dist",
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build"
+    "beforeDevCommand": "cd src-ui && npx vite",
+    "beforeBuildCommand": "cd src-ui && npm run build"
   },
   "app": {
     "windows": [

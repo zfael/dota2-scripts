@@ -1,0 +1,13 @@
+{
+  "private": true,
+  "workspaces": [
+    "src-ui"
+  ],
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.10.1"
+  }
+}
