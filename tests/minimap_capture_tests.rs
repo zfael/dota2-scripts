@@ -20,10 +20,10 @@ fn minimap_capture_defaults_are_exposed_through_settings() {
     let settings = Settings::default();
 
     assert!(!settings.minimap_capture.enabled);
-    assert_eq!(settings.minimap_capture.minimap_x, 10);
-    assert_eq!(settings.minimap_capture.minimap_y, 815);
-    assert_eq!(settings.minimap_capture.minimap_width, 260);
-    assert_eq!(settings.minimap_capture.minimap_height, 260);
+    assert_eq!(settings.minimap_capture.minimap_x, 2);
+    assert_eq!(settings.minimap_capture.minimap_y, 835);
+    assert_eq!(settings.minimap_capture.minimap_width, 240);
+    assert_eq!(settings.minimap_capture.minimap_height, 245);
     assert_eq!(settings.minimap_capture.capture_interval_ms, 1000);
     assert_eq!(settings.minimap_capture.sample_every_n, 30);
     assert_eq!(

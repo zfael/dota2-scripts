@@ -927,16 +927,16 @@ fn default_minimap_capture_output_dir() -> String {
     "logs/minimap_capture".to_string()
 }
 fn default_minimap_x() -> u32 {
-    10
+    2
 }
 fn default_minimap_y() -> u32 {
-    815
+    835
 }
 fn default_minimap_width() -> u32 {
-    260
+    240
 }
 fn default_minimap_height() -> u32 {
-    260
+    245
 }
 
 // Soul Ring defaults

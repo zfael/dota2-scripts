@@ -29,10 +29,10 @@ audio_enabled = true
 
 [minimap_capture]
 enabled = false
-minimap_x = 10
-minimap_y = 815
-minimap_width = 260
-minimap_height = 260
+minimap_x = 2
+minimap_y = 835
+minimap_width = 240
+minimap_height = 245
 capture_interval_ms = 1000
 sample_every_n = 30
 artifact_output_dir = "logs/minimap_capture"

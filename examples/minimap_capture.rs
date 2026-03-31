@@ -119,10 +119,10 @@ struct Args {
 impl Args {
     fn parse() -> Self {
         let mut args = Self {
-            x: 10,
-            y: 815,
-            width: 260,
-            height: 260,
+            x: 2,
+            y: 835,
+            width: 240,
+            height: 245,
             output: "logs/minimap_capture".to_string(),
         };
 
@@ -186,10 +186,10 @@ fn print_usage() {
     println!("Usage: cargo run --example minimap_capture [OPTIONS]");
     println!();
     println!("Options:");
-    println!("  --x <N>        Minimap X offset (default: 10)");
-    println!("  --y <N>        Minimap Y offset (default: 815)");
-    println!("  --width <N>    Minimap width (default: 260)");
-    println!("  --height <N>   Minimap height (default: 260)");
+    println!("  --x <N>        Minimap X offset (default: 2)");
+    println!("  --y <N>        Minimap Y offset (default: 835)");
+    println!("  --width <N>    Minimap width (default: 240)");
+    println!("  --height <N>   Minimap height (default: 245)");
     println!("  --output <DIR> Output directory (default: logs/minimap_capture)");
     println!("  --help, -h     Show this help");
 }
