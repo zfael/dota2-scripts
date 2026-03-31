@@ -9,6 +9,7 @@ import {
   Activity,
   Settings,
 } from "lucide-react";
+import { useUIStore } from "../../stores/uiStore";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -22,10 +23,19 @@ const navItems = [
 ];
 
 export function Sidebar() {
+  const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
+  const toggleSidebar = useUIStore((s) => s.toggleSidebar);
+
   return (
-    <aside className="flex h-full w-[200px] shrink-0 flex-col border-r border-border bg-base">
+    <aside
+      className={`flex h-full shrink-0 flex-col border-r border-border bg-base transition-all duration-200 ${
+        sidebarCollapsed ? "w-[60px]" : "w-[200px]"
+      }`}
+    >
       <div className="p-4">
-        <h1 className="text-lg font-semibold text-gold">D2 Scripts</h1>
+        {!sidebarCollapsed && (
+          <h1 className="text-lg font-semibold text-gold">D2 Scripts</h1>
+        )}
       </div>
       <nav className="flex-1 space-y-0.5 px-2">
         {navItems.map(({ to, label, icon: Icon }) => (
@@ -42,12 +52,23 @@ export function Sidebar() {
             }
           >
             <Icon className="h-5 w-5 shrink-0" />
-            <span>{label}</span>
+            {!sidebarCollapsed && <span>{label}</span>}
           </NavLink>
         ))}
       </nav>
-      <div className="border-t border-border p-4">
-        <span className="text-xs text-muted">v0.1.0-dev</span>
+      <div className="border-t border-border">
+        {!sidebarCollapsed && (
+          <div className="px-4 pt-3">
+            <span className="text-xs text-muted">v0.1.0-dev</span>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          className="flex w-full items-center justify-center p-3 text-subtle hover:text-content"
+        >
+          {sidebarCollapsed ? "»" : "«"}
+        </button>
       </div>
     </aside>
   );
