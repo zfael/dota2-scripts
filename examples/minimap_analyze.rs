@@ -7,7 +7,11 @@
 //!   cargo run --example minimap_analyze -- --dir logs/minimap_capture
 //!   cargo run --example minimap_analyze -- --dir logs/minimap_capture --baseline-frames 5
 //!   cargo run --example minimap_analyze -- --dir logs/minimap_capture --min-cluster 10 --max-cluster 150
+//!   cargo run --example minimap_analyze -- --dir logs/minimap_capture --team dire --window 5
 
+use dota2_scripts::observability::lane_heat::{
+    classify_zone_activity, ActivityLevel, LaneHeatTracker, TeamSide,
+};
 use dota2_scripts::observability::minimap_analysis::{
     build_color_masks, detect_heroes, ColorThresholds, TeamColor,
 };
@@ -18,6 +22,9 @@ use std::time::Instant;
 fn main() {
     let args = Args::parse();
 
+    let team_side = TeamSide::from_team_name(&args.team);
+    let mut tracker = LaneHeatTracker::new(args.window);
+
     println!("Minimap Analysis Utility");
     println!("  Directory: {}", args.dir);
     println!("  Baseline frames: {}", args.baseline_frames);
@@ -25,6 +32,8 @@ fn main() {
         "  Cluster size: {}-{}",
         args.min_cluster, args.max_cluster
     );
+    println!("  Team: {} (ally={}, enemy={})", args.team, team_side.ally_color, team_side.enemy_color);
+    println!("  Rolling window: {} frames", args.window);
     println!();
 
     // Collect PNG files sorted by name
@@ -99,17 +108,11 @@ fn main() {
         let elapsed = start.elapsed();
 
         let red_count = heroes.iter().filter(|h| h.team_color == TeamColor::Red).count();
-        let green_count = heroes
-            .iter()
-            .filter(|h| h.team_color == TeamColor::Green)
-            .count();
+        let green_count = heroes.iter().filter(|h| h.team_color == TeamColor::Green).count();
 
         println!(
             "{}: {} heroes detected ({} red, {} green) [{:.1}ms]",
-            name,
-            heroes.len(),
-            red_count,
-            green_count,
+            name, heroes.len(), red_count, green_count,
             elapsed.as_secs_f64() * 1000.0
         );
 
@@ -119,6 +122,60 @@ fn main() {
                 hero.team_color, hero.x, hero.y, hero.zone, hero.cluster_size
             );
         }
+
+        // Zone activity classification
+        let snapshots = classify_zone_activity(&heroes, &team_side);
+        if !snapshots.is_empty() {
+            println!("  Zone Activity:");
+            for snap in &snapshots {
+                let detail = match snap.activity {
+                    ActivityLevel::Fight => format!(
+                        "{} ({} ally, {} enemy)",
+                        snap.activity, snap.ally_count, snap.enemy_count
+                    ),
+                    _ => {
+                        if snap.ally_count > 0 && snap.enemy_count > 0 {
+                            format!("{} ({} ally, {} enemy)", snap.activity, snap.ally_count, snap.enemy_count)
+                        } else if snap.ally_count > 0 {
+                            format!("{} ({} ally)", snap.activity, snap.ally_count)
+                        } else {
+                            format!("{} ({} enemy)", snap.activity, snap.enemy_count)
+                        }
+                    }
+                };
+                println!("    {}: {}", snap.zone, detail);
+            }
+        }
+
+        // Rolling window tracker
+        tracker.push_frame(snapshots);
+        let summary = tracker.summary();
+        if !summary.is_empty() {
+            println!("  Rolling Summary (last {} frames):", args.window);
+            for s in &summary {
+                let mut line = format!(
+                    "    {}: avg {:.1} ally, {:.1} enemy | peak: {}",
+                    s.zone, s.avg_ally_count, s.avg_enemy_count, s.peak_activity
+                );
+                if s.frames_with_fight > 0 {
+                    line.push_str(&format!(
+                        " | fight in {}/{} frames",
+                        s.frames_with_fight, tracker.frame_count()
+                    ));
+                }
+                println!("{}", line);
+            }
+        }
+
+        let events = tracker.events();
+        if !events.is_empty() {
+            println!("  ⚠ Events:");
+            for event in &events {
+                println!("    {}", event);
+            }
+        }
+
+        println!();
     }
     println!("{:-<70}", "");
 }
@@ -128,6 +185,8 @@ struct Args {
     baseline_frames: u32,
     min_cluster: usize,
     max_cluster: usize,
+    team: String,
+    window: usize,
 }
 
 impl Args {
@@ -137,6 +196,8 @@ impl Args {
             baseline_frames: 5,
             min_cluster: 20,
             max_cluster: 200,
+            team: "dire".to_string(),
+            window: 5,
         };
         let raw: Vec<String> = env::args().collect();
         let mut i = 1;
@@ -161,6 +222,23 @@ impl Args {
                 "--max-cluster" => {
                     i += 1;
                     args.max_cluster = parse_usize(&raw, i, "--max-cluster");
+                }
+                "--team" => {
+                    i += 1;
+                    if i >= raw.len() {
+                        eprintln!("Error: --team requires a value");
+                        std::process::exit(1);
+                    }
+                    let val = raw[i].to_lowercase();
+                    if val != "dire" && val != "radiant" {
+                        eprintln!("Error: --team must be 'dire' or 'radiant'");
+                        std::process::exit(1);
+                    }
+                    args.team = val;
+                }
+                "--window" => {
+                    i += 1;
+                    args.window = parse_usize(&raw, i, "--window");
                 }
                 "--help" | "-h" => {
                     print_usage();
@@ -208,5 +286,7 @@ fn print_usage() {
     println!("  --baseline-frames <N>   Frames for baseline (default: 5)");
     println!("  --min-cluster <N>       Min cluster size (default: 20)");
     println!("  --max-cluster <N>       Max cluster size (default: 200)");
+    println!("  --team <dire|radiant>   Player's team (default: dire)");
+    println!("  --window <N>            Rolling window size (default: 5)");
     println!("  --help, -h              Show this help");
 }
