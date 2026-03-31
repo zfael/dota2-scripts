@@ -1,5 +1,5 @@
 {
-  "productName": "Dota 2 Scripts",
+  "productName": "dota2-scripts",
   "version": "0.1.0",
   "identifier": "com.dota2scripts.app",
   "build": {

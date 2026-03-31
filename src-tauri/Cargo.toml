@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-dota2_scripts = { path = "..", package = "dota2-scripts", default-features = false }
+dota2_scripts = { path = "..", package = "dota2-scripts" }
 tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
