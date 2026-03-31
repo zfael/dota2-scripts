@@ -467,7 +467,7 @@ fn gsi_event_deserializes_with_player_team() {
 
 // Layer 1: Zone Activity Classifier Tests
 use dota2_scripts::observability::lane_heat::{
-    classify_zone_activity, ActivityLevel, TeamSide,
+    classify_zone_activity, ActivityLevel, TeamSide, LaneEvent, LaneHeatTracker, ZoneSnapshot,
 };
 
 #[test]
@@ -562,5 +562,123 @@ fn classify_multiple_zones() {
     assert_eq!(bot.ally_count, 0);
     assert_eq!(bot.enemy_count, 1);
     assert_eq!(bot.activity, ActivityLevel::Active);
+}
+
+// Layer 2 tests: LaneHeatTracker
+
+#[test]
+fn tracker_empty_summary() {
+    let tracker = LaneHeatTracker::new(5);
+    assert!(tracker.summary().is_empty());
+    assert!(tracker.events().is_empty());
+}
+
+#[test]
+fn tracker_single_frame_summary() {
+    let mut tracker = LaneHeatTracker::new(5);
+    let snapshots = vec![ZoneSnapshot {
+        zone: MapZone::TopLane,
+        ally_count: 2,
+        enemy_count: 0,
+        activity: ActivityLevel::Active,
+    }];
+    tracker.push_frame(snapshots);
+    let summary = tracker.summary();
+    assert_eq!(summary.len(), 1);
+    assert_eq!(summary[0].zone, MapZone::TopLane);
+    assert!((summary[0].avg_ally_count - 2.0).abs() < 0.01);
+    assert!((summary[0].avg_enemy_count - 0.0).abs() < 0.01);
+    assert_eq!(summary[0].peak_activity, ActivityLevel::Active);
+    assert_eq!(summary[0].current_activity, ActivityLevel::Active);
+    assert_eq!(summary[0].frames_with_fight, 0);
+}
+
+#[test]
+fn tracker_fight_detected_event() {
+    let mut tracker = LaneHeatTracker::new(5);
+    tracker.push_frame(vec![ZoneSnapshot {
+        zone: MapZone::TopLane,
+        ally_count: 1,
+        enemy_count: 0,
+        activity: ActivityLevel::Active,
+    }]);
+    tracker.push_frame(vec![ZoneSnapshot {
+        zone: MapZone::TopLane,
+        ally_count: 1,
+        enemy_count: 1,
+        activity: ActivityLevel::Fight,
+    }]);
+    let events = tracker.events();
+    assert!(events.iter().any(|e| matches!(e, LaneEvent::FightDetected { zone } if *zone == MapZone::TopLane)));
+}
+
+#[test]
+fn tracker_fight_ongoing_event() {
+    let mut tracker = LaneHeatTracker::new(5);
+    tracker.push_frame(vec![ZoneSnapshot {
+        zone: MapZone::MidLane,
+        ally_count: 2,
+        enemy_count: 2,
+        activity: ActivityLevel::Fight,
+    }]);
+    tracker.push_frame(vec![ZoneSnapshot {
+        zone: MapZone::MidLane,
+        ally_count: 2,
+        enemy_count: 2,
+        activity: ActivityLevel::Fight,
+    }]);
+    let events = tracker.events();
+    assert!(events.iter().any(|e| matches!(e, LaneEvent::FightOngoing { zone } if *zone == MapZone::MidLane)));
+}
+
+#[test]
+fn tracker_enemy_rotation_event() {
+    let mut tracker = LaneHeatTracker::new(5);
+    for _ in 0..3 {
+        tracker.push_frame(vec![ZoneSnapshot {
+            zone: MapZone::BotLane,
+            ally_count: 1,
+            enemy_count: 0,
+            activity: ActivityLevel::Active,
+        }]);
+    }
+    tracker.push_frame(vec![ZoneSnapshot {
+        zone: MapZone::BotLane,
+        ally_count: 1,
+        enemy_count: 3,
+        activity: ActivityLevel::Fight,
+    }]);
+    let events = tracker.events();
+    assert!(events.iter().any(|e| matches!(e, LaneEvent::EnemyRotation { zone } if *zone == MapZone::BotLane)));
+}
+
+#[test]
+fn tracker_enemy_grouping_event() {
+    let mut tracker = LaneHeatTracker::new(5);
+    tracker.push_frame(vec![ZoneSnapshot {
+        zone: MapZone::MidLane,
+        ally_count: 0,
+        enemy_count: 3,
+        activity: ActivityLevel::Active,
+    }]);
+    let events = tracker.events();
+    assert!(events.iter().any(|e| matches!(e, LaneEvent::EnemyGrouping { zone, count } if *zone == MapZone::MidLane && *count == 3)));
+}
+
+#[test]
+fn tracker_window_evicts_old_frames() {
+    let mut tracker = LaneHeatTracker::new(3);
+    for i in 0..5 {
+        tracker.push_frame(vec![ZoneSnapshot {
+            zone: MapZone::TopLane,
+            ally_count: i + 1,
+            enemy_count: 0,
+            activity: ActivityLevel::Active,
+        }]);
+    }
+    let summary = tracker.summary();
+    let top = summary.iter().find(|s| s.zone == MapZone::TopLane).unwrap();
+    // Frames 3,4,5 (ally counts 3,4,5) → avg = 4.0
+    assert!((top.avg_ally_count - 4.0).abs() < 0.01);
 }
 
