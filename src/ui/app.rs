@@ -475,6 +475,9 @@ impl Dota2ScriptApp {
                     "  Capture interval: {} ms",
                     minimap_capture.capture_interval_ms
                 ));
+                if let Some(duration) = minimap_capture.last_capture_duration_ms {
+                    ui.label(format!("  Last capture: {} ms", duration));
+                }
                 ui.label(format!(
                     "  Consecutive failures: {}",
                     minimap_capture.consecutive_failures
@@ -928,6 +931,27 @@ impl Dota2ScriptApp {
                 &mut settings.minimap_capture.sample_every_n,
                 1..=300,
             ));
+        });
+
+        ui.add_space(5.0);
+        ui.horizontal(|ui| {
+            ui.label("Minimap X:");
+            ui.add(egui::Slider::new(&mut settings.minimap_capture.minimap_x, 0..=500));
+        });
+        ui.add_space(5.0);
+        ui.horizontal(|ui| {
+            ui.label("Minimap Y:");
+            ui.add(egui::Slider::new(&mut settings.minimap_capture.minimap_y, 0..=2000));
+        });
+        ui.add_space(5.0);
+        ui.horizontal(|ui| {
+            ui.label("Minimap Width:");
+            ui.add(egui::Slider::new(&mut settings.minimap_capture.minimap_width, 50..=600));
+        });
+        ui.add_space(5.0);
+        ui.horizontal(|ui| {
+            ui.label("Minimap Height:");
+            ui.add(egui::Slider::new(&mut settings.minimap_capture.minimap_height, 50..=600));
         });
 
         ui.add_space(20.0);
