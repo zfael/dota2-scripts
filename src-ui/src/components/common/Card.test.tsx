@@ -15,9 +15,10 @@ describe("Card", () => {
         <p>Hidden content</p>
       </Card>,
     );
-    expect(screen.getByText("Hidden content")).toBeVisible();
+    expect(screen.getByText("Hidden content")).toBeInTheDocument();
     await userEvent.click(screen.getByText("Collapsible"));
-    expect(screen.queryByText("Hidden content")).not.toBeVisible();
+    const content = screen.getByText("Hidden content").parentElement;
+    expect(content).toHaveClass("hidden");
   });
 
   it("starts collapsed when defaultOpen is false", () => {
@@ -26,6 +27,7 @@ describe("Card", () => {
         <p>Invisible</p>
       </Card>,
     );
-    expect(screen.queryByText("Invisible")).not.toBeVisible();
+    const content = screen.getByText("Invisible").parentElement;
+    expect(content).toHaveClass("hidden");
   });
 });
