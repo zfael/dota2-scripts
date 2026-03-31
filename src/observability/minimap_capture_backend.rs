@@ -103,13 +103,17 @@ fn capture_window_region_win32(
     region_height: u32,
 ) -> CaptureBackendResult {
     use windows::core::w;
-    use windows::Win32::Foundation::{HWND, POINT, RECT};
+    use windows::Win32::Foundation::{HWND, RECT};
     use windows::Win32::Graphics::Gdi::{
-        BitBlt, ClientToScreen, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject,
-        GetDC, GetDIBits, ReleaseDC, SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB,
-        DIB_RGB_COLORS, SRCCOPY,
+        BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDC,
+        GetDIBits, ReleaseDC, SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS,
+        SRCCOPY,
     };
+    use windows::Win32::Storage::Xps::{PrintWindow, PRINT_WINDOW_FLAGS, PW_CLIENTONLY};
     use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, GetClientRect, IsWindow};
+
+    // PW_RENDERFULLCONTENT (0x2) captures DWM-composed content including GPU surfaces
+    const PW_RENDERFULLCONTENT: u32 = 2;
 
     // Find the Dota 2 window
     let hwnd = match unsafe { FindWindowW(None, w!("Dota 2")) } {
@@ -138,18 +142,7 @@ fn capture_window_region_win32(
         ));
     }
 
-    // Convert client-area coordinates to screen coordinates.
-    // We capture from the screen DC because GPU-accelerated windows
-    // (DirectX/Vulkan) return blank pixels from their window DC.
-    let mut screen_pt = POINT {
-        x: region_x as i32,
-        y: region_y as i32,
-    };
-    if !unsafe { ClientToScreen(hwnd, &mut screen_pt) }.as_bool() {
-        return CaptureBackendResult::CaptureError("ClientToScreen failed".to_string());
-    }
-
-    // Get the screen DC (null HWND = entire desktop)
+    // Get a screen DC for creating compatible objects
     let hdc_screen = unsafe { GetDC(HWND::default()) };
     if hdc_screen.is_invalid() {
         return CaptureBackendResult::CaptureError(
@@ -157,51 +150,107 @@ fn capture_window_region_win32(
         );
     }
 
-    // Create compatible DC and bitmap
-    let hdc_mem = unsafe { CreateCompatibleDC(hdc_screen) };
-    if hdc_mem.is_invalid() {
+    // Create full-window DC and bitmap for PrintWindow
+    let hdc_full = unsafe { CreateCompatibleDC(hdc_screen) };
+    if hdc_full.is_invalid() {
         unsafe { ReleaseDC(HWND::default(), hdc_screen) };
-        return CaptureBackendResult::CaptureError("CreateCompatibleDC failed".to_string());
+        return CaptureBackendResult::CaptureError("CreateCompatibleDC (full) failed".to_string());
     }
 
-    let hbm =
-        unsafe { CreateCompatibleBitmap(hdc_screen, region_width as i32, region_height as i32) };
-    if hbm.is_invalid() {
+    let hbm_full = unsafe {
+        CreateCompatibleBitmap(hdc_screen, client_width as i32, client_height as i32)
+    };
+    if hbm_full.is_invalid() {
         unsafe {
-            let _ = DeleteDC(hdc_mem);
+            let _ = DeleteDC(hdc_full);
             ReleaseDC(HWND::default(), hdc_screen);
         };
-        return CaptureBackendResult::CaptureError("CreateCompatibleBitmap failed".to_string());
+        return CaptureBackendResult::CaptureError(
+            "CreateCompatibleBitmap (full) failed".to_string(),
+        );
     }
 
-    let old_bm = unsafe { SelectObject(hdc_mem, hbm) };
+    let old_full = unsafe { SelectObject(hdc_full, hbm_full) };
 
-    // BitBlt from screen DC at the computed screen coordinates
+    // Capture the full client area directly from the window via DWM
+    let print_ok = unsafe {
+        PrintWindow(
+            hwnd,
+            hdc_full,
+            PRINT_WINDOW_FLAGS(PW_CLIENTONLY.0 | PW_RENDERFULLCONTENT),
+        )
+    };
+
+    if !print_ok.as_bool() {
+        unsafe {
+            SelectObject(hdc_full, old_full);
+            let _ = DeleteObject(hbm_full);
+            let _ = DeleteDC(hdc_full);
+            ReleaseDC(HWND::default(), hdc_screen);
+        };
+        return CaptureBackendResult::CaptureError("PrintWindow failed".to_string());
+    }
+
+    // Create region DC and bitmap for the minimap sub-region
+    let hdc_region = unsafe { CreateCompatibleDC(hdc_screen) };
+    if hdc_region.is_invalid() {
+        unsafe {
+            SelectObject(hdc_full, old_full);
+            let _ = DeleteObject(hbm_full);
+            let _ = DeleteDC(hdc_full);
+            ReleaseDC(HWND::default(), hdc_screen);
+        };
+        return CaptureBackendResult::CaptureError(
+            "CreateCompatibleDC (region) failed".to_string(),
+        );
+    }
+
+    let hbm_region =
+        unsafe { CreateCompatibleBitmap(hdc_screen, region_width as i32, region_height as i32) };
+    if hbm_region.is_invalid() {
+        unsafe {
+            SelectObject(hdc_full, old_full);
+            let _ = DeleteObject(hbm_full);
+            let _ = DeleteDC(hdc_full);
+            let _ = DeleteDC(hdc_region);
+            ReleaseDC(HWND::default(), hdc_screen);
+        };
+        return CaptureBackendResult::CaptureError(
+            "CreateCompatibleBitmap (region) failed".to_string(),
+        );
+    }
+
+    let old_region = unsafe { SelectObject(hdc_region, hbm_region) };
+
+    // BitBlt the minimap region from the full capture
     let blt_result = unsafe {
         BitBlt(
-            hdc_mem,
+            hdc_region,
             0,
             0,
             region_width as i32,
             region_height as i32,
-            hdc_screen,
-            screen_pt.x,
-            screen_pt.y,
+            hdc_full,
+            region_x as i32,
+            region_y as i32,
             SRCCOPY,
         )
     };
 
     if let Err(e) = blt_result {
         unsafe {
-            SelectObject(hdc_mem, old_bm);
-            let _ = DeleteObject(hbm);
-            let _ = DeleteDC(hdc_mem);
+            SelectObject(hdc_region, old_region);
+            let _ = DeleteObject(hbm_region);
+            let _ = DeleteDC(hdc_region);
+            SelectObject(hdc_full, old_full);
+            let _ = DeleteObject(hbm_full);
+            let _ = DeleteDC(hdc_full);
             ReleaseDC(HWND::default(), hdc_screen);
         };
         return CaptureBackendResult::CaptureError(format!("BitBlt failed: {}", e));
     }
 
-    // Extract pixel data via GetDIBits
+    // Extract pixel data from the region bitmap
     let mut bmi = BITMAPINFO {
         bmiHeader: BITMAPINFOHEADER {
             biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
@@ -223,8 +272,8 @@ fn capture_window_region_win32(
 
     let lines = unsafe {
         GetDIBits(
-            hdc_mem,
-            hbm,
+            hdc_region,
+            hbm_region,
             0,
             region_height,
             Some(pixels.as_mut_ptr() as *mut _),
@@ -233,11 +282,14 @@ fn capture_window_region_win32(
         )
     };
 
-    // Cleanup GDI resources
+    // Cleanup all GDI resources
     unsafe {
-        SelectObject(hdc_mem, old_bm);
-        let _ = DeleteObject(hbm);
-        let _ = DeleteDC(hdc_mem);
+        SelectObject(hdc_region, old_region);
+        let _ = DeleteObject(hbm_region);
+        let _ = DeleteDC(hdc_region);
+        SelectObject(hdc_full, old_full);
+        let _ = DeleteObject(hbm_full);
+        let _ = DeleteDC(hdc_full);
         ReleaseDC(HWND::default(), hdc_screen);
     };
 
