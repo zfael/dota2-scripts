@@ -1,5 +1,6 @@
 #[allow(dead_code)]
 pub mod minimap_artifacts;
+pub mod minimap_analysis;
 #[allow(dead_code)]
 pub mod minimap_capture;
 #[allow(dead_code)]
