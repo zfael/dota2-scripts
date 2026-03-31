@@ -59,7 +59,36 @@ pub fn process_capture_attempt(
 }
 
 pub fn start_minimap_capture_worker(
-    _settings: Arc<Mutex<Settings>>,
-    _app_state: Arc<Mutex<AppState>>,
+    settings: Arc<Mutex<Settings>>,
+    app_state: Arc<Mutex<AppState>>,
 ) {
+    loop {
+        let config = {
+            let guard = settings.lock().unwrap();
+            guard.minimap_capture.clone()
+        };
+
+        if !config.enabled {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            continue;
+        }
+
+        let previous_failures = app_state
+            .lock()
+            .unwrap()
+            .minimap_capture
+            .as_ref()
+            .map(|snapshot| snapshot.consecutive_failures)
+            .unwrap_or(0);
+
+        let status = process_capture_attempt(
+            &config,
+            CaptureAttemptResult::WindowNotFound,
+            None,
+            previous_failures,
+        );
+
+        app_state.lock().unwrap().minimap_capture = Some(status);
+        std::thread::sleep(std::time::Duration::from_millis(config.capture_interval_ms));
+    }
 }

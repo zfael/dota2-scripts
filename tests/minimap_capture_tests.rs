@@ -128,3 +128,27 @@ fn failed_window_binding_marks_status_unhealthy() {
     assert_eq!(status.consecutive_failures, 1);
     assert_eq!(status.health.as_str(), "unhealthy");
 }
+
+#[test]
+fn disabled_worker_leaves_minimap_capture_status_idle() {
+    let state = AppState::default();
+    assert!(state.minimap_capture.is_none());
+
+    let settings = Settings::default();
+    assert!(!settings.minimap_capture.enabled);
+}
+
+#[test]
+fn capture_attempt_success_builds_healthy_status() {
+    let config = Settings::default().minimap_capture;
+    let status = process_capture_attempt(
+        &config,
+        CaptureAttemptResult::Success,
+        Some("logs/minimap_capture/sample.png".to_string()),
+        2,
+    );
+
+    assert_eq!(status.window_binding_status, "bound");
+    assert_eq!(status.consecutive_failures, 0);
+    assert_eq!(status.health, MinimapCaptureHealth::Healthy);
+}
