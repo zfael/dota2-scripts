@@ -1,8 +1,12 @@
-use crate::ipc_types::GameStateDto;
+use crate::ipc_types::{ActivityEntryDto, GameStateDto};
 use crate::TauriAppState;
+use dota2_scripts::actions::activity;
 use dota2_scripts::actions::danger_detector;
-use std::time::Duration;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
+
+static ACTIVITY_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 /// Starts a background task that polls AppState and emits game_state events at ~5Hz
 pub fn start_game_state_emitter(app: AppHandle) {
@@ -15,24 +19,62 @@ pub fn start_game_state_emitter(app: AppHandle) {
         loop {
             tokio::time::sleep(Duration::from_millis(200)).await;
 
-            let dto = {
-                let state = match app_state.lock() {
-                    Ok(s) => s,
-                    Err(_) => continue,
+            // Emit game state if changed
+            {
+                let dto = {
+                    let state = match app_state.lock() {
+                        Ok(s) => s,
+                        Err(_) => {
+                            drain_and_emit_activities(&app);
+                            continue;
+                        }
+                    };
+
+                    if state.metrics.events_processed != last_events_processed {
+                        last_events_processed = state.metrics.events_processed;
+                        Some(build_game_state_dto(&state))
+                    } else {
+                        None
+                    }
                 };
 
-                // Only emit if there's new data
-                if state.metrics.events_processed == last_events_processed {
-                    continue;
+                if let Some(dto) = dto {
+                    let _ = app.emit("gsi_update", &dto);
                 }
-                last_events_processed = state.metrics.events_processed;
+            }
 
-                build_game_state_dto(&state)
-            };
-
-            let _ = app.emit("gsi_update", &dto);
+            // Drain and emit activity events
+            drain_and_emit_activities(&app);
         }
     });
+}
+
+fn drain_and_emit_activities(app: &AppHandle) {
+    let entries = activity::drain_activities();
+    for entry in entries {
+        let id = ACTIVITY_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let timestamp = entry
+            .timestamp
+            .duration_since(UNIX_EPOCH)
+            .map(|d| {
+                let secs = d.as_secs() % 86400;
+                let hours = secs / 3600;
+                let minutes = (secs % 3600) / 60;
+                let seconds = secs % 60;
+                let millis = d.subsec_millis();
+                format!("{:02}:{:02}:{:02}.{:03}", hours, minutes, seconds, millis)
+            })
+            .unwrap_or_else(|_| "00:00:00.000".to_string());
+
+        let dto = ActivityEntryDto {
+            id: id.to_string(),
+            timestamp,
+            category: entry.category.as_str().to_string(),
+            message: entry.message,
+            details: entry.details,
+        };
+        let _ = app.emit("activity_event", &dto);
+    }
 }
 
 fn build_game_state_dto(state: &dota2_scripts::state::AppState) -> GameStateDto {

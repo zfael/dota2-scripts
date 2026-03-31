@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { ActivityEntry, ActivityCategory } from "../types/activity";
-import { mockActivityLog } from "./mockData";
+import { isTauri } from "../lib/tauri";
 
 interface ActivityStore {
   entries: ActivityEntry[];
@@ -9,10 +9,11 @@ interface ActivityStore {
   addEntry: (entry: ActivityEntry) => void;
   clear: () => void;
   filteredEntries: () => ActivityEntry[];
+  startListening: () => Promise<() => void>;
 }
 
 export const useActivityStore = create<ActivityStore>((set, get) => ({
-  entries: mockActivityLog,
+  entries: [],
   filter: "all",
   setFilter: (filter) => set({ filter }),
   addEntry: (entry) =>
@@ -20,6 +21,19 @@ export const useActivityStore = create<ActivityStore>((set, get) => ({
   clear: () => set({ entries: [] }),
   filteredEntries: () => {
     const { entries, filter } = get();
-    return filter === "all" ? entries : entries.filter((e) => e.category === filter);
+    return filter === "all"
+      ? entries
+      : entries.filter((e) => e.category === filter);
+  },
+  startListening: async () => {
+    if (!isTauri()) return () => {};
+
+    const { listen } = await import("@tauri-apps/api/event");
+
+    const unlisten = await listen<ActivityEntry>("activity_event", (event) => {
+      get().addEntry(event.payload);
+    });
+
+    return unlisten;
   },
 }));

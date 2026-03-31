@@ -7,6 +7,7 @@
 //! - Cooldown lockout has elapsed (prevents double-fire)
 //! - Item being used costs mana (skip list items like Blink, Phase Boots are excluded)
 
+use crate::actions::activity::{push_activity, ActivityCategory};
 use crate::config::Settings;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
@@ -317,6 +318,7 @@ pub fn press_ability_with_soul_ring(key: char, settings: &Settings) {
             drop(state); // Release lock before sleeping
             
             info!("💍 Soul Ring before ability '{}'", key);
+            push_activity(ActivityCategory::Action, "Soul Ring combo triggered");
             crate::input::simulation::press_key(sr_key);
             std::thread::sleep(std::time::Duration::from_millis(
                 settings.soul_ring.delay_before_ability_ms,

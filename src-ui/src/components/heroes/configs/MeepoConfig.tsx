@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Card } from "../../common/Card";
 import { Toggle } from "../../common/Toggle";
 import { Slider } from "../../common/Slider";
@@ -5,6 +6,8 @@ import { NumberInput } from "../../common/NumberInput";
 import { KeyInput } from "../../common/KeyInput";
 import { TagList } from "../../common/TagList";
 import { useConfigStore } from "../../../stores/configStore";
+import { isTauri } from "../../../lib/tauri";
+import type { MeepoObservedState } from "../../../types/game";
 
 export default function MeepoConfig() {
   const config = useConfigStore((s) => s.config.heroes.meepo);
@@ -13,8 +16,98 @@ export default function MeepoConfig() {
   const setFarm = (updates: Partial<typeof config.farm_assist>) =>
     set({ farm_assist: { ...config.farm_assist, ...updates } });
 
+  const [meepoState, setMeepoState] = useState<MeepoObservedState | null>(null);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    let cancelled = false;
+
+    const poll = async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        while (!cancelled) {
+          const state = await invoke<MeepoObservedState | null>("get_meepo_state");
+          if (!cancelled) setMeepoState(state);
+          await new Promise((r) => setTimeout(r, 500));
+        }
+      } catch {
+        // Silently ignore — command may not be available
+      }
+    };
+
+    poll();
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <>
+      {meepoState && (
+        <div className="col-span-2">
+          <Card title="Live State">
+            <div className="grid grid-cols-3 gap-3 text-sm">
+              <div>
+                <span className="text-muted">HP:</span>{" "}
+                <span className={meepoState.healthPercent < 30 ? "text-danger" : "text-terminal"}>
+                  {meepoState.healthPercent}%
+                </span>
+              </div>
+              <div>
+                <span className="text-muted">Mana:</span>{" "}
+                <span className="text-info">{meepoState.manaPercent}%</span>
+              </div>
+              <div>
+                <span className="text-muted">Status:</span>{" "}
+                {meepoState.inDanger ? (
+                  <span className="text-danger">⚠ DANGER</span>
+                ) : meepoState.alive ? (
+                  <span className="text-terminal">Alive</span>
+                ) : (
+                  <span className="text-muted">Dead</span>
+                )}
+              </div>
+              <div>
+                <span className="text-muted">Poof:</span>{" "}
+                <span className={meepoState.poofReady ? "text-terminal" : "text-muted"}>
+                  {meepoState.poofReady ? "Ready" : "CD"}
+                </span>
+              </div>
+              <div>
+                <span className="text-muted">Dig:</span>{" "}
+                <span className={meepoState.digReady ? "text-terminal" : "text-muted"}>
+                  {meepoState.digReady ? "Ready" : "CD"}
+                </span>
+              </div>
+              <div>
+                <span className="text-muted">MegaMeepo:</span>{" "}
+                <span className={meepoState.megameepoReady ? "text-terminal" : "text-muted"}>
+                  {meepoState.megameepoReady ? "Ready" : "CD"}
+                </span>
+              </div>
+              <div>
+                <span className="text-muted">Blink:</span>{" "}
+                <span className={meepoState.blinkAvailable ? "text-terminal" : "text-muted"}>
+                  {meepoState.blinkAvailable ? "Available" : "No"}
+                </span>
+              </div>
+              <div>
+                <span className="text-muted">Shard:</span>{" "}
+                {meepoState.hasShard ? "✓" : "✗"}
+              </div>
+              <div>
+                <span className="text-muted">Scepter:</span>{" "}
+                {meepoState.hasScepter ? "✓" : "✗"}
+              </div>
+            </div>
+            {meepoState.comboItems.length > 0 && (
+              <div className="mt-2 text-sm">
+                <span className="text-muted">Combo items ready:</span>{" "}
+                {meepoState.comboItems.join(", ")}
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
       <div className="space-y-4">
         <Card title="Keybindings">
           <div className="grid grid-cols-2 gap-3">
@@ -63,4 +156,3 @@ export default function MeepoConfig() {
     </>
   );
 }
-

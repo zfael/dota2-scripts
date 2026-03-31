@@ -1,3 +1,4 @@
+use crate::actions::activity::{push_activity, ActivityCategory};
 use crate::actions::executor::ActionExecutor;
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Item};
@@ -279,6 +280,10 @@ impl SurvivabilityActions {
 
         if let Some(key) = key {
             info!("Using {} in {} (key: {})", item_name, slot, key);
+            push_activity(
+                ActivityCategory::Action,
+                format!("Healing item used: {}", item_name.replace("item_", "")),
+            );
             crate::input::press_key(key);
         }
     }
@@ -352,6 +357,10 @@ impl SurvivabilityActions {
 
                             if let Some(key) = key {
                                 info!("Using {} in {} (key: {})", item.name, slot, key);
+                                push_activity(
+                                    ActivityCategory::Action,
+                                    format!("Defensive item activated: {}", item.name.replace("item_", "")),
+                                );
                                 ready_items.push((item.name.clone(), key));
                             }
                             break; // Move to next item type
@@ -452,6 +461,10 @@ impl SurvivabilityActions {
         info!(
             "⚡ Using neutral item in danger: {} (HP: {}%)",
             neutral_item.name, event.hero.health_percent
+        );
+        push_activity(
+            ActivityCategory::Action,
+            format!("Neutral item used: {}", neutral_item.name.replace("item_", "")),
         );
 
         // Release lock before input simulation

@@ -89,7 +89,7 @@ mod tests {
 
     #[test]
     fn test_push_and_drain() {
-        // Drain any pre-existing entries
+        // Drain any pre-existing entries (from concurrent tests sharing the global buffer)
         drain_activities();
 
         push_activity(ActivityCategory::System, "test message");
@@ -100,6 +100,11 @@ mod tests {
         );
 
         let entries = drain_activities();
+        // Filter to only our test entries (other parallel tests may push to the global buffer)
+        let entries: Vec<_> = entries
+            .into_iter()
+            .filter(|e| e.message == "test message" || e.message == "action msg")
+            .collect();
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].category, ActivityCategory::System);
         assert_eq!(entries[0].message, "test message");
@@ -110,6 +115,10 @@ mod tests {
 
         // Buffer should be empty after drain
         let entries = drain_activities();
+        let entries: Vec<_> = entries
+            .into_iter()
+            .filter(|e| e.message == "test message" || e.message == "action msg")
+            .collect();
         assert!(entries.is_empty());
     }
 
@@ -118,12 +127,25 @@ mod tests {
         drain_activities();
 
         for i in 0..MAX_BUFFER_SIZE + 10 {
-            push_activity(ActivityCategory::System, format!("msg {}", i));
+            push_activity(ActivityCategory::System, format!("overflow_msg {}", i));
         }
 
         let entries = drain_activities();
-        assert_eq!(entries.len(), MAX_BUFFER_SIZE);
-        // Oldest entries should have been dropped
-        assert_eq!(entries[0].message, "msg 10");
+        // The total buffer (including any concurrent test entries) must not exceed MAX_BUFFER_SIZE
+        assert!(entries.len() <= MAX_BUFFER_SIZE);
+        // Our overflow entries should be present (oldest ones dropped)
+        let our_entries: Vec<_> = entries
+            .into_iter()
+            .filter(|e| e.message.starts_with("overflow_msg "))
+            .collect();
+        assert!(!our_entries.is_empty());
+        // The entries we do have should be the later ones (oldest dropped first)
+        let first_msg = &our_entries[0].message;
+        let first_idx: usize = first_msg
+            .strip_prefix("overflow_msg ")
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert!(first_idx > 0, "oldest entries should have been dropped");
     }
 }

@@ -71,3 +71,19 @@ export interface DiagnosticsState {
   soulRingState: "ready" | "triggered" | "cooldown";
   blockedKeys: string[];
 }
+
+export interface MeepoObservedState {
+  healthPercent: number;
+  manaPercent: number;
+  inDanger: boolean;
+  alive: boolean;
+  stunned: boolean;
+  silenced: boolean;
+  poofReady: boolean;
+  digReady: boolean;
+  megameepoReady: boolean;
+  hasShard: boolean;
+  hasScepter: boolean;
+  blinkAvailable: boolean;
+  comboItems: string[];
+}

@@ -1,3 +1,4 @@
+use crate::actions::activity::{push_activity, ActivityCategory};
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Hero};
 use crate::state::AppState;
@@ -133,8 +134,12 @@ pub async fn process_gsi_events(
         // Update app state
         {
             let mut state = app_state.lock().unwrap();
+            let first_event = state.last_event.is_none();
             state.update_from_gsi(event.clone());
             state.metrics.current_queue_depth = rx.len();
+            if first_event {
+                push_activity(ActivityCategory::System, "GSI connected");
+            }
         }
 
         // Keep keyboard-supporting runtime state fresh even when the main

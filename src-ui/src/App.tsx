@@ -57,11 +57,13 @@ export default function App() {
   useEffect(() => {
     useConfigStore.getState().loadConfig();
     useUIStore.getState().loadInitialState();
-    const unlistenPromise = useGameStore.getState().startListening();
+    const gameUnlistenPromise = useGameStore.getState().startListening();
+    const activityUnlistenPromise = useActivityStore.getState().startListening();
     useUpdateStore.getState().loadInitialState();
 
     return () => {
-      unlistenPromise.then((unlisten) => unlisten());
+      gameUnlistenPromise.then((unlisten) => unlisten());
+      activityUnlistenPromise.then((unlisten) => unlisten());
     };
   }, []);
 

@@ -140,6 +140,7 @@ pub fn run() {
             commands::updates::check_for_updates,
             commands::updates::apply_update,
             commands::updates::dismiss_update,
+            commands::meepo::get_meepo_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

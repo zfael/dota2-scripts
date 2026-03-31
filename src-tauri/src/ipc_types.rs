@@ -93,6 +93,25 @@ pub struct ActivityEntryDto {
     pub details: Option<String>,
 }
 
+/// Meepo hero-specific observed runtime state
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeepoStateDto {
+    pub health_percent: u32,
+    pub mana_percent: u32,
+    pub in_danger: bool,
+    pub alive: bool,
+    pub stunned: bool,
+    pub silenced: bool,
+    pub poof_ready: bool,
+    pub dig_ready: bool,
+    pub megameepo_ready: bool,
+    pub has_shard: bool,
+    pub has_scepter: bool,
+    pub blink_available: bool,
+    pub combo_items: Vec<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

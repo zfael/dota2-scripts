@@ -1,3 +1,4 @@
+use crate::actions::activity::{push_activity, ActivityCategory};
 use crate::config::DangerDetectionConfig;
 use crate::models::GsiWebhookEvent;
 use lazy_static::lazy_static;
@@ -69,6 +70,10 @@ pub fn update(event: &GsiWebhookEvent, config: &DangerDetectionConfig) -> bool {
                 "⚠️ DANGER DETECTED! HP: {}/{} ({}%), lost {}HP in {}ms",
                 current_hp, max_hp, current_hp_percent, hp_delta, time_delta_ms
             );
+            push_activity(
+                ActivityCategory::Danger,
+                format!("⚠ Danger detected — HP {}%", current_hp_percent),
+            );
         } else if !in_danger && tracker.danger_detected {
             // Check if danger should be cleared
             if let Some(danger_start) = tracker.danger_start_time {
@@ -76,6 +81,10 @@ pub fn update(event: &GsiWebhookEvent, config: &DangerDetectionConfig) -> bool {
                     tracker.danger_detected = false;
                     tracker.danger_start_time = None;
                     info!("✓ Danger cleared - HP stabilized at {}HP ({}%)", current_hp, current_hp_percent);
+                    push_activity(
+                        ActivityCategory::Danger,
+                        format!("✓ Danger cleared — HP {}%", current_hp_percent),
+                    );
                 }
             }
         }
