@@ -58,7 +58,7 @@ impl BaselineMask {
             self.built = true;
             return;
         }
-        let cutoff = (self.frames as f32 * self.threshold) as u32;
+        let cutoff = (self.frames as f32 * self.threshold).ceil() as u32;
         let total = (self.width * self.height) as usize;
         self.static_red = self.red_counts.iter().take(total).map(|&c| c >= cutoff).collect();
         self.static_green = self.green_counts.iter().take(total).map(|&c| c >= cutoff).collect();
