@@ -1,7 +1,8 @@
 use serde::Serialize;
+use std::cmp::PartialEq;
 
 /// Matches frontend GameState in src-ui/src/types/game.ts
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct GameStateDto {
     pub hero_name: Option<String>,
@@ -25,6 +26,7 @@ pub struct AppStateDto {
     pub selected_hero: Option<String>,
     pub gsi_enabled: bool,
     pub standalone_enabled: bool,
+    pub app_version: String,
 }
 
 /// Matches frontend QueueMetrics in src-ui/src/types/game.ts

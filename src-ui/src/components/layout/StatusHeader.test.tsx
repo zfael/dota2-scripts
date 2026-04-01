@@ -6,12 +6,14 @@ const defaultProps = {
   silenced: false,
   alive: true,
   respawnTimer: null,
+  appVersion: "0.14.0-rc.9",
 };
 
 describe("StatusHeader", () => {
   it("renders idle state when no game data", () => {
     render(<StatusHeader {...defaultProps} />);
     expect(screen.getByText("Waiting for game...")).toBeInTheDocument();
+    expect(screen.getByText("v0.14.0-rc.9")).toBeInTheDocument();
   });
 
   it("renders in-game state with hero info", () => {
@@ -45,5 +47,10 @@ describe("StatusHeader", () => {
       />,
     );
     expect(screen.getByText("⚠ DANGER")).toBeInTheDocument();
+  });
+
+  it("renders disconnected state when GSI is stale", () => {
+    render(<StatusHeader connected={false} {...defaultProps} />);
+    expect(screen.getByText("Disconnected")).toBeInTheDocument();
   });
 });

@@ -69,6 +69,7 @@ export default function App() {
   }, []);
 
   const game = useGameStore((s) => s.game);
+  const appVersion = useUIStore((s) => s.appVersion);
   useRuneAlert(game.runeTimer);
   const entries = useActivityStore((s) => s.entries);
   const tickerEntries = entries.slice(-3).map((e) => ({
@@ -90,6 +91,7 @@ export default function App() {
             manaPercent={game.manaPercent}
             inDanger={game.inDanger}
             connected={game.connected}
+            appVersion={appVersion}
             runeTimer={game.runeTimer}
             stunned={game.stunned}
             silenced={game.silenced}

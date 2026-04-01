@@ -2312,6 +2312,10 @@ In the `StatusHeader` component, find the section that displays hero info and ad
 
 Place this near the top-left of the header, before the hero name/stats.
 
+Later implementation note:
+- Treat this indicator as freshness-based, not "we have ever received at least one GSI payload".
+- Include the post-match / stale-GSI scenario in Pencil and mock designs so the header does not imply an active match after GSI goes stale.
+
 - [ ] **Step 2: Verify builds**
 
 ```bash

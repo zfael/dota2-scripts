@@ -1,8 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
+import { useUIStore } from "../../stores/uiStore";
 
 function renderSidebar() {
+  useUIStore.setState({ appVersion: "0.14.0-rc.9", sidebarCollapsed: false });
   return render(
     <MemoryRouter initialEntries={["/"]}>
       <Sidebar />
@@ -25,6 +27,6 @@ describe("Sidebar", () => {
 
   it("renders version in footer", () => {
     renderSidebar();
-    expect(screen.getByText(/v\d/)).toBeInTheDocument();
+    expect(screen.getByText("v0.14.0-rc.9")).toBeInTheDocument();
   });
 });

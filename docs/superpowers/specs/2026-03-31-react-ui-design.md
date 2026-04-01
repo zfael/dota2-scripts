@@ -55,8 +55,9 @@ Persistent horizontal bar across the top of the content area (right of sidebar).
 - App title: "D2 Scripts"
 - Pulsing dot: "Waiting for game..."
 - App version on right
+- Pencil/design note: also cover the post-match stale-GSI scenario where transport may have been active recently but the app is no longer in an active match; this should not remain visually equivalent to an active in-game state.
 
-**In-game state (GSI active):**
+**In-game state (fresh GSI active):**
 - Hero name + level (auto-detected)
 - HP bar: gradient green→yellow→red, numerical percentage overlaid
 - Mana bar: blue, numerical percentage overlaid
@@ -64,6 +65,7 @@ Persistent horizontal bar across the top of the content area (right of sidebar).
 - Danger indicator: red pulsing "⚠ DANGER" badge (only when danger state active)
 - Rune timer: countdown to next rune spawn, flashes amber when imminent
 - Connection indicator: green dot = GSI connected, red = disconnected
+- Version text should come from runtime app metadata, not a hardcoded design placeholder.
 
 **Update Banner:**
 Appears as a persistent banner below the status header when an update is available. Visible across all pages.

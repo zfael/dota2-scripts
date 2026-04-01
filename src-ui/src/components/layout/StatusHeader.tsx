@@ -10,6 +10,7 @@ interface StatusHeaderProps {
   manaPercent?: number;
   inDanger?: boolean;
   connected?: boolean;
+  appVersion: string;
   runeTimer?: number | null;
   stunned: boolean;
   silenced: boolean;
@@ -24,6 +25,7 @@ export function StatusHeader({
   manaPercent,
   inDanger = false,
   connected = false,
+  appVersion,
   runeTimer,
   stunned,
   silenced,
@@ -90,7 +92,7 @@ export function StatusHeader({
             <span className="text-xs text-subtle">Waiting for game...</span>
           </div>
           <div className="flex-1" />
-          <span className="text-xs text-muted">v0.1.0-dev</span>
+          <span className="text-xs text-muted">v{appVersion}</span>
         </>
       )}
     </header>

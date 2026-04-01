@@ -27,6 +27,7 @@ const navItems = [
 export function Sidebar() {
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
+  const appVersion = useUIStore((s) => s.appVersion);
 
   return (
     <aside
@@ -61,7 +62,7 @@ export function Sidebar() {
       <div className="border-t border-border">
         {!sidebarCollapsed && (
           <div className="px-4 pt-3">
-            <span className="text-xs text-muted">v0.1.0-dev</span>
+            <span className="text-xs text-muted">v{appVersion}</span>
           </div>
         )}
         <button

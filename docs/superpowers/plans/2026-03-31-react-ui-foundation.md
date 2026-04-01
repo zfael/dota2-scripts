@@ -1399,7 +1399,7 @@ export function Sidebar() {
         ))}
       </nav>
       <div className="border-t border-border p-4">
-        <span className="text-xs text-muted">v0.1.0-dev</span>
+        <span className="text-xs text-muted">v{appVersion}</span>
       </div>
     </aside>
   );

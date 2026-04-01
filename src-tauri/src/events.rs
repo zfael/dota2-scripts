@@ -14,7 +14,7 @@ pub fn start_game_state_emitter(app: AppHandle) {
     let app_state = tauri_state.app_state.clone();
 
     tauri::async_runtime::spawn(async move {
-        let mut last_events_processed: u64 = 0;
+        let mut last_emitted_state: Option<GameStateDto> = None;
 
         loop {
             tokio::time::sleep(Duration::from_millis(200)).await;
@@ -30,15 +30,16 @@ pub fn start_game_state_emitter(app: AppHandle) {
                         }
                     };
 
-                    if state.metrics.events_processed != last_events_processed {
-                        last_events_processed = state.metrics.events_processed;
-                        Some(build_game_state_dto(&state))
+                    let dto = build_game_state_dto(&state);
+                    if last_emitted_state.as_ref() != Some(&dto) {
+                        Some(dto)
                     } else {
                         None
                     }
                 };
 
                 if let Some(dto) = dto {
+                    last_emitted_state = Some(dto.clone());
                     let _ = app.emit("gsi_update", &dto);
                 }
             }
@@ -78,7 +79,11 @@ fn drain_and_emit_activities(app: &AppHandle) {
 }
 
 fn build_game_state_dto(state: &dota2_scripts::state::AppState) -> GameStateDto {
-    if let Some(ref event) = state.last_event {
+    if state.has_recent_gsi_activity() {
+        let event = state
+            .last_event
+            .as_ref()
+            .expect("recent GSI activity should always have a last event");
         let rune_timer = state
             .rune_alerts
             .as_ref()

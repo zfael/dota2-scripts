@@ -11,7 +11,7 @@ pub fn get_diagnostics(state: tauri::State<'_, TauriAppState>) -> Result<Diagnos
         .map_err(|e| format!("Failed to lock app state: {}", e))?;
 
     Ok(DiagnosticsDto {
-        gsi_connected: app.last_event.is_some(),
+        gsi_connected: app.has_recent_gsi_activity(),
         keyboard_hook_active: true,
         queue_metrics: QueueMetricsDto {
             events_processed: app.metrics.events_processed,

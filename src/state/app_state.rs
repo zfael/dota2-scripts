@@ -2,6 +2,9 @@ use crate::models::{GsiWebhookEvent, Hero};
 use crate::observability::minimap_capture_state::MinimapCaptureStatusSnapshot;
 use crate::observability::rune_alerts::RuneAlertSnapshot;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime};
+
+const GSI_ACTIVITY_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HeroType {
@@ -86,6 +89,7 @@ pub struct AppState {
     pub gsi_enabled: bool,
     pub standalone_enabled: bool,
     pub last_event: Option<GsiWebhookEvent>,
+    pub last_gsi_activity_at: Option<SystemTime>,
     pub metrics: QueueMetrics,
     pub trigger_key: Arc<Mutex<String>>,
     pub sf_enabled: Arc<Mutex<bool>>,
@@ -102,6 +106,7 @@ impl Default for AppState {
             gsi_enabled: true,
             standalone_enabled: true,
             last_event: None,
+            last_gsi_activity_at: None,
             metrics: QueueMetrics::default(),
             trigger_key: Arc::new(Mutex::new("Home".to_string())),
             sf_enabled: Arc::new(Mutex::new(false)),
@@ -129,7 +134,15 @@ impl AppState {
         }
 
         self.last_event = Some(event);
+        self.last_gsi_activity_at = Some(SystemTime::now());
         self.metrics.events_processed += 1;
+    }
+
+    pub fn has_recent_gsi_activity(&self) -> bool {
+        self.last_gsi_activity_at
+            .and_then(|last_seen| SystemTime::now().duration_since(last_seen).ok())
+            .map(|elapsed| elapsed <= GSI_ACTIVITY_TIMEOUT)
+            .unwrap_or(false)
     }
 }
 

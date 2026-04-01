@@ -6,6 +6,7 @@ interface UIStore {
   toggleSidebar: () => void;
   gsiEnabled: boolean;
   standaloneEnabled: boolean;
+  appVersion: string;
   setGsiEnabled: (enabled: boolean) => void;
   setStandaloneEnabled: (enabled: boolean) => void;
   loadInitialState: () => Promise<void>;
@@ -16,6 +17,7 @@ export const useUIStore = create<UIStore>((set) => ({
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   gsiEnabled: true,
   standaloneEnabled: false,
+  appVersion: "0.1.0",
 
   setGsiEnabled: (enabled) => {
     set({ gsiEnabled: enabled });
@@ -43,10 +45,12 @@ export const useUIStore = create<UIStore>((set) => ({
         selectedHero: string | null;
         gsiEnabled: boolean;
         standaloneEnabled: boolean;
+        appVersion: string;
       }>("get_app_state");
       set({
         gsiEnabled: state.gsiEnabled,
         standaloneEnabled: state.standaloneEnabled,
+        appVersion: state.appVersion,
       });
     } catch (e) {
       console.error("Failed to load app state:", e);
