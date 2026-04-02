@@ -110,7 +110,16 @@ pub fn find_item_slot_by_name(
 
 /// Snapshot-aware helpers for danger-aware gating used by survivability paths
 #[cfg_attr(not(test), allow(dead_code))]
-fn healing_threshold_for_event(settings: &Settings, in_danger: bool) -> u32 {
+fn healing_threshold_for_event(event: &GsiWebhookEvent, settings: &Settings, in_danger: bool) -> u32 {
+    let lane_phase_duration_seconds = settings.common.lane_phase_duration_seconds;
+
+    if lane_phase_duration_seconds > 0
+        && event.map.clock_time >= 0
+        && (event.map.clock_time as u64) < lane_phase_duration_seconds
+    {
+        return settings.common.lane_phase_healing_threshold;
+    }
+
     if in_danger && settings.danger_detection.enabled {
         settings.danger_detection.healing_threshold_in_danger
     } else {
@@ -211,7 +220,7 @@ impl SurvivabilityActions {
         }
 
         let settings = self.settings.lock().unwrap();
-        let threshold = healing_threshold_for_event(&settings, in_danger);
+        let threshold = healing_threshold_for_event(event, &settings, in_danger);
 
         // Check if HP is below threshold
         if event.hero.health_percent >= threshold {
@@ -758,16 +767,88 @@ mod snapshot_tests {
     }
 
     #[test]
-    fn healing_threshold_uses_passed_danger_flag() {
+    fn healing_threshold_uses_passed_danger_flag_after_lane_phase() {
         let settings = Settings::default();
+        let mut event = base_event(hero_with_health(100, 100), empty_items());
+        event.map.clock_time = 900;
 
         assert_eq!(
-            healing_threshold_for_event(&settings, true),
+            healing_threshold_for_event(&event, &settings, true),
             settings.danger_detection.healing_threshold_in_danger
         );
         assert_eq!(
-            healing_threshold_for_event(&settings, false),
+            healing_threshold_for_event(&event, &settings, false),
             settings.common.survivability_hp_threshold
+        );
+    }
+
+    #[test]
+    fn lane_phase_healing_threshold_overrides_danger_before_cutoff() {
+        let settings = Settings::default();
+        let mut event = base_event(hero_with_health(100, 100), empty_items());
+        event.map.clock_time = 479;
+
+        assert_eq!(healing_threshold_for_event(&event, &settings, true), 12);
+    }
+
+    #[test]
+    fn lane_phase_healing_threshold_expires_at_cutoff() {
+        let settings = Settings::default();
+        let mut event = base_event(hero_with_health(100, 100), empty_items());
+        event.map.clock_time = 480;
+
+        assert_eq!(
+            healing_threshold_for_event(&event, &settings, true),
+            settings.danger_detection.healing_threshold_in_danger
+        );
+    }
+
+    #[test]
+    fn lane_phase_healing_threshold_falls_back_to_danger_after_cutoff() {
+        let settings = Settings::default();
+        let mut event = base_event(hero_with_health(100, 100), empty_items());
+        event.map.clock_time = 900;
+
+        assert_eq!(
+            healing_threshold_for_event(&event, &settings, true),
+            settings.danger_detection.healing_threshold_in_danger
+        );
+    }
+
+    #[test]
+    fn lane_phase_healing_threshold_falls_back_to_normal_after_cutoff() {
+        let settings = Settings::default();
+        let mut event = base_event(hero_with_health(100, 100), empty_items());
+        event.map.clock_time = 900;
+
+        assert_eq!(
+            healing_threshold_for_event(&event, &settings, false),
+            settings.common.survivability_hp_threshold
+        );
+    }
+
+    #[test]
+    fn lane_phase_healing_threshold_is_disabled_when_duration_is_zero() {
+        let mut settings = Settings::default();
+        settings.common.lane_phase_duration_seconds = 0;
+        let mut event = base_event(hero_with_health(100, 100), empty_items());
+        event.map.clock_time = 120;
+
+        assert_eq!(
+            healing_threshold_for_event(&event, &settings, true),
+            settings.danger_detection.healing_threshold_in_danger
+        );
+    }
+
+    #[test]
+    fn lane_phase_healing_threshold_ignores_negative_clock_time() {
+        let settings = Settings::default();
+        let mut event = base_event(hero_with_health(100, 100), empty_items());
+        event.map.clock_time = -30;
+
+        assert_eq!(
+            healing_threshold_for_event(&event, &settings, true),
+            settings.danger_detection.healing_threshold_in_danger
         );
     }
 
