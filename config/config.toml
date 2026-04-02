@@ -39,6 +39,8 @@ artifact_output_dir = "logs/minimap_capture"
 
 [common]
 survivability_hp_threshold = 30
+lane_phase_duration_seconds = 480
+lane_phase_healing_threshold = 12
 
 [armlet]
 enabled = true

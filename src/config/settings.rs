@@ -64,6 +64,10 @@ pub struct LoggingConfig {
 pub struct CommonConfig {
     #[serde(default = "default_survivability_threshold")]
     pub survivability_hp_threshold: u32,
+    #[serde(default = "default_lane_phase_duration_seconds")]
+    pub lane_phase_duration_seconds: u64,
+    #[serde(default = "default_lane_phase_healing_threshold")]
+    pub lane_phase_healing_threshold: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -698,6 +702,12 @@ fn default_log_level() -> String {
 fn default_survivability_threshold() -> u32 {
     30
 }
+fn default_lane_phase_duration_seconds() -> u64 {
+    480
+}
+fn default_lane_phase_healing_threshold() -> u32 {
+    12
+}
 fn default_armlet_enabled() -> bool {
     true
 }
@@ -1114,6 +1124,8 @@ impl Default for CommonConfig {
     fn default() -> Self {
         Self {
             survivability_hp_threshold: default_survivability_threshold(),
+            lane_phase_duration_seconds: default_lane_phase_duration_seconds(),
+            lane_phase_healing_threshold: default_lane_phase_healing_threshold(),
         }
     }
 }
@@ -1574,5 +1586,13 @@ mod tests {
         assert_eq!(settings.rune_alerts.alert_lead_seconds, 10);
         assert_eq!(settings.rune_alerts.interval_seconds, 120);
         assert!(settings.rune_alerts.audio_enabled);
+    }
+
+    #[test]
+    fn lane_phase_healing_defaults_are_exposed_through_settings() {
+        let settings = Settings::default();
+
+        assert_eq!(settings.common.lane_phase_duration_seconds, 480);
+        assert_eq!(settings.common.lane_phase_healing_threshold, 12);
     }
 }
