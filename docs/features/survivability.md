@@ -52,8 +52,11 @@ Owned by `src/actions/common.rs::check_and_use_healing_items()`.
 
 | Mode | Threshold source | Default |
 |---|---|---|
+| Lane phase | `common.lane_phase_healing_threshold` while `0 <= map.clock_time < common.lane_phase_duration_seconds` | `12` |
 | Normal | `common.survivability_hp_threshold` | `30` |
 | Danger | `danger_detection.healing_threshold_in_danger` | `50` |
+
+Lane phase takes precedence over both normal and danger healing during the configured early-game window. Set `common.lane_phase_duration_seconds = 0` to disable the override. Negative pre-game clock values do not count as lane phase.
 
 ### Item order
 

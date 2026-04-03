@@ -68,6 +68,8 @@
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |
 |---|---:|---:|---|
 | `survivability_hp_threshold` | `30` | `30` | Base HP% threshold for shared healing when danger mode is not active. See `docs/features/survivability.md`. |
+| `lane_phase_duration_seconds` | `480` | `480` | Duration of the global lane-phase healing override. Set to `0` to disable it. |
+| `lane_phase_healing_threshold` | `12` | `12` | HP% threshold used during `0 <= map.clock_time < lane_phase_duration_seconds`, before normal or danger healing thresholds are considered. |
 
 ## `[armlet]`
 

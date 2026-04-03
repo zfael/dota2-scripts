@@ -78,8 +78,11 @@ Owned by `src/actions/common.rs::check_and_use_healing_items()` and the event-sn
 
 | Mode | Threshold source | Default | Max items per call |
 |---|---|---|---|
+| Lane phase | `common.lane_phase_healing_threshold` while `0 <= map.clock_time < common.lane_phase_duration_seconds` | `12` | same per-call limit the current `in_danger` flag would have used |
 | Normal | `common.survivability_hp_threshold` | `30` | `1` |
 | Danger | `danger_detection.healing_threshold_in_danger` | `50` | `danger_detection.max_healing_items_per_danger` (`3`) |
+
+During the configured lane-phase window, the shared override wins even if the current danger snapshot is `true`. This override only changes the HP threshold. The per-call healing item budget still follows the existing `in_danger` flag logic.
 
 **Code nuance**: `max_healing_items_per_danger` is enforced per call to `check_and_use_healing_items()`. The current implementation does **not** track a once-per-danger-window total across multiple GSI events.
 
