@@ -130,18 +130,21 @@ hp_threshold = 50
 allowed_items = [
     "item_essence_ring",
     "item_minotaur_horn",
-    "item_jidi_pollen_bag",
     "item_metamorphic_mandible",
-    "item_riftshadow_prism",
-    "item_kobold_cup",
-    "item_polliwog_charm",
+    "item_jidi_pollen_bag",
     "item_ash_legion_shield",
-    "item_mana_draught",
-    "item_pogo_stick",
-    "item_psychic_headband",
-    "item_crippling_crossbow",
     "item_idol_of_screeauk",
-    "item_flayers_bota"
+    "item_kobold_cup",
+    "item_crippling_crossbow"
+]
+
+[mana_automation]
+enabled = true
+mana_threshold_percent = 25
+excluded_heroes = ["npc_dota_hero_huskar"]
+allowed_items = [
+    "item_arcane_boots",
+    "item_mana_draught",
 ]
 
 [heroes.largo]

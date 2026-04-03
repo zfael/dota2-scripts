@@ -1,12 +1,25 @@
 use crate::actions::activity::{push_activity, ActivityCategory};
 use crate::actions::executor::ActionExecutor;
+use crate::actions::item_automation::{
+    hero_is_excluded, lookup_item_automation, try_acquire_global_lockout, CastMode,
+    ItemAutomationSpec, SupportStatus, TriggerFamily,
+};
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Item};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tracing::{debug, info};
 
+#[cfg(test)]
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 const SELF_CAST_DELAY_MS: u64 = 50;
+const ITEM_AUTOMATION_LOCKOUT_MS: u64 = 120;
+
+#[cfg(test)]
+lazy_static::lazy_static! {
+    static ref LOW_MANA_CHECK_CALLS: AtomicUsize = AtomicUsize::new(0);
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct PlannedKeyPress {
@@ -41,11 +54,18 @@ fn plan_defensive_item_key_sequence(items: &[(String, char)]) -> Vec<PlannedKeyP
         .collect()
 }
 
-fn plan_neutral_item_key_sequence(neutral_key: char, self_cast_key: char) -> Vec<PlannedKeyPress> {
-    vec![
-        PlannedKeyPress::new(neutral_key, SELF_CAST_DELAY_MS),
-        PlannedKeyPress::new(self_cast_key, 0),
-    ]
+fn plan_automation_key_sequence(
+    cast_mode: CastMode,
+    item_key: char,
+    self_cast_key: char,
+) -> Vec<PlannedKeyPress> {
+    match cast_mode {
+        CastMode::SelfCast => vec![
+            PlannedKeyPress::new(item_key, SELF_CAST_DELAY_MS),
+            PlannedKeyPress::new(self_cast_key, 0),
+        ],
+        CastMode::NoTarget | CastMode::CursorTargeted => vec![PlannedKeyPress::new(item_key, 0)],
+    }
 }
 
 fn execute_key_sequence(sequence: Vec<PlannedKeyPress>) {
@@ -168,6 +188,89 @@ fn should_consider_neutral_item(event: &GsiWebhookEvent, settings: &Settings, in
         return can_cast;
     }
     false
+}
+
+fn current_time_millis() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64
+}
+
+fn acquire_item_trigger_lockout(lockout_key: &str, now_ms: u64, lockout_ms: u64) -> bool {
+    try_acquire_global_lockout(lockout_key, now_ms, lockout_ms)
+}
+
+fn eligible_danger_neutral_spec<'a>(
+    event: &GsiWebhookEvent,
+    settings: &'a Settings,
+    in_danger: bool,
+) -> Option<&'static ItemAutomationSpec> {
+    if !should_consider_neutral_item(event, settings, in_danger) {
+        return None;
+    }
+
+    let neutral_name = &event.items.neutral0.name;
+    let spec = lookup_item_automation(neutral_name)?;
+
+    if spec.trigger_family != TriggerFamily::Danger {
+        return None;
+    }
+    if spec.support != SupportStatus::Supported {
+        return None;
+    }
+    if !spec.is_neutral {
+        return None;
+    }
+
+    Some(spec)
+}
+
+fn hero_uses_mana(event: &GsiWebhookEvent) -> bool {
+    event.hero.max_mana > 0
+}
+
+fn eligible_low_mana_item(
+    event: &GsiWebhookEvent,
+    settings: &Settings,
+) -> Option<(&'static ItemAutomationSpec, char)> {
+    if !settings.mana_automation.enabled {
+        return None;
+    }
+    if !event.hero.is_alive() {
+        return None;
+    }
+    if !hero_uses_mana(event) {
+        return None;
+    }
+    if hero_is_excluded(&event.hero.name, &settings.mana_automation.excluded_heroes) {
+        return None;
+    }
+    if event.hero.mana_percent >= settings.mana_automation.mana_threshold_percent {
+        return None;
+    }
+
+    for (slot, item) in event.items.all_slots() {
+        if item.name == "empty" || item.can_cast != Some(true) {
+            continue;
+        }
+        if !settings.mana_automation.allowed_items.contains(&item.name) {
+            continue;
+        }
+
+        let spec = lookup_item_automation(&item.name)?;
+        if spec.trigger_family != TriggerFamily::LowMana {
+            continue;
+        }
+        if spec.support != SupportStatus::Supported {
+            continue;
+        }
+
+        let key = settings.get_key_for_slot(slot)?;
+        return Some((spec, key));
+    }
+
+    None
 }
 
 /// Common survivability actions that apply to all heroes
@@ -421,77 +524,96 @@ impl SurvivabilityActions {
         }
 
         let settings = self.settings.lock().unwrap();
-
-        if !settings.neutral_items.enabled {
+        let Some(spec) = eligible_danger_neutral_spec(event, &settings, in_danger) else {
             return;
-        }
-
-        if !settings.neutral_items.use_in_danger {
-            return;
-        }
-
-        if !in_danger {
-            return;
-        }
-
-        if event.hero.health_percent >= settings.neutral_items.hp_threshold {
-            return;
-        }
+        };
 
         let neutral_item = &event.items.neutral0;
-
-        if neutral_item.name == "empty" {
-            return;
-        }
-
-        if !settings
-            .neutral_items
-            .allowed_items
-            .contains(&neutral_item.name)
-        {
-            debug!("Neutral item {} not in allowed list", neutral_item.name);
-            return;
-        }
-
-        if let Some(can_cast) = neutral_item.can_cast {
-            if !can_cast {
-                debug!("Neutral item on cooldown: {}", neutral_item.name);
-                return;
-            }
-        } else {
-            debug!("Neutral item can_cast is None: {}", neutral_item.name);
-            return;
-        }
 
         // Get keybindings
         let neutral_key = settings.keybindings.neutral0;
         let self_cast_key = settings.neutral_items.self_cast_key;
+        let lockout_key = format!("danger:{}", neutral_item.name);
+        let now_ms = current_time_millis();
+
+        if !acquire_item_trigger_lockout(&lockout_key, now_ms, ITEM_AUTOMATION_LOCKOUT_MS) {
+            debug!("Skipping duplicate danger trigger for {}", neutral_item.name);
+            return;
+        }
 
         info!(
-            "⚡ Using neutral item in danger: {} (HP: {}%)",
+            "⚡ Using danger automation item: {} (HP: {}%)",
             neutral_item.name, event.hero.health_percent
         );
         push_activity(
             ActivityCategory::Action,
-            format!("Neutral item used: {}", neutral_item.name.replace("item_", "")),
+            format!(
+                "Danger automation used: {}",
+                neutral_item.name.replace("item_", "")
+            ),
         );
 
         // Release lock before input simulation
         drop(settings);
 
-        let sequence = plan_neutral_item_key_sequence(neutral_key, self_cast_key);
-        self.executor.enqueue("common-neutral-self-cast", move || {
+        let sequence = plan_automation_key_sequence(spec.cast_mode, neutral_key, self_cast_key);
+        self.executor.enqueue("common-danger-neutral", move || {
+            execute_key_sequence(sequence);
+        });
+    }
+
+    pub fn check_and_use_mana_items(&self, event: &GsiWebhookEvent) {
+        #[cfg(test)]
+        {
+            LOW_MANA_CHECK_CALLS.fetch_add(1, Ordering::SeqCst);
+        }
+
+        let settings = self.settings.lock().unwrap();
+        let Some((spec, item_key)) = eligible_low_mana_item(event, &settings) else {
+            return;
+        };
+
+        let self_cast_key = settings.neutral_items.self_cast_key;
+        let item_name = spec.item_name.to_string();
+        let lockout_key = format!("mana:{}", item_name);
+        let now_ms = current_time_millis();
+
+        if !acquire_item_trigger_lockout(&lockout_key, now_ms, ITEM_AUTOMATION_LOCKOUT_MS) {
+            return;
+        }
+
+        let sequence = plan_automation_key_sequence(spec.cast_mode, item_key, self_cast_key);
+        drop(settings);
+
+        info!("💧 Using low-mana automation item: {}", item_name);
+        push_activity(
+            ActivityCategory::Action,
+            format!("Mana automation used: {}", item_name.replace("item_", "")),
+        );
+
+        self.executor.enqueue("common-low-mana-item", move || {
             execute_key_sequence(sequence);
         });
     }
 }
 
 #[cfg(test)]
+pub fn reset_low_mana_check_call_count_for_tests() {
+    LOW_MANA_CHECK_CALLS.store(0, Ordering::SeqCst);
+}
+
+#[cfg(test)]
+pub fn low_mana_check_call_count_for_tests() -> usize {
+    LOW_MANA_CHECK_CALLS.load(Ordering::SeqCst)
+}
+
+#[cfg(test)]
 mod tests {
     use super::{
-        find_item_slot, plan_defensive_item_key_sequence, plan_item_key_sequence,
-        plan_neutral_item_key_sequence, PlannedKeyPress, SELF_CAST_DELAY_MS,
+        find_item_slot, plan_automation_key_sequence, plan_defensive_item_key_sequence,
+        plan_item_key_sequence, PlannedKeyPress, SELF_CAST_DELAY_MS,
     };
+    use crate::actions::item_automation::CastMode;
     use crate::config::Settings;
     use crate::models::gsi_event::{Abilities, Ability, GsiWebhookEvent, Hero, Item as GsiItem, Items, Map};
     use crate::models::Item;
@@ -626,13 +748,29 @@ mod tests {
     }
 
     #[test]
-    fn neutral_item_plan_waits_before_self_cast() {
+    fn automation_plan_for_self_cast_waits_before_tail() {
         assert_eq!(
-            plan_neutral_item_key_sequence('n', 'a'),
+            plan_automation_key_sequence(CastMode::SelfCast, 'n', 'a'),
             vec![
                 PlannedKeyPress::new('n', SELF_CAST_DELAY_MS),
                 PlannedKeyPress::new('a', 0),
             ]
+        );
+    }
+
+    #[test]
+    fn automation_plan_for_no_target_is_single_press() {
+        assert_eq!(
+            plan_automation_key_sequence(CastMode::NoTarget, 'n', 'a'),
+            vec![PlannedKeyPress::new('n', 0)]
+        );
+    }
+
+    #[test]
+    fn automation_plan_for_cursor_targeted_is_single_press() {
+        assert_eq!(
+            plan_automation_key_sequence(CastMode::CursorTargeted, 'n', 'a'),
+            vec![PlannedKeyPress::new('n', 0)]
         );
     }
 
@@ -657,12 +795,14 @@ mod snapshot_tests {
     use std::sync::{Arc, Mutex};
 
     use crate::actions::executor::ActionExecutor;
+    use crate::actions::item_automation::reset_global_lockouts_for_tests;
     use crate::config::Settings;
     use crate::models::gsi_event::{Abilities, Ability, GsiWebhookEvent, Hero, Item, Items, Map};
 
     use super::{
-        healing_threshold_for_event, should_consider_defensive_items,
-        should_consider_neutral_item, SurvivabilityActions,
+        acquire_item_trigger_lockout, eligible_danger_neutral_spec, eligible_low_mana_item,
+        healing_threshold_for_event, should_consider_defensive_items, should_consider_neutral_item,
+        SurvivabilityActions,
     };
 
     fn empty_ability() -> Ability {
@@ -882,6 +1022,135 @@ mod snapshot_tests {
 
         assert!(!should_consider_neutral_item(&event, &settings, false));
         assert!(should_consider_neutral_item(&event, &settings, true));
+    }
+
+    #[test]
+    fn danger_neutral_gate_accepts_supported_no_target_item() {
+        let mut settings = Settings::default();
+        settings.neutral_items.enabled = true;
+        settings.neutral_items.allowed_items = vec!["item_jidi_pollen_bag".to_string()];
+        let mut items = empty_items();
+        items.neutral0 = Item {
+            name: "item_jidi_pollen_bag".to_string(),
+            can_cast: Some(true),
+            ..Default::default()
+        };
+        let event = base_event(hero_with_health(20, 20), items);
+
+        assert!(eligible_danger_neutral_spec(&event, &settings, true).is_some());
+    }
+
+    #[test]
+    fn danger_neutral_gate_rejects_known_unsupported_item_even_if_configured() {
+        let mut settings = Settings::default();
+        settings.neutral_items.enabled = true;
+        settings.neutral_items.allowed_items = vec!["item_psychic_headband".to_string()];
+        let mut items = empty_items();
+        items.neutral0 = Item {
+            name: "item_psychic_headband".to_string(),
+            can_cast: Some(true),
+            ..Default::default()
+        };
+        let event = base_event(hero_with_health(20, 20), items);
+
+        assert!(eligible_danger_neutral_spec(&event, &settings, true).is_none());
+    }
+
+    #[test]
+    fn danger_neutral_gate_respects_global_lockout() {
+        reset_global_lockouts_for_tests();
+
+        assert!(acquire_item_trigger_lockout(
+            "danger:item_jidi_pollen_bag",
+            1_000,
+            120
+        ));
+        assert!(!acquire_item_trigger_lockout(
+            "danger:item_jidi_pollen_bag",
+            1_050,
+            120
+        ));
+        assert!(acquire_item_trigger_lockout(
+            "danger:item_jidi_pollen_bag",
+            1_200,
+            120
+        ));
+    }
+
+    #[test]
+    fn low_mana_gate_accepts_arcane_boots_for_supported_mana_user() {
+        let mut settings = Settings::default();
+        settings.mana_automation.enabled = true;
+        settings.mana_automation.allowed_items = vec![
+            "item_arcane_boots".to_string(),
+            "item_mana_draught".to_string(),
+        ];
+        let mut items = empty_items();
+        items.slot0 = Item {
+            name: "item_arcane_boots".to_string(),
+            can_cast: Some(true),
+            ..Default::default()
+        };
+
+        let mut hero = hero_with_health(100, 100);
+        hero.name = "npc_dota_hero_zuus".to_string();
+        hero.mana = 100;
+        hero.max_mana = 500;
+        hero.mana_percent = 20;
+
+        let event = base_event(hero, items);
+        let (spec, slot_key) = eligible_low_mana_item(&event, &settings).unwrap();
+
+        assert_eq!(spec.item_name, "item_arcane_boots");
+        assert_eq!(slot_key, settings.keybindings.slot0);
+    }
+
+    #[test]
+    fn low_mana_gate_excludes_huskar() {
+        let mut settings = Settings::default();
+        settings.mana_automation.enabled = true;
+        settings.mana_automation.allowed_items = vec!["item_arcane_boots".to_string()];
+        settings.mana_automation.excluded_heroes = vec!["npc_dota_hero_huskar".to_string()];
+        let mut items = empty_items();
+        items.slot0 = Item {
+            name: "item_arcane_boots".to_string(),
+            can_cast: Some(true),
+            ..Default::default()
+        };
+
+        let mut hero = hero_with_health(100, 100);
+        hero.name = "npc_dota_hero_huskar".to_string();
+        hero.mana = 50;
+        hero.max_mana = 200;
+        hero.mana_percent = 20;
+
+        let event = base_event(hero, items);
+        assert!(eligible_low_mana_item(&event, &settings).is_none());
+    }
+
+    #[test]
+    fn low_mana_gate_finds_mana_draught_in_neutral_slot() {
+        let mut settings = Settings::default();
+        settings.mana_automation.enabled = true;
+        settings.mana_automation.allowed_items = vec!["item_mana_draught".to_string()];
+        let mut items = empty_items();
+        items.neutral0 = Item {
+            name: "item_mana_draught".to_string(),
+            can_cast: Some(true),
+            ..Default::default()
+        };
+
+        let mut hero = hero_with_health(100, 100);
+        hero.name = "npc_dota_hero_lina".to_string();
+        hero.mana = 80;
+        hero.max_mana = 400;
+        hero.mana_percent = 20;
+
+        let event = base_event(hero, items);
+        let (spec, slot_key) = eligible_low_mana_item(&event, &settings).unwrap();
+
+        assert_eq!(spec.item_name, "item_mana_draught");
+        assert_eq!(slot_key, settings.keybindings.neutral0);
     }
 
     #[test]

@@ -196,26 +196,36 @@ For the heuristics that decide when this path runs, see `docs/features/danger-de
 
 ## Neutral items
 
-Owned by `src/actions/common.rs::use_neutral_item_if_danger()`.
+Owned by `src/actions/common.rs` with item classification in `src/actions/item_automation.rs`.
 
 Neutral-item automation is part of survivability because it is tied to low HP + danger state.
 
-Current requirements:
+Neutral-item automation now supports three cast modes:
 
-- hero alive
-- `[neutral_items].enabled = true`
-- `[neutral_items].use_in_danger = true`
-- `danger_detector::is_in_danger() == true`
-- `event.hero.health_percent < neutral_items.hp_threshold`
-- neutral item present in `event.items.neutral0`
-- neutral item name included in `neutral_items.allowed_items`
-- `neutral_item.can_cast == Some(true)`
+1. `self_cast` - neutral key -> `neutral_items.self_cast_key`
+2. `no_target` - neutral key only
+3. `cursor_targeted` - neutral key at the current cursor target
 
-When triggered, the code:
+Current danger-supported neutrals:
 
-1. validates the neutral item against the existing danger, HP, allowed-item, and `can_cast` gates
-2. queues a self-cast sequence on the shared `ActionExecutor`
-3. inside that executor job, presses the neutral slot key, waits 50ms, then presses `neutral_items.self_cast_key`
+- Self-cast: `item_essence_ring`, `item_minotaur_horn`, `item_metamorphic_mandible`
+- No-target: `item_jidi_pollen_bag`, `item_ash_legion_shield`, `item_idol_of_screeauk`, `item_kobold_cup`
+- Cursor-targeted: `item_crippling_crossbow`
+
+Configured-but-unsupported neutrals are ignored at runtime unless their support status is upgraded in `src/actions/item_automation.rs`.
+
+---
+
+## Low mana automation
+
+Shared low-mana automation is dispatcher-owned and runs before hero routing.
+
+Current low-mana supported items:
+
+- `item_arcane_boots`
+- `item_mana_draught`
+
+The feature is controlled by `[mana_automation]`. Huskar is excluded by default.
 
 ---
 
@@ -272,6 +282,7 @@ If you change how shared item availability is read from GSI, check both:
 | `[danger_detection]` | `enabled`, `healing_threshold_in_danger`, `max_healing_items_per_danger`, `auto_bkb`, `auto_satanic`, `satanic_hp_threshold`, `auto_blade_mail`, `auto_glimmer_cape`, `auto_ghost_scepter`, `auto_shivas_guard`, `auto_manta_on_silence`, `auto_lotus_on_silence` |
 | `[heroes.<hero>.armlet]` | optional per-hero `enabled`, `toggle_threshold`, `predictive_offset`, `toggle_cooldown_ms` overrides |
 | `[neutral_items]` | `enabled`, `self_cast_key`, `use_in_danger`, `hp_threshold`, `allowed_items` |
+| `[mana_automation]` | `enabled`, `mana_threshold_percent`, `excluded_heroes`, `allowed_items` |
 
 ---
 

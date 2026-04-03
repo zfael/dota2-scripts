@@ -421,6 +421,18 @@ pub struct NeutralItemConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ManaAutomationConfig {
+    #[serde(default = "default_mana_automation_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_mana_threshold_percent")]
+    pub mana_threshold_percent: u32,
+    #[serde(default = "default_mana_automation_excluded_heroes")]
+    pub excluded_heroes: Vec<String>,
+    #[serde(default = "default_mana_automation_allowed_items")]
+    pub allowed_items: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SoulRingConfig {
     #[serde(default = "default_soul_ring_enabled")]
     pub enabled: bool,
@@ -653,6 +665,8 @@ pub struct Settings {
     pub danger_detection: DangerDetectionConfig,
     #[serde(default)]
     pub neutral_items: NeutralItemConfig,
+    #[serde(default)]
+    pub mana_automation: ManaAutomationConfig,
     #[serde(default)]
     pub soul_ring: SoulRingConfig,
     #[serde(default)]
@@ -1014,6 +1028,21 @@ fn default_neutral_hp_threshold() -> u32 {
 fn default_allowed_items() -> Vec<String> {
     Vec::new()
 }
+fn default_mana_automation_enabled() -> bool {
+    true
+}
+fn default_mana_threshold_percent() -> u32 {
+    25
+}
+fn default_mana_automation_excluded_heroes() -> Vec<String> {
+    vec!["npc_dota_hero_huskar".to_string()]
+}
+fn default_mana_automation_allowed_items() -> Vec<String> {
+    vec![
+        "item_arcane_boots".to_string(),
+        "item_mana_draught".to_string(),
+    ]
+}
 fn default_gsi_logging_enabled() -> bool {
     false
 }
@@ -1347,6 +1376,17 @@ impl Default for NeutralItemConfig {
     }
 }
 
+impl Default for ManaAutomationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_mana_automation_enabled(),
+            mana_threshold_percent: default_mana_threshold_percent(),
+            excluded_heroes: default_mana_automation_excluded_heroes(),
+            allowed_items: default_mana_automation_allowed_items(),
+        }
+    }
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -1358,6 +1398,7 @@ impl Default for Settings {
             heroes: HeroesConfig::default(),
             danger_detection: DangerDetectionConfig::default(),
             neutral_items: NeutralItemConfig::default(),
+            mana_automation: ManaAutomationConfig::default(),
             soul_ring: SoulRingConfig::default(),
             gsi_logging: GsiLoggingConfig::default(),
             updates: UpdateConfig::default(),

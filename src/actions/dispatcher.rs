@@ -157,6 +157,9 @@ impl ActionDispatcher {
 
         drop(settings); // Release lock before further processing
 
+        // Shared low-mana automation is global, unlike hero-specific survivability calls.
+        self.survivability.check_and_use_mana_items(event);
+
         // Check if hero has a custom handler
         if let Some(hero_script) = self.hero_scripts.get(&event.hero.name) {
             // Hero has custom handler, use it
@@ -193,11 +196,14 @@ impl ActionDispatcher {
 #[cfg(test)]
 mod tests {
     use super::{standalone_dispatch_mode, ActionDispatcher, StandaloneDispatchMode};
-    use crate::actions::common::SurvivabilityActions;
+    use crate::actions::common::{
+        low_mana_check_call_count_for_tests, reset_low_mana_check_call_count_for_tests,
+        SurvivabilityActions,
+    };
     use crate::actions::executor::ActionExecutor;
     use crate::actions::heroes::HeroScript;
     use crate::config::Settings;
-    use crate::models::GsiWebhookEvent;
+    use crate::models::gsi_event::{Abilities, Ability, GsiWebhookEvent, Hero, Item, Items, Map};
     use std::any::Any;
     use std::collections::HashMap;
     use std::sync::mpsc;
@@ -220,6 +226,24 @@ mod tests {
             let _ = self.release_rx.lock().unwrap().recv();
             let _ = self.finished_tx.send(self.hero_name);
         }
+
+        fn hero_name(&self) -> &'static str {
+            self.hero_name
+        }
+
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+    }
+
+    struct NoopHeroScript {
+        hero_name: &'static str,
+    }
+
+    impl HeroScript for NoopHeroScript {
+        fn handle_gsi_event(&self, _event: &GsiWebhookEvent) {}
+
+        fn handle_standalone_trigger(&self) {}
 
         fn hero_name(&self) -> &'static str {
             self.hero_name
@@ -352,5 +376,111 @@ mod tests {
         finished_rx
             .recv_timeout(Duration::from_millis(100))
             .expect("blocking script should finish after release");
+    }
+
+    #[test]
+    fn dispatch_gsi_event_runs_low_mana_pre_hook_for_custom_hero_scripts() {
+        reset_low_mana_check_call_count_for_tests();
+
+        let settings = Arc::new(Mutex::new(Settings::default()));
+        let executor = ActionExecutor::new();
+        let mut hero_scripts: HashMap<String, Arc<dyn HeroScript>> = HashMap::new();
+        hero_scripts.insert(
+            "npc_dota_hero_test".to_string(),
+            Arc::new(NoopHeroScript {
+                hero_name: "npc_dota_hero_test",
+            }),
+        );
+
+        let dispatcher = ActionDispatcher {
+            hero_scripts,
+            executor: executor.clone(),
+            survivability: SurvivabilityActions::new(settings, executor),
+        };
+
+        let empty_ability = Ability {
+            ability_active: false,
+            can_cast: false,
+            cooldown: 0,
+            level: 0,
+            name: String::new(),
+            passive: false,
+            ultimate: false,
+        };
+
+        let event = GsiWebhookEvent {
+            hero: Hero {
+                name: "npc_dota_hero_test".to_string(),
+                alive: true,
+                health: 100,
+                health_percent: 100,
+                mana: 50,
+                mana_percent: 20,
+                max_health: 100,
+                max_mana: 200,
+                aghanims_scepter: false,
+                aghanims_shard: false,
+                attributes_level: 0,
+                is_break: false,
+                buyback_cooldown: 0,
+                buyback_cost: 0,
+                disarmed: false,
+                facet: 0,
+                has_debuff: false,
+                hexed: false,
+                id: 0,
+                level: 1,
+                magicimmune: false,
+                muted: false,
+                respawn_seconds: 0,
+                silenced: false,
+                smoked: false,
+                stunned: false,
+                talent_1: false,
+                talent_2: false,
+                talent_3: false,
+                talent_4: false,
+                talent_5: false,
+                talent_6: false,
+                talent_7: false,
+                talent_8: false,
+                xp: 0,
+                xpos: 0,
+                ypos: 0,
+            },
+            abilities: Abilities {
+                ability0: empty_ability.clone(),
+                ability1: empty_ability.clone(),
+                ability2: empty_ability.clone(),
+                ability3: empty_ability.clone(),
+                ability4: empty_ability.clone(),
+                ability5: empty_ability,
+            },
+            items: Items {
+                neutral0: Item::default(),
+                slot0: Item::default(),
+                slot1: Item::default(),
+                slot2: Item::default(),
+                slot3: Item::default(),
+                slot4: Item::default(),
+                slot5: Item::default(),
+                slot6: Item::default(),
+                slot7: Item::default(),
+                slot8: Item::default(),
+                stash0: Item::default(),
+                stash1: Item::default(),
+                stash2: Item::default(),
+                stash3: Item::default(),
+                stash4: Item::default(),
+                stash5: Item::default(),
+                teleport0: Item::default(),
+            },
+            map: Map { clock_time: 0 },
+            player: None,
+        };
+
+        dispatcher.dispatch_gsi_event(&event);
+
+        assert_eq!(low_mana_check_call_count_for_tests(), 1);
     }
 }

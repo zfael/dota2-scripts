@@ -115,7 +115,18 @@ See `docs/features/danger-detection.md` and `docs/features/survivability.md`.
 | `log_discoveries` | `false` | `true` | When true, `src/actions/dispatcher.rs` appends discoveries to `logs/neutral_items_discovered.txt`. |
 | `use_in_danger` | `true` | `true` | Additional gate for danger-triggered neutral usage. |
 | `hp_threshold` | `50` | `50` | Only used when danger criteria and feature gates allow it. |
-| `allowed_items` | 14-item allowlist | empty list | Must use GSI item names such as `item_essence_ring`. Only `items.neutral0` is checked. |
+| `allowed_items` | 8-item allowlist | empty list | Runtime still checks `items.neutral0`, but only supported entries from `src/actions/item_automation.rs` will actually fire. |
+
+See `docs/features/survivability.md`.
+
+## `[mana_automation]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `enabled` | `true` | `true` | Master switch for shared low-mana automation. |
+| `mana_threshold_percent` | `25` | `25` | Fires only when `hero.mana_percent` is below this value. |
+| `excluded_heroes` | `["npc_dota_hero_huskar"]` | same list | Exact internal hero names skipped by low-mana automation. |
+| `allowed_items` | `["item_arcane_boots","item_mana_draught"]` | same list | Item names eligible for the shared low-mana path. |
 
 See `docs/features/survivability.md`.
 

@@ -127,6 +127,7 @@ Important design detail: for registered heroes, the dispatcher does **not** auto
 
 Instead, the hero script decides how to compose shared behavior. In the current codebase, all registered hero scripts call shared survivability helpers themselves:
 
+- `check_and_use_mana_items(...)` is **not** part of that per-hero composition. `dispatch_gsi_event()` now runs shared low-mana automation after silence dispel and before hero routing, so both custom hero scripts and the fallback path inherit the same mana-restoration behavior.
 - `danger_detector::update(...)`
 - `check_and_use_healing_items(...)`
 - `use_defensive_items_if_danger(...)`
@@ -144,7 +145,7 @@ That means:
 The current executor scope is intentionally limited to the hot GSI-driven short jobs identified in the audit:
 
 - default/common armlet handling in `src/actions/common.rs`
-- shared survivability timed self-casts in `src/actions/common.rs` (Glimmer Cape follow-up tap and neutral-item self-cast)
+- shared survivability timed item automation in `src/actions/common.rs` (Glimmer Cape follow-up tap, cast-mode neutral automation, and low-mana item automation)
 - silence dispel jitter in `src/actions/dispel.rs`
 - Huskar armlet handling in `src/actions/heroes/huskar.rs`
 - Tiny, Legion Commander, and Outworld Destroyer standalone combo execution in `src/actions/heroes/tiny.rs`, `src/actions/heroes/legion_commander.rs`, and `src/actions/heroes/outworld_destroyer.rs`
