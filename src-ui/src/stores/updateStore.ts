@@ -2,6 +2,9 @@ import { create } from "zustand";
 import type { UpdateCheckState } from "../types/game";
 import { isTauri } from "../lib/tauri";
 
+const STARTUP_UPDATE_REFRESH_INTERVAL_MS = 750;
+const STARTUP_UPDATE_REFRESH_ATTEMPTS = 20;
+
 interface UpdateStore {
   updateState: UpdateCheckState;
   setUpdateState: (state: UpdateCheckState) => void;
@@ -9,6 +12,19 @@ interface UpdateStore {
   applyUpdate: () => Promise<void>;
   dismissUpdate: () => void;
   loadInitialState: () => Promise<void>;
+}
+
+function shouldRefreshStartupUpdateState(state: UpdateCheckState): boolean {
+  return state.kind === "idle" || state.kind === "checking";
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchUpdateState(): Promise<UpdateCheckState> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<UpdateCheckState>("get_update_state");
 }
 
 export const useUpdateStore = create<UpdateStore>((set) => ({
@@ -19,9 +35,19 @@ export const useUpdateStore = create<UpdateStore>((set) => ({
   loadInitialState: async () => {
     if (!isTauri()) return;
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      const state = await invoke<UpdateCheckState>("get_update_state");
+      let state = await fetchUpdateState();
       set({ updateState: state });
+
+      for (
+        let attempt = 0;
+        attempt < STARTUP_UPDATE_REFRESH_ATTEMPTS &&
+        shouldRefreshStartupUpdateState(state);
+        attempt += 1
+      ) {
+        await wait(STARTUP_UPDATE_REFRESH_INTERVAL_MS);
+        state = await fetchUpdateState();
+        set({ updateState: state });
+      }
     } catch (e) {
       console.error("Failed to load update state:", e);
     }
