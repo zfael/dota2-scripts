@@ -148,10 +148,12 @@ jobs:
               Copy-Item $msi.FullName $dest
               Write-Host "MSI installer: $dest"
             } else {
-              Write-Host "No MSI found in $MSI_DIR"
+              Write-Error "No MSI found in $MSI_DIR"
+              exit 1
             }
           } else {
-            Write-Host "MSI directory not found: $MSI_DIR"
+            Write-Error "MSI directory not found: $MSI_DIR"
+            exit 1
           }
 
       - name: Package config template artifact
@@ -159,6 +161,32 @@ jobs:
         run: |
           $VERSION = "${{ github.ref_name }}"
           Copy-Item "config/config.toml" "artifacts/dota2-scripts-${VERSION}-config.template.toml"
+
+      - name: Package MSI installer assets
+        shell: pwsh
+        run: |
+          $VERSION = "${{ github.ref_name }}"
+          $TARGET = "${{ matrix.target }}"
+          $MSI = "artifacts/dota2-scripts-${VERSION}-${TARGET}.msi"
+          $TEMPLATE = "artifacts/dota2-scripts-${VERSION}-config.template.toml"
+          $INSTALLER_DIR = "artifacts/dota2-scripts-${VERSION}-${TARGET}-installer-assets"
+
+          if (-not (Test-Path $MSI)) {
+            Write-Error "Missing MSI installer artifact: $MSI"
+            exit 1
+          }
+
+          if (-not (Test-Path $TEMPLATE)) {
+            Write-Error "Missing config template artifact: $TEMPLATE"
+            exit 1
+          }
+
+          New-Item -ItemType Directory -Force -Path $INSTALLER_DIR | Out-Null
+          Copy-Item $MSI -Destination $INSTALLER_DIR
+          Copy-Item $TEMPLATE -Destination $INSTALLER_DIR
+
+          Write-Host "Installer asset bundle contents:"
+          Get-ChildItem $INSTALLER_DIR
 
       - name: Upload ZIP artifact
         uses: actions/upload-artifact@v4
@@ -168,7 +196,6 @@ jobs:
 
       - name: Upload MSI artifact
         uses: actions/upload-artifact@v4
-        if: hashFiles(format('artifacts/dota2-scripts-{0}-{1}.msi', github.ref_name, matrix.target)) != ''
         with:
           name: dota2-scripts-${{ github.ref_name }}-${{ matrix.target }}-msi
           path: artifacts/dota2-scripts-${{ github.ref_name }}-${{ matrix.target }}.msi
@@ -178,6 +205,12 @@ jobs:
         with:
           name: dota2-scripts-${{ github.ref_name }}-config-template
           path: artifacts/dota2-scripts-${{ github.ref_name }}-config.template.toml
+
+      - name: Upload MSI installer assets artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dota2-scripts-${{ github.ref_name }}-${{ matrix.target }}-installer-assets
+          path: artifacts/dota2-scripts-${{ github.ref_name }}-${{ matrix.target }}-installer-assets
 
   release:
     name: Create Release

@@ -109,6 +109,7 @@ Update merge rules:
 ### ZIP vs MSI behavior
 
 - GitHub Releases still publish both ZIP and MSI assets.
+- The release workflow also uploads a dedicated workflow artifact that bundles the MSI with the matching `config.template.toml`.
 - The app only supports **MSI-driven** in-app updates going forward.
 - ZIP-style installs are expected to install the MSI manually once before using the in-app updater.
 - The MSI upgrade path relaunches the app automatically after a successful silent install.
