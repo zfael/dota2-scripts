@@ -19,17 +19,19 @@
 
 ## Startup flow
 
-Startup check is triggered from `src/main.rs`.
+Startup check is triggered from Rust boot and surfaced through the React/Tauri frontend.
 
 Current flow:
 
-1. load `settings.updates.check_on_startup`
-2. load `settings.updates.include_prereleases`
+1. Rust loads `settings.updates.check_on_startup`
+2. Rust loads `settings.updates.include_prereleases`
 3. if startup checks are enabled:
    - clone `AppState.update_state`
    - set it to `UpdateCheckState::Checking`
-   - run `check_for_update(include_prereleases)` inside `tokio::task::spawn_blocking`
-4. store the result back into `update_state`
+   - run `check_for_update(include_prereleases)` in a background task
+   - store `Available`, `UpToDate`, or `Error` back into `update_state`
+4. React loads update state on mount with `get_update_state()`
+5. if the first frontend snapshot is `Idle` or `Checking`, the update store re-reads `get_update_state()` on a short bounded interval until the state becomes terminal or the retry window expires
 
 Possible state transitions at startup:
 
@@ -107,7 +109,7 @@ If the restart spawn fails, the UI state becomes:
 
 ## UI flow
 
-### Update banner (`src/ui/app.rs::render_update_banner()`)
+### Update banner (`src-ui/src/components/layout/UpdateBanner.tsx`)
 
 Banner states:
 
@@ -119,7 +121,7 @@ Banner states:
 | `Error(msg)` | red banner with **Retry** / **Dismiss** |
 | `Idle`, `UpToDate` | no banner |
 
-`update_dismissed` is a UI-only flag on `Dota2ScriptApp`; dismissing the banner does not change saved config.
+The banner no longer depends on a single startup snapshot. On app mount, the frontend update store performs an initial `get_update_state()` read and, if the backend is still `Idle` or `Checking`, briefly re-reads state until the startup check reaches `Available`, `UpToDate`, or `Error`.
 
 ### Settings tab (`src/ui/app.rs::render_settings_tab()`)
 
@@ -133,7 +135,7 @@ Exposes:
 
 ### Manual retry path
 
-`retry_update_check()`:
+Manual retry (`src-ui/src/stores/updateStore.ts::checkForUpdates()`):
 
 1. reads `settings.updates.include_prereleases`
 2. sets `UpdateCheckState::Checking`
