@@ -1,6 +1,9 @@
 use crate::config::RuneAlertConfig;
 use lazy_static::lazy_static;
-use std::sync::{Mutex, OnceLock};
+use std::sync::Mutex;
+
+#[cfg(test)]
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuneAlertSettings {
@@ -119,21 +122,14 @@ lazy_static! {
     static ref LATEST_RUNE_ALERT_SNAPSHOT: Mutex<Option<RuneAlertSnapshot>> = Mutex::new(None);
 }
 
+#[cfg(test)]
 type SoundHook = fn();
 
+#[cfg(test)]
 fn default_sound_hook() {
-    #[cfg(windows)]
-    {
-        let _ = std::process::Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-Command",
-                "[console]::beep(880,180)",
-            ])
-            .spawn();
-    }
 }
 
+#[cfg(test)]
 fn sound_hook_cell() -> &'static Mutex<SoundHook> {
     static SOUND_HOOK: OnceLock<Mutex<SoundHook>> = OnceLock::new();
     SOUND_HOOK.get_or_init(|| Mutex::new(default_sound_hook))
@@ -142,14 +138,9 @@ fn sound_hook_cell() -> &'static Mutex<SoundHook> {
 pub fn process_clock_time(clock_time_seconds: i32, config: &RuneAlertConfig) -> RuneAlertSnapshot {
     let mut manager = RUNE_ALERT_MANAGER.lock().unwrap();
     manager.update_settings(RuneAlertSettings::from(config));
-    let alert = manager.update(clock_time_seconds);
+    let _ = manager.update(clock_time_seconds);
     let snapshot = manager.snapshot(clock_time_seconds);
     drop(manager);
-
-    if alert.is_some() && config.audio_enabled {
-        let hook = *sound_hook_cell().lock().unwrap();
-        hook();
-    }
 
     *LATEST_RUNE_ALERT_SNAPSHOT.lock().unwrap() = Some(snapshot.clone());
     snapshot
@@ -175,4 +166,38 @@ pub fn reset_rune_alert_state_for_tests() {
 #[cfg(test)]
 pub fn set_sound_hook_for_tests(hook: SoundHook) {
     *sound_hook_cell().lock().unwrap() = hook;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static SOUND_HOOK_CALLS: AtomicUsize = AtomicUsize::new(0);
+
+    fn counting_sound_hook() {
+        SOUND_HOOK_CALLS.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn test_config() -> RuneAlertConfig {
+        RuneAlertConfig {
+            enabled: true,
+            alert_lead_seconds: 10,
+            interval_seconds: 120,
+            audio_enabled: true,
+        }
+    }
+
+    #[test]
+    fn process_clock_time_does_not_invoke_sound_hook_when_alert_fires() {
+        reset_rune_alert_state_for_tests();
+        SOUND_HOOK_CALLS.store(0, Ordering::SeqCst);
+        set_sound_hook_for_tests(counting_sound_hook);
+
+        let snapshot = process_clock_time(110, &test_config());
+
+        assert_eq!(snapshot.last_alerted_rune_time_seconds, Some(120));
+        assert_eq!(snapshot.last_alert_clock_time_seconds, Some(110));
+        assert_eq!(SOUND_HOOK_CALLS.load(Ordering::SeqCst), 0);
+    }
 }

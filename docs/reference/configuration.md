@@ -142,6 +142,17 @@ See `docs/reference/gsi-schema-and-usage.md`.
 
 See `docs/features/soul-ring.md` and `docs/features/keyboard-interception.md`.
 
+## `[rune_alerts]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `enabled` | `true` | `true` | Enables backend rune-alert window tracking. The Tauri UI may still show the countdown even when alerts are disabled. |
+| `alert_lead_seconds` | `10` | `10` | Number of seconds before a rune spawn when the alert window opens. |
+| `interval_seconds` | `120` | `120` | Rune cadence used by `src/observability/rune_alerts.rs`. |
+| `audio_enabled` | `true` | `true` | In the Tauri app, gates the frontend Web Audio tone. Setting this to `false` silences audio without removing the timer. |
+
+See `src/observability/rune_alerts.rs`, `src-ui/src/hooks/useRuneAlert.ts`, and `src-ui/src/pages/Settings.tsx`.
+
 ## `[minimap_capture]`
 
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |

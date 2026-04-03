@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Sidebar } from "./components/layout/Sidebar";
 import { StatusHeader } from "./components/layout/StatusHeader";
 import { UpdateBanner } from "./components/layout/UpdateBanner";
 import { ActivityTicker } from "./components/layout/ActivityTicker";
+import { useRuneAlert } from "./hooks/useRuneAlert";
 import { useConfigStore } from "./stores/configStore";
 import { useGameStore } from "./stores/gameStore";
 import { useUIStore } from "./stores/uiStore";
@@ -19,40 +20,6 @@ import ActivityLog from "./pages/ActivityLog";
 import Diagnostics from "./pages/Diagnostics";
 import Settings from "./pages/Settings";
 import MinimapIntelligence from "./pages/MinimapIntelligence";
-
-function useRuneAlert(runeTimer: number | null) {
-  const lastAlertRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (runeTimer === null || runeTimer > 10) {
-      lastAlertRef.current = null;
-      return;
-    }
-
-    // Don't re-alert for the same rune window
-    if (lastAlertRef.current !== null && lastAlertRef.current <= 10) {
-      return;
-    }
-
-    lastAlertRef.current = runeTimer;
-
-    // Play a short alert tone using Web Audio API
-    try {
-      const ctx = new AudioContext();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.value = 880;
-      gain.gain.value = 0.15;
-      osc.start();
-      osc.stop(ctx.currentTime + 0.12);
-      setTimeout(() => ctx.close(), 500);
-    } catch {
-      // AudioContext may not be available
-    }
-  }, [runeTimer]);
-}
 
 export default function App() {
   useEffect(() => {
@@ -70,7 +37,10 @@ export default function App() {
 
   const game = useGameStore((s) => s.game);
   const appVersion = useUIStore((s) => s.appVersion);
-  useRuneAlert(game.runeTimer);
+  const runeAlertsEnabled = useConfigStore((s) => s.config.rune_alerts.enabled);
+  const runeAlertAudioEnabled = useConfigStore((s) => s.config.rune_alerts.audio_enabled);
+
+  useRuneAlert(game.runeTimer, runeAlertsEnabled, runeAlertAudioEnabled);
   const entries = useActivityStore((s) => s.entries);
   const tickerEntries = entries.slice(-3).map((e) => ({
     id: e.id,

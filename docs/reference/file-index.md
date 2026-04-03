@@ -20,6 +20,7 @@
 | `src/config/` | Runtime config types, defaults, helpers | `docs/reference/configuration.md` |
 | `src/state/` | Shared app/UI/runtime state | `docs/architecture/state-and-dispatch.md` |
 | `src/ui/` | egui app, status, settings, manual hero selection | `docs/architecture/overview.md` |
+| `src-ui/` | Tauri React frontend, settings UI, game dashboard, and Vitest coverage | `docs/superpowers/specs/2026-03-31-react-ui-design.md` |
 | `src/models/` | GSI model types plus shared enums | `docs/reference/gsi-schema-and-usage.md` |
 | `assets/` | Application icon and packaged visual assets | `src/main.rs` |
 | `examples/` | Small standalone binaries for local input/debug experiments | `docs/workflows/testing-and-debugging.md` |
@@ -113,6 +114,13 @@
 |---|---|---|
 | `src/ui/app.rs` | Main egui app: tabs, hero selection, status, settings, update banner | `docs/architecture/overview.md`, `docs/workflows/adding-a-hero.md` |
 | `src/ui/mod.rs` | Module re-exports | — |
+
+## `src-ui/src/`
+
+| File | Purpose | Linked Doc |
+|---|---|---|
+| `src-ui/src/App.tsx` | React shell that wires stores, routing, and global hooks | `docs/superpowers/specs/2026-03-31-react-ui-design.md` |
+| `src-ui/src/hooks/useRuneAlert.ts` | Frontend-owned rune alert gating and Web Audio playback | `docs/superpowers/specs/2026-03-31-react-ui-design.md`, `docs/reference/configuration.md` |
 
 ## `src/models/`
 
