@@ -3,6 +3,7 @@ use crate::TauriAppState;
 use dota2_scripts::state::UpdateCheckState;
 use dota2_scripts::update::{ApplyUpdateResult, UpdateCheckResult};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 /// Returns current update check state
 #[tauri::command]
@@ -101,6 +102,12 @@ pub async fn check_for_updates(
 pub async fn apply_update(
     state: tauri::State<'_, TauriAppState>,
 ) -> Result<UpdateStateDto, String> {
+    let include_prereleases = state
+        .settings
+        .lock()
+        .map_err(|e| format!("Failed to lock settings: {}", e))?
+        .updates
+        .include_prereleases;
     let update_state_arc: Arc<Mutex<UpdateCheckState>> = {
         let app = state
             .app_state
@@ -115,29 +122,36 @@ pub async fn apply_update(
     }
 
     let update_state_clone = update_state_arc.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        let apply_result = dota2_scripts::update::apply_update();
+    let (result, should_exit) = tokio::task::spawn_blocking(move || {
+        let apply_result = dota2_scripts::update::apply_update(include_prereleases);
         let mut us = update_state_clone.lock().unwrap();
         match apply_result {
             ApplyUpdateResult::Success { new_version: _ } => {
                 *us = UpdateCheckState::UpToDate;
-                UpdateStateDto::UpToDate
+                (UpdateStateDto::UpToDate, true)
             }
             ApplyUpdateResult::UpToDate => {
                 *us = UpdateCheckState::UpToDate;
-                UpdateStateDto::UpToDate
+                (UpdateStateDto::UpToDate, false)
             }
             ApplyUpdateResult::Error(msg) => {
                 let dto = UpdateStateDto::Error {
                     message: msg.clone(),
                 };
                 *us = UpdateCheckState::Error(msg);
-                dto
+                (dto, false)
             }
         }
     })
     .await
     .map_err(|e| format!("Task join error: {}", e))?;
+
+    if should_exit {
+        std::thread::spawn(|| {
+            std::thread::sleep(Duration::from_millis(500));
+            std::process::exit(0);
+        });
+    }
 
     Ok(result)
 }

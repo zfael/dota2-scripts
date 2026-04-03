@@ -1,6 +1,5 @@
 use crate::TauriAppState;
 use dota2_scripts::config::Settings;
-use std::fs;
 use tracing::info;
 
 fn validate_settings(settings: &Settings) -> Result<(), String> {
@@ -80,10 +79,8 @@ pub fn update_config(
         serde_json::from_value(config_value).map_err(|e| format!("Deserialize error: {}", e))?;
 
     validate_settings(&new_settings)?;
-
-    let toml_str =
-        toml::to_string_pretty(&new_settings).map_err(|e| format!("TOML error: {}", e))?;
-    fs::write("config/config.toml", &toml_str)
+    new_settings
+        .save()
         .map_err(|e| format!("Failed to write config: {}", e))?;
 
     *settings = new_settings;
@@ -128,10 +125,8 @@ pub fn update_hero_config(
         serde_json::from_value(config_value).map_err(|e| format!("Deserialize error: {}", e))?;
 
     validate_settings(&new_settings)?;
-
-    let toml_str =
-        toml::to_string_pretty(&new_settings).map_err(|e| format!("TOML error: {}", e))?;
-    fs::write("config/config.toml", &toml_str)
+    new_settings
+        .save()
         .map_err(|e| format!("Failed to write config: {}", e))?;
 
     *settings = new_settings;

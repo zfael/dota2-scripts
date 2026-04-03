@@ -30,6 +30,7 @@ tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.8"
+reqwest = { version = "0.12", features = ["blocking", "json", "rustls-tls"] }
 
 # Input simulation
 enigo = "0.2"
@@ -62,7 +63,7 @@ windows = { version = "0.58", features = [
 ] }
 
 [dev-dependencies]
-reqwest = { version = "0.12", features = ["json"] }
+tempfile = "3"
 
 [build-dependencies]
 embed-resource = "2.4"

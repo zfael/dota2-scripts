@@ -8,10 +8,13 @@
 
 | Rule | Source |
 |---|---|
-| Runtime loads `config/config.toml` once at startup via `Settings::load()` | `src/config/settings.rs` |
+| Runtime resolves the live writable config to `%LOCALAPPDATA%\dota2-scripts\config\config.toml` via `ConfigPaths::detect()` | `src/config/storage.rs` |
+| On first launch, if the LocalAppData config is missing and an older install-local `config\config.toml` exists next to the executable, the app imports it automatically | `src/config/storage.rs` |
+| Otherwise the live config is seeded from the checked-in `config/config.toml` template embedded into the binary | `src/config/storage.rs` |
 | If the file is missing or TOML parsing fails, the app falls back to `Settings::default()` for the whole config | `src/config/settings.rs` |
 | Missing sections / missing keys inside a valid file fall back per-field because the structs use `#[serde(default)]` | `src/config/settings.rs` |
-| The checked-in `config/config.toml` is **not** the same as the Rust fallback defaults for every field; treat both as important | `config/config.toml`, `src/config/settings.rs` |
+| UI/config saves merge the new serialized settings into the existing live TOML so unknown local-only keys are preserved | `src/config/storage.rs`, `src/config/settings.rs`, `src-tauri/src/commands/config.rs` |
+| The checked-in `config/config.toml` is **not** the same as the Rust fallback defaults for every field; treat both as important | `config/config.toml`, `src/config/settings.rs`, `src/config/storage.rs` |
 | `RUST_LOG` overrides `[logging].level` at process start | `src/main.rs` |
 | Duplicate inventory/neutral keybindings only warn; the app still starts | `src/config/settings.rs` |
 | Most hotkey-like string fields must be supported by `src/input/keyboard.rs::parse_key_string()` (`Home`, `End`, `Insert`, `Delete`, `PageUp`, `PageDown`, `F1`-`F12`, or one character) | `src/input/keyboard.rs` |
@@ -38,7 +41,7 @@
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |
 |---|---:|---:|---|
 | `check_on_startup` | `true` | `true` | If true, `src/main.rs` starts a background update check. See `docs/features/updates.md`. |
-| `include_prereleases` | `false` | `false` | Passed into `check_for_update(...)`; affects which GitHub Releases qualify. |
+| `include_prereleases` | `false` | `false` | Passed into `check_for_update(...)` and the MSI apply path; affects which GitHub Releases qualify. |
 
 ## `[keybindings]`
 

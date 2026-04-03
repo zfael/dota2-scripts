@@ -75,7 +75,8 @@ export const useUpdateStore = create<UpdateStore>((set) => ({
     set({ updateState: { kind: "downloading" } });
     try {
       const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("apply_update");
+      const result = await invoke<UpdateCheckState>("apply_update");
+      set({ updateState: result });
     } catch (e) {
       set({
         updateState: {

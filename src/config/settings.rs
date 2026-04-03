@@ -1,3 +1,6 @@
+use crate::config::storage::{
+    bootstrap_live_config, persist_live_config, ConfigPaths, EMBEDDED_CONFIG_TEMPLATE,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -1411,12 +1414,26 @@ impl Default for Settings {
 
 impl Settings {
     pub fn load() -> Self {
-        let config_path = "config/config.toml";
+        let paths = match ConfigPaths::detect() {
+            Ok(paths) => paths,
+            Err(e) => {
+                warn!("Failed to resolve config paths: {}. Using default settings.", e);
+                return Settings::default();
+            }
+        };
 
-        match fs::read_to_string(config_path) {
+        let config_path = match bootstrap_live_config(&paths, EMBEDDED_CONFIG_TEMPLATE) {
+            Ok(path) => path,
+            Err(e) => {
+                warn!("Failed to bootstrap live config: {}. Using default settings.", e);
+                return Settings::default();
+            }
+        };
+
+        match fs::read_to_string(&config_path) {
             Ok(contents) => match toml::from_str(&contents) {
                 Ok(settings) => {
-                    info!("Loaded configuration from {}", config_path);
+                    info!("Loaded configuration from {}", config_path.display());
                     let settings: Settings = settings;
                     settings.validate_keybindings();
                     settings
@@ -1424,15 +1441,17 @@ impl Settings {
                 Err(e) => {
                     warn!(
                         "Failed to parse {}: {}. Using default settings.",
-                        config_path, e
+                        config_path.display(),
+                        e
                     );
                     Settings::default()
                 }
             },
-            Err(_) => {
+            Err(e) => {
                 info!(
-                    "Configuration file {} not found. Using default settings.",
-                    config_path
+                    "Configuration file {} could not be read ({}). Using default settings.",
+                    config_path.display(),
+                    e
                 );
                 Settings::default()
             }
@@ -1563,10 +1582,12 @@ impl Settings {
     }
 
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let config_path = "config/config.toml";
-        let toml_string = toml::to_string_pretty(self)?;
-        fs::write(config_path, toml_string)?;
-        info!("Settings saved to {}", config_path);
+        let paths = ConfigPaths::detect().map_err(std::io::Error::other)?;
+        let desired_contents = toml::to_string_pretty(self)?;
+        let config_path =
+            persist_live_config(&paths, &desired_contents, EMBEDDED_CONFIG_TEMPLATE)
+                .map_err(std::io::Error::other)?;
+        info!("Settings saved to {}", config_path.display());
         Ok(())
     }
 }

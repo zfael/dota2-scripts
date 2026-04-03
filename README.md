@@ -58,7 +58,7 @@ cargo build --release
 steamapps/common/dota 2 beta/game/dota/cfg/gamestate_integration/gamestate_integration_dota2scripts.cfg
 ```
 
-3. Point Dota at the local server. The default checked-in port is `3000`, but if you change `[server].port` in `config/config.toml`, update the URI to match:
+3. Point Dota at the local server. The default checked-in port is `3000`, but if you change `[server].port` in `%LOCALAPPDATA%\dota2-scripts\config\config.toml`, update the URI to match:
 
 ```text
 "Dota 2 Integration Configuration"
@@ -94,7 +94,14 @@ $env:RUST_LOG="debug"; cargo run --release
 
 ## Configuration
 
-Main runtime settings live in `config/config.toml`.
+Live runtime settings now live at `%LOCALAPPDATA%\dota2-scripts\config\config.toml`.
+
+Startup bootstraps that file automatically:
+
+- if an older install-local `config\config.toml` exists next to the executable, it is imported into LocalAppData on first launch
+- otherwise the app seeds LocalAppData from the checked-in `config/config.toml` template embedded into the binary
+
+The checked-in `config/config.toml` remains the source template for development, packaging, and release assets.
 
 The current checked-in config surface includes:
 
@@ -116,6 +123,13 @@ The current checked-in config surface includes:
 - `[heroes.broodmother]`
 
 For exact fields, checked-in values, fallback defaults, and known runtime drift, use `docs/reference/configuration.md`.
+
+## Updates
+
+- GitHub Releases still publish both a manual **ZIP** and an **MSI** installer.
+- The app now treats the **MSI** as the only supported in-app update artifact.
+- When you accept an update in-app, it downloads the latest MSI plus a matching `config.template.toml`, merges the new template into your LocalAppData config with **local values winning**, preserves local-only keys, runs a silent upgrade, and relaunches automatically.
+- Older ZIP-style installs are expected to install the MSI once before using in-app updates.
 
 ## Using the UI
 

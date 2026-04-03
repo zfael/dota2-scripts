@@ -86,9 +86,19 @@ pub fn drain_activities() -> Vec<ActivityEntry> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Mutex, OnceLock};
+
+    fn shared_test_lock() -> &'static Mutex<()> {
+        static TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        TEST_LOCK.get_or_init(|| Mutex::new(()))
+    }
 
     #[test]
     fn test_push_and_drain() {
+        let _guard = shared_test_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
         // Drain any pre-existing entries (from concurrent tests sharing the global buffer)
         drain_activities();
 
@@ -124,6 +134,10 @@ mod tests {
 
     #[test]
     fn test_buffer_overflow() {
+        let _guard = shared_test_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
         drain_activities();
 
         for i in 0..MAX_BUFFER_SIZE + 10 {

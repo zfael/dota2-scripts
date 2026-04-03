@@ -99,6 +99,7 @@
 | File | Purpose | Linked Doc |
 |---|---|---|
 | `src/config/settings.rs` | Config structs, serde defaults, load/save helpers, keybinding validation | `docs/reference/configuration.md` |
+| `src/config/storage.rs` | LocalAppData config-path resolution, legacy import, and TOML merge/persist helpers | `docs/reference/configuration.md`, `docs/features/updates.md` |
 | `src/config/constants.rs` | Compile-time constants and default maps | `docs/reference/configuration.md` |
 | `src/config/mod.rs` | Module re-exports | — |
 
@@ -136,7 +137,8 @@
 
 | File | Purpose | Linked Doc |
 |---|---|---|
-| `src/update/mod.rs` | Update check, download/apply, and restart flow | `docs/features/updates.md` |
+| `src/update/mod.rs` | GitHub release checks plus MSI/config-template apply orchestration | `docs/features/updates.md` |
+| `src/update/msi.rs` | MSI asset selection, ZIP-layout guard, temp download, and PowerShell handoff helpers | `docs/features/updates.md` |
 
 ## `src/observability/`
 

@@ -2,14 +2,19 @@
 //!
 //! Uses the `self_update` crate to:
 //! 1. Check for newer versions on GitHub Releases
-//! 2. Download and replace the executable
-//! 3. Restart the application
+//! 2. Download the latest MSI installer and config template
+//! 3. Launch a silent MSI upgrade handoff that relaunches the app
 
-use self_update::backends::github::ReleaseList;
+mod msi;
+
 use self_update::cargo_crate_version;
 use self_update::version::bump_is_greater;
-use std::process::Command;
+use serde::Deserialize;
 use tracing::{error, info, warn};
+
+use crate::config::storage::{
+    bootstrap_live_config, merge_template_with_local, ConfigPaths, EMBEDDED_CONFIG_TEMPLATE,
+};
 
 /// GitHub repository owner
 const REPO_OWNER: &str = "zfael";
@@ -34,6 +39,54 @@ pub enum UpdateCheckResult {
     Error(String),
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct GitHubRelease {
+    tag_name: String,
+    body: Option<String>,
+    prerelease: bool,
+    assets: Vec<GitHubReleaseAsset>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct GitHubReleaseAsset {
+    name: String,
+    browser_download_url: String,
+}
+
+fn fetch_releases() -> Result<Vec<GitHubRelease>, String> {
+    let releases_api_url = format!(
+        "https://api.github.com/repos/{}/{}/releases",
+        REPO_OWNER, REPO_NAME
+    );
+
+    reqwest::blocking::Client::new()
+        .get(releases_api_url)
+        .header(reqwest::header::USER_AGENT, "dota2-scripts-updater")
+        .send()
+        .and_then(|response| response.error_for_status())
+        .map_err(|e| format!("Failed to fetch releases: {}", e))?
+        .json::<Vec<GitHubRelease>>()
+        .map_err(|e| format!("Failed to deserialize releases: {}", e))
+}
+
+fn latest_eligible_release(include_prereleases: bool) -> Result<GitHubRelease, String> {
+    let releases = fetch_releases()?;
+
+    let filtered_releases = if include_prereleases {
+        releases
+    } else {
+        releases
+            .into_iter()
+            .filter(|release| !release.prerelease && !is_prerelease(&release.tag_name))
+            .collect()
+    };
+
+    filtered_releases
+        .into_iter()
+        .next()
+        .ok_or_else(|| "No eligible releases found".to_string())
+}
+
 /// Check for available updates on GitHub Releases.
 ///
 /// # Arguments
@@ -48,50 +101,14 @@ pub fn check_for_update(include_prereleases: bool) -> UpdateCheckResult {
         current_version
     );
 
-    // Fetch releases from GitHub
-    let releases = match ReleaseList::configure()
-        .repo_owner(REPO_OWNER)
-        .repo_name(REPO_NAME)
-        .build()
-    {
-        Ok(list) => match list.fetch() {
-            Ok(releases) => releases,
-            Err(e) => {
-                let msg = format!("Failed to fetch releases: {}", e);
-                warn!("{}", msg);
-                return UpdateCheckResult::Error(msg);
-            }
-        },
-        Err(e) => {
-            let msg = format!("Failed to configure release list: {}", e);
-            error!("{}", msg);
+    let latest = match latest_eligible_release(include_prereleases) {
+        Ok(release) => release,
+        Err(msg) => {
+            warn!("{}", msg);
             return UpdateCheckResult::Error(msg);
         }
     };
-
-    if releases.is_empty() {
-        info!("No releases found on GitHub");
-        return UpdateCheckResult::UpToDate;
-    }
-
-    // Filter releases based on prerelease preference
-    let filtered_releases: Vec<_> = if include_prereleases {
-        releases
-    } else {
-        releases
-            .into_iter()
-            .filter(|r| !is_prerelease(&r.version))
-            .collect()
-    };
-
-    if filtered_releases.is_empty() {
-        info!("No stable releases found (prereleases excluded)");
-        return UpdateCheckResult::UpToDate;
-    }
-
-    // Check if the latest release is newer than current version
-    let latest = &filtered_releases[0];
-    let latest_version = latest.version.trim_start_matches('v');
+    let latest_version = latest.tag_name.trim_start_matches('v');
 
     match bump_is_greater(current_version, latest_version) {
         Ok(true) => {
@@ -101,7 +118,7 @@ pub fn check_for_update(include_prereleases: bool) -> UpdateCheckResult {
             );
             UpdateCheckResult::Available(UpdateInfo {
                 version: latest_version.to_string(),
-                release_notes: latest.body.clone(),
+                release_notes: latest.body,
             })
         }
         Ok(false) => {
@@ -136,66 +153,127 @@ pub enum ApplyUpdateResult {
     Error(String),
 }
 
-/// Download and apply the update.
-///
-/// This will:
-/// 1. Download the latest release asset
-/// 2. Extract and replace the current executable
-/// 3. Return success status (caller should restart)
-pub fn apply_update() -> ApplyUpdateResult {
-    info!("📥 Downloading and applying update...");
-
-    let result = self_update::backends::github::Update::configure()
-        .repo_owner(REPO_OWNER)
-        .repo_name(REPO_NAME)
-        .bin_name("dota2-scripts")
-        .show_download_progress(false) // We show our own spinner in UI
-        .no_confirm(true) // UI already prompted user
-        .current_version(cargo_crate_version!())
-        .build();
-
-    match result {
-        Ok(updater) => match updater.update() {
-            Ok(status) => {
-                let new_version = status.version().to_string();
-                if status.updated() {
-                    info!("✅ Update applied successfully! New version: v{}", new_version);
-                    ApplyUpdateResult::Success { new_version }
-                } else {
-                    info!("Already up to date");
-                    ApplyUpdateResult::UpToDate
-                }
-            }
-            Err(e) => {
-                let msg = format!("Failed to apply update: {}", e);
-                error!("{}", msg);
-                ApplyUpdateResult::Error(msg)
-            }
-        },
-        Err(e) => {
-            let msg = format!("Failed to configure updater: {}", e);
-            error!("{}", msg);
-            ApplyUpdateResult::Error(msg)
-        }
-    }
+fn is_newer_than_current(tag_name: &str) -> Result<bool, String> {
+    bump_is_greater(cargo_crate_version!(), tag_name.trim_start_matches('v'))
+        .map_err(|e| format!("Failed to compare versions: {}", e))
 }
 
-/// Restart the application by spawning a new process and exiting.
+/// Download the latest MSI/template assets, merge config, and hand off to msiexec.
 ///
-/// # Returns
-/// This function does not return on success (exits the process).
-/// Returns an error string if restart fails.
-pub fn restart_application() -> Result<(), String> {
-    info!("🔄 Restarting application...");
+/// This will:
+/// 1. Download the latest release MSI + config template assets
+/// 2. Merge the new template into the LocalAppData live config
+/// 3. Spawn a PowerShell handoff that upgrades and relaunches the app
+pub fn apply_update(include_prereleases: bool) -> ApplyUpdateResult {
+    info!("📥 Downloading and applying update...");
 
-    let current_exe = std::env::current_exe().map_err(|e| format!("Failed to get current exe: {}", e))?;
+    let latest = match latest_eligible_release(include_prereleases) {
+        Ok(release) => release,
+        Err(msg) => return ApplyUpdateResult::Error(msg),
+    };
 
-    // Spawn new process
-    Command::new(&current_exe)
-        .spawn()
-        .map_err(|e| format!("Failed to spawn new process: {}", e))?;
+    match is_newer_than_current(&latest.tag_name) {
+        Ok(false) => return ApplyUpdateResult::UpToDate,
+        Err(msg) => return ApplyUpdateResult::Error(msg),
+        Ok(true) => {}
+    }
 
-    // Exit current process
-    info!("Exiting current process for restart...");
-    std::process::exit(0);
+    let current_exe = match std::env::current_exe() {
+        Ok(path) => path,
+        Err(e) => {
+            let msg = format!("Failed to resolve current exe: {}", e);
+            error!("{}", msg);
+            return ApplyUpdateResult::Error(msg);
+        }
+    };
+
+    if let Err(msg) = msi::ensure_msi_managed_install(&current_exe) {
+        return ApplyUpdateResult::Error(msg);
+    }
+
+    let assets = latest
+        .assets
+        .iter()
+        .map(|asset| msi::ReleaseAssetRef {
+            name: asset.name.as_str(),
+            download_url: asset.browser_download_url.as_str(),
+        })
+        .collect::<Vec<_>>();
+    let install_assets =
+        match msi::select_release_assets(&latest.tag_name, "x86_64-pc-windows-msvc", &assets) {
+            Ok(assets) => assets,
+            Err(msg) => return ApplyUpdateResult::Error(msg),
+        };
+
+    let template_contents = match reqwest::blocking::get(&install_assets.template_url)
+        .and_then(|response| response.error_for_status())
+        .and_then(|response| response.text())
+    {
+        Ok(contents) => contents,
+        Err(e) => {
+            let msg = format!("Failed to download config template: {}", e);
+            error!("{}", msg);
+            return ApplyUpdateResult::Error(msg);
+        }
+    };
+
+    let paths = match ConfigPaths::detect() {
+        Ok(paths) => paths,
+        Err(msg) => return ApplyUpdateResult::Error(msg),
+    };
+    let live_config_path = match bootstrap_live_config(&paths, EMBEDDED_CONFIG_TEMPLATE) {
+        Ok(path) => path,
+        Err(msg) => return ApplyUpdateResult::Error(msg),
+    };
+    let error_log_path = live_config_path
+        .parent()
+        .and_then(|config_dir| config_dir.parent())
+        .map(|app_dir| app_dir.join("logs").join("update-error.log"))
+        .unwrap_or_else(|| {
+            std::env::temp_dir()
+                .join("dota2-scripts")
+                .join("logs")
+                .join("update-error.log")
+        });
+    let local_contents = match std::fs::read_to_string(&live_config_path) {
+        Ok(contents) => contents,
+        Err(e) => {
+            let msg = format!("Failed to read live config {}: {}", live_config_path.display(), e);
+            error!("{}", msg);
+            return ApplyUpdateResult::Error(msg);
+        }
+    };
+    let merged_contents = match merge_template_with_local(&template_contents, &local_contents) {
+        Ok(contents) => contents,
+        Err(msg) => return ApplyUpdateResult::Error(msg),
+    };
+
+    let msi_path = match msi::download_to_temp(&install_assets.msi_url, "msi") {
+        Ok(path) => path,
+        Err(msg) => return ApplyUpdateResult::Error(msg),
+    };
+    let staged_config_path = match msi::write_temp_contents(&merged_contents, "toml") {
+        Ok(path) => path,
+        Err(msg) => return ApplyUpdateResult::Error(msg),
+    };
+    if let Err(msg) = msi::launch_msi_handoff(
+        std::process::id(),
+        &msi_path,
+        &staged_config_path,
+        &live_config_path,
+        &error_log_path,
+        &current_exe,
+    ) {
+        error!("{}", msg);
+        return ApplyUpdateResult::Error(msg);
+    }
+
+    info!(
+        "✅ Launched MSI update handoff for {} using {}",
+        latest.tag_name,
+        msi_path.display()
+    );
+    ApplyUpdateResult::Success {
+        new_version: latest.tag_name.trim_start_matches('v').to_string(),
+    }
 }

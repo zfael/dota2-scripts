@@ -154,6 +154,12 @@ jobs:
             Write-Host "MSI directory not found: $MSI_DIR"
           }
 
+      - name: Package config template artifact
+        shell: pwsh
+        run: |
+          $VERSION = "${{ github.ref_name }}"
+          Copy-Item "config/config.toml" "artifacts/dota2-scripts-${VERSION}-config.template.toml"
+
       - name: Upload ZIP artifact
         uses: actions/upload-artifact@v4
         with:
@@ -166,6 +172,12 @@ jobs:
         with:
           name: dota2-scripts-${{ github.ref_name }}-${{ matrix.target }}-msi
           path: artifacts/dota2-scripts-${{ github.ref_name }}-${{ matrix.target }}.msi
+
+      - name: Upload config template artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dota2-scripts-${{ github.ref_name }}-config-template
+          path: artifacts/dota2-scripts-${{ github.ref_name }}-config.template.toml
 
   release:
     name: Create Release
@@ -289,7 +301,8 @@ jobs:
           
           ### 📥 Downloads
           - **Windows (ZIP)**: `dota2-scripts-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip` (includes exe + example config)
-          - **Windows (MSI)**: `dota2-scripts-${{ github.ref_name }}-x86_64-pc-windows-msvc.msi` (installer)
+          - **Windows (MSI)**: `dota2-scripts-${{ github.ref_name }}-x86_64-pc-windows-msvc.msi` (installer + in-app update target)
+          - **Config template**: `dota2-scripts-${{ github.ref_name }}-config.template.toml` (used by in-app config merge)
           
           ### 📋 Requirements
           - Windows 10/11
@@ -315,6 +328,7 @@ jobs:
           files: |
             artifacts/dota2-scripts-${{ github.ref_name }}-x86_64-pc-windows-msvc-zip/dota2-scripts-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip
             artifacts/dota2-scripts-${{ github.ref_name }}-x86_64-pc-windows-msvc-msi/dota2-scripts-${{ github.ref_name }}-x86_64-pc-windows-msvc.msi
+            artifacts/dota2-scripts-${{ github.ref_name }}-config-template/dota2-scripts-${{ github.ref_name }}-config.template.toml
           body_path: release_body.md
           draft: false
           prerelease: ${{ contains(github.ref, '-rc') }}
