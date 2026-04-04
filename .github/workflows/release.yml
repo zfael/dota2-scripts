@@ -113,7 +113,7 @@ jobs:
         run: npm ci
 
       - name: Build Tauri app
-        run: npx tauri build --target ${{ matrix.target }}
+        run: npx tauri build --target ${{ matrix.target }} --bundles msi --ci
 
       - name: Package ZIP artifact
         shell: pwsh
