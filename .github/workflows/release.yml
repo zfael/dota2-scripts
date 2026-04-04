@@ -40,8 +40,37 @@ jobs:
           $TAG = "${{ github.ref_name }}"
           # Strip 'v' prefix from tag to get semver (v1.0.0 -> 1.0.0)
           $VERSION = $TAG -replace '^v', ''
+
+          if ($VERSION -match '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?:-rc\.(?<rc>\d+))?$') {
+            $major = [int]$Matches.major
+            $minor = [int]$Matches.minor
+            $patch = [int]$Matches.patch
+            $rc = if ($Matches.rc) { [int]$Matches.rc } else { $null }
+
+            if ($patch -gt 655) {
+              Write-Error "Patch version $patch exceeds MSI encoding limit (max 655)"
+              exit 1
+            }
+
+            if ($null -ne $rc -and $rc -gt 98) {
+              Write-Error "RC version $rc exceeds MSI encoding limit (max 98)"
+              exit 1
+            }
+
+            # Windows Installer only compares the first three ProductVersion fields.
+            # Encode rc builds below the eventual stable release while keeping all values numeric.
+            $MSI_VERSION = if ($null -ne $rc) {
+              "$major.$minor.$(($patch * 100) + $rc)"
+            } else {
+              "$major.$minor.$(($patch * 100) + 99)"
+            }
+          } else {
+            Write-Error "Unsupported tag format for MSI version derivation: $VERSION"
+            exit 1
+          }
           
           Write-Host "Syncing Cargo.toml version to: $VERSION"
+          Write-Host "Derived MSI version: $MSI_VERSION"
           
           # Update root Cargo.toml [package] version
           $lines = Get-Content "Cargo.toml"
@@ -91,8 +120,16 @@ jobs:
           # Update src-tauri/tauri.conf.json version
           $conf = Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json
           $conf.version = $VERSION
+          if (-not $conf.bundle.PSObject.Properties['windows']) {
+            $conf.bundle | Add-Member -NotePropertyName windows -NotePropertyValue ([pscustomobject]@{})
+          }
+          if (-not $conf.bundle.windows.PSObject.Properties['wix']) {
+            $conf.bundle.windows | Add-Member -NotePropertyName wix -NotePropertyValue ([pscustomobject]@{})
+          }
+          $conf.bundle.windows.wix | Add-Member -NotePropertyName version -NotePropertyValue $MSI_VERSION -Force
           $conf | ConvertTo-Json -Depth 10 | Set-Content "src-tauri/tauri.conf.json"
           Write-Host "Updated tauri.conf.json version to: $VERSION"
+          Write-Host "Updated tauri.conf.json bundle.windows.wix.version to: $MSI_VERSION"
 
       - name: Generate Cargo.lock
         run: cargo generate-lockfile
