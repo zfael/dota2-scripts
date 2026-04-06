@@ -8,7 +8,7 @@
 
 | Path | What it owns |
 |---|---|
-| `src/input/keyboard.rs` | Global `rdev::grab` hook, decision tree, `HotkeyEvent` channel, Soul Ring replay helper |
+| `src/input/keyboard.rs` | Global `rdev::grab` hook, decision tree, `HotkeyEvent` channel, Soul Ring replay helper, Armlet Roshan toggle hotkey |
 | `src/actions/heroes/outworld_destroyer.rs` | Outworld Destroyer intercepted-sequence planning and dedicated request worker (`R` combo, self-Astral, standalone combo) |
 | `src/actions/soul_ring.rs` | Soul Ring shared state, key eligibility rules, health/mana/cooldown gates |
 | `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend intercepted-sequence planning and dedicated request worker (`Q/W/E` razes, `R` ultimate combo, standalone combo) |
@@ -50,6 +50,7 @@ The snapshot holds only static keyboard-facing facts:
 - Outworld Destroyer interception flags, keys, and combo config
 - Broodmother callback-facing config and pre-parsed keys
 - Soul Ring thresholds, ability keys, and item-slot keys
+- Armlet Roshan toggle key when `[armlet.roshan].enabled = true`
 
 It does **not** replace live Soul Ring runtime state. Cooldowns, mana, health, alive state, Soul Ring availability, and slot-to-item contents still come from `SOUL_RING_STATE`, which is refreshed from GSI. That means moving an item between slots in-game still updates the interception path once GSI reports the new inventory layout.
 
@@ -92,15 +93,19 @@ Current callback order on key/button input:
     - block `R` only when `Sanity's Eclipse` is ready
     - enqueue `BKB -> Objurgation -> R` onto the dedicated OD worker
     - optionally block the configured self-Astral panic hotkey and double-tap Astral on self
-10. **Largo / generic ability-key path**
+10. **Armlet Roshan toggle**
+    - if `[armlet.roshan].enabled = true` and the configured hotkey matches
+    - emit `HotkeyEvent::ArmletRoshanToggle`
+    - block the original key so it does not also reach Dota 2
+11. **Largo / generic ability-key path**
     - emit `HotkeyEvent::LargoQ/W/E/R`
     - if Soul Ring should trigger, block and replay
     - otherwise pass through
-11. **Item-slot Soul Ring interception**
-    - blocks configured item keys when the item is mana-using and Soul Ring should fire first
-12. **Standalone combo key**
-    - sends `HotkeyEvent::ComboTrigger`
-    - does not block the original key
+12. **Item-slot Soul Ring interception**
+     - blocks configured item keys when the item is mana-using and Soul Ring should fire first
+13. **Standalone combo key**
+     - sends `HotkeyEvent::ComboTrigger`
+     - does not block the original key
 
 Because this logic is ordered, a new intercept can easily shadow an older one. Preserve ordering deliberately.
 
@@ -326,6 +331,7 @@ These are still part of the interception surface even though this page centers o
 | Area | Path | Keys |
 |---|---|---|
 | Soul Ring | `config/config.toml` -> `[soul_ring]` | `enabled`, `min_mana_percent`, `min_health_percent`, `delay_before_ability_ms`, `trigger_cooldown_ms`, `ability_keys`, `intercept_item_keys` |
+| Armlet Roshan | `config/config.toml` -> `[armlet.roshan]` | `enabled`, `toggle_key` |
 | Shadow Fiend | `config/config.toml` -> `[heroes.shadow_fiend]` | `raze_intercept_enabled`, `raze_delay_ms`, `auto_bkb_on_ultimate`, `auto_d_on_ultimate` |
 | Global hotkey | `config/config.toml` -> `[keybindings]` | slot key mappings; the live standalone trigger is read from `AppState.trigger_key` and cached as a parsed `snapshot.trigger_key` |
 

@@ -1,12 +1,20 @@
 import { Card } from "../../common/Card";
 import { KeyInput } from "../../common/KeyInput";
 import { NumberInput } from "../../common/NumberInput";
+import { Toggle } from "../../common/Toggle";
 import { useConfigStore } from "../../../stores/configStore";
 
 export default function HuskarConfig() {
   const config = useConfigStore((s) => s.config.heroes.huskar);
   const update = useConfigStore((s) => s.updateHeroConfig);
   const set = (updates: Partial<typeof config>) => update("huskar", updates);
+  const setRoshanSpears = (updates: Partial<typeof config.roshan_spears>) =>
+    set({
+      roshan_spears: {
+        ...config.roshan_spears,
+        ...updates,
+      },
+    });
 
   return (
     <>
@@ -18,6 +26,31 @@ export default function HuskarConfig() {
 
         <Card title="Berserker Blood">
           <NumberInput label="Cleanse Delay" value={config.berserker_blood_delay_ms} onChange={(v) => set({ berserker_blood_delay_ms: v })} suffix="ms" />
+        </Card>
+
+        <Card title="Roshan Spears">
+          <Toggle
+            label="Enable Roshan Spears Gate"
+            checked={config.roshan_spears.enabled}
+            onChange={(value) => setRoshanSpears({ enabled: value })}
+          />
+          <KeyInput
+            label="Burning Spears Key"
+            value={config.roshan_spears.burning_spear_key}
+            onChange={(value) => setRoshanSpears({ burning_spear_key: value })}
+          />
+          <NumberInput
+            label="Disable Buffer"
+            value={config.roshan_spears.disable_buffer_hp}
+            onChange={(value) => setRoshanSpears({ disable_buffer_hp: value })}
+            suffix="HP"
+          />
+          <NumberInput
+            label="Re-enable Buffer"
+            value={config.roshan_spears.reenable_buffer_hp}
+            onChange={(value) => setRoshanSpears({ reenable_buffer_hp: value })}
+            suffix="HP"
+          />
         </Card>
       </div>
 

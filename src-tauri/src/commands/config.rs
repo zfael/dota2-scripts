@@ -1,5 +1,6 @@
 use crate::TauriAppState;
 use dota2_scripts::config::Settings;
+use dota2_scripts::input::keyboard::KeyboardSnapshot;
 use tracing::info;
 
 fn validate_settings(settings: &Settings) -> Result<(), String> {
@@ -84,6 +85,17 @@ pub fn update_config(
         .map_err(|e| format!("Failed to write config: {}", e))?;
 
     *settings = new_settings;
+    let app = state
+        .app_state
+        .lock()
+        .map_err(|e| format!("Failed to lock app state: {}", e))?;
+    let snapshot = KeyboardSnapshot::from_runtime(&settings, &app);
+    drop(app);
+    let mut keyboard_snapshot = state
+        .keyboard_snapshot
+        .write()
+        .map_err(|e| format!("Failed to lock keyboard snapshot: {}", e))?;
+    *keyboard_snapshot = snapshot;
     info!("Config section '{}' updated and persisted", section);
 
     Ok(())
@@ -130,6 +142,17 @@ pub fn update_hero_config(
         .map_err(|e| format!("Failed to write config: {}", e))?;
 
     *settings = new_settings;
+    let app = state
+        .app_state
+        .lock()
+        .map_err(|e| format!("Failed to lock app state: {}", e))?;
+    let snapshot = KeyboardSnapshot::from_runtime(&settings, &app);
+    drop(app);
+    let mut keyboard_snapshot = state
+        .keyboard_snapshot
+        .write()
+        .map_err(|e| format!("Failed to lock keyboard snapshot: {}", e))?;
+    *keyboard_snapshot = snapshot;
     info!("Hero config '{}' updated and persisted", hero);
 
     Ok(())

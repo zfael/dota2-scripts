@@ -1,8 +1,8 @@
 use crate::actions::heroes::traits::HeroScript;
 use crate::actions::common::SurvivabilityActions;
 use crate::actions::executor::ActionExecutor;
-use crate::config::Settings;
-use crate::models::{GsiWebhookEvent, Hero};
+use crate::config::{settings::HuskarRoshanSpearsConfig, Settings};
+use crate::models::{gsi_event::Ability, GsiWebhookEvent, Hero};
 use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -10,6 +10,111 @@ use tracing::{debug, info};
 
 lazy_static! {
     static ref BERSERKER_BLOOD_DEBUFF_DETECTED: Mutex<Option<Instant>> = Mutex::new(None);
+    static ref ROSHAN_SPEARS_STATE: Mutex<HuskarRoshanSpearsState> =
+        Mutex::new(HuskarRoshanSpearsState::default());
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct HuskarRoshanSpearsState {
+    disabled_by_app: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HuskarRoshanSpearsAction {
+    None,
+    Disable,
+    Reenable,
+    ClearOwnership,
+}
+
+fn evaluate_roshan_spears_gate(
+    health: u32,
+    effective_trigger: u32,
+    roshan_mode_armed: bool,
+    burning_spear_present: bool,
+    config: &HuskarRoshanSpearsConfig,
+    state: &mut HuskarRoshanSpearsState,
+) -> HuskarRoshanSpearsAction {
+    if !config.enabled || !roshan_mode_armed || !burning_spear_present {
+        let had_ownership = state.disabled_by_app;
+        state.disabled_by_app = false;
+        return if had_ownership {
+            HuskarRoshanSpearsAction::ClearOwnership
+        } else {
+            HuskarRoshanSpearsAction::None
+        };
+    }
+
+    let disable_line = effective_trigger.saturating_add(config.disable_buffer_hp);
+    let reenable_line = effective_trigger.saturating_add(config.reenable_buffer_hp);
+
+    if state.disabled_by_app {
+        if health >= reenable_line {
+            state.disabled_by_app = false;
+            HuskarRoshanSpearsAction::Reenable
+        } else {
+            HuskarRoshanSpearsAction::None
+        }
+    } else if health <= disable_line {
+        state.disabled_by_app = true;
+        HuskarRoshanSpearsAction::Disable
+    } else {
+        HuskarRoshanSpearsAction::None
+    }
+}
+
+fn evaluate_resolved_roshan_spears_gate(
+    settings: &Settings,
+    health: u32,
+    roshan_mode_armed: bool,
+    burning_spear_present: bool,
+    state: &mut HuskarRoshanSpearsState,
+) -> HuskarRoshanSpearsAction {
+    let resolved = settings.resolve_armlet_config(Hero::Huskar.to_game_name());
+    let effective_trigger = resolved
+        .toggle_threshold
+        .saturating_add(resolved.predictive_offset);
+
+    evaluate_roshan_spears_gate(
+        health,
+        effective_trigger,
+        roshan_mode_armed,
+        burning_spear_present,
+        &settings.heroes.huskar.roshan_spears,
+        state,
+    )
+}
+
+fn clear_roshan_spears_ownership(reason: &str) {
+    if let Ok(mut state) = ROSHAN_SPEARS_STATE.lock() {
+        if state.disabled_by_app {
+            state.disabled_by_app = false;
+            info!(
+                "Clearing Roshan Burning Spears ownership state without toggling ({})",
+                reason
+            );
+        }
+    }
+}
+
+fn find_burning_spear_ability<'a>(event: &'a GsiWebhookEvent) -> Option<&'a Ability> {
+    [
+        &event.abilities.ability0,
+        &event.abilities.ability1,
+        &event.abilities.ability2,
+        &event.abilities.ability3,
+        &event.abilities.ability4,
+        &event.abilities.ability5,
+    ]
+    .iter()
+    .find(|ability| ability.name == "huskar_burning_spear" && ability.level > 0 && !ability.passive)
+    .copied()
+}
+
+fn emit_burning_spear_toggle(key: char) {
+    crate::input::simulation::modifier_down(crate::input::simulation::ModifierKey::Alt);
+    crate::input::simulation::press_key(key);
+    crate::input::simulation::modifier_up(crate::input::simulation::ModifierKey::Alt);
 }
 
 pub struct HuskarScript {
@@ -89,6 +194,50 @@ impl HuskarScript {
             }
         }
     }
+
+    fn manage_roshan_burning_spears(&self, event: &GsiWebhookEvent) {
+        if !event.hero.is_alive() {
+            clear_roshan_spears_ownership("hero died");
+            return;
+        }
+
+        let settings = self.settings.lock().unwrap();
+        let config = settings.heroes.huskar.roshan_spears.clone();
+        let resolved = settings.resolve_armlet_config(&event.hero.name);
+        let effective_trigger = resolved
+            .toggle_threshold
+            .saturating_add(resolved.predictive_offset);
+        let roshan_mode_armed = crate::actions::armlet::is_roshan_mode_armed();
+        let burning_spear_present = find_burning_spear_ability(event).is_some();
+
+        let mut state = ROSHAN_SPEARS_STATE.lock().unwrap();
+        match evaluate_resolved_roshan_spears_gate(
+            &settings,
+            event.hero.health,
+            roshan_mode_armed,
+            burning_spear_present,
+            &mut state,
+        ) {
+            HuskarRoshanSpearsAction::Disable => {
+                let disable_line =
+                    effective_trigger.saturating_add(config.disable_buffer_hp);
+                info!(
+                    "Entering Roshan Burning Spears danger band at {}HP (disable line: {})",
+                    event.hero.health, disable_line
+                );
+                info!("Disabling Burning Spears due to Roshan threshold protection");
+                emit_burning_spear_toggle(config.burning_spear_key);
+            }
+            HuskarRoshanSpearsAction::Reenable => {
+                info!("Re-enabling Burning Spears after HP recovery");
+                emit_burning_spear_toggle(config.burning_spear_key);
+            }
+            HuskarRoshanSpearsAction::ClearOwnership => {
+                info!("Clearing Roshan Burning Spears ownership state without toggling");
+            }
+            HuskarRoshanSpearsAction::None => {}
+        }
+    }
 }
 
 impl HeroScript for HuskarScript {
@@ -110,7 +259,10 @@ impl HeroScript for HuskarScript {
         // Use neutral items if in danger
         survivability.use_neutral_item_if_danger_with_snapshot(event, in_danger);
 
-        // PRIORITY 3: Huskar-specific berserker blood cleanse
+        // PRIORITY 3: Huskar-specific Roshan Burning Spears gate
+        self.manage_roshan_burning_spears(event);
+
+        // PRIORITY 4: Huskar-specific berserker blood cleanse
         self.berserker_blood_cleanse(event);
     }
 
@@ -124,5 +276,102 @@ impl HeroScript for HuskarScript {
     
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::settings::HuskarRoshanSpearsConfig;
+
+    #[test]
+    fn roshan_spears_gate_disables_once_when_hp_enters_disable_band() {
+        let config = HuskarRoshanSpearsConfig {
+            enabled: true,
+            burning_spear_key: 'w',
+            disable_buffer_hp: 60,
+            reenable_buffer_hp: 100,
+        };
+        let mut state = HuskarRoshanSpearsState::default();
+
+        let action = evaluate_roshan_spears_gate(320, 270, true, true, &config, &mut state);
+
+        assert_eq!(action, HuskarRoshanSpearsAction::Disable);
+        assert!(state.disabled_by_app);
+    }
+
+    #[test]
+    fn roshan_spears_gate_does_not_repeat_disable_while_owned_by_app() {
+        let config = HuskarRoshanSpearsConfig {
+            enabled: true,
+            burning_spear_key: 'w',
+            disable_buffer_hp: 60,
+            reenable_buffer_hp: 100,
+        };
+        let mut state = HuskarRoshanSpearsState {
+            disabled_by_app: true,
+        };
+
+        let action = evaluate_roshan_spears_gate(300, 270, true, true, &config, &mut state);
+
+        assert_eq!(action, HuskarRoshanSpearsAction::None);
+        assert!(state.disabled_by_app);
+    }
+
+    #[test]
+    fn roshan_spears_gate_reenables_only_after_hp_crosses_reenable_line() {
+        let config = HuskarRoshanSpearsConfig {
+            enabled: true,
+            burning_spear_key: 'w',
+            disable_buffer_hp: 60,
+            reenable_buffer_hp: 100,
+        };
+        let mut state = HuskarRoshanSpearsState {
+            disabled_by_app: true,
+        };
+
+        let action = evaluate_roshan_spears_gate(380, 270, true, true, &config, &mut state);
+
+        assert_eq!(action, HuskarRoshanSpearsAction::Reenable);
+        assert!(!state.disabled_by_app);
+    }
+
+    #[test]
+    fn roshan_spears_gate_clears_ownership_when_roshan_mode_is_not_armed() {
+        let config = HuskarRoshanSpearsConfig {
+            enabled: true,
+            burning_spear_key: 'w',
+            disable_buffer_hp: 60,
+            reenable_buffer_hp: 100,
+        };
+        let mut state = HuskarRoshanSpearsState {
+            disabled_by_app: true,
+        };
+
+        let action = evaluate_roshan_spears_gate(300, 270, false, true, &config, &mut state);
+
+        assert_eq!(action, HuskarRoshanSpearsAction::ClearOwnership);
+        assert!(!state.disabled_by_app);
+    }
+
+    #[test]
+    fn resolved_roshan_spears_gate_uses_huskar_armlet_override_thresholds() {
+        let mut settings = Settings::default();
+        settings.armlet.toggle_threshold = 320;
+        settings.armlet.predictive_offset = 30;
+        settings.heroes.huskar.armlet.toggle_threshold = Some(120);
+        settings.heroes.huskar.armlet.predictive_offset = Some(150);
+        settings.heroes.huskar.roshan_spears = HuskarRoshanSpearsConfig {
+            enabled: true,
+            burning_spear_key: 'w',
+            disable_buffer_hp: 60,
+            reenable_buffer_hp: 100,
+        };
+        let mut state = HuskarRoshanSpearsState::default();
+
+        let action = evaluate_resolved_roshan_spears_gate(&settings, 330, true, true, &mut state);
+
+        assert_eq!(action, HuskarRoshanSpearsAction::Disable);
+        assert!(state.disabled_by_app);
     }
 }

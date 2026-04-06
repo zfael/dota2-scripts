@@ -86,6 +86,20 @@
 
 See `docs/features/survivability.md`.
 
+### `[armlet.roshan]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `enabled` | `false` | `false` | Enables the Roshan-specific shared Armlet mode and exposes its dedicated hotkey in the keyboard hook. |
+| `toggle_key` | `"Insert"` | `"Insert"` | Blocked global hotkey that arms/disarms Roshan mode at runtime without passing the key through to Dota 2. |
+| `emergency_margin_hp` | `60` | `60` | Extra HP buffer used by the first-hit emergency fallback before enough Roshan samples have been learned. |
+| `learning_window_ms` | `5000` | `5000` | Rolling time window used to keep likely Roshan-hit samples. |
+| `min_confidence_hits` | `2` | `2` | Number of valid samples required before learned-hit prediction is trusted. |
+| `min_sample_damage` | `80` | `80` | Minimum downward HP delta required for a sample to count toward Roshan-hit learning. |
+| `stale_reset_ms` | `6000` | `6000` | Clears learned Roshan-hit samples after the window goes stale. |
+
+See `docs/features/survivability.md` and `docs/features/keyboard-interception.md`.
+
 ## `[danger_detection]`
 
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |
@@ -220,6 +234,15 @@ See `src/observability/rune_alerts.rs`, `src-ui/src/hooks/useRuneAlert.ts`, and 
 | `toggle_cooldown_ms` | `300` | inherits `[armlet].toggle_cooldown_ms` | Checked-in Huskar config overrides the shared cooldown. |
 
 **Compatibility note:** legacy flat Huskar keys (`armlet_toggle_threshold`, `armlet_predictive_offset`, `armlet_toggle_cooldown_ms`) are still read when the nested `[heroes.huskar.armlet]` block is absent, so older local configs do not lose Huskar-specific tuning.
+
+### `[heroes.huskar.roshan_spears]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `enabled` | `false` | `false` | Master switch for Huskar's Roshan-only Burning Spears gate. |
+| `burning_spear_key` | `"w"` | `"w"` | Burning Spears key paired with `Alt` to toggle autocast. |
+| `disable_buffer_hp` | `60` | `60` | Extra HP above the effective Armlet trigger where Spears turns off. |
+| `reenable_buffer_hp` | `100` | `100` | Extra HP above the effective Armlet trigger where Spears may turn back on. |
 
 See `docs/heroes/huskar.md`.
 

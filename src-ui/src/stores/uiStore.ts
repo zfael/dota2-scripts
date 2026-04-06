@@ -7,9 +7,12 @@ interface UIStore {
   gsiEnabled: boolean;
   standaloneEnabled: boolean;
   appVersion: string;
+  armletRoshanArmed: boolean;
   setGsiEnabled: (enabled: boolean) => void;
   setStandaloneEnabled: (enabled: boolean) => void;
+  setArmletRoshanArmed: (armed: boolean) => void;
   loadInitialState: () => Promise<void>;
+  startListening: () => Promise<() => void>;
 }
 
 export const useUIStore = create<UIStore>((set) => ({
@@ -18,6 +21,7 @@ export const useUIStore = create<UIStore>((set) => ({
   gsiEnabled: true,
   standaloneEnabled: false,
   appVersion: "0.1.0",
+  armletRoshanArmed: false,
 
   setGsiEnabled: (enabled) => {
     set({ gsiEnabled: enabled });
@@ -37,6 +41,15 @@ export const useUIStore = create<UIStore>((set) => ({
     }
   },
 
+  setArmletRoshanArmed: (armed) => {
+    set({ armletRoshanArmed: armed });
+    if (isTauri()) {
+      import("@tauri-apps/api/core").then(({ invoke }) => {
+        invoke("set_armlet_roshan_mode_armed", { armed }).catch(console.error);
+      });
+    }
+  },
+
   loadInitialState: async () => {
     if (!isTauri()) return;
     try {
@@ -45,15 +58,39 @@ export const useUIStore = create<UIStore>((set) => ({
         selectedHero: string | null;
         gsiEnabled: boolean;
         standaloneEnabled: boolean;
+        armletRoshanArmed: boolean;
         appVersion: string;
       }>("get_app_state");
       set({
         gsiEnabled: state.gsiEnabled,
         standaloneEnabled: state.standaloneEnabled,
+        armletRoshanArmed: state.armletRoshanArmed,
         appVersion: state.appVersion,
       });
     } catch (e) {
       console.error("Failed to load app state:", e);
     }
+  },
+
+  startListening: async () => {
+    if (!isTauri()) return () => {};
+
+    const { listen } = await import("@tauri-apps/api/event");
+    const unlisten = await listen<{
+      selectedHero: string | null;
+      gsiEnabled: boolean;
+      standaloneEnabled: boolean;
+      armletRoshanArmed: boolean;
+      appVersion: string;
+    }>("app_state_update", (event) => {
+      set({
+        gsiEnabled: event.payload.gsiEnabled,
+        standaloneEnabled: event.payload.standaloneEnabled,
+        armletRoshanArmed: event.payload.armletRoshanArmed,
+        appVersion: event.payload.appVersion,
+      });
+    });
+
+    return unlisten;
   },
 }));

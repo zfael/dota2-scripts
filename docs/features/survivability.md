@@ -97,6 +97,28 @@ This path is shared across heroes and fallback survivability flow. The runtime o
 - current HP is below `toggle_threshold + predictive_offset`
 - the shared cooldown has elapsed
 
+### Roshan mode
+
+Shared Armlet now includes an optional Roshan-specific mode under `[armlet.roshan]`.
+
+- `enabled = false` by default
+- when enabled, the configured `toggle_key` becomes a **blocked global hotkey**
+- pressing that hotkey toggles a live armed/disarmed runtime state without sending the key through to Dota 2
+- while armed, the module keeps learning recent HP-loss samples that look like Roshan hits
+
+The Roshan path only runs when the normal Armlet decision would otherwise be `SkipSafe`. It does not bypass the existing cooldown or critical-retry handling.
+
+Current trigger ladder:
+
+1. record large recent HP drops that clear `min_sample_damage`
+2. if the sample window reaches `min_confidence_hits` inside `learning_window_ms`, use the largest learned hit as predicted incoming Roshan damage
+3. before confidence is reached, allow an emergency first-hit fallback when HP falls into the learned-danger zone plus `emergency_margin_hp`
+4. clear stale learning after `stale_reset_ms` or whenever Roshan mode is armed/disarmed again
+
+This exists because the current GSI model does not expose authoritative Roshan attack events. The runtime therefore infers likely Roshan hits from observed HP deltas instead of predicting an exact server-side attack timer.
+
+For Huskar specifically, `src/actions/heroes/huskar.rs` can also gate Burning Spears while Roshan mode is armed. The optional `[heroes.huskar.roshan_spears]` block disables Burning Spears in a buffer band above the effective Armlet trigger and only re-enables it after HP recovers above a higher hysteresis line.
+
 ### Trigger shape
 
 Armlet toggling now uses a dual-trigger sequence:
@@ -279,6 +301,7 @@ If you change how shared item availability is read from GSI, check both:
 |---|---|
 | `[common]` | `survivability_hp_threshold` |
 | `[armlet]` | `enabled`, `cast_modifier`, `toggle_threshold`, `predictive_offset`, `toggle_cooldown_ms` |
+| `[armlet.roshan]` | `enabled`, `toggle_key`, `emergency_margin_hp`, `learning_window_ms`, `min_confidence_hits`, `min_sample_damage`, `stale_reset_ms` |
 | `[danger_detection]` | `enabled`, `healing_threshold_in_danger`, `max_healing_items_per_danger`, `auto_bkb`, `auto_satanic`, `satanic_hp_threshold`, `auto_blade_mail`, `auto_glimmer_cape`, `auto_ghost_scepter`, `auto_shivas_guard`, `auto_manta_on_silence`, `auto_lotus_on_silence` |
 | `[heroes.<hero>.armlet]` | optional per-hero `enabled`, `toggle_threshold`, `predictive_offset`, `toggle_cooldown_ms` overrides |
 | `[neutral_items]` | `enabled`, `self_cast_key`, `use_in_danger`, `hp_threshold`, `allowed_items` |

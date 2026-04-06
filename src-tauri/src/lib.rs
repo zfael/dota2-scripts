@@ -20,6 +20,7 @@ use tracing::info;
 pub struct TauriAppState {
     pub app_state: Arc<Mutex<AppState>>,
     pub settings: Arc<Mutex<Settings>>,
+    pub keyboard_snapshot: Arc<RwLock<KeyboardSnapshot>>,
     pub executor_metrics: Arc<ExecutorMetrics>,
 }
 
@@ -119,6 +120,7 @@ pub fn run() {
         .manage(TauriAppState {
             app_state: app_state.clone(),
             settings: settings.clone(),
+            keyboard_snapshot: initial_snapshot.clone(),
             executor_metrics,
         })
         .setup(|app| {
@@ -133,6 +135,7 @@ pub fn run() {
             commands::state::get_app_state,
             commands::state::set_gsi_enabled,
             commands::state::set_standalone_enabled,
+            commands::state::set_armlet_roshan_mode_armed,
             commands::state::select_hero,
             commands::game::get_game_state,
             commands::diagnostics::get_diagnostics,
@@ -196,6 +199,13 @@ fn handle_hotkey_events(
                         }
                     }
                 }
+            }
+            HotkeyEvent::ArmletRoshanToggle => {
+                let armed = dota2_scripts::actions::armlet::toggle_roshan_mode();
+                info!(
+                    "Armlet Roshan mode {} via hotkey",
+                    if armed { "armed" } else { "disarmed" }
+                );
             }
             HotkeyEvent::LargoQ => {
                 dispatch_largo_song(&app_state, &dispatcher, |largo| {

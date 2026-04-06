@@ -9,6 +9,7 @@ Learn how the Huskar script plugs into the shared armlet module and automates Be
 ## Feature Summary
 
 - **Shared armlet toggle automation** - Uses the repo-wide armlet module with Huskar-specific override values
+- **Roshan Burning Spears gate** - Can suppress Burning Spears near the Armlet Roshan trigger band and restore it after HP recovers
 - **Berserker Blood debuff cleanse** - Activates Berserker Blood to cleanse debuffs after a configurable delay
 - **GSI-based detection** - Auto-enables when `npc_dota_hero_huskar` is active
 - **Survivability actions** - Auto-uses healing, defensive, and neutral items
@@ -34,6 +35,12 @@ standalone_key = "Home"
 toggle_threshold = 120
 predictive_offset = 150
 toggle_cooldown_ms = 300
+
+[heroes.huskar.roshan_spears]
+enabled = false
+burning_spear_key = "w"
+disable_buffer_hp = 60
+reenable_buffer_hp = 100
 ```
 
 The checked-in `config/config.toml` values below override the Rust defaults from `src/config/settings.rs`.
@@ -47,6 +54,10 @@ The checked-in `config/config.toml` values below override the Rust defaults from
 | `[heroes.huskar.armlet].toggle_threshold` | u32 | `120` | inherits `[armlet]` | Huskar override for base threshold |
 | `[heroes.huskar.armlet].predictive_offset` | u32 | `150` | inherits `[armlet]` | Huskar override for predictive buffer |
 | `[heroes.huskar.armlet].toggle_cooldown_ms` | u64 | `300` | inherits `[armlet]` | Huskar override for cooldown |
+| `[heroes.huskar.roshan_spears].enabled` | bool | `false` | `false` | Master switch for Huskar's Roshan-only Burning Spears gate |
+| `[heroes.huskar.roshan_spears].burning_spear_key` | char | `'w'` | `'w'` | Burning Spears key paired with `Alt` to toggle autocast |
+| `[heroes.huskar.roshan_spears].disable_buffer_hp` | u32 | `60` | `60` | Extra HP above the effective Armlet trigger where Spears is turned off |
+| `[heroes.huskar.roshan_spears].reenable_buffer_hp` | u32 | `100` | `100` | Extra HP above the effective Armlet trigger where Spears may turn back on |
 | `berserker_blood_key` | char | `'e'` | `'e'` | Key to press for Berserker Blood |
 | `berserker_blood_delay_ms` | u64 | `300` | `300` | Delay before activating cleanse |
 | `standalone_key` | string | `"Home"` | `"Home"` | Reserved for future standalone combo |
@@ -108,6 +119,21 @@ With the checked-in Huskar override:
 
 When Huskar's HP drops below 270, the shared armlet module becomes eligible to toggle.
 
+#### Roshan Burning Spears gate
+
+When shared Armlet Roshan mode is armed and `[heroes.huskar.roshan_spears].enabled = true`, Huskar also manages Burning Spears autocast in a small band above the effective Armlet trigger:
+
+- disable line = `effective_armlet_trigger + disable_buffer_hp`
+- re-enable line = `effective_armlet_trigger + reenable_buffer_hp`
+
+With the checked-in values:
+
+- effective Armlet trigger = `270 HP`
+- Burning Spears disable line = `330 HP`
+- Burning Spears re-enable line = `370 HP`
+
+That means Huskar can stop self-damage from Burning Spears before drifting into the Roshan Armlet save window, then restore Spears only after HP has clearly recovered.
+
 #### Cooldown and critical retry
 
 The shared `toggle_cooldown_ms` prevents rapid retriggers. Huskar overrides it to `300ms` in the checked-in config.
@@ -164,7 +190,8 @@ Huskar standalone trigger not implemented
 3. Tune `[armlet]` and `[heroes.huskar.armlet]` to your preference.
 4. Run the app and let GSI detect Huskar.
 5. Confirm armlet toggles when HP drops below the effective threshold.
-6. Confirm Berserker Blood cleanses debuffs after the configured delay.
+6. If Roshan mode is armed and the Roshan Spears gate is enabled, confirm Burning Spears turns off near the disable line and returns after HP recovery.
+7. Confirm Berserker Blood cleanses debuffs after the configured delay.
 
 ### Logging
 
@@ -172,6 +199,9 @@ With `level = "info"`, you'll see messages like:
 
 ```text
 Triggering armlet toggle (HP: 250 < trigger: 270, base: 120, cooldown: 300ms)
+Entering Roshan Burning Spears danger band at 330HP (disable line: 330)
+Disabling Burning Spears due to Roshan threshold protection
+Re-enabling Burning Spears after HP recovery
 Debuff detected, starting 300ms timer for Berserker Blood
 Activating Berserker Blood to cleanse debuffs (300ms delay elapsed)
 ```

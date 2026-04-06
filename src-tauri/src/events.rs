@@ -1,6 +1,7 @@
-use crate::ipc_types::{ActivityEntryDto, GameStateDto};
+use crate::ipc_types::{ActivityEntryDto, AppStateDto, GameStateDto};
 use crate::TauriAppState;
 use dota2_scripts::actions::activity;
+use dota2_scripts::actions::armlet;
 use dota2_scripts::actions::danger_detector;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, UNIX_EPOCH};
@@ -15,6 +16,7 @@ pub fn start_game_state_emitter(app: AppHandle) {
 
     tauri::async_runtime::spawn(async move {
         let mut last_emitted_state: Option<GameStateDto> = None;
+        let mut last_emitted_app_state: Option<AppStateDto> = None;
 
         loop {
             tokio::time::sleep(Duration::from_millis(200)).await;
@@ -44,10 +46,46 @@ pub fn start_game_state_emitter(app: AppHandle) {
                 }
             }
 
+            {
+                let dto = {
+                    let state = match app_state.lock() {
+                        Ok(s) => s,
+                        Err(_) => {
+                            drain_and_emit_activities(&app);
+                            continue;
+                        }
+                    };
+
+                    let dto = build_app_state_dto(&state);
+                    if last_emitted_app_state.as_ref() != Some(&dto) {
+                        Some(dto)
+                    } else {
+                        None
+                    }
+                };
+
+                if let Some(dto) = dto {
+                    last_emitted_app_state = Some(dto.clone());
+                    let _ = app.emit("app_state_update", &dto);
+                }
+            }
+
             // Drain and emit activity events
             drain_and_emit_activities(&app);
         }
     });
+}
+
+fn build_app_state_dto(state: &dota2_scripts::state::AppState) -> AppStateDto {
+    AppStateDto {
+        selected_hero: state
+            .selected_hero
+            .map(|hero| hero.to_display_name().to_string()),
+        gsi_enabled: state.gsi_enabled,
+        standalone_enabled: state.standalone_enabled,
+        armlet_roshan_armed: armlet::is_roshan_mode_armed(),
+        app_version: env!("CARGO_PKG_VERSION").to_string(),
+    }
 }
 
 fn drain_and_emit_activities(app: &AppHandle) {

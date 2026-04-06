@@ -32,6 +32,17 @@ export interface ArmletConfig {
   toggle_threshold: number;
   predictive_offset: number;
   toggle_cooldown_ms: number;
+  roshan: ArmletRoshanConfig;
+}
+
+export interface ArmletRoshanConfig {
+  enabled: boolean;
+  toggle_key: string;
+  emergency_margin_hp: number;
+  learning_window_ms: number;
+  min_confidence_hits: number;
+  min_sample_damage: number;
+  stale_reset_ms: number;
 }
 
 export interface HeroArmletOverride {
@@ -39,6 +50,13 @@ export interface HeroArmletOverride {
   toggle_threshold?: number;
   predictive_offset?: number;
   toggle_cooldown_ms?: number;
+}
+
+export interface HuskarRoshanSpearsConfig {
+  enabled: boolean;
+  burning_spear_key: string;
+  disable_buffer_hp: number;
+  reenable_buffer_hp: number;
 }
 
 export interface HuskarConfig {
@@ -49,6 +67,7 @@ export interface HuskarConfig {
   berserker_blood_delay_ms: number;
   standalone_key: string;
   armlet: HeroArmletOverride;
+  roshan_spears: HuskarRoshanSpearsConfig;
 }
 
 export interface LegionCommanderConfig {

@@ -12,6 +12,15 @@ export const mockConfig: Settings = {
   armlet: {
     enabled: true, cast_modifier: "Alt", toggle_threshold: 320,
     predictive_offset: 30, toggle_cooldown_ms: 250,
+    roshan: {
+      enabled: false,
+      toggle_key: "Insert",
+      emergency_margin_hp: 60,
+      learning_window_ms: 5000,
+      min_confidence_hits: 2,
+      min_sample_damage: 80,
+      stale_reset_ms: 6000,
+    },
   },
   heroes: {
     huskar: {
@@ -19,6 +28,12 @@ export const mockConfig: Settings = {
       armlet_toggle_cooldown_ms: 300, berserker_blood_key: "e",
       berserker_blood_delay_ms: 300, standalone_key: "Home",
       armlet: {},
+      roshan_spears: {
+        enabled: false,
+        burning_spear_key: "w",
+        disable_buffer_hp: 60,
+        reenable_buffer_hp: 100,
+      },
     },
     legion_commander: { standalone_key: "Home", armlet: {} },
     shadow_fiend: {

@@ -25,11 +25,13 @@ export default function App() {
   useEffect(() => {
     useConfigStore.getState().loadConfig();
     useUIStore.getState().loadInitialState();
+    const uiUnlistenPromise = useUIStore.getState().startListening();
     const gameUnlistenPromise = useGameStore.getState().startListening();
     const activityUnlistenPromise = useActivityStore.getState().startListening();
     useUpdateStore.getState().loadInitialState();
 
     return () => {
+      uiUnlistenPromise.then((unlisten) => unlisten());
       gameUnlistenPromise.then((unlisten) => unlisten());
       activityUnlistenPromise.then((unlisten) => unlisten());
     };

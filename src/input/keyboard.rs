@@ -21,6 +21,7 @@ use crate::state::app_state::AppState;
 pub enum HotkeyEvent {
     ComboTrigger,
     MeepoFarmToggle,
+    ArmletRoshanToggle,
     LargoQ,
     LargoW,
     LargoE,
@@ -469,6 +470,14 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                 
                 if let Some(hotkey_event) = plan_global_hotkey_event(key, &snapshot) {
                     match hotkey_event {
+                        HotkeyEvent::ArmletRoshanToggle => {
+                            info!(
+                                "{:?} key pressed - toggling Armlet Roshan mode",
+                                snapshot.armlet_roshan_toggle_key
+                            );
+                            let _ = event_tx.send(hotkey_event);
+                            return None;
+                        }
                         HotkeyEvent::ComboTrigger => {
                             info!("{:?} key pressed - triggering combo", snapshot.trigger_key);
                         }
@@ -546,6 +555,8 @@ pub struct KeyboardSnapshot {
     pub trigger_key: Option<Key>,
     /// Parsed Meepo farm-assist toggle key for the current hero, if active.
     pub meepo_farm_toggle_key: Option<Key>,
+    /// Parsed Armlet Roshan mode toggle key, if enabled.
+    pub armlet_roshan_toggle_key: Option<Key>,
     /// Whether Shadow Fiend raze interception is active.
     pub sf_enabled: bool,
     pub od_enabled: bool,
@@ -679,6 +690,11 @@ impl KeyboardSnapshot {
             } else {
                 None
             },
+            armlet_roshan_toggle_key: if settings.armlet.roshan.enabled {
+                parse_key_string(&settings.armlet.roshan.toggle_key)
+            } else {
+                None
+            },
             sf_enabled,
             od_enabled,
             shadow_fiend: ShadowFiendKeyboardSnapshot {
@@ -752,6 +768,13 @@ fn plan_global_hotkey_event(key: Key, snapshot: &KeyboardSnapshot) -> Option<Hot
         return Some(HotkeyEvent::MeepoFarmToggle);
     }
 
+    if snapshot
+        .armlet_roshan_toggle_key
+        .is_some_and(|toggle_key| key == toggle_key)
+    {
+        return Some(HotkeyEvent::ArmletRoshanToggle);
+    }
+
     if snapshot.trigger_key.is_some_and(|trigger_key| key == trigger_key) {
         return Some(HotkeyEvent::ComboTrigger);
     }
@@ -772,6 +795,7 @@ mod tests {
         KeyboardSnapshot {
             trigger_key: None,
             meepo_farm_toggle_key: None,
+            armlet_roshan_toggle_key: None,
             sf_enabled: false,
             od_enabled: false,
             shadow_fiend: ShadowFiendKeyboardSnapshot {
@@ -900,6 +924,28 @@ mod tests {
         assert!(matches!(
             plan_global_hotkey_event(Key::End, &snapshot),
             Some(HotkeyEvent::MeepoFarmToggle)
+        ));
+    }
+
+    #[test]
+    fn keyboard_snapshot_parses_armlet_roshan_toggle_key_when_enabled() {
+        let mut settings = Settings::default();
+        settings.armlet.roshan.enabled = true;
+        settings.armlet.roshan.toggle_key = "Insert".to_string();
+
+        let snapshot = KeyboardSnapshot::from_runtime(&settings, &AppState::default());
+
+        assert_eq!(snapshot.armlet_roshan_toggle_key, Some(Key::Insert));
+    }
+
+    #[test]
+    fn armlet_roshan_toggle_key_plans_hotkey_event() {
+        let mut snapshot = broodmother_test_snapshot();
+        snapshot.armlet_roshan_toggle_key = Some(Key::Insert);
+
+        assert!(matches!(
+            plan_global_hotkey_event(Key::Insert, &snapshot),
+            Some(HotkeyEvent::ArmletRoshanToggle)
         ));
     }
 

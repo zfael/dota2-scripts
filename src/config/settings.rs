@@ -73,6 +73,24 @@ pub struct CommonConfig {
     pub lane_phase_healing_threshold: u32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ArmletRoshanConfig {
+    #[serde(default = "default_armlet_roshan_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_armlet_roshan_toggle_key")]
+    pub toggle_key: String,
+    #[serde(default = "default_armlet_roshan_emergency_margin_hp")]
+    pub emergency_margin_hp: u32,
+    #[serde(default = "default_armlet_roshan_learning_window_ms")]
+    pub learning_window_ms: u64,
+    #[serde(default = "default_armlet_roshan_min_confidence_hits")]
+    pub min_confidence_hits: usize,
+    #[serde(default = "default_armlet_roshan_min_sample_damage")]
+    pub min_sample_damage: u32,
+    #[serde(default = "default_armlet_roshan_stale_reset_ms")]
+    pub stale_reset_ms: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArmletAutomationConfig {
     #[serde(default = "default_armlet_enabled")]
@@ -85,6 +103,8 @@ pub struct ArmletAutomationConfig {
     pub predictive_offset: u32,
     #[serde(default = "default_armlet_cooldown")]
     pub toggle_cooldown_ms: u64,
+    #[serde(default)]
+    pub roshan: ArmletRoshanConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -115,6 +135,19 @@ pub struct EffectiveArmletConfig {
     pub toggle_threshold: u32,
     pub predictive_offset: u32,
     pub toggle_cooldown_ms: u64,
+    pub roshan: ArmletRoshanConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HuskarRoshanSpearsConfig {
+    #[serde(default = "default_huskar_roshan_spears_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_huskar_burning_spear_key")]
+    pub burning_spear_key: char,
+    #[serde(default = "default_huskar_roshan_spears_disable_buffer_hp")]
+    pub disable_buffer_hp: u32,
+    #[serde(default = "default_huskar_roshan_spears_reenable_buffer_hp")]
+    pub reenable_buffer_hp: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -133,6 +166,8 @@ pub struct HuskarConfig {
     pub standalone_key: String,
     #[serde(default)]
     pub armlet: HeroArmletOverrideConfig,
+    #[serde(default)]
+    pub roshan_spears: HuskarRoshanSpearsConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -740,11 +775,44 @@ fn default_armlet_offset() -> u32 {
 fn default_armlet_cooldown() -> u64 {
     250
 }
+fn default_armlet_roshan_enabled() -> bool {
+    false
+}
+fn default_armlet_roshan_toggle_key() -> String {
+    "Insert".to_string()
+}
+fn default_armlet_roshan_emergency_margin_hp() -> u32 {
+    60
+}
+fn default_armlet_roshan_learning_window_ms() -> u64 {
+    5_000
+}
+fn default_armlet_roshan_min_confidence_hits() -> usize {
+    2
+}
+fn default_armlet_roshan_min_sample_damage() -> u32 {
+    80
+}
+fn default_armlet_roshan_stale_reset_ms() -> u64 {
+    6_000
+}
 fn default_berserker_blood_key() -> char {
     'e'
 }
 fn default_berserker_blood_delay() -> u64 {
     300
+}
+fn default_huskar_roshan_spears_enabled() -> bool {
+    false
+}
+fn default_huskar_burning_spear_key() -> char {
+    'w'
+}
+fn default_huskar_roshan_spears_disable_buffer_hp() -> u32 {
+    60
+}
+fn default_huskar_roshan_spears_reenable_buffer_hp() -> u32 {
+    100
 }
 fn default_standalone_key() -> String {
     "Home".to_string()
@@ -1170,6 +1238,21 @@ impl Default for ArmletAutomationConfig {
             toggle_threshold: default_armlet_threshold(),
             predictive_offset: default_armlet_offset(),
             toggle_cooldown_ms: default_armlet_cooldown(),
+            roshan: ArmletRoshanConfig::default(),
+        }
+    }
+}
+
+impl Default for ArmletRoshanConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_armlet_roshan_enabled(),
+            toggle_key: default_armlet_roshan_toggle_key(),
+            emergency_margin_hp: default_armlet_roshan_emergency_margin_hp(),
+            learning_window_ms: default_armlet_roshan_learning_window_ms(),
+            min_confidence_hits: default_armlet_roshan_min_confidence_hits(),
+            min_sample_damage: default_armlet_roshan_min_sample_damage(),
+            stale_reset_ms: default_armlet_roshan_stale_reset_ms(),
         }
     }
 }
@@ -1184,6 +1267,18 @@ impl Default for HuskarConfig {
             berserker_blood_delay_ms: default_berserker_blood_delay(),
             standalone_key: default_standalone_key(),
             armlet: HeroArmletOverrideConfig::default(),
+            roshan_spears: HuskarRoshanSpearsConfig::default(),
+        }
+    }
+}
+
+impl Default for HuskarRoshanSpearsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_huskar_roshan_spears_enabled(),
+            burning_spear_key: default_huskar_burning_spear_key(),
+            disable_buffer_hp: default_huskar_roshan_spears_disable_buffer_hp(),
+            reenable_buffer_hp: default_huskar_roshan_spears_reenable_buffer_hp(),
         }
     }
 }
@@ -1549,6 +1644,7 @@ impl Settings {
             toggle_threshold: self.armlet.toggle_threshold,
             predictive_offset: self.armlet.predictive_offset,
             toggle_cooldown_ms: self.armlet.toggle_cooldown_ms,
+            roshan: self.armlet.roshan.clone(),
         };
 
         if let Some(hero_override) = self.hero_armlet_override(hero_name) {
@@ -1595,6 +1691,16 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn huskar_roshan_spears_defaults_are_exposed_through_settings() {
+        let settings = Settings::default();
+
+        assert!(!settings.heroes.huskar.roshan_spears.enabled);
+        assert_eq!(settings.heroes.huskar.roshan_spears.burning_spear_key, 'w');
+        assert_eq!(settings.heroes.huskar.roshan_spears.disable_buffer_hp, 60);
+        assert_eq!(settings.heroes.huskar.roshan_spears.reenable_buffer_hp, 100);
+    }
 
     #[test]
     fn meepo_defaults_are_exposed_through_settings() {

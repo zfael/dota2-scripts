@@ -1,8 +1,10 @@
-use crate::config::settings::EffectiveArmletConfig;
+use crate::config::settings::{ArmletRoshanConfig, EffectiveArmletConfig};
 use crate::config::Settings;
 use crate::input::simulation::{armlet_chord, ModifierKey};
 use crate::models::GsiWebhookEvent;
 use lazy_static::lazy_static;
+use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Instant;
 use tracing::{debug, info, trace, warn};
@@ -10,7 +12,10 @@ use tracing::{debug, info, trace, warn};
 lazy_static! {
     static ref ARMLET_LAST_TOGGLE: Mutex<Option<Instant>> = Mutex::new(None);
     static ref ARMLET_CRITICAL_HP: Mutex<Option<u32>> = Mutex::new(None);
+    static ref ARMLET_ROSHAN_STATE: Mutex<ArmletRoshanState> = Mutex::new(ArmletRoshanState::default());
 }
+
+static ARMLET_ROSHAN_MODE_ARMED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ArmletTriggerStep {
@@ -22,6 +27,7 @@ enum ArmletTriggerStep {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ArmletDecision {
     Toggle,
+    ToggleRoshan,
     CriticalRetry,
     SkipSafe,
     SkipStunned,
@@ -61,6 +67,84 @@ struct ArmletReplayReport {
     cooldown_blocks: usize,
     stun_blocks: usize,
     events: Vec<ArmletReplayEvent>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct RoshanHitSample {
+    at_ms: u64,
+    damage: u32,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+struct ArmletRoshanState {
+    last_health: Option<u32>,
+    latest_observed_damage: Option<u32>,
+    samples: VecDeque<RoshanHitSample>,
+    was_stunned_last_tick: bool,
+    awaiting_post_stun_hit: bool,
+    stun_recovery_estimate_damage: Option<u32>,
+    stun_recovery_started_at_ms: Option<u64>,
+}
+
+impl ArmletRoshanState {
+    #[cfg_attr(not(test), allow(dead_code))]
+    fn armed() -> Self {
+        Self::default()
+    }
+
+    fn reset_learning(&mut self) {
+        self.last_health = None;
+        self.latest_observed_damage = None;
+        self.samples.clear();
+        self.was_stunned_last_tick = false;
+        self.awaiting_post_stun_hit = false;
+        self.stun_recovery_estimate_damage = None;
+        self.stun_recovery_started_at_ms = None;
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RoshanArmletTrigger {
+    EmergencyFallback {
+        observed_damage: u32,
+        lethal_zone: u32,
+    },
+    LearnedHit {
+        predicted_damage: u32,
+        lethal_zone: u32,
+        sample_count: usize,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RoshanRecoveryAction {
+    None,
+    ProtectNow,
+    AwaitNextHit { predicted_damage: u32 },
+    TriggerDeferredHit { observed_damage: u32 },
+}
+
+pub fn is_roshan_mode_armed() -> bool {
+    ARMLET_ROSHAN_MODE_ARMED.load(Ordering::SeqCst)
+}
+
+pub fn set_roshan_mode_armed(armed: bool) -> bool {
+    let previous = ARMLET_ROSHAN_MODE_ARMED.swap(armed, Ordering::SeqCst);
+    if previous != armed {
+        if let Ok(mut state) = ARMLET_ROSHAN_STATE.lock() {
+            state.reset_learning();
+        }
+        info!(
+            "Armlet Roshan mode {}",
+            if armed { "armed" } else { "disarmed" }
+        );
+    }
+
+    armed
+}
+
+pub fn toggle_roshan_mode() -> bool {
+    set_roshan_mode_armed(!is_roshan_mode_armed())
 }
 
 fn parse_cast_modifier(raw: &str) -> Option<ModifierKey> {
@@ -241,6 +325,162 @@ fn evaluate_armlet_decision(
     }
 }
 
+fn prune_stale_roshan_samples(
+    state: &mut ArmletRoshanState,
+    now_ms: u64,
+    config: &ArmletRoshanConfig,
+) {
+    if let Some(last_sample) = state.samples.back() {
+        if now_ms.saturating_sub(last_sample.at_ms) > config.stale_reset_ms {
+            state.reset_learning();
+            return;
+        }
+    }
+
+    while let Some(sample) = state.samples.front() {
+        if now_ms.saturating_sub(sample.at_ms) > config.learning_window_ms {
+            state.samples.pop_front();
+        } else {
+            break;
+        }
+    }
+}
+
+fn record_roshan_health_sample(
+    state: &mut ArmletRoshanState,
+    now_ms: u64,
+    health: u32,
+    config: &ArmletRoshanConfig,
+) -> Option<u32> {
+    prune_stale_roshan_samples(state, now_ms, config);
+
+    let observed_damage = state
+        .last_health
+        .and_then(|last_health| last_health.checked_sub(health))
+        .filter(|damage| *damage >= config.min_sample_damage);
+
+    state.last_health = Some(health);
+    state.latest_observed_damage = observed_damage;
+
+    if let Some(damage) = observed_damage {
+        state.samples.push_back(RoshanHitSample {
+            at_ms: now_ms,
+            damage,
+        });
+    }
+
+    observed_damage
+}
+
+fn evaluate_roshan_trigger(
+    health: u32,
+    now_ms: u64,
+    state: &ArmletRoshanState,
+    config: &ArmletRoshanConfig,
+) -> Option<RoshanArmletTrigger> {
+    if !config.enabled {
+        return None;
+    }
+
+    let recent_samples: Vec<_> = state
+        .samples
+        .iter()
+        .filter(|sample| now_ms.saturating_sub(sample.at_ms) <= config.learning_window_ms)
+        .collect();
+
+    if recent_samples.len() >= config.min_confidence_hits {
+        let predicted_damage = recent_samples.iter().map(|sample| sample.damage).max()?;
+        let lethal_zone = predicted_damage.saturating_add(config.emergency_margin_hp);
+        if health <= lethal_zone {
+            return Some(RoshanArmletTrigger::LearnedHit {
+                predicted_damage,
+                lethal_zone,
+                sample_count: recent_samples.len(),
+            });
+        }
+    }
+
+    let observed_damage = state.latest_observed_damage?;
+    let lethal_zone = observed_damage.saturating_add(config.emergency_margin_hp);
+    if health <= lethal_zone {
+        Some(RoshanArmletTrigger::EmergencyFallback {
+            observed_damage,
+            lethal_zone,
+        })
+    } else {
+        None
+    }
+}
+
+fn best_roshan_hit_estimate(
+    state: &ArmletRoshanState,
+    now_ms: u64,
+    config: &ArmletRoshanConfig,
+) -> Option<u32> {
+    let recent_max = state
+        .samples
+        .iter()
+        .filter(|sample| now_ms.saturating_sub(sample.at_ms) <= config.learning_window_ms)
+        .map(|sample| sample.damage)
+        .max();
+
+    recent_max.or(state.latest_observed_damage)
+}
+
+fn clear_roshan_recovery_defer(state: &mut ArmletRoshanState) {
+    state.awaiting_post_stun_hit = false;
+    state.stun_recovery_estimate_damage = None;
+    state.stun_recovery_started_at_ms = None;
+}
+
+fn evaluate_roshan_stun_recovery(
+    state: &mut ArmletRoshanState,
+    health: u32,
+    is_stunned: bool,
+    just_recovered_from_stun: bool,
+    now_ms: u64,
+    config: &ArmletRoshanConfig,
+) -> RoshanRecoveryAction {
+    if is_stunned {
+        clear_roshan_recovery_defer(state);
+        state.was_stunned_last_tick = true;
+        return RoshanRecoveryAction::None;
+    }
+
+    if state.awaiting_post_stun_hit {
+        if let Some(observed_damage) = state.latest_observed_damage {
+            if observed_damage >= config.min_sample_damage {
+                clear_roshan_recovery_defer(state);
+                state.was_stunned_last_tick = false;
+                return RoshanRecoveryAction::TriggerDeferredHit { observed_damage };
+            }
+        }
+
+        state.was_stunned_last_tick = false;
+        return RoshanRecoveryAction::None;
+    }
+
+    if !just_recovered_from_stun {
+        state.was_stunned_last_tick = false;
+        return RoshanRecoveryAction::None;
+    }
+
+    let Some(predicted_damage) = best_roshan_hit_estimate(state, now_ms, config) else {
+        state.was_stunned_last_tick = false;
+        return RoshanRecoveryAction::None;
+    };
+
+    state.was_stunned_last_tick = false;
+    if health <= predicted_damage.saturating_add(config.emergency_margin_hp) {
+        RoshanRecoveryAction::ProtectNow
+    } else {
+        state.awaiting_post_stun_hit = true;
+        state.stun_recovery_estimate_damage = Some(predicted_damage);
+        state.stun_recovery_started_at_ms = Some(now_ms);
+        RoshanRecoveryAction::AwaitNextHit { predicted_damage }
+    }
+}
+
 #[cfg_attr(not(test), allow(dead_code))]
 fn simulate_armlet_replay(
     samples: &[ArmletReplaySample],
@@ -272,7 +512,7 @@ fn simulate_armlet_replay(
         });
 
         match evaluation.decision {
-            ArmletDecision::Toggle => {
+            ArmletDecision::Toggle | ArmletDecision::ToggleRoshan => {
                 report.normal_toggles += 1;
                 last_toggle_at_ms = Some(sample.at_ms);
                 last_critical =
@@ -309,17 +549,30 @@ fn find_armlet_slot_key(event: &GsiWebhookEvent, settings: &Settings) -> Option<
     settings.get_key_for_slot(armlet_slot)
 }
 
+fn clear_roshan_learning_state(state: &mut ArmletRoshanState) {
+    state.reset_learning();
+}
+
 pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
     if !event.hero.is_alive() {
+        if let Ok(mut roshan_state) = ARMLET_ROSHAN_STATE.lock() {
+            roshan_state.reset_learning();
+        }
         return;
     }
 
     let resolved = settings.resolve_armlet_config(&event.hero.name);
     if !resolved.enabled {
+        if let Ok(mut roshan_state) = ARMLET_ROSHAN_STATE.lock() {
+            roshan_state.reset_learning();
+        }
         return;
     }
 
     let Some(slot_key) = find_armlet_slot_key(event, settings) else {
+        if let Ok(mut roshan_state) = ARMLET_ROSHAN_STATE.lock() {
+            roshan_state.reset_learning();
+        }
         return;
     };
 
@@ -331,7 +584,7 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
     let last_critical = *ARMLET_CRITICAL_HP.lock().unwrap();
     let last_toggle_snapshot = *ARMLET_LAST_TOGGLE.lock().unwrap();
     let elapsed_since_last_toggle_ms = elapsed_since_toggle_ms(last_toggle_snapshot);
-    let evaluation = evaluate_armlet_decision(
+    let mut evaluation = evaluate_armlet_decision(
         health,
         threshold,
         resolved.predictive_offset,
@@ -340,6 +593,100 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
         elapsed_since_last_toggle_ms,
         cooldown_ms,
     );
+
+    let roshan_active = resolved.roshan.enabled && is_roshan_mode_armed();
+
+    if roshan_active {
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_millis() as u64)
+            .unwrap_or_default();
+
+        if let Ok(mut roshan_state) = ARMLET_ROSHAN_STATE.lock() {
+            let was_stunned_last_tick = roshan_state.was_stunned_last_tick;
+            record_roshan_health_sample(&mut roshan_state, now_ms, health, &resolved.roshan);
+
+            if matches!(
+                evaluation.decision,
+                ArmletDecision::Toggle | ArmletDecision::CriticalRetry
+            ) {
+                roshan_state.was_stunned_last_tick = event.hero.is_stunned();
+                if event.hero.is_stunned() {
+                    clear_roshan_recovery_defer(&mut roshan_state);
+                }
+            } else {
+                let roshan_recovery_action = evaluate_roshan_stun_recovery(
+                    &mut roshan_state,
+                    health,
+                    event.hero.is_stunned(),
+                    was_stunned_last_tick && !event.hero.is_stunned(),
+                    now_ms,
+                    &resolved.roshan,
+                );
+
+                if evaluation.decision == ArmletDecision::SkipSafe {
+                    match roshan_recovery_action {
+                        RoshanRecoveryAction::ProtectNow => {
+                            info!(
+                                "Triggering immediate Roshan protection after stun recovery (HP: {})",
+                                health
+                            );
+                            evaluation.decision = ArmletDecision::ToggleRoshan;
+                        }
+                        RoshanRecoveryAction::AwaitNextHit { predicted_damage } => {
+                            info!(
+                                "Deferring Roshan toggle after stun recovery; waiting for next hit (predicted damage: {})",
+                                predicted_damage
+                            );
+                        }
+                        RoshanRecoveryAction::TriggerDeferredHit { observed_damage } => {
+                            info!(
+                                "Triggering deferred Roshan re-sync toggle after stun recovery hit (observed damage: {})",
+                                observed_damage
+                            );
+                            evaluation.decision = ArmletDecision::ToggleRoshan;
+                        }
+                        RoshanRecoveryAction::None => {
+                            if let Some(trigger) =
+                                evaluate_roshan_trigger(health, now_ms, &roshan_state, &resolved.roshan)
+                            {
+                                match trigger {
+                                    RoshanArmletTrigger::EmergencyFallback {
+                                        observed_damage,
+                                        lethal_zone,
+                                    } => {
+                                        info!(
+                                            "Triggering armlet Roshan emergency fallback (HP: {} <= lethal zone: {}, observed hit: {})",
+                                            health, lethal_zone, observed_damage
+                                        );
+                                    }
+                                    RoshanArmletTrigger::LearnedHit {
+                                        predicted_damage,
+                                        lethal_zone,
+                                        sample_count,
+                                    } => {
+                                        info!(
+                                            "Triggering armlet Roshan learned-hit protection (HP: {} <= lethal zone: {}, predicted hit: {}, samples: {})",
+                                            health, lethal_zone, predicted_damage, sample_count
+                                        );
+                                    }
+                                }
+
+                                evaluation.decision = ArmletDecision::ToggleRoshan;
+                            }
+                        }
+                    }
+                } else {
+                    trace!(
+                        "Roshan recovery state updated without immediate toggle decision: {:?}",
+                        roshan_recovery_action
+                    );
+                }
+            }
+        }
+    } else if let Ok(mut roshan_state) = ARMLET_ROSHAN_STATE.lock() {
+        clear_roshan_learning_state(&mut roshan_state);
+    }
 
     match evaluation.decision {
         ArmletDecision::CriticalRetry => {
@@ -360,6 +707,24 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
 
             let mut last_toggle = ARMLET_LAST_TOGGLE.lock().unwrap();
             *last_toggle = Some(Instant::now());
+        }
+        ArmletDecision::ToggleRoshan => {
+            debug!(
+                "Armlet Roshan decision: hero={}, health={}, threshold={}, offset={}, cooldown={}ms, modifier={:?}",
+                event.hero.name,
+                health,
+                threshold,
+                resolved.predictive_offset,
+                cooldown_ms,
+                cast_modifier
+            );
+
+            execute_dual_trigger(slot_key, cast_modifier);
+            let mut last_toggle = ARMLET_LAST_TOGGLE.lock().unwrap();
+            *last_toggle = Some(Instant::now());
+
+            let mut critical_hp = ARMLET_CRITICAL_HP.lock().unwrap();
+            *critical_hp = next_critical_retry_health(health, threshold);
         }
         ArmletDecision::Toggle => {
             info!(
@@ -414,10 +779,12 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
 #[cfg(test)]
 mod tests {
     use super::{
-        cooldown_ready, cooldown_remaining_ms, evaluate_armlet_decision, next_critical_retry_health,
-        parse_cast_modifier, plan_dual_trigger_sequence, resolve_cast_modifier,
-        should_force_critical_retry, simulate_armlet_replay, ArmletDecision, ArmletReplaySample,
-        ArmletTriggerStep,
+        clear_roshan_learning_state, cooldown_ready, cooldown_remaining_ms, evaluate_armlet_decision,
+        evaluate_roshan_trigger, evaluate_roshan_stun_recovery, next_critical_retry_health,
+        parse_cast_modifier, plan_dual_trigger_sequence, record_roshan_health_sample,
+        resolve_cast_modifier, should_force_critical_retry, simulate_armlet_replay,
+        ArmletDecision, ArmletReplaySample, ArmletRoshanConfig, ArmletRoshanState,
+        ArmletTriggerStep, RoshanArmletTrigger, RoshanRecoveryAction,
     };
     use crate::config::{
         settings::{ArmletAutomationConfig, EffectiveArmletConfig, HeroArmletOverrideConfig},
@@ -425,6 +792,18 @@ mod tests {
     };
     use crate::input::simulation::ModifierKey;
     use std::time::{Duration, Instant};
+
+    fn roshan_test_config() -> ArmletRoshanConfig {
+        ArmletRoshanConfig {
+            enabled: true,
+            toggle_key: "Insert".to_string(),
+            emergency_margin_hp: 60,
+            learning_window_ms: 5_000,
+            min_confidence_hits: 2,
+            min_sample_damage: 80,
+            stale_reset_ms: 6_000,
+        }
+    }
 
     #[test]
     fn dual_trigger_plan_uses_quick_cast_then_modified_cast() {
@@ -455,6 +834,7 @@ mod tests {
             toggle_threshold: 320,
             predictive_offset: 30,
             toggle_cooldown_ms: 250,
+            roshan: ArmletRoshanConfig::default(),
         };
 
         assert_eq!(resolve_cast_modifier(&config), ModifierKey::Alt);
@@ -551,6 +931,7 @@ mod tests {
             toggle_threshold: 80,
             predictive_offset: 0,
             toggle_cooldown_ms: 150,
+            roshan: ArmletRoshanConfig::default(),
         };
         let aggressive = EffectiveArmletConfig {
             toggle_threshold: 150,
@@ -602,6 +983,7 @@ mod tests {
             toggle_threshold: 120,
             predictive_offset: 0,
             toggle_cooldown_ms: 300,
+            roshan: ArmletRoshanConfig::default(),
         };
         let fast = EffectiveArmletConfig {
             toggle_cooldown_ms: 100,
@@ -637,6 +1019,7 @@ mod tests {
             toggle_threshold: 120,
             predictive_offset: 0,
             toggle_cooldown_ms: 300,
+            roshan: ArmletRoshanConfig::default(),
         };
 
         let report = simulate_armlet_replay(&samples, &config);
@@ -644,6 +1027,198 @@ mod tests {
         assert_eq!(report.normal_toggles, 1);
         assert_eq!(report.critical_retries, 1);
         assert_eq!(report.events[1].decision, ArmletDecision::CriticalRetry);
+    }
+
+    #[test]
+    fn roshan_mode_triggers_on_first_large_hit_when_health_enters_emergency_margin() {
+        let mut state = ArmletRoshanState::armed();
+        let config = ArmletRoshanConfig {
+            enabled: true,
+            toggle_key: "Insert".to_string(),
+            emergency_margin_hp: 60,
+            learning_window_ms: 5_000,
+            min_confidence_hits: 2,
+            min_sample_damage: 80,
+            stale_reset_ms: 6_000,
+        };
+
+        assert_eq!(record_roshan_health_sample(&mut state, 1_000, 320, &config), None);
+        assert_eq!(
+            record_roshan_health_sample(&mut state, 1_200, 120, &config),
+            Some(200)
+        );
+
+        assert_eq!(
+            evaluate_roshan_trigger(120, 1_200, &state, &config),
+            Some(RoshanArmletTrigger::EmergencyFallback {
+                observed_damage: 200,
+                lethal_zone: 260,
+            })
+        );
+    }
+
+    #[test]
+    fn roshan_mode_uses_largest_recent_hit_once_confident() {
+        let mut state = ArmletRoshanState::armed();
+        let config = ArmletRoshanConfig {
+            enabled: true,
+            toggle_key: "Insert".to_string(),
+            emergency_margin_hp: 60,
+            learning_window_ms: 5_000,
+            min_confidence_hits: 2,
+            min_sample_damage: 80,
+            stale_reset_ms: 6_000,
+        };
+
+        assert_eq!(record_roshan_health_sample(&mut state, 1_000, 500, &config), None);
+        assert_eq!(
+            record_roshan_health_sample(&mut state, 1_200, 360, &config),
+            Some(140)
+        );
+        assert_eq!(
+            record_roshan_health_sample(&mut state, 2_200, 210, &config),
+            Some(150)
+        );
+
+        assert_eq!(
+            evaluate_roshan_trigger(190, 2_200, &state, &config),
+            Some(RoshanArmletTrigger::LearnedHit {
+                predicted_damage: 150,
+                lethal_zone: 210,
+                sample_count: 2,
+            })
+        );
+    }
+
+    #[test]
+    fn clearing_roshan_learning_state_resets_stale_health_and_samples() {
+        let mut state = ArmletRoshanState::armed();
+        let config = roshan_test_config();
+
+        assert_eq!(record_roshan_health_sample(&mut state, 1_000, 500, &config), None);
+        assert_eq!(
+            record_roshan_health_sample(&mut state, 1_200, 360, &config),
+            Some(140)
+        );
+        assert_eq!(state.last_health, Some(360));
+        assert_eq!(state.latest_observed_damage, Some(140));
+        assert_eq!(state.samples.len(), 1);
+
+        clear_roshan_learning_state(&mut state);
+
+        assert_eq!(state.last_health, None);
+        assert_eq!(state.latest_observed_damage, None);
+        assert!(state.samples.is_empty());
+    }
+
+    #[test]
+    fn roshan_stun_recovery_defers_toggle_until_next_valid_hit_when_one_more_hit_is_survivable() {
+        let config = roshan_test_config();
+        let mut state = ArmletRoshanState::armed();
+
+        assert_eq!(record_roshan_health_sample(&mut state, 1_000, 520, &config), None);
+        assert_eq!(
+            record_roshan_health_sample(&mut state, 1_200, 380, &config),
+            Some(140)
+        );
+        assert_eq!(
+            record_roshan_health_sample(&mut state, 2_200, 230, &config),
+            Some(150)
+        );
+
+        let recovery =
+            evaluate_roshan_stun_recovery(&mut state, 230, false, true, 2_300, &config);
+
+        assert_eq!(
+            recovery,
+            RoshanRecoveryAction::AwaitNextHit {
+                predicted_damage: 150
+            }
+        );
+        assert!(state.awaiting_post_stun_hit);
+    }
+
+    #[test]
+    fn roshan_stun_recovery_resyncs_on_first_valid_hit_after_deferral() {
+        let config = roshan_test_config();
+        let mut state = ArmletRoshanState::armed();
+        state.awaiting_post_stun_hit = true;
+        state.stun_recovery_estimate_damage = Some(150);
+
+        assert_eq!(record_roshan_health_sample(&mut state, 3_000, 230, &config), None);
+        assert_eq!(
+            record_roshan_health_sample(&mut state, 3_250, 80, &config),
+            Some(150)
+        );
+
+        let recovery =
+            evaluate_roshan_stun_recovery(&mut state, 80, false, false, 3_250, &config);
+
+        assert_eq!(
+            recovery,
+            RoshanRecoveryAction::TriggerDeferredHit {
+                observed_damage: 150
+            }
+        );
+        assert!(!state.awaiting_post_stun_hit);
+    }
+
+    #[test]
+    fn roshan_stun_recovery_does_not_defer_when_recovery_is_already_lethal() {
+        let config = roshan_test_config();
+        let mut state = ArmletRoshanState::armed();
+
+        assert_eq!(record_roshan_health_sample(&mut state, 1_000, 500, &config), None);
+        assert_eq!(
+            record_roshan_health_sample(&mut state, 1_200, 360, &config),
+            Some(140)
+        );
+        assert_eq!(
+            record_roshan_health_sample(&mut state, 2_200, 210, &config),
+            Some(150)
+        );
+
+        let recovery =
+            evaluate_roshan_stun_recovery(&mut state, 200, false, true, 2_300, &config);
+
+        assert_eq!(recovery, RoshanRecoveryAction::ProtectNow);
+        assert!(!state.awaiting_post_stun_hit);
+    }
+
+    #[test]
+    fn roshan_stun_recovery_ignores_small_damage_while_waiting_for_next_hit() {
+        let config = roshan_test_config();
+        let mut state = ArmletRoshanState::armed();
+        state.awaiting_post_stun_hit = true;
+        state.stun_recovery_estimate_damage = Some(150);
+
+        assert_eq!(record_roshan_health_sample(&mut state, 4_000, 220, &config), None);
+        assert_eq!(record_roshan_health_sample(&mut state, 4_200, 180, &config), None);
+
+        let recovery =
+            evaluate_roshan_stun_recovery(&mut state, 180, false, false, 4_200, &config);
+
+        assert_eq!(recovery, RoshanRecoveryAction::None);
+        assert!(state.awaiting_post_stun_hit);
+    }
+
+    #[test]
+    fn clearing_roshan_learning_state_resets_stun_recovery_defer_fields() {
+        let mut state = ArmletRoshanState::armed();
+        state.awaiting_post_stun_hit = true;
+        state.stun_recovery_estimate_damage = Some(150);
+        state.stun_recovery_started_at_ms = Some(2_300);
+        state.was_stunned_last_tick = true;
+
+        clear_roshan_learning_state(&mut state);
+
+        assert_eq!(state.last_health, None);
+        assert_eq!(state.latest_observed_damage, None);
+        assert!(state.samples.is_empty());
+        assert!(!state.awaiting_post_stun_hit);
+        assert_eq!(state.stun_recovery_estimate_damage, None);
+        assert_eq!(state.stun_recovery_started_at_ms, None);
+        assert!(!state.was_stunned_last_tick);
     }
 
     #[test]
@@ -716,6 +1291,7 @@ mod tests {
                             toggle_threshold: threshold,
                             predictive_offset: 0,
                             toggle_cooldown_ms: cooldown,
+                            roshan: ArmletRoshanConfig::default(),
                         },
                     );
 
@@ -742,6 +1318,7 @@ mod tests {
             toggle_threshold: 350,
             predictive_offset: 40,
             toggle_cooldown_ms: 280,
+            roshan: ArmletRoshanConfig::default(),
         };
 
         let resolved = settings.resolve_armlet_config("npc_dota_hero_kunkka");

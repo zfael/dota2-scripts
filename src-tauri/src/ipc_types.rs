@@ -20,12 +20,13 @@ pub struct GameStateDto {
 }
 
 /// Matches frontend AppState-related fields
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AppStateDto {
     pub selected_hero: Option<String>,
     pub gsi_enabled: bool,
     pub standalone_enabled: bool,
+    pub armlet_roshan_armed: bool,
     pub app_version: String,
 }
 

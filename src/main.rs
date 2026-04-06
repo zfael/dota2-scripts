@@ -158,6 +158,13 @@ async fn main() {
                         }
                     }
                 }
+                input::keyboard::HotkeyEvent::ArmletRoshanToggle => {
+                    let armed = crate::actions::armlet::toggle_roshan_mode();
+                    info!(
+                        "Armlet Roshan mode {} via hotkey",
+                        if armed { "armed" } else { "disarmed" }
+                    );
+                }
                 input::keyboard::HotkeyEvent::LargoQ => {
                     let state = app_state_clone2.lock().unwrap();
                     if state.standalone_enabled
