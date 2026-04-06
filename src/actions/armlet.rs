@@ -155,7 +155,11 @@ fn should_log_roshan_skip_context(
     let nearest_zone = observed_damage
         .into_iter()
         .chain(predicted_damage)
-        .map(|damage| damage.saturating_add(emergency_margin_hp))
+        .map(|damage| {
+            trigger_point
+                .saturating_add(damage)
+                .saturating_add(emergency_margin_hp)
+        })
         .max()
         .unwrap_or(trigger_point.saturating_add(emergency_margin_hp));
 
