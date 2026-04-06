@@ -49,6 +49,15 @@ fn should_log_roshan_spears_idle(health: u32, thresholds: RoshanSpearsThresholds
     health <= thresholds.reenable_line.saturating_add(80)
 }
 
+fn should_log_roshan_spears_noop(
+    health: u32,
+    thresholds: RoshanSpearsThresholds,
+    owned_by_app: bool,
+    clear_reason: Option<&'static str>,
+) -> bool {
+    owned_by_app || (clear_reason.is_none() && should_log_roshan_spears_idle(health, thresholds))
+}
+
 fn roshan_spears_clear_reason(
     config_enabled: bool,
     roshan_mode_armed: bool,
@@ -133,6 +142,33 @@ fn clear_roshan_spears_ownership(reason: &str) {
             );
         }
     }
+}
+
+fn log_roshan_spears_gate_event(
+    action: &str,
+    reason: &str,
+    health: u32,
+    thresholds: RoshanSpearsThresholds,
+    roshan_mode_armed: bool,
+    owned_by_app_before: bool,
+    owned_by_app_after: bool,
+    config_enabled: bool,
+    burning_spear_present: bool,
+) {
+    info!(
+        "{} (hp={}, trigger={}, disable_line={}, reenable_line={}, roshan_mode_armed={}, owned_by_app_before={}, owned_by_app_after={}, config_enabled={}, burning_spears_present={}, reason={})",
+        action,
+        health,
+        thresholds.effective_trigger,
+        thresholds.disable_line,
+        thresholds.reenable_line,
+        roshan_mode_armed,
+        owned_by_app_before,
+        owned_by_app_after,
+        config_enabled,
+        burning_spear_present,
+        reason
+    );
 }
 
 fn find_burning_spear_ability<'a>(event: &'a GsiWebhookEvent) -> Option<&'a Ability> {
@@ -263,66 +299,53 @@ impl HuskarScript {
             &mut state,
         ) {
             HuskarRoshanSpearsAction::Disable => {
-                info!(
-                    "Disabling Burning Spears in Roshan mode (hp={}, trigger={}, disable_line={}, reenable_line={}, roshan_mode_armed={}, owned_by_app_before={}, owned_by_app_after={}, config_enabled={}, burning_spears_present={}, reason=entered disable band)",
+                log_roshan_spears_gate_event(
+                    "Disabling Burning Spears in Roshan mode",
+                    "entered disable band",
                     event.hero.health,
-                    thresholds.effective_trigger,
-                    thresholds.disable_line,
-                    thresholds.reenable_line,
-                    roshan_mode_armed,
-                    owned_by_app_before,
-                    state.disabled_by_app,
-                    config.enabled,
-                    burning_spear_present
-                );
-                emit_burning_spear_toggle(config.burning_spear_key);
-            }
-            HuskarRoshanSpearsAction::Reenable => {
-                info!(
-                    "Re-enabling Burning Spears in Roshan mode (hp={}, trigger={}, disable_line={}, reenable_line={}, roshan_mode_armed={}, owned_by_app_before={}, owned_by_app_after={}, config_enabled={}, burning_spears_present={}, reason=recovered above re-enable line)",
-                    event.hero.health,
-                    thresholds.effective_trigger,
-                    thresholds.disable_line,
-                    thresholds.reenable_line,
-                    roshan_mode_armed,
-                    owned_by_app_before,
-                    state.disabled_by_app,
-                    config.enabled,
-                    burning_spear_present
-                );
-                emit_burning_spear_toggle(config.burning_spear_key);
-            }
-            HuskarRoshanSpearsAction::ClearOwnership => {
-                info!(
-                    "Clearing Roshan Burning Spears ownership state without toggling (hp={}, trigger={}, disable_line={}, reenable_line={}, roshan_mode_armed={}, owned_by_app_before={}, owned_by_app_after={}, config_enabled={}, burning_spears_present={}, reason={})",
-                    event.hero.health,
-                    thresholds.effective_trigger,
-                    thresholds.disable_line,
-                    thresholds.reenable_line,
+                    thresholds,
                     roshan_mode_armed,
                     owned_by_app_before,
                     state.disabled_by_app,
                     config.enabled,
                     burning_spear_present,
-                    clear_reason.unwrap_or("gate preconditions changed")
+                );
+                emit_burning_spear_toggle(config.burning_spear_key);
+            }
+            HuskarRoshanSpearsAction::Reenable => {
+                log_roshan_spears_gate_event(
+                    "Re-enabling Burning Spears in Roshan mode",
+                    "recovered above re-enable line",
+                    event.hero.health,
+                    thresholds,
+                    roshan_mode_armed,
+                    owned_by_app_before,
+                    state.disabled_by_app,
+                    config.enabled,
+                    burning_spear_present,
+                );
+                emit_burning_spear_toggle(config.burning_spear_key);
+            }
+            HuskarRoshanSpearsAction::ClearOwnership => {
+                log_roshan_spears_gate_event(
+                    "Clearing Roshan Burning Spears ownership state without toggling",
+                    clear_reason.unwrap_or("gate preconditions changed"),
+                    event.hero.health,
+                    thresholds,
+                    roshan_mode_armed,
+                    owned_by_app_before,
+                    state.disabled_by_app,
+                    config.enabled,
+                    burning_spear_present,
                 );
             }
             HuskarRoshanSpearsAction::None => {
-                if owned_by_app_before
-                    || should_log_roshan_spears_idle(event.hero.health, thresholds)
-                {
-                    info!(
-                        "Roshan Burning Spears gate no-op context: hp={}, trigger={}, disable_line={}, reenable_line={}, roshan_mode_armed={}, owned_by_app={}, config_enabled={}, burning_spears_present={}",
-                        event.hero.health,
-                        thresholds.effective_trigger,
-                        thresholds.disable_line,
-                        thresholds.reenable_line,
-                        roshan_mode_armed,
-                        state.disabled_by_app,
-                        config.enabled,
-                        burning_spear_present
-                    );
-
+                if should_log_roshan_spears_noop(
+                    event.hero.health,
+                    thresholds,
+                    owned_by_app_before,
+                    clear_reason,
+                ) {
                     let reason = if let Some(reason) = clear_reason {
                         reason
                     } else if state.disabled_by_app {
@@ -331,7 +354,17 @@ impl HuskarScript {
                         "hp remains above disable line"
                     };
 
-                    info!("Roshan Burning Spears gate no-op reason: {}", reason);
+                    log_roshan_spears_gate_event(
+                        "Roshan Burning Spears gate no-op",
+                        reason,
+                        event.hero.health,
+                        thresholds,
+                        roshan_mode_armed,
+                        owned_by_app_before,
+                        state.disabled_by_app,
+                        config.enabled,
+                        burning_spear_present,
+                    );
                 }
             }
         }
@@ -421,6 +454,38 @@ mod tests {
 
         assert!(should_log_roshan_spears_idle(450, thresholds));
         assert!(!should_log_roshan_spears_idle(451, thresholds));
+    }
+
+    #[test]
+    fn roshan_spears_noop_logging_stays_quiet_when_roshan_mode_is_disarmed() {
+        let thresholds = RoshanSpearsThresholds {
+            effective_trigger: 270,
+            disable_line: 330,
+            reenable_line: 370,
+        };
+
+        assert!(!should_log_roshan_spears_noop(
+            380,
+            thresholds,
+            false,
+            Some("roshan mode disarmed"),
+        ));
+    }
+
+    #[test]
+    fn roshan_spears_noop_logging_stays_on_while_owned_by_app() {
+        let thresholds = RoshanSpearsThresholds {
+            effective_trigger: 270,
+            disable_line: 330,
+            reenable_line: 370,
+        };
+
+        assert!(should_log_roshan_spears_noop(
+            520,
+            thresholds,
+            true,
+            None,
+        ));
     }
 
     #[test]
