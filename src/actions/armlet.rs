@@ -124,6 +124,44 @@ enum RoshanRecoveryAction {
     TriggerDeferredHit { observed_damage: u32 },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RoshanResetReason {
+    HeroDied,
+    ArmletDisabled,
+    ArmletMissing,
+    RoshanModeDisarmed,
+    ModeToggled,
+}
+
+impl RoshanResetReason {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::HeroDied => "hero died",
+            Self::ArmletDisabled => "armlet automation disabled",
+            Self::ArmletMissing => "armlet item missing",
+            Self::RoshanModeDisarmed => "roshan mode inactive",
+            Self::ModeToggled => "roshan mode toggled",
+        }
+    }
+}
+
+fn should_log_roshan_skip_context(
+    health: u32,
+    trigger_point: u32,
+    observed_damage: Option<u32>,
+    predicted_damage: Option<u32>,
+    emergency_margin_hp: u32,
+) -> bool {
+    let nearest_zone = observed_damage
+        .into_iter()
+        .chain(predicted_damage)
+        .map(|damage| damage.saturating_add(emergency_margin_hp))
+        .max()
+        .unwrap_or(trigger_point.saturating_add(emergency_margin_hp));
+
+    health <= nearest_zone.saturating_add(120)
+}
+
 pub fn is_roshan_mode_armed() -> bool {
     ARMLET_ROSHAN_MODE_ARMED.load(Ordering::SeqCst)
 }
@@ -782,9 +820,10 @@ mod tests {
         clear_roshan_learning_state, cooldown_ready, cooldown_remaining_ms, evaluate_armlet_decision,
         evaluate_roshan_trigger, evaluate_roshan_stun_recovery, next_critical_retry_health,
         parse_cast_modifier, plan_dual_trigger_sequence, record_roshan_health_sample,
-        resolve_cast_modifier, should_force_critical_retry, simulate_armlet_replay,
-        ArmletDecision, ArmletReplaySample, ArmletRoshanConfig, ArmletRoshanState,
-        ArmletTriggerStep, RoshanArmletTrigger, RoshanRecoveryAction,
+        resolve_cast_modifier, should_force_critical_retry, should_log_roshan_skip_context,
+        simulate_armlet_replay, ArmletDecision, ArmletReplaySample, ArmletRoshanConfig,
+        ArmletRoshanState, ArmletTriggerStep, RoshanArmletTrigger, RoshanRecoveryAction,
+        RoshanResetReason,
     };
     use crate::config::{
         settings::{ArmletAutomationConfig, EffectiveArmletConfig, HeroArmletOverrideConfig},
@@ -1219,6 +1258,37 @@ mod tests {
         assert_eq!(state.stun_recovery_estimate_damage, None);
         assert_eq!(state.stun_recovery_started_at_ms, None);
         assert!(!state.was_stunned_last_tick);
+    }
+
+    #[test]
+    fn roshan_reset_reason_strings_match_expected_logs() {
+        assert_eq!(RoshanResetReason::HeroDied.as_str(), "hero died");
+        assert_eq!(RoshanResetReason::ArmletDisabled.as_str(), "armlet automation disabled");
+        assert_eq!(RoshanResetReason::ArmletMissing.as_str(), "armlet item missing");
+        assert_eq!(RoshanResetReason::RoshanModeDisarmed.as_str(), "roshan mode inactive");
+        assert_eq!(RoshanResetReason::ModeToggled.as_str(), "roshan mode toggled");
+    }
+
+    #[test]
+    fn roshan_skip_logging_window_stays_quiet_when_health_is_far_above_danger() {
+        assert!(!should_log_roshan_skip_context(
+            620,
+            270,
+            None,
+            Some(140),
+            60,
+        ));
+    }
+
+    #[test]
+    fn roshan_skip_logging_window_turns_on_near_lethal_zone() {
+        assert!(should_log_roshan_skip_context(
+            340,
+            270,
+            Some(120),
+            None,
+            60,
+        ));
     }
 
     #[test]
