@@ -153,18 +153,15 @@ fn should_log_roshan_skip_context(
     predicted_damage: Option<u32>,
     emergency_margin_hp: u32,
 ) -> bool {
-    let nearest_zone = observed_damage
+    let lethal_zone = observed_damage
         .into_iter()
         .chain(predicted_damage)
-        .map(|damage| {
-            trigger_point
-                .saturating_add(damage)
-                .saturating_add(emergency_margin_hp)
-        })
+        .map(|damage| damage.saturating_add(emergency_margin_hp))
         .max()
-        .unwrap_or(trigger_point.saturating_add(emergency_margin_hp));
+        .unwrap_or_default();
+    let near_danger_floor = trigger_point.max(lethal_zone);
 
-    health <= nearest_zone.saturating_add(120)
+    health <= near_danger_floor.saturating_add(120)
 }
 
 pub fn is_roshan_mode_armed() -> bool {
@@ -634,6 +631,9 @@ fn roshan_prediction_summary(
 fn maybe_log_roshan_skip_context(
     evaluation: ArmletEvaluation,
     health: u32,
+    threshold: u32,
+    predictive_offset: u32,
+    is_stunned: bool,
     state: &ArmletRoshanState,
     recovery_action: RoshanRecoveryAction,
     now_ms: u64,
@@ -653,46 +653,46 @@ fn maybe_log_roshan_skip_context(
         return;
     }
 
+    info!(
+        "Armlet Roshan no-toggle context: hp={}, threshold={}, offset={}, trigger={}, cooldown={}ms, observed_hit={:?}, predicted_hit={:?}, samples={}, awaiting_post_stun_hit={}, stunned={}",
+        health,
+        threshold,
+        predictive_offset,
+        evaluation.trigger_point,
+        evaluation.cooldown_remaining_ms,
+        observed_damage,
+        predicted_context_damage,
+        recent_sample_count,
+        state.awaiting_post_stun_hit,
+        is_stunned
+    );
+
     match evaluation.decision {
         ArmletDecision::SkipCooldown => {
             info!(
-                "Skipping Armlet Roshan protection near danger: cooldown {}ms remaining (HP: {}, trigger: {}, observed hit: {:?}, predicted hit: {:?})",
+                "Skipping Armlet Roshan protection near danger: cooldown {}ms remaining",
                 evaluation.cooldown_remaining_ms,
-                health,
-                evaluation.trigger_point,
-                observed_damage,
-                predicted_context_damage
             );
         }
         ArmletDecision::SkipStunned => {
-            info!(
-                "Skipping Armlet Roshan protection near danger: still stunned (HP: {}, trigger: {}, observed hit: {:?}, predicted hit: {:?})",
-                health,
-                evaluation.trigger_point,
-                observed_damage,
-                predicted_context_damage
-            );
+            info!("Skipping Armlet Roshan protection near danger: still stunned");
         }
         ArmletDecision::SkipSafe => match recovery_action {
             RoshanRecoveryAction::AwaitNextHit { predicted_damage } => {
                 info!(
-                    "Skipping Armlet Roshan protection near danger: waiting for deferred post-stun hit re-sync (HP: {}, predicted hit: {})",
-                    health, predicted_damage
+                    "Skipping Armlet Roshan protection near danger: waiting for deferred post-stun hit re-sync (predicted hit: {})",
+                    predicted_damage
                 );
             }
             RoshanRecoveryAction::None if state.awaiting_post_stun_hit => {
                 info!(
-                    "Skipping Armlet Roshan protection near danger: deferred post-stun wait still active (HP: {}, predicted hit: {:?}, latest observed hit: {:?})",
-                    health,
-                    state.stun_recovery_estimate_damage,
-                    observed_damage
+                    "Skipping Armlet Roshan protection near danger: deferred post-stun wait still active"
                 );
             }
             RoshanRecoveryAction::None => {
                 if recent_sample_count < config.min_confidence_hits && observed_damage.is_none() {
                     info!(
-                        "Skipping Armlet Roshan protection near danger: insufficient sample confidence (HP: {}, samples: {}/{}, predicted hit: {:?})",
-                        health,
+                        "Skipping Armlet Roshan protection near danger: insufficient sample confidence (samples: {}/{}, predicted hit: {:?})",
                         recent_sample_count,
                         config.min_confidence_hits,
                         predicted_damage
@@ -716,8 +716,8 @@ fn maybe_log_roshan_skip_context(
                     );
                 } else {
                     info!(
-                        "Skipping Armlet Roshan protection near danger: insufficient sample confidence (HP: {}, samples: {}/{})",
-                        health, recent_sample_count, config.min_confidence_hits
+                        "Skipping Armlet Roshan protection near danger: insufficient sample confidence (samples: {}/{})",
+                        recent_sample_count, config.min_confidence_hits
                     );
                 }
             }
@@ -803,13 +803,21 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
                     now_ms,
                     &resolved.roshan,
                 );
+                let (predicted_damage, recent_sample_count) =
+                    roshan_prediction_summary(&roshan_state, now_ms, &resolved.roshan);
 
                 if evaluation.decision == ArmletDecision::SkipSafe {
                     match roshan_recovery_action {
                         RoshanRecoveryAction::ProtectNow => {
                             info!(
-                                "Triggering immediate Roshan protection after stun recovery (HP: {})",
-                                health
+                                "Triggering immediate Roshan protection after stun recovery (HP: {}, threshold: {}, offset: {}, trigger: {}, cooldown: {}ms, predicted hit: {:?}, samples: {})",
+                                health,
+                                threshold,
+                                resolved.predictive_offset,
+                                evaluation.trigger_point,
+                                evaluation.cooldown_remaining_ms,
+                                predicted_damage,
+                                recent_sample_count
                             );
                             evaluation.decision = ArmletDecision::ToggleRoshan;
                         }
@@ -817,20 +825,36 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
                             maybe_log_roshan_skip_context(
                                 evaluation,
                                 health,
+                                threshold,
+                                resolved.predictive_offset,
+                                event.hero.is_stunned(),
                                 &roshan_state,
                                 RoshanRecoveryAction::AwaitNextHit { predicted_damage },
                                 now_ms,
                                 &resolved.roshan,
                             );
                             debug!(
-                                "Deferring Roshan toggle after stun recovery; waiting for next hit (predicted damage: {})",
-                                predicted_damage
+                                "Deferring Roshan toggle after stun recovery; waiting for next hit (HP: {}, threshold: {}, offset: {}, trigger: {}, cooldown: {}ms, predicted damage: {}, samples: {})",
+                                health,
+                                threshold,
+                                resolved.predictive_offset,
+                                evaluation.trigger_point,
+                                evaluation.cooldown_remaining_ms,
+                                predicted_damage,
+                                recent_sample_count
                             );
                         }
                         RoshanRecoveryAction::TriggerDeferredHit { observed_damage } => {
                             info!(
-                                "Triggering deferred Roshan re-sync toggle after stun recovery hit (observed damage: {})",
-                                observed_damage
+                                "Triggering deferred Roshan re-sync toggle after stun recovery hit (HP: {}, threshold: {}, offset: {}, trigger: {}, cooldown: {}ms, observed damage: {}, predicted hit: {:?}, samples: {})",
+                                health,
+                                threshold,
+                                resolved.predictive_offset,
+                                evaluation.trigger_point,
+                                evaluation.cooldown_remaining_ms,
+                                observed_damage,
+                                predicted_damage,
+                                recent_sample_count
                             );
                             evaluation.decision = ArmletDecision::ToggleRoshan;
                         }
@@ -847,8 +871,16 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
                                         lethal_zone,
                                     } => {
                                         info!(
-                                            "Triggering armlet Roshan emergency fallback (HP: {} <= lethal zone: {}, observed hit: {})",
-                                            health, lethal_zone, observed_damage
+                                            "Triggering armlet Roshan emergency fallback (HP: {} <= lethal zone: {}, threshold: {}, offset: {}, trigger: {}, cooldown: {}ms, observed hit: {}, predicted hit: {:?}, samples: {})",
+                                            health,
+                                            lethal_zone,
+                                            threshold,
+                                            resolved.predictive_offset,
+                                            evaluation.trigger_point,
+                                            evaluation.cooldown_remaining_ms,
+                                            observed_damage,
+                                            predicted_damage,
+                                            recent_sample_count
                                         );
                                     }
                                     RoshanArmletTrigger::LearnedHit {
@@ -857,8 +889,15 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
                                         sample_count,
                                     } => {
                                         info!(
-                                            "Triggering armlet Roshan learned-hit protection (HP: {} <= lethal zone: {}, predicted hit: {}, samples: {})",
-                                            health, lethal_zone, predicted_damage, sample_count
+                                            "Triggering armlet Roshan learned-hit protection (HP: {} <= lethal zone: {}, threshold: {}, offset: {}, trigger: {}, cooldown: {}ms, predicted hit: {}, samples: {})",
+                                            health,
+                                            lethal_zone,
+                                            threshold,
+                                            resolved.predictive_offset,
+                                            evaluation.trigger_point,
+                                            evaluation.cooldown_remaining_ms,
+                                            predicted_damage,
+                                            sample_count
                                         );
                                     }
                                 }
@@ -868,6 +907,9 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
                                 maybe_log_roshan_skip_context(
                                     evaluation,
                                     health,
+                                    threshold,
+                                    resolved.predictive_offset,
+                                    event.hero.is_stunned(),
                                     &roshan_state,
                                     RoshanRecoveryAction::None,
                                     now_ms,
@@ -880,6 +922,9 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
                     maybe_log_roshan_skip_context(
                         evaluation,
                         health,
+                        threshold,
+                        resolved.predictive_offset,
+                        event.hero.is_stunned(),
                         &roshan_state,
                         roshan_recovery_action,
                         now_ms,
@@ -1493,6 +1538,17 @@ mod tests {
     #[test]
     fn roshan_skip_logging_window_uses_predicted_damage_when_present() {
         assert!(should_log_roshan_skip_context(315, 270, None, Some(80), 60,));
+    }
+
+    #[test]
+    fn roshan_skip_logging_window_stays_quiet_until_trigger_band_is_close() {
+        assert!(!should_log_roshan_skip_context(
+            500,
+            270,
+            Some(120),
+            None,
+            60,
+        ));
     }
 
     #[test]
