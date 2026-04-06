@@ -12,7 +12,8 @@ use tracing::{debug, info, trace, warn};
 lazy_static! {
     static ref ARMLET_LAST_TOGGLE: Mutex<Option<Instant>> = Mutex::new(None);
     static ref ARMLET_CRITICAL_HP: Mutex<Option<u32>> = Mutex::new(None);
-    static ref ARMLET_ROSHAN_STATE: Mutex<ArmletRoshanState> = Mutex::new(ArmletRoshanState::default());
+    static ref ARMLET_ROSHAN_STATE: Mutex<ArmletRoshanState> =
+        Mutex::new(ArmletRoshanState::default());
 }
 
 static ARMLET_ROSHAN_MODE_ARMED: AtomicBool = AtomicBool::new(false);
@@ -174,11 +175,12 @@ pub fn set_roshan_mode_armed(armed: bool) -> bool {
     let previous = ARMLET_ROSHAN_MODE_ARMED.swap(armed, Ordering::SeqCst);
     if previous != armed {
         if let Ok(mut state) = ARMLET_ROSHAN_STATE.lock() {
-            state.reset_learning();
+            clear_roshan_learning_state_with_reason(&mut state, RoshanResetReason::ModeToggled);
         }
         info!(
-            "Armlet Roshan mode {}",
-            if armed { "armed" } else { "disarmed" }
+            "Armlet Roshan mode {} (reason: {})",
+            if armed { "armed" } else { "disarmed" },
+            RoshanResetReason::ModeToggled.as_str()
         );
     }
 
@@ -557,8 +559,7 @@ fn simulate_armlet_replay(
             ArmletDecision::Toggle | ArmletDecision::ToggleRoshan => {
                 report.normal_toggles += 1;
                 last_toggle_at_ms = Some(sample.at_ms);
-                last_critical =
-                    next_critical_retry_health(sample.health, config.toggle_threshold);
+                last_critical = next_critical_retry_health(sample.health, config.toggle_threshold);
             }
             ArmletDecision::CriticalRetry => {
                 report.critical_retries += 1;
@@ -595,10 +596,141 @@ fn clear_roshan_learning_state(state: &mut ArmletRoshanState) {
     state.reset_learning();
 }
 
+fn clear_roshan_learning_state_with_reason(
+    state: &mut ArmletRoshanState,
+    reason: RoshanResetReason,
+) {
+    if *state != ArmletRoshanState::default() {
+        info!(
+            "Clearing Armlet Roshan learning state ({})",
+            reason.as_str()
+        );
+    }
+    clear_roshan_learning_state(state);
+}
+
+fn roshan_prediction_summary(
+    state: &ArmletRoshanState,
+    now_ms: u64,
+    config: &ArmletRoshanConfig,
+) -> (Option<u32>, usize) {
+    let mut predicted_damage = None;
+    let mut recent_sample_count = 0;
+
+    for sample in state
+        .samples
+        .iter()
+        .filter(|sample| now_ms.saturating_sub(sample.at_ms) <= config.learning_window_ms)
+    {
+        recent_sample_count += 1;
+        predicted_damage = Some(predicted_damage.map_or(sample.damage, |current_max: u32| {
+            current_max.max(sample.damage)
+        }));
+    }
+
+    (predicted_damage, recent_sample_count)
+}
+
+fn maybe_log_roshan_skip_context(
+    evaluation: ArmletEvaluation,
+    health: u32,
+    state: &ArmletRoshanState,
+    recovery_action: RoshanRecoveryAction,
+    now_ms: u64,
+    config: &ArmletRoshanConfig,
+) {
+    let observed_damage = state.latest_observed_damage;
+    let (predicted_damage, recent_sample_count) = roshan_prediction_summary(state, now_ms, config);
+    let predicted_context_damage = state.stun_recovery_estimate_damage.or(predicted_damage);
+
+    if !should_log_roshan_skip_context(
+        health,
+        evaluation.trigger_point,
+        observed_damage,
+        predicted_context_damage,
+        config.emergency_margin_hp,
+    ) {
+        return;
+    }
+
+    match evaluation.decision {
+        ArmletDecision::SkipCooldown => {
+            info!(
+                "Skipping Armlet Roshan protection near danger: cooldown {}ms remaining (HP: {}, trigger: {}, observed hit: {:?}, predicted hit: {:?})",
+                evaluation.cooldown_remaining_ms,
+                health,
+                evaluation.trigger_point,
+                observed_damage,
+                predicted_context_damage
+            );
+        }
+        ArmletDecision::SkipStunned => {
+            info!(
+                "Skipping Armlet Roshan protection near danger: still stunned (HP: {}, trigger: {}, observed hit: {:?}, predicted hit: {:?})",
+                health,
+                evaluation.trigger_point,
+                observed_damage,
+                predicted_context_damage
+            );
+        }
+        ArmletDecision::SkipSafe => match recovery_action {
+            RoshanRecoveryAction::AwaitNextHit { predicted_damage } => {
+                info!(
+                    "Skipping Armlet Roshan protection near danger: waiting for deferred post-stun hit re-sync (HP: {}, predicted hit: {})",
+                    health, predicted_damage
+                );
+            }
+            RoshanRecoveryAction::None if state.awaiting_post_stun_hit => {
+                info!(
+                    "Skipping Armlet Roshan protection near danger: deferred post-stun wait still active (HP: {}, predicted hit: {:?}, latest observed hit: {:?})",
+                    health,
+                    state.stun_recovery_estimate_damage,
+                    observed_damage
+                );
+            }
+            RoshanRecoveryAction::None => {
+                if recent_sample_count < config.min_confidence_hits && observed_damage.is_none() {
+                    info!(
+                        "Skipping Armlet Roshan protection near danger: insufficient sample confidence (HP: {}, samples: {}/{}, predicted hit: {:?})",
+                        health,
+                        recent_sample_count,
+                        config.min_confidence_hits,
+                        predicted_damage
+                    );
+                } else if recent_sample_count >= config.min_confidence_hits {
+                    if let Some(predicted_damage) = predicted_damage {
+                        info!(
+                            "Skipping Armlet Roshan protection near danger: HP {} still above learned lethal zone {} (predicted hit: {}, samples: {})",
+                            health,
+                            predicted_damage.saturating_add(config.emergency_margin_hp),
+                            predicted_damage,
+                            recent_sample_count
+                        );
+                    }
+                } else if let Some(observed_damage) = observed_damage {
+                    info!(
+                        "Skipping Armlet Roshan protection near danger: HP {} still above emergency fallback zone {} (observed hit: {})",
+                        health,
+                        observed_damage.saturating_add(config.emergency_margin_hp),
+                        observed_damage
+                    );
+                } else {
+                    info!(
+                        "Skipping Armlet Roshan protection near danger: insufficient sample confidence (HP: {}, samples: {}/{})",
+                        health, recent_sample_count, config.min_confidence_hits
+                    );
+                }
+            }
+            _ => {}
+        },
+        ArmletDecision::Toggle | ArmletDecision::ToggleRoshan | ArmletDecision::CriticalRetry => {}
+    }
+}
+
 pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
     if !event.hero.is_alive() {
         if let Ok(mut roshan_state) = ARMLET_ROSHAN_STATE.lock() {
-            roshan_state.reset_learning();
+            clear_roshan_learning_state_with_reason(&mut roshan_state, RoshanResetReason::HeroDied);
         }
         return;
     }
@@ -606,14 +738,20 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
     let resolved = settings.resolve_armlet_config(&event.hero.name);
     if !resolved.enabled {
         if let Ok(mut roshan_state) = ARMLET_ROSHAN_STATE.lock() {
-            roshan_state.reset_learning();
+            clear_roshan_learning_state_with_reason(
+                &mut roshan_state,
+                RoshanResetReason::ArmletDisabled,
+            );
         }
         return;
     }
 
     let Some(slot_key) = find_armlet_slot_key(event, settings) else {
         if let Ok(mut roshan_state) = ARMLET_ROSHAN_STATE.lock() {
-            roshan_state.reset_learning();
+            clear_roshan_learning_state_with_reason(
+                &mut roshan_state,
+                RoshanResetReason::ArmletMissing,
+            );
         }
         return;
     };
@@ -676,7 +814,15 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
                             evaluation.decision = ArmletDecision::ToggleRoshan;
                         }
                         RoshanRecoveryAction::AwaitNextHit { predicted_damage } => {
-                            info!(
+                            maybe_log_roshan_skip_context(
+                                evaluation,
+                                health,
+                                &roshan_state,
+                                RoshanRecoveryAction::AwaitNextHit { predicted_damage },
+                                now_ms,
+                                &resolved.roshan,
+                            );
+                            debug!(
                                 "Deferring Roshan toggle after stun recovery; waiting for next hit (predicted damage: {})",
                                 predicted_damage
                             );
@@ -689,9 +835,12 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
                             evaluation.decision = ArmletDecision::ToggleRoshan;
                         }
                         RoshanRecoveryAction::None => {
-                            if let Some(trigger) =
-                                evaluate_roshan_trigger(health, now_ms, &roshan_state, &resolved.roshan)
-                            {
+                            if let Some(trigger) = evaluate_roshan_trigger(
+                                health,
+                                now_ms,
+                                &roshan_state,
+                                &resolved.roshan,
+                            ) {
                                 match trigger {
                                     RoshanArmletTrigger::EmergencyFallback {
                                         observed_damage,
@@ -715,10 +864,27 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
                                 }
 
                                 evaluation.decision = ArmletDecision::ToggleRoshan;
+                            } else {
+                                maybe_log_roshan_skip_context(
+                                    evaluation,
+                                    health,
+                                    &roshan_state,
+                                    RoshanRecoveryAction::None,
+                                    now_ms,
+                                    &resolved.roshan,
+                                );
                             }
                         }
                     }
                 } else {
+                    maybe_log_roshan_skip_context(
+                        evaluation,
+                        health,
+                        &roshan_state,
+                        roshan_recovery_action,
+                        now_ms,
+                        &resolved.roshan,
+                    );
                     trace!(
                         "Roshan recovery state updated without immediate toggle decision: {:?}",
                         roshan_recovery_action
@@ -727,7 +893,10 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
             }
         }
     } else if let Ok(mut roshan_state) = ARMLET_ROSHAN_STATE.lock() {
-        clear_roshan_learning_state(&mut roshan_state);
+        clear_roshan_learning_state_with_reason(
+            &mut roshan_state,
+            RoshanResetReason::RoshanModeDisarmed,
+        );
     }
 
     match evaluation.decision {
@@ -805,7 +974,9 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
         ArmletDecision::SkipSafe => {
             trace!(
                 "Armlet safe: hero={}, health={}, trigger={}",
-                event.hero.name, health, evaluation.trigger_point
+                event.hero.name,
+                health,
+                evaluation.trigger_point
             );
 
             if let Ok(mut critical_hp) = ARMLET_CRITICAL_HP.try_lock() {
@@ -821,13 +992,13 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
 #[cfg(test)]
 mod tests {
     use super::{
-        clear_roshan_learning_state, cooldown_ready, cooldown_remaining_ms, evaluate_armlet_decision,
-        evaluate_roshan_trigger, evaluate_roshan_stun_recovery, next_critical_retry_health,
-        parse_cast_modifier, plan_dual_trigger_sequence, record_roshan_health_sample,
-        resolve_cast_modifier, should_force_critical_retry, should_log_roshan_skip_context,
-        simulate_armlet_replay, ArmletDecision, ArmletReplaySample, ArmletRoshanConfig,
-        ArmletRoshanState, ArmletTriggerStep, RoshanArmletTrigger, RoshanRecoveryAction,
-        RoshanResetReason,
+        clear_roshan_learning_state, cooldown_ready, cooldown_remaining_ms,
+        evaluate_armlet_decision, evaluate_roshan_stun_recovery, evaluate_roshan_trigger,
+        next_critical_retry_health, parse_cast_modifier, plan_dual_trigger_sequence,
+        record_roshan_health_sample, resolve_cast_modifier, should_force_critical_retry,
+        should_log_roshan_skip_context, simulate_armlet_replay, ArmletDecision, ArmletReplaySample,
+        ArmletRoshanConfig, ArmletRoshanState, ArmletTriggerStep, RoshanArmletTrigger,
+        RoshanRecoveryAction, RoshanResetReason,
     };
     use crate::config::{
         settings::{ArmletAutomationConfig, EffectiveArmletConfig, HeroArmletOverrideConfig},
@@ -893,13 +1064,7 @@ mod tests {
     fn critical_retry_waits_for_cooldown_before_forcing_another_toggle() {
         let just_now = Some(Instant::now());
 
-        assert!(!should_force_critical_retry(
-            1,
-            120,
-            Some(1),
-            just_now,
-            300,
-        ));
+        assert!(!should_force_critical_retry(1, 120, Some(1), just_now, 300,));
     }
 
     #[test]
@@ -929,7 +1094,8 @@ mod tests {
 
     #[test]
     fn cooldown_remaining_reports_unexpired_window() {
-        let remaining = cooldown_remaining_ms(Some(Instant::now() - Duration::from_millis(75)), 300);
+        let remaining =
+            cooldown_remaining_ms(Some(Instant::now() - Duration::from_millis(75)), 300);
 
         assert!(remaining >= 200);
         assert!(remaining <= 225);
@@ -986,10 +1152,7 @@ mod tests {
 
         assert_eq!(conservative_report.normal_toggles, 1);
         assert_eq!(aggressive_report.normal_toggles, 2);
-        assert_eq!(
-            aggressive_report.events[2].decision,
-            ArmletDecision::Toggle
-        );
+        assert_eq!(aggressive_report.events[2].decision, ArmletDecision::Toggle);
         assert_eq!(
             conservative_report.events[2].decision,
             ArmletDecision::SkipSafe
@@ -1085,7 +1248,10 @@ mod tests {
             stale_reset_ms: 6_000,
         };
 
-        assert_eq!(record_roshan_health_sample(&mut state, 1_000, 320, &config), None);
+        assert_eq!(
+            record_roshan_health_sample(&mut state, 1_000, 320, &config),
+            None
+        );
         assert_eq!(
             record_roshan_health_sample(&mut state, 1_200, 120, &config),
             Some(200)
@@ -1113,7 +1279,10 @@ mod tests {
             stale_reset_ms: 6_000,
         };
 
-        assert_eq!(record_roshan_health_sample(&mut state, 1_000, 500, &config), None);
+        assert_eq!(
+            record_roshan_health_sample(&mut state, 1_000, 500, &config),
+            None
+        );
         assert_eq!(
             record_roshan_health_sample(&mut state, 1_200, 360, &config),
             Some(140)
@@ -1138,7 +1307,10 @@ mod tests {
         let mut state = ArmletRoshanState::armed();
         let config = roshan_test_config();
 
-        assert_eq!(record_roshan_health_sample(&mut state, 1_000, 500, &config), None);
+        assert_eq!(
+            record_roshan_health_sample(&mut state, 1_000, 500, &config),
+            None
+        );
         assert_eq!(
             record_roshan_health_sample(&mut state, 1_200, 360, &config),
             Some(140)
@@ -1159,7 +1331,10 @@ mod tests {
         let config = roshan_test_config();
         let mut state = ArmletRoshanState::armed();
 
-        assert_eq!(record_roshan_health_sample(&mut state, 1_000, 520, &config), None);
+        assert_eq!(
+            record_roshan_health_sample(&mut state, 1_000, 520, &config),
+            None
+        );
         assert_eq!(
             record_roshan_health_sample(&mut state, 1_200, 380, &config),
             Some(140)
@@ -1169,8 +1344,7 @@ mod tests {
             Some(150)
         );
 
-        let recovery =
-            evaluate_roshan_stun_recovery(&mut state, 230, false, true, 2_300, &config);
+        let recovery = evaluate_roshan_stun_recovery(&mut state, 230, false, true, 2_300, &config);
 
         assert_eq!(
             recovery,
@@ -1188,14 +1362,16 @@ mod tests {
         state.awaiting_post_stun_hit = true;
         state.stun_recovery_estimate_damage = Some(150);
 
-        assert_eq!(record_roshan_health_sample(&mut state, 3_000, 230, &config), None);
+        assert_eq!(
+            record_roshan_health_sample(&mut state, 3_000, 230, &config),
+            None
+        );
         assert_eq!(
             record_roshan_health_sample(&mut state, 3_250, 80, &config),
             Some(150)
         );
 
-        let recovery =
-            evaluate_roshan_stun_recovery(&mut state, 80, false, false, 3_250, &config);
+        let recovery = evaluate_roshan_stun_recovery(&mut state, 80, false, false, 3_250, &config);
 
         assert_eq!(
             recovery,
@@ -1211,7 +1387,10 @@ mod tests {
         let config = roshan_test_config();
         let mut state = ArmletRoshanState::armed();
 
-        assert_eq!(record_roshan_health_sample(&mut state, 1_000, 500, &config), None);
+        assert_eq!(
+            record_roshan_health_sample(&mut state, 1_000, 500, &config),
+            None
+        );
         assert_eq!(
             record_roshan_health_sample(&mut state, 1_200, 360, &config),
             Some(140)
@@ -1221,8 +1400,7 @@ mod tests {
             Some(150)
         );
 
-        let recovery =
-            evaluate_roshan_stun_recovery(&mut state, 200, false, true, 2_300, &config);
+        let recovery = evaluate_roshan_stun_recovery(&mut state, 200, false, true, 2_300, &config);
 
         assert_eq!(recovery, RoshanRecoveryAction::ProtectNow);
         assert!(!state.awaiting_post_stun_hit);
@@ -1235,11 +1413,16 @@ mod tests {
         state.awaiting_post_stun_hit = true;
         state.stun_recovery_estimate_damage = Some(150);
 
-        assert_eq!(record_roshan_health_sample(&mut state, 4_000, 220, &config), None);
-        assert_eq!(record_roshan_health_sample(&mut state, 4_200, 180, &config), None);
+        assert_eq!(
+            record_roshan_health_sample(&mut state, 4_000, 220, &config),
+            None
+        );
+        assert_eq!(
+            record_roshan_health_sample(&mut state, 4_200, 180, &config),
+            None
+        );
 
-        let recovery =
-            evaluate_roshan_stun_recovery(&mut state, 180, false, false, 4_200, &config);
+        let recovery = evaluate_roshan_stun_recovery(&mut state, 180, false, false, 4_200, &config);
 
         assert_eq!(recovery, RoshanRecoveryAction::None);
         assert!(state.awaiting_post_stun_hit);
@@ -1267,10 +1450,22 @@ mod tests {
     #[test]
     fn roshan_reset_reason_strings_match_expected_logs() {
         assert_eq!(RoshanResetReason::HeroDied.as_str(), "hero died");
-        assert_eq!(RoshanResetReason::ArmletDisabled.as_str(), "armlet automation disabled");
-        assert_eq!(RoshanResetReason::ArmletMissing.as_str(), "armlet item missing");
-        assert_eq!(RoshanResetReason::RoshanModeDisarmed.as_str(), "roshan mode inactive");
-        assert_eq!(RoshanResetReason::ModeToggled.as_str(), "roshan mode toggled");
+        assert_eq!(
+            RoshanResetReason::ArmletDisabled.as_str(),
+            "armlet automation disabled"
+        );
+        assert_eq!(
+            RoshanResetReason::ArmletMissing.as_str(),
+            "armlet item missing"
+        );
+        assert_eq!(
+            RoshanResetReason::RoshanModeDisarmed.as_str(),
+            "roshan mode inactive"
+        );
+        assert_eq!(
+            RoshanResetReason::ModeToggled.as_str(),
+            "roshan mode toggled"
+        );
     }
 
     #[test]
@@ -1293,6 +1488,11 @@ mod tests {
             None,
             60,
         ));
+    }
+
+    #[test]
+    fn roshan_skip_logging_window_uses_predicted_damage_when_present() {
+        assert!(should_log_roshan_skip_context(315, 270, None, Some(80), 60,));
     }
 
     #[test]
