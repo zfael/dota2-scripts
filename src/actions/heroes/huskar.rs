@@ -27,6 +27,44 @@ enum HuskarRoshanSpearsAction {
     ClearOwnership,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RoshanSpearsThresholds {
+    effective_trigger: u32,
+    disable_line: u32,
+    reenable_line: u32,
+}
+
+fn roshan_spears_thresholds(
+    effective_trigger: u32,
+    config: &HuskarRoshanSpearsConfig,
+) -> RoshanSpearsThresholds {
+    RoshanSpearsThresholds {
+        effective_trigger,
+        disable_line: effective_trigger.saturating_add(config.disable_buffer_hp),
+        reenable_line: effective_trigger.saturating_add(config.reenable_buffer_hp),
+    }
+}
+
+fn should_log_roshan_spears_idle(health: u32, thresholds: RoshanSpearsThresholds) -> bool {
+    health <= thresholds.reenable_line.saturating_add(80)
+}
+
+fn roshan_spears_clear_reason(
+    config_enabled: bool,
+    roshan_mode_armed: bool,
+    burning_spear_present: bool,
+) -> Option<&'static str> {
+    if !config_enabled {
+        Some("feature disabled")
+    } else if !roshan_mode_armed {
+        Some("roshan mode disarmed")
+    } else if !burning_spear_present {
+        Some("Burning Spears missing or unparseable")
+    } else {
+        None
+    }
+}
+
 fn evaluate_roshan_spears_gate(
     health: u32,
     effective_trigger: u32,
@@ -45,17 +83,16 @@ fn evaluate_roshan_spears_gate(
         };
     }
 
-    let disable_line = effective_trigger.saturating_add(config.disable_buffer_hp);
-    let reenable_line = effective_trigger.saturating_add(config.reenable_buffer_hp);
+    let thresholds = roshan_spears_thresholds(effective_trigger, config);
 
     if state.disabled_by_app {
-        if health >= reenable_line {
+        if health >= thresholds.reenable_line {
             state.disabled_by_app = false;
             HuskarRoshanSpearsAction::Reenable
         } else {
             HuskarRoshanSpearsAction::None
         }
-    } else if health <= disable_line {
+    } else if health <= thresholds.disable_line {
         state.disabled_by_app = true;
         HuskarRoshanSpearsAction::Disable
     } else {
@@ -63,6 +100,7 @@ fn evaluate_roshan_spears_gate(
     }
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn evaluate_resolved_roshan_spears_gate(
     settings: &Settings,
     health: u32,
@@ -90,7 +128,7 @@ fn clear_roshan_spears_ownership(reason: &str) {
         if state.disabled_by_app {
             state.disabled_by_app = false;
             info!(
-                "Clearing Roshan Burning Spears ownership state without toggling ({})",
+                "Clearing Roshan Burning Spears ownership state without toggling (reason: {})",
                 reason
             );
         }
@@ -178,7 +216,7 @@ impl HuskarScript {
                     if first_debuff_time.elapsed() >= Duration::from_millis(delay_ms) {
                         info!("Activating Berserker Blood to cleanse debuffs ({}ms delay elapsed)", delay_ms);
                         crate::input::press_key(key);
-                        
+
                         // Reset tracker after activation
                         *debuff_time = None;
                     } else {
@@ -207,35 +245,95 @@ impl HuskarScript {
         let effective_trigger = resolved
             .toggle_threshold
             .saturating_add(resolved.predictive_offset);
+        let thresholds = roshan_spears_thresholds(effective_trigger, &config);
         let roshan_mode_armed = crate::actions::armlet::is_roshan_mode_armed();
         let burning_spear_present = find_burning_spear_ability(event).is_some();
+        let clear_reason =
+            roshan_spears_clear_reason(config.enabled, roshan_mode_armed, burning_spear_present);
+        drop(settings);
 
         let mut state = ROSHAN_SPEARS_STATE.lock().unwrap();
-        match evaluate_resolved_roshan_spears_gate(
-            &settings,
+        let owned_by_app_before = state.disabled_by_app;
+        match evaluate_roshan_spears_gate(
             event.hero.health,
+            effective_trigger,
             roshan_mode_armed,
             burning_spear_present,
+            &config,
             &mut state,
         ) {
             HuskarRoshanSpearsAction::Disable => {
-                let disable_line =
-                    effective_trigger.saturating_add(config.disable_buffer_hp);
                 info!(
-                    "Entering Roshan Burning Spears danger band at {}HP (disable line: {})",
-                    event.hero.health, disable_line
+                    "Disabling Burning Spears in Roshan mode (hp={}, trigger={}, disable_line={}, reenable_line={}, roshan_mode_armed={}, owned_by_app_before={}, owned_by_app_after={}, config_enabled={}, burning_spears_present={}, reason=entered disable band)",
+                    event.hero.health,
+                    thresholds.effective_trigger,
+                    thresholds.disable_line,
+                    thresholds.reenable_line,
+                    roshan_mode_armed,
+                    owned_by_app_before,
+                    state.disabled_by_app,
+                    config.enabled,
+                    burning_spear_present
                 );
-                info!("Disabling Burning Spears due to Roshan threshold protection");
                 emit_burning_spear_toggle(config.burning_spear_key);
             }
             HuskarRoshanSpearsAction::Reenable => {
-                info!("Re-enabling Burning Spears after HP recovery");
+                info!(
+                    "Re-enabling Burning Spears in Roshan mode (hp={}, trigger={}, disable_line={}, reenable_line={}, roshan_mode_armed={}, owned_by_app_before={}, owned_by_app_after={}, config_enabled={}, burning_spears_present={}, reason=recovered above re-enable line)",
+                    event.hero.health,
+                    thresholds.effective_trigger,
+                    thresholds.disable_line,
+                    thresholds.reenable_line,
+                    roshan_mode_armed,
+                    owned_by_app_before,
+                    state.disabled_by_app,
+                    config.enabled,
+                    burning_spear_present
+                );
                 emit_burning_spear_toggle(config.burning_spear_key);
             }
             HuskarRoshanSpearsAction::ClearOwnership => {
-                info!("Clearing Roshan Burning Spears ownership state without toggling");
+                info!(
+                    "Clearing Roshan Burning Spears ownership state without toggling (hp={}, trigger={}, disable_line={}, reenable_line={}, roshan_mode_armed={}, owned_by_app_before={}, owned_by_app_after={}, config_enabled={}, burning_spears_present={}, reason={})",
+                    event.hero.health,
+                    thresholds.effective_trigger,
+                    thresholds.disable_line,
+                    thresholds.reenable_line,
+                    roshan_mode_armed,
+                    owned_by_app_before,
+                    state.disabled_by_app,
+                    config.enabled,
+                    burning_spear_present,
+                    clear_reason.unwrap_or("gate preconditions changed")
+                );
             }
-            HuskarRoshanSpearsAction::None => {}
+            HuskarRoshanSpearsAction::None => {
+                if owned_by_app_before
+                    || should_log_roshan_spears_idle(event.hero.health, thresholds)
+                {
+                    info!(
+                        "Roshan Burning Spears gate no-op context: hp={}, trigger={}, disable_line={}, reenable_line={}, roshan_mode_armed={}, owned_by_app={}, config_enabled={}, burning_spears_present={}",
+                        event.hero.health,
+                        thresholds.effective_trigger,
+                        thresholds.disable_line,
+                        thresholds.reenable_line,
+                        roshan_mode_armed,
+                        state.disabled_by_app,
+                        config.enabled,
+                        burning_spear_present
+                    );
+
+                    let reason = if let Some(reason) = clear_reason {
+                        reason
+                    } else if state.disabled_by_app {
+                        "still waiting to cross re-enable line"
+                    } else {
+                        "hp remains above disable line"
+                    };
+
+                    info!("Roshan Burning Spears gate no-op reason: {}", reason);
+                }
+            }
         }
     }
 }
@@ -249,7 +347,7 @@ impl HeroScript for HuskarScript {
 
         // PRIORITY 2: Create survivability actions for healing and defensive items
         let survivability = SurvivabilityActions::new(self.settings.clone(), self.executor.clone());
-        
+
         // Check healing items (danger-aware)
         survivability.check_and_use_healing_items_with_danger(event, in_danger);
 
@@ -273,7 +371,7 @@ impl HeroScript for HuskarScript {
     fn hero_name(&self) -> &'static str {
         Hero::Huskar.to_game_name()
     }
-    
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -283,6 +381,47 @@ impl HeroScript for HuskarScript {
 mod tests {
     use super::*;
     use crate::config::settings::HuskarRoshanSpearsConfig;
+
+    #[test]
+    fn roshan_spears_thresholds_match_configured_buffers() {
+        let thresholds = roshan_spears_thresholds(
+            270,
+            &HuskarRoshanSpearsConfig {
+                enabled: true,
+                burning_spear_key: 'w',
+                disable_buffer_hp: 60,
+                reenable_buffer_hp: 100,
+            },
+        );
+
+        assert_eq!(thresholds.effective_trigger, 270);
+        assert_eq!(thresholds.disable_line, 330);
+        assert_eq!(thresholds.reenable_line, 370);
+    }
+
+    #[test]
+    fn roshan_spears_idle_logging_window_turns_on_near_reenable_line() {
+        let thresholds = RoshanSpearsThresholds {
+            effective_trigger: 270,
+            disable_line: 330,
+            reenable_line: 370,
+        };
+
+        assert!(should_log_roshan_spears_idle(390, thresholds));
+        assert!(!should_log_roshan_spears_idle(520, thresholds));
+    }
+
+    #[test]
+    fn roshan_spears_idle_logging_window_stops_after_idle_buffer() {
+        let thresholds = RoshanSpearsThresholds {
+            effective_trigger: 270,
+            disable_line: 330,
+            reenable_line: 370,
+        };
+
+        assert!(should_log_roshan_spears_idle(450, thresholds));
+        assert!(!should_log_roshan_spears_idle(451, thresholds));
+    }
 
     #[test]
     fn roshan_spears_gate_disables_once_when_hp_enters_disable_band() {
