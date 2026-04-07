@@ -74,6 +74,15 @@ fn roshan_spears_clear_reason(
     }
 }
 
+fn roshan_spears_action_label(action: HuskarRoshanSpearsAction) -> &'static str {
+    match action {
+        HuskarRoshanSpearsAction::None => "none",
+        HuskarRoshanSpearsAction::Disable => "disable",
+        HuskarRoshanSpearsAction::Reenable => "reenable",
+        HuskarRoshanSpearsAction::ClearOwnership => "clear_ownership",
+    }
+}
+
 fn evaluate_roshan_spears_gate(
     health: u32,
     effective_trigger: u32,
@@ -290,14 +299,31 @@ impl HuskarScript {
 
         let mut state = ROSHAN_SPEARS_STATE.lock().unwrap();
         let owned_by_app_before = state.disabled_by_app;
-        match evaluate_roshan_spears_gate(
+        let action = evaluate_roshan_spears_gate(
             event.hero.health,
             effective_trigger,
             roshan_mode_armed,
             burning_spear_present,
             &config,
             &mut state,
-        ) {
+        );
+
+        if roshan_mode_armed {
+            info!(
+                "Roshan Burning Spears summary: hp={}, trigger={}, disable_line={}, reenable_line={}, roshan_armed={}, config_enabled={}, burning_spears_present={}, owned_by_app={}, action={}",
+                event.hero.health,
+                thresholds.effective_trigger,
+                thresholds.disable_line,
+                thresholds.reenable_line,
+                roshan_mode_armed,
+                config.enabled,
+                burning_spear_present,
+                state.disabled_by_app,
+                roshan_spears_action_label(action)
+            );
+        }
+
+        match action {
             HuskarRoshanSpearsAction::Disable => {
                 log_roshan_spears_gate_event(
                     "Disabling Burning Spears in Roshan mode",
@@ -309,6 +335,13 @@ impl HuskarScript {
                     state.disabled_by_app,
                     config.enabled,
                     burning_spear_present,
+                );
+                info!(
+                    "Emitting Roshan Burning Spears Alt+W toggle (action={}, key={}, hp={}, owned_by_app_after={})",
+                    roshan_spears_action_label(HuskarRoshanSpearsAction::Disable),
+                    config.burning_spear_key,
+                    event.hero.health,
+                    state.disabled_by_app
                 );
                 emit_burning_spear_toggle(config.burning_spear_key);
             }
@@ -323,6 +356,13 @@ impl HuskarScript {
                     state.disabled_by_app,
                     config.enabled,
                     burning_spear_present,
+                );
+                info!(
+                    "Emitting Roshan Burning Spears Alt+W toggle (action={}, key={}, hp={}, owned_by_app_after={})",
+                    roshan_spears_action_label(HuskarRoshanSpearsAction::Reenable),
+                    config.burning_spear_key,
+                    event.hero.health,
+                    state.disabled_by_app
                 );
                 emit_burning_spear_toggle(config.burning_spear_key);
             }
@@ -486,6 +526,20 @@ mod tests {
             true,
             None,
         ));
+    }
+
+    #[test]
+    fn roshan_spears_action_labels_match_summary_logs() {
+        assert_eq!(roshan_spears_action_label(HuskarRoshanSpearsAction::None), "none");
+        assert_eq!(roshan_spears_action_label(HuskarRoshanSpearsAction::Disable), "disable");
+        assert_eq!(
+            roshan_spears_action_label(HuskarRoshanSpearsAction::Reenable),
+            "reenable"
+        );
+        assert_eq!(
+            roshan_spears_action_label(HuskarRoshanSpearsAction::ClearOwnership),
+            "clear_ownership"
+        );
     }
 
     #[test]
