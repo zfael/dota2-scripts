@@ -653,7 +653,7 @@ fn maybe_log_roshan_skip_context(
         return;
     }
 
-    info!(
+    debug!(
         "Armlet Roshan no-toggle context: hp={}, threshold={}, offset={}, trigger={}, cooldown={}ms, observed_hit={:?}, predicted_hit={:?}, samples={}, awaiting_post_stun_hit={}, stunned={}",
         health,
         threshold,
@@ -669,29 +669,29 @@ fn maybe_log_roshan_skip_context(
 
     match evaluation.decision {
         ArmletDecision::SkipCooldown => {
-            info!(
+            debug!(
                 "Skipping Armlet Roshan protection near danger: cooldown {}ms remaining",
                 evaluation.cooldown_remaining_ms,
             );
         }
         ArmletDecision::SkipStunned => {
-            info!("Skipping Armlet Roshan protection near danger: still stunned");
+            debug!("Skipping Armlet Roshan protection near danger: still stunned");
         }
         ArmletDecision::SkipSafe => match recovery_action {
             RoshanRecoveryAction::AwaitNextHit { predicted_damage } => {
-                info!(
+                debug!(
                     "Skipping Armlet Roshan protection near danger: waiting for deferred post-stun hit re-sync (predicted hit: {})",
                     predicted_damage
                 );
             }
             RoshanRecoveryAction::None if state.awaiting_post_stun_hit => {
-                info!(
+                debug!(
                     "Skipping Armlet Roshan protection near danger: deferred post-stun wait still active"
                 );
             }
             RoshanRecoveryAction::None => {
                 if recent_sample_count < config.min_confidence_hits && observed_damage.is_none() {
-                    info!(
+                    debug!(
                         "Skipping Armlet Roshan protection near danger: insufficient sample confidence (samples: {}/{}, predicted hit: {:?})",
                         recent_sample_count,
                         config.min_confidence_hits,
@@ -699,7 +699,7 @@ fn maybe_log_roshan_skip_context(
                     );
                 } else if recent_sample_count >= config.min_confidence_hits {
                     if let Some(predicted_damage) = predicted_damage {
-                        info!(
+                        debug!(
                             "Skipping Armlet Roshan protection near danger: HP {} still above learned lethal zone {} (predicted hit: {}, samples: {})",
                             health,
                             predicted_damage.saturating_add(config.emergency_margin_hp),
@@ -708,14 +708,14 @@ fn maybe_log_roshan_skip_context(
                         );
                     }
                 } else if let Some(observed_damage) = observed_damage {
-                    info!(
+                    debug!(
                         "Skipping Armlet Roshan protection near danger: HP {} still above emergency fallback zone {} (observed hit: {})",
                         health,
                         observed_damage.saturating_add(config.emergency_margin_hp),
                         observed_damage
                     );
                 } else {
-                    info!(
+                    debug!(
                         "Skipping Armlet Roshan protection near danger: insufficient sample confidence (samples: {}/{})",
                         recent_sample_count, config.min_confidence_hits
                     );

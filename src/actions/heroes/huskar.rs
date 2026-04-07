@@ -1,6 +1,6 @@
-use crate::actions::heroes::traits::HeroScript;
 use crate::actions::common::SurvivabilityActions;
 use crate::actions::executor::ActionExecutor;
+use crate::actions::heroes::traits::HeroScript;
 use crate::config::{settings::HuskarRoshanSpearsConfig, Settings};
 use crate::models::{gsi_event::Ability, GsiWebhookEvent, Hero};
 use lazy_static::lazy_static;
@@ -163,21 +163,39 @@ fn log_roshan_spears_gate_event(
     owned_by_app_after: bool,
     config_enabled: bool,
     burning_spear_present: bool,
+    noisy: bool,
 ) {
-    info!(
-        "{} (hp={}, trigger={}, disable_line={}, reenable_line={}, roshan_mode_armed={}, owned_by_app_before={}, owned_by_app_after={}, config_enabled={}, burning_spears_present={}, reason={})",
-        action,
-        health,
-        thresholds.effective_trigger,
-        thresholds.disable_line,
-        thresholds.reenable_line,
-        roshan_mode_armed,
-        owned_by_app_before,
-        owned_by_app_after,
-        config_enabled,
-        burning_spear_present,
-        reason
-    );
+    if noisy {
+        debug!(
+            "{} (hp={}, trigger={}, disable_line={}, reenable_line={}, roshan_mode_armed={}, owned_by_app_before={}, owned_by_app_after={}, config_enabled={}, burning_spears_present={}, reason={})",
+            action,
+            health,
+            thresholds.effective_trigger,
+            thresholds.disable_line,
+            thresholds.reenable_line,
+            roshan_mode_armed,
+            owned_by_app_before,
+            owned_by_app_after,
+            config_enabled,
+            burning_spear_present,
+            reason
+        );
+    } else {
+        info!(
+            "{} (hp={}, trigger={}, disable_line={}, reenable_line={}, roshan_mode_armed={}, owned_by_app_before={}, owned_by_app_after={}, config_enabled={}, burning_spears_present={}, reason={})",
+            action,
+            health,
+            thresholds.effective_trigger,
+            thresholds.disable_line,
+            thresholds.reenable_line,
+            roshan_mode_armed,
+            owned_by_app_before,
+            owned_by_app_after,
+            config_enabled,
+            burning_spear_present,
+            reason
+        );
+    }
 }
 
 fn find_burning_spear_ability<'a>(event: &'a GsiWebhookEvent) -> Option<&'a Ability> {
@@ -244,8 +262,10 @@ impl HuskarScript {
 
         // Check if ability can be cast (not on cooldown and has levels)
         if !ability.can_cast || ability.level == 0 || ability.cooldown > 0 {
-            debug!("Berserker Blood not ready: can_cast={}, level={}, cooldown={}",
-                ability.can_cast, ability.level, ability.cooldown);
+            debug!(
+                "Berserker Blood not ready: can_cast={}, level={}, cooldown={}",
+                ability.can_cast, ability.level, ability.cooldown
+            );
             return;
         }
 
@@ -259,19 +279,27 @@ impl HuskarScript {
                 Some(first_debuff_time) => {
                     // Debuff already detected, check if delay has passed
                     if first_debuff_time.elapsed() >= Duration::from_millis(delay_ms) {
-                        info!("Activating Berserker Blood to cleanse debuffs ({}ms delay elapsed)", delay_ms);
+                        info!(
+                            "Activating Berserker Blood to cleanse debuffs ({}ms delay elapsed)",
+                            delay_ms
+                        );
                         crate::input::press_key(key);
 
                         // Reset tracker after activation
                         *debuff_time = None;
                     } else {
-                        debug!("Waiting for more debuffs... ({}ms elapsed)",
-                            first_debuff_time.elapsed().as_millis());
+                        debug!(
+                            "Waiting for more debuffs... ({}ms elapsed)",
+                            first_debuff_time.elapsed().as_millis()
+                        );
                     }
                 }
                 None => {
                     // First debuff detected, start tracking
-                    info!("Debuff detected, starting {}ms timer for Berserker Blood", delay_ms);
+                    info!(
+                        "Debuff detected, starting {}ms timer for Berserker Blood",
+                        delay_ms
+                    );
                     *debuff_time = Some(Instant::now());
                 }
             }
@@ -309,7 +337,7 @@ impl HuskarScript {
         );
 
         if roshan_mode_armed {
-            info!(
+            debug!(
                 "Roshan Burning Spears summary: hp={}, trigger={}, disable_line={}, reenable_line={}, roshan_armed={}, config_enabled={}, burning_spears_present={}, owned_by_app={}, action={}",
                 event.hero.health,
                 thresholds.effective_trigger,
@@ -335,6 +363,7 @@ impl HuskarScript {
                     state.disabled_by_app,
                     config.enabled,
                     burning_spear_present,
+                    false,
                 );
                 info!(
                     "Emitting Roshan Burning Spears Alt+W toggle (action={}, key={}, hp={}, owned_by_app_after={})",
@@ -356,6 +385,7 @@ impl HuskarScript {
                     state.disabled_by_app,
                     config.enabled,
                     burning_spear_present,
+                    false,
                 );
                 info!(
                     "Emitting Roshan Burning Spears Alt+W toggle (action={}, key={}, hp={}, owned_by_app_after={})",
@@ -377,6 +407,7 @@ impl HuskarScript {
                     state.disabled_by_app,
                     config.enabled,
                     burning_spear_present,
+                    false,
                 );
             }
             HuskarRoshanSpearsAction::None => {
@@ -404,6 +435,7 @@ impl HuskarScript {
                         state.disabled_by_app,
                         config.enabled,
                         burning_spear_present,
+                        true,
                     );
                 }
             }
@@ -520,18 +552,19 @@ mod tests {
             reenable_line: 370,
         };
 
-        assert!(should_log_roshan_spears_noop(
-            520,
-            thresholds,
-            true,
-            None,
-        ));
+        assert!(should_log_roshan_spears_noop(520, thresholds, true, None,));
     }
 
     #[test]
     fn roshan_spears_action_labels_match_summary_logs() {
-        assert_eq!(roshan_spears_action_label(HuskarRoshanSpearsAction::None), "none");
-        assert_eq!(roshan_spears_action_label(HuskarRoshanSpearsAction::Disable), "disable");
+        assert_eq!(
+            roshan_spears_action_label(HuskarRoshanSpearsAction::None),
+            "none"
+        );
+        assert_eq!(
+            roshan_spears_action_label(HuskarRoshanSpearsAction::Disable),
+            "disable"
+        );
         assert_eq!(
             roshan_spears_action_label(HuskarRoshanSpearsAction::Reenable),
             "reenable"
