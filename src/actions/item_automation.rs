@@ -6,6 +6,7 @@ use std::sync::Mutex;
 pub enum TriggerFamily {
     Danger,
     LowMana,
+    Movement,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,6 +21,14 @@ pub enum SupportStatus {
     Supported,
     KnownUnsupported,
     Inactive,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MovementSnapshot {
+    pub hero_name: String,
+    pub alive: bool,
+    pub xpos: i32,
+    pub ypos: i32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,6 +112,13 @@ pub const ITEM_AUTOMATION_SPECS: &[ItemAutomationSpec] = &[
         is_neutral: true,
     },
     ItemAutomationSpec {
+        item_name: "item_phase_boots",
+        trigger_family: TriggerFamily::Movement,
+        cast_mode: CastMode::NoTarget,
+        support: SupportStatus::Supported,
+        is_neutral: false,
+    },
+    ItemAutomationSpec {
         item_name: "item_psychic_headband",
         trigger_family: TriggerFamily::Danger,
         cast_mode: CastMode::CursorTargeted,
@@ -170,6 +186,7 @@ impl TriggerLockoutState {
 lazy_static! {
     static ref GLOBAL_TRIGGER_LOCKOUTS: Mutex<TriggerLockoutState> =
         Mutex::new(TriggerLockoutState::default());
+    static ref LAST_MOVEMENT_SNAPSHOT: Mutex<Option<MovementSnapshot>> = Mutex::new(None);
 }
 
 pub fn try_acquire_global_lockout(key: &str, now_ms: u64, lockout_ms: u64) -> bool {
@@ -179,9 +196,26 @@ pub fn try_acquire_global_lockout(key: &str, now_ms: u64, lockout_ms: u64) -> bo
         .try_acquire(key, now_ms, lockout_ms)
 }
 
+pub fn read_movement_snapshot() -> Option<MovementSnapshot> {
+    LAST_MOVEMENT_SNAPSHOT.lock().unwrap().clone()
+}
+
+pub fn write_movement_snapshot(snapshot: MovementSnapshot) {
+    *LAST_MOVEMENT_SNAPSHOT.lock().unwrap() = Some(snapshot);
+}
+
+pub fn clear_movement_snapshot() {
+    *LAST_MOVEMENT_SNAPSHOT.lock().unwrap() = None;
+}
+
 #[cfg(test)]
 pub fn reset_global_lockouts_for_tests() {
     *GLOBAL_TRIGGER_LOCKOUTS.lock().unwrap() = TriggerLockoutState::default();
+}
+
+#[cfg(test)]
+pub fn replace_movement_snapshot_for_tests(snapshot: Option<MovementSnapshot>) {
+    *LAST_MOVEMENT_SNAPSHOT.lock().unwrap() = snapshot;
 }
 
 #[cfg(test)]
@@ -221,6 +255,16 @@ mod tests {
         let draught = lookup_item_automation("item_mana_draught").unwrap();
         assert_eq!(draught.trigger_family, TriggerFamily::LowMana);
         assert_eq!(draught.support, SupportStatus::Supported);
+    }
+
+    #[test]
+    fn lookup_returns_phase_boots_as_supported_movement_item() {
+        let boots = lookup_item_automation("item_phase_boots").unwrap();
+
+        assert_eq!(boots.trigger_family, TriggerFamily::Movement);
+        assert_eq!(boots.cast_mode, CastMode::NoTarget);
+        assert_eq!(boots.support, SupportStatus::Supported);
+        assert!(!boots.is_neutral);
     }
 
     #[test]

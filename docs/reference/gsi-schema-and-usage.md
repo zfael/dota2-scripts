@@ -78,8 +78,10 @@ The model includes many fields, but the runtime currently reads this subset:
 | `hero.aghanims_shard` | `src/actions/heroes/largo.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs` | Largo dual-song mode detection; Meepo Dig gate; Meepo observed-state UI |
 | `hero.level` | `src/actions/heroes/meepo_state.rs`, UI, tests | Status display, Meepo observed-state UI, and fixture assertions |
 | `hero.respawn_seconds` | UI | Respawn countdown text |
+| `hero.xpos` | `src/actions/common.rs` | Shared Phase Boots movement automation pathing checks |
+| `hero.ypos` | `src/actions/common.rs` | Shared Phase Boots movement automation pathing checks |
 
-Fields such as `hero.magicimmune`, `hero.break`, positions, talents, and buyback data are modeled but not currently consumed by runtime logic.
+Fields such as `hero.magicimmune`, `hero.break`, talents, and buyback data are modeled but not currently consumed by runtime logic. `hero.xpos` and `hero.ypos` are now consumed by shared Phase Boots movement automation.
 
 ### `abilities`
 

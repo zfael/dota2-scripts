@@ -162,6 +162,11 @@ allowed_items = [
     "item_mana_draught",
 ]
 
+[phase_boots_automation]
+enabled = true
+minimum_distance_units = 100
+excluded_heroes = []
+
 [heroes.largo]
 amphibian_rhapsody_enabled = true
 auto_toggle_on_danger = true

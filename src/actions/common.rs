@@ -1,8 +1,9 @@
 use crate::actions::activity::{push_activity, ActivityCategory};
 use crate::actions::executor::ActionExecutor;
 use crate::actions::item_automation::{
-    hero_is_excluded, lookup_item_automation, try_acquire_global_lockout, CastMode,
-    ItemAutomationSpec, SupportStatus, TriggerFamily,
+    clear_movement_snapshot, hero_is_excluded, lookup_item_automation, read_movement_snapshot,
+    try_acquire_global_lockout, write_movement_snapshot, CastMode, ItemAutomationSpec,
+    MovementSnapshot, SupportStatus, TriggerFamily,
 };
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Item};
@@ -19,6 +20,7 @@ const ITEM_AUTOMATION_LOCKOUT_MS: u64 = 120;
 #[cfg(test)]
 lazy_static::lazy_static! {
     static ref LOW_MANA_CHECK_CALLS: AtomicUsize = AtomicUsize::new(0);
+    static ref MOVEMENT_CHECK_CALLS: AtomicUsize = AtomicUsize::new(0);
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -130,7 +132,11 @@ pub fn find_item_slot_by_name(
 
 /// Snapshot-aware helpers for danger-aware gating used by survivability paths
 #[cfg_attr(not(test), allow(dead_code))]
-fn healing_threshold_for_event(event: &GsiWebhookEvent, settings: &Settings, in_danger: bool) -> u32 {
+fn healing_threshold_for_event(
+    event: &GsiWebhookEvent,
+    settings: &Settings,
+    in_danger: bool,
+) -> u32 {
     let lane_phase_duration_seconds = settings.common.lane_phase_duration_seconds;
 
     if lane_phase_duration_seconds > 0
@@ -148,7 +154,11 @@ fn healing_threshold_for_event(event: &GsiWebhookEvent, settings: &Settings, in_
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
-fn should_consider_defensive_items(event: &GsiWebhookEvent, settings: &Settings, in_danger: bool) -> bool {
+fn should_consider_defensive_items(
+    event: &GsiWebhookEvent,
+    settings: &Settings,
+    in_danger: bool,
+) -> bool {
     // Mirror the early gates in use_defensive_items_if_danger
     if !settings.danger_detection.enabled {
         return false;
@@ -163,7 +173,11 @@ fn should_consider_defensive_items(event: &GsiWebhookEvent, settings: &Settings,
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
-fn should_consider_neutral_item(event: &GsiWebhookEvent, settings: &Settings, in_danger: bool) -> bool {
+fn should_consider_neutral_item(
+    event: &GsiWebhookEvent,
+    settings: &Settings,
+    in_danger: bool,
+) -> bool {
     // Minimal gating used by use_neutral_item_if_danger
     if !settings.neutral_items.enabled || !settings.neutral_items.use_in_danger {
         return false;
@@ -230,6 +244,17 @@ fn hero_uses_mana(event: &GsiWebhookEvent) -> bool {
     event.hero.max_mana > 0
 }
 
+fn movement_distance_units(
+    previous_xpos: i32,
+    previous_ypos: i32,
+    current_xpos: i32,
+    current_ypos: i32,
+) -> f64 {
+    let dx = (current_xpos - previous_xpos) as f64;
+    let dy = (current_ypos - previous_ypos) as f64;
+    (dx * dx + dy * dy).sqrt()
+}
+
 fn eligible_low_mana_item(
     event: &GsiWebhookEvent,
     settings: &Settings,
@@ -260,6 +285,59 @@ fn eligible_low_mana_item(
 
         let spec = lookup_item_automation(&item.name)?;
         if spec.trigger_family != TriggerFamily::LowMana {
+            continue;
+        }
+        if spec.support != SupportStatus::Supported {
+            continue;
+        }
+
+        let key = settings.get_key_for_slot(slot)?;
+        return Some((spec, key));
+    }
+
+    None
+}
+
+fn eligible_movement_item(
+    event: &GsiWebhookEvent,
+    settings: &Settings,
+) -> Option<(&'static ItemAutomationSpec, char)> {
+    if !settings.phase_boots_automation.enabled {
+        return None;
+    }
+    if !event.hero.is_alive() {
+        return None;
+    }
+    if hero_is_excluded(
+        &event.hero.name,
+        &settings.phase_boots_automation.excluded_heroes,
+    ) {
+        return None;
+    }
+
+    let previous = read_movement_snapshot()?;
+    if !previous.alive || previous.hero_name != event.hero.name {
+        return None;
+    }
+    if movement_distance_units(
+        previous.xpos,
+        previous.ypos,
+        event.hero.xpos,
+        event.hero.ypos,
+    ) < settings.phase_boots_automation.minimum_distance_units as f64
+    {
+        return None;
+    }
+
+    for (slot, item) in event.items.all_slots() {
+        if item.name == "empty" || item.can_cast != Some(true) {
+            continue;
+        }
+
+        let Some(spec) = lookup_item_automation(&item.name) else {
+            continue;
+        };
+        if spec.trigger_family != TriggerFamily::Movement {
             continue;
         }
         if spec.support != SupportStatus::Supported {
@@ -471,7 +549,10 @@ impl SurvivabilityActions {
                                 info!("Using {} in {} (key: {})", item.name, slot, key);
                                 push_activity(
                                     ActivityCategory::Action,
-                                    format!("Defensive item activated: {}", item.name.replace("item_", "")),
+                                    format!(
+                                        "Defensive item activated: {}",
+                                        item.name.replace("item_", "")
+                                    ),
                                 );
                                 ready_items.push((item.name.clone(), key));
                             }
@@ -537,7 +618,10 @@ impl SurvivabilityActions {
         let now_ms = current_time_millis();
 
         if !acquire_item_trigger_lockout(&lockout_key, now_ms, ITEM_AUTOMATION_LOCKOUT_MS) {
-            debug!("Skipping duplicate danger trigger for {}", neutral_item.name);
+            debug!(
+                "Skipping duplicate danger trigger for {}",
+                neutral_item.name
+            );
             return;
         }
 
@@ -595,6 +679,59 @@ impl SurvivabilityActions {
             execute_key_sequence(sequence);
         });
     }
+
+    pub fn check_and_use_movement_items(&self, event: &GsiWebhookEvent) {
+        #[cfg(test)]
+        {
+            MOVEMENT_CHECK_CALLS.fetch_add(1, Ordering::SeqCst);
+        }
+
+        let settings = self.settings.lock().unwrap();
+        let decision = eligible_movement_item(event, &settings);
+        let current_snapshot = MovementSnapshot {
+            hero_name: event.hero.name.clone(),
+            alive: event.hero.alive,
+            xpos: event.hero.xpos,
+            ypos: event.hero.ypos,
+        };
+
+        if !event.hero.is_alive() {
+            clear_movement_snapshot();
+            return;
+        }
+
+        write_movement_snapshot(current_snapshot);
+
+        let Some((spec, item_key)) = decision else {
+            return;
+        };
+
+        let lockout_key = format!("movement:{}", spec.item_name);
+        let now_ms = current_time_millis();
+        if !acquire_item_trigger_lockout(&lockout_key, now_ms, ITEM_AUTOMATION_LOCKOUT_MS) {
+            return;
+        }
+
+        let sequence = plan_automation_key_sequence(
+            spec.cast_mode,
+            item_key,
+            settings.neutral_items.self_cast_key,
+        );
+        drop(settings);
+
+        info!("🏃 Using movement automation item: {}", spec.item_name);
+        push_activity(
+            ActivityCategory::Action,
+            format!(
+                "Movement automation used: {}",
+                spec.item_name.replace("item_", "")
+            ),
+        );
+
+        self.executor.enqueue("common-movement-item", move || {
+            execute_key_sequence(sequence);
+        });
+    }
 }
 
 #[cfg(test)]
@@ -608,6 +745,16 @@ pub fn low_mana_check_call_count_for_tests() -> usize {
 }
 
 #[cfg(test)]
+pub fn reset_movement_check_call_count_for_tests() {
+    MOVEMENT_CHECK_CALLS.store(0, Ordering::SeqCst);
+}
+
+#[cfg(test)]
+pub fn movement_check_call_count_for_tests() -> usize {
+    MOVEMENT_CHECK_CALLS.load(Ordering::SeqCst)
+}
+
+#[cfg(test)]
 mod tests {
     use super::{
         find_item_slot, plan_automation_key_sequence, plan_defensive_item_key_sequence,
@@ -615,7 +762,9 @@ mod tests {
     };
     use crate::actions::item_automation::CastMode;
     use crate::config::Settings;
-    use crate::models::gsi_event::{Abilities, Ability, GsiWebhookEvent, Hero, Item as GsiItem, Items, Map};
+    use crate::models::gsi_event::{
+        Abilities, Ability, GsiWebhookEvent, Hero, Item as GsiItem, Items, Map,
+    };
     use crate::models::Item;
 
     fn empty_ability() -> Ability {
@@ -795,14 +944,17 @@ mod snapshot_tests {
     use std::sync::{Arc, Mutex};
 
     use crate::actions::executor::ActionExecutor;
-    use crate::actions::item_automation::reset_global_lockouts_for_tests;
+    use crate::actions::item_automation::{
+        read_movement_snapshot, replace_movement_snapshot_for_tests,
+        reset_global_lockouts_for_tests, MovementSnapshot,
+    };
     use crate::config::Settings;
     use crate::models::gsi_event::{Abilities, Ability, GsiWebhookEvent, Hero, Item, Items, Map};
 
     use super::{
         acquire_item_trigger_lockout, eligible_danger_neutral_spec, eligible_low_mana_item,
-        healing_threshold_for_event, should_consider_defensive_items, should_consider_neutral_item,
-        SurvivabilityActions,
+        eligible_movement_item, healing_threshold_for_event, should_consider_defensive_items,
+        should_consider_neutral_item, SurvivabilityActions,
     };
 
     fn empty_ability() -> Ability {
@@ -1151,6 +1303,180 @@ mod snapshot_tests {
 
         assert_eq!(spec.item_name, "item_mana_draught");
         assert_eq!(slot_key, settings.keybindings.neutral0);
+    }
+
+    #[test]
+    fn movement_gate_requires_previous_sample_before_phase_boots_can_trigger() {
+        reset_global_lockouts_for_tests();
+        replace_movement_snapshot_for_tests(None);
+
+        let mut settings = Settings::default();
+        settings.phase_boots_automation.enabled = true;
+        settings.phase_boots_automation.minimum_distance_units = 100;
+
+        let mut items = empty_items();
+        items.slot0 = Item {
+            name: "item_phase_boots".to_string(),
+            can_cast: Some(true),
+            ..Default::default()
+        };
+
+        let mut hero = hero_with_health(100, 100);
+        hero.name = "npc_dota_hero_axe".to_string();
+        hero.xpos = 1000;
+        hero.ypos = 1000;
+
+        let event = base_event(hero, items);
+        assert!(eligible_movement_item(&event, &settings).is_none());
+    }
+
+    #[test]
+    fn movement_gate_rejects_sub_threshold_motion_and_accepts_real_travel() {
+        reset_global_lockouts_for_tests();
+
+        let mut settings = Settings::default();
+        settings.phase_boots_automation.enabled = true;
+        settings.phase_boots_automation.minimum_distance_units = 100;
+
+        let mut items = empty_items();
+        items.slot0 = Item {
+            name: "item_phase_boots".to_string(),
+            can_cast: Some(true),
+            ..Default::default()
+        };
+
+        replace_movement_snapshot_for_tests(Some(MovementSnapshot {
+            hero_name: "npc_dota_hero_axe".to_string(),
+            alive: true,
+            xpos: 1000,
+            ypos: 1000,
+        }));
+
+        let mut jitter_hero = hero_with_health(100, 100);
+        jitter_hero.name = "npc_dota_hero_axe".to_string();
+        jitter_hero.xpos = 1030;
+        jitter_hero.ypos = 1040;
+        let jitter_event = base_event(jitter_hero, items.clone());
+        assert!(eligible_movement_item(&jitter_event, &settings).is_none());
+
+        let mut travel_hero = hero_with_health(100, 100);
+        travel_hero.name = "npc_dota_hero_axe".to_string();
+        travel_hero.xpos = 1120;
+        travel_hero.ypos = 1000;
+        let travel_event = base_event(travel_hero, items);
+        let (spec, slot_key) = eligible_movement_item(&travel_event, &settings).unwrap();
+
+        assert_eq!(spec.item_name, "item_phase_boots");
+        assert_eq!(slot_key, settings.keybindings.slot0);
+    }
+
+    #[test]
+    fn movement_gate_respects_phase_boots_excluded_heroes() {
+        let mut settings = Settings::default();
+        settings.phase_boots_automation.enabled = true;
+        settings.phase_boots_automation.excluded_heroes = vec!["npc_dota_hero_huskar".to_string()];
+
+        let mut items = empty_items();
+        items.slot0 = Item {
+            name: "item_phase_boots".to_string(),
+            can_cast: Some(true),
+            ..Default::default()
+        };
+
+        replace_movement_snapshot_for_tests(Some(MovementSnapshot {
+            hero_name: "npc_dota_hero_huskar".to_string(),
+            alive: true,
+            xpos: 1000,
+            ypos: 1000,
+        }));
+
+        let mut hero = hero_with_health(100, 100);
+        hero.name = "npc_dota_hero_huskar".to_string();
+        hero.xpos = 1200;
+        hero.ypos = 1000;
+
+        let event = base_event(hero, items);
+        assert!(eligible_movement_item(&event, &settings).is_none());
+    }
+
+    #[test]
+    fn movement_gate_skips_non_automation_items_before_phase_boots() {
+        let mut settings = Settings::default();
+        settings.phase_boots_automation.enabled = true;
+        settings.phase_boots_automation.minimum_distance_units = 100;
+
+        let mut items = empty_items();
+        items.slot0 = Item {
+            name: "item_bracer".to_string(),
+            can_cast: Some(false),
+            ..Default::default()
+        };
+        items.slot1 = Item {
+            name: "item_phase_boots".to_string(),
+            can_cast: Some(true),
+            ..Default::default()
+        };
+
+        replace_movement_snapshot_for_tests(Some(MovementSnapshot {
+            hero_name: "npc_dota_hero_axe".to_string(),
+            alive: true,
+            xpos: 1000,
+            ypos: 1000,
+        }));
+
+        let mut hero = hero_with_health(100, 100);
+        hero.name = "npc_dota_hero_axe".to_string();
+        hero.xpos = 1200;
+        hero.ypos = 1000;
+
+        let event = base_event(hero, items);
+        let (spec, slot_key) = eligible_movement_item(&event, &settings).unwrap();
+
+        assert_eq!(spec.item_name, "item_phase_boots");
+        assert_eq!(slot_key, settings.keybindings.slot1);
+    }
+
+    #[test]
+    fn movement_check_records_first_sample_for_future_events() {
+        replace_movement_snapshot_for_tests(None);
+
+        let actions = test_actions(Settings::default());
+        let mut hero = hero_with_health(100, 100);
+        hero.name = "npc_dota_hero_axe".to_string();
+        hero.xpos = 1000;
+        hero.ypos = 1000;
+
+        actions.check_and_use_movement_items(&base_event(hero, empty_items()));
+
+        assert_eq!(
+            read_movement_snapshot(),
+            Some(MovementSnapshot {
+                hero_name: "npc_dota_hero_axe".to_string(),
+                alive: true,
+                xpos: 1000,
+                ypos: 1000,
+            })
+        );
+    }
+
+    #[test]
+    fn movement_check_clears_snapshot_when_hero_is_dead() {
+        replace_movement_snapshot_for_tests(Some(MovementSnapshot {
+            hero_name: "npc_dota_hero_axe".to_string(),
+            alive: true,
+            xpos: 1000,
+            ypos: 1000,
+        }));
+
+        let actions = test_actions(Settings::default());
+        let mut hero = hero_with_health(100, 100);
+        hero.name = "npc_dota_hero_axe".to_string();
+        hero.alive = false;
+        hero.xpos = 1200;
+        hero.ypos = 1200;
+
+        actions.check_and_use_movement_items(&base_event(hero, empty_items()));
+        assert_eq!(read_movement_snapshot(), None);
     }
 
     #[test]

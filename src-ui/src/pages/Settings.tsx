@@ -46,6 +46,24 @@ export default function Settings() {
               suffix="%"
             />
           </Card>
+
+          <Card title="Phase Boots Automation">
+            <Toggle
+              label="Enable Phase Boots Automation"
+              checked={config.phase_boots_automation.enabled}
+              onChange={(v) => updateConfig("phase_boots_automation", { enabled: v })}
+            />
+            <NumberInput
+              label="Minimum Movement Distance"
+              value={config.phase_boots_automation.minimum_distance_units}
+              onChange={(v) => updateConfig("phase_boots_automation", { minimum_distance_units: v })}
+              suffix="u"
+            />
+            <p className="text-xs text-subtle">
+              Only triggers when the hero actually changes position by at least
+              this distance between GSI updates.
+            </p>
+          </Card>
         </div>
 
         <div className="space-y-4">

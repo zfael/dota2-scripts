@@ -224,6 +224,12 @@ export interface NeutralItemConfig {
   allowed_items: string[];
 }
 
+export interface PhaseBootsAutomationConfig {
+  enabled: boolean;
+  minimum_distance_units: number;
+  excluded_heroes: string[];
+}
+
 export interface SoulRingConfig {
   enabled: boolean;
   min_mana_percent: number;
@@ -277,6 +283,7 @@ export interface Settings {
   heroes: HeroesConfig;
   danger_detection: DangerDetectionConfig;
   neutral_items: NeutralItemConfig;
+  phase_boots_automation: PhaseBootsAutomationConfig;
   soul_ring: SoulRingConfig;
   updates: UpdateConfig;
   rune_alerts: RuneAlertConfig;

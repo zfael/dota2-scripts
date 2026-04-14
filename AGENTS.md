@@ -184,7 +184,7 @@ Supported heroes: **Broodmother, Huskar, Largo, Legion Commander, Meepo, Outworl
 | `src/actions/dispel.rs` | `docs/features/survivability.md`, `docs/features/danger-detection.md` |
 | `src/actions/soul_ring.rs` | `docs/features/keyboard-interception.md`, `docs/features/soul-ring.md` |
 | `src/input/keyboard.rs` | `docs/features/keyboard-interception.md` |
-| `src/config/settings.rs` | `docs/reference/configuration.md` plus the affected hero/feature doc |
+| `src/config/settings.rs` | `docs/reference/configuration.md`, the affected hero/feature doc, and the matching React UI page when the setting is operator-facing |
 | `src/state/app_state.rs` | `docs/architecture/state-and-dispatch.md` |
 | `src/gsi/handler.rs` or `src/gsi/server.rs` | `docs/architecture/runtime-flow.md`, `docs/reference/gsi-schema-and-usage.md` |
 | `src/main.rs` | `docs/architecture/overview.md`, `docs/architecture/runtime-flow.md`, `docs/features/updates.md` |
@@ -197,7 +197,7 @@ Supported heroes: **Broodmother, Huskar, Largo, Legion Commander, Meepo, Outworl
 ## Documentation Maintenance Contract
 
 1. **Every hero script needs a paired doc.** All hero docs live under `docs/heroes/`. Use `docs/heroes/hero-template.md` when creating a new hero doc. When you add or change `src/actions/heroes/<hero>.rs`, update the matching hero doc.
-2. **Config changes require doc updates.** When you add a field to any `*Config` struct in `src/config/settings.rs`, add it to the configuration table in the relevant feature or hero doc.
+2. **Config changes require doc updates and a UI decision.** When you add a field to any `*Config` struct in `src/config/settings.rs`, add it to the configuration table in the relevant feature or hero doc and explicitly check whether it should be exposed in the React UI (`src-ui/`). If it is operator-facing, wire it into the appropriate page; if it stays hidden, make that choice explicit in your task summary or review notes.
 3. **File-index is the authoritative map.** After adding a new source file, add it to `docs/reference/file-index.md`.
 4. **Keep `AGENTS.md` navigation current.** If you add a new workflow or feature doc, add a row to the "If You Want To…" table above.
 

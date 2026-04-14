@@ -106,6 +106,11 @@ export const mockConfig: Settings = {
     use_in_danger: true, hp_threshold: 50,
     allowed_items: ["essence_ring", "minotaur_horn", "metamorphic_mandible"],
   },
+  phase_boots_automation: {
+    enabled: true,
+    minimum_distance_units: 100,
+    excluded_heroes: [],
+  },
   soul_ring: {
     enabled: true, min_mana_percent: 100, min_health_percent: 20,
     delay_before_ability_ms: 30, trigger_cooldown_ms: 10,

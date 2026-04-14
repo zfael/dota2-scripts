@@ -14,7 +14,7 @@
 | `src/actions/dispel.rs` | Immediate Manta/Lotus reaction to silence |
 | `src/actions/auto_items.rs` | Cached GSI item/ability state and Space+right-click item usage; not the HP-healing loop, but part of the shared item automation surface |
 | `src/config/settings.rs` | `CommonConfig`, shared `ArmletAutomationConfig`, hero armlet overrides, `DangerDetectionConfig`, `NeutralItemConfig` defaults |
-| `config/config.toml` | Checked-in values for `[common]`, `[armlet]`, `[danger_detection]`, `[neutral_items]`, and hero armlet overrides |
+| `config/config.toml` | Checked-in values for `[common]`, `[armlet]`, `[danger_detection]`, `[neutral_items]`, `[mana_automation]`, `[phase_boots_automation]`, and hero armlet overrides |
 
 ---
 
@@ -251,6 +251,21 @@ The feature is controlled by `[mana_automation]`. Huskar is excluded by default.
 
 ---
 
+## Movement automation
+
+Shared movement automation is dispatcher-owned and runs before hero routing.
+
+Current movement-supported items:
+
+- `item_phase_boots`
+
+The feature is controlled by `[phase_boots_automation]`. It only fires when
+`hero.xpos` / `hero.ypos` move by at least
+`phase_boots_automation.minimum_distance_units` between GSI events. Small
+position jitter and stationary farming should stay below that threshold.
+
+---
+
 ## Silence dispel
 
 Owned by `src/actions/dispel.rs::check_and_dispel_silence()`.
@@ -306,6 +321,7 @@ If you change how shared item availability is read from GSI, check both:
 | `[heroes.<hero>.armlet]` | optional per-hero `enabled`, `toggle_threshold`, `predictive_offset`, `toggle_cooldown_ms` overrides |
 | `[neutral_items]` | `enabled`, `self_cast_key`, `use_in_danger`, `hp_threshold`, `allowed_items` |
 | `[mana_automation]` | `enabled`, `mana_threshold_percent`, `excluded_heroes`, `allowed_items` |
+| `[phase_boots_automation]` | `enabled`, `minimum_distance_units`, `excluded_heroes` |
 
 ---
 

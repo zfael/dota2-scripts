@@ -471,6 +471,16 @@ pub struct ManaAutomationConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PhaseBootsAutomationConfig {
+    #[serde(default = "default_phase_boots_automation_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_phase_boots_minimum_distance_units")]
+    pub minimum_distance_units: u32,
+    #[serde(default = "default_phase_boots_excluded_heroes")]
+    pub excluded_heroes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SoulRingConfig {
     #[serde(default = "default_soul_ring_enabled")]
     pub enabled: bool,
@@ -705,6 +715,8 @@ pub struct Settings {
     pub neutral_items: NeutralItemConfig,
     #[serde(default)]
     pub mana_automation: ManaAutomationConfig,
+    #[serde(default)]
+    pub phase_boots_automation: PhaseBootsAutomationConfig,
     #[serde(default)]
     pub soul_ring: SoulRingConfig,
     #[serde(default)]
@@ -1114,6 +1126,15 @@ fn default_mana_automation_allowed_items() -> Vec<String> {
         "item_mana_draught".to_string(),
     ]
 }
+fn default_phase_boots_automation_enabled() -> bool {
+    true
+}
+fn default_phase_boots_minimum_distance_units() -> u32 {
+    100
+}
+fn default_phase_boots_excluded_heroes() -> Vec<String> {
+    Vec::new()
+}
 fn default_gsi_logging_enabled() -> bool {
     false
 }
@@ -1389,7 +1410,8 @@ impl Default for MeepoFarmAssistConfig {
             minimum_health_percent: default_meepo_farm_assist_minimum_health_percent(),
             right_click_after_poof: default_meepo_farm_assist_right_click_after_poof(),
             suspend_on_danger: default_meepo_farm_assist_suspend_on_danger(),
-            suspend_after_manual_combo_ms: default_meepo_farm_assist_suspend_after_manual_combo_ms(),
+            suspend_after_manual_combo_ms: default_meepo_farm_assist_suspend_after_manual_combo_ms(
+            ),
             poof_press_count: default_meepo_farm_assist_poof_press_count(),
             poof_press_interval_ms: default_meepo_farm_assist_poof_press_interval_ms(),
         }
@@ -1485,6 +1507,16 @@ impl Default for ManaAutomationConfig {
     }
 }
 
+impl Default for PhaseBootsAutomationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_phase_boots_automation_enabled(),
+            minimum_distance_units: default_phase_boots_minimum_distance_units(),
+            excluded_heroes: default_phase_boots_excluded_heroes(),
+        }
+    }
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -1497,6 +1529,7 @@ impl Default for Settings {
             danger_detection: DangerDetectionConfig::default(),
             neutral_items: NeutralItemConfig::default(),
             mana_automation: ManaAutomationConfig::default(),
+            phase_boots_automation: PhaseBootsAutomationConfig::default(),
             soul_ring: SoulRingConfig::default(),
             gsi_logging: GsiLoggingConfig::default(),
             updates: UpdateConfig::default(),
@@ -1512,7 +1545,10 @@ impl Settings {
         let paths = match ConfigPaths::detect() {
             Ok(paths) => paths,
             Err(e) => {
-                warn!("Failed to resolve config paths: {}. Using default settings.", e);
+                warn!(
+                    "Failed to resolve config paths: {}. Using default settings.",
+                    e
+                );
                 return Settings::default();
             }
         };
@@ -1520,7 +1556,10 @@ impl Settings {
         let config_path = match bootstrap_live_config(&paths, EMBEDDED_CONFIG_TEMPLATE) {
             Ok(path) => path,
             Err(e) => {
-                warn!("Failed to bootstrap live config: {}. Using default settings.", e);
+                warn!(
+                    "Failed to bootstrap live config: {}. Using default settings.",
+                    e
+                );
                 return Settings::default();
             }
         };
@@ -1680,9 +1719,8 @@ impl Settings {
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
         let paths = ConfigPaths::detect().map_err(std::io::Error::other)?;
         let desired_contents = toml::to_string_pretty(self)?;
-        let config_path =
-            persist_live_config(&paths, &desired_contents, EMBEDDED_CONFIG_TEMPLATE)
-                .map_err(std::io::Error::other)?;
+        let config_path = persist_live_config(&paths, &desired_contents, EMBEDDED_CONFIG_TEMPLATE)
+            .map_err(std::io::Error::other)?;
         info!("Settings saved to {}", config_path.display());
         Ok(())
     }
@@ -1736,7 +1774,11 @@ mod tests {
         assert!(settings.heroes.meepo.farm_assist.right_click_after_poof);
         assert!(settings.heroes.meepo.farm_assist.suspend_on_danger);
         assert_eq!(
-            settings.heroes.meepo.farm_assist.suspend_after_manual_combo_ms,
+            settings
+                .heroes
+                .meepo
+                .farm_assist
+                .suspend_after_manual_combo_ms,
             2500
         );
         assert_eq!(settings.heroes.meepo.farm_assist.poof_press_count, 1);
@@ -1762,5 +1804,14 @@ mod tests {
 
         assert_eq!(settings.common.lane_phase_duration_seconds, 480);
         assert_eq!(settings.common.lane_phase_healing_threshold, 12);
+    }
+
+    #[test]
+    fn phase_boots_automation_defaults_are_exposed_through_settings() {
+        let settings = Settings::default();
+
+        assert!(settings.phase_boots_automation.enabled);
+        assert_eq!(settings.phase_boots_automation.minimum_distance_units, 100);
+        assert!(settings.phase_boots_automation.excluded_heroes.is_empty());
     }
 }
