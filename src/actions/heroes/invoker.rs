@@ -310,7 +310,8 @@ fn run_primary_combo(
         if !plan.prepare_keys.is_empty() {
             thread::sleep(Duration::from_millis(50));
 
-            // Update slot tracking: invoking moves the new spell to secondary
+            // Update slot tracking: invoke shifts secondary to primary, new spell to secondary
+            current_active_spells[0] = current_active_spells[1].clone();
             current_active_spells[1] = Some(spell_name.to_string());
         }
 
@@ -601,9 +602,9 @@ mod tests {
         // QE burst sequence: [sun_strike, meteor, blast]
         // Expected behavior:
         // 1. Sun Strike: not active, must invoke → moves to secondary slot
-        // 2. Meteor: already active in primary slot → press primary key
-        // 3. Blast: WAS in secondary slot initially, but after Sun Strike invoke,
-        //    the secondary slot now has Sun Strike, so Blast needs re-invoking
+        //    After invoke: slots become [blast, sun_strike] (old secondary shifts to primary)
+        // 2. Meteor: no longer in any slot after Sun Strike invoke → must re-invoke
+        // 3. Blast: now in primary slot (shifted during Sun Strike invoke) → press primary key
 
         // Plan Sun Strike (first spell)
         let sun_strike_plan = plan_single_spell("invoker_sun_strike", &state, config)
@@ -611,8 +612,9 @@ mod tests {
         assert!(!sun_strike_plan.prepare_keys.is_empty(), "sun strike should require invoke");
         assert_eq!(sun_strike_plan.cast_key, config.spell_slot_secondary_key);
 
-        // Simulate the invoke effect: Sun Strike moves to secondary slot
+        // Simulate the invoke effect: old secondary shifts to primary, Sun Strike to secondary
         let mut current_active_spells = state.active_spells.clone();
+        current_active_spells[0] = current_active_spells[1].clone();
         current_active_spells[1] = Some("invoker_sun_strike".to_string());
 
         // Plan Meteor (second spell) with updated state
@@ -629,18 +631,18 @@ mod tests {
         };
         let meteor_plan = plan_single_spell("invoker_chaos_meteor", &state_after_sun_strike, config)
             .expect("meteor should be plannable");
-        assert!(meteor_plan.prepare_keys.is_empty(), "meteor should already be active");
-        assert_eq!(meteor_plan.cast_key, config.spell_slot_primary_key, "meteor should use primary slot");
+        assert!(!meteor_plan.prepare_keys.is_empty(), "meteor should require invoke after being displaced");
+        assert_eq!(meteor_plan.cast_key, config.spell_slot_secondary_key);
 
         // Plan Blast (third spell) with updated state
-        // CRITICAL: Blast is no longer in secondary slot (Sun Strike displaced it)
+        // CRITICAL: Blast is now in primary slot (shifted from secondary during Sun Strike invoke)
         let blast_plan = plan_single_spell("invoker_deafening_blast", &state_after_sun_strike, config)
             .expect("blast should be plannable");
-        assert!(!blast_plan.prepare_keys.is_empty(), "blast should require invoke after being displaced");
-        assert_eq!(blast_plan.cast_key, config.spell_slot_secondary_key);
+        assert!(blast_plan.prepare_keys.is_empty(), "blast should already be active in primary");
+        assert_eq!(blast_plan.cast_key, config.spell_slot_primary_key, "blast should use primary slot");
 
-        // This test verifies the fix: without slot tracking, blast_plan would incorrectly
-        // think Blast is still in the secondary slot and press F without invoking,
-        // casting Sun Strike instead.
+        // This test verifies the fix: without slot tracking, meteor_plan would incorrectly
+        // think Meteor is still in the primary slot and press D without invoking,
+        // casting Blast instead.
     }
 }
