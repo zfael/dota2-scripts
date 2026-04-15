@@ -69,6 +69,7 @@
 | `src/actions/heroes/traits.rs` | `HeroScript` trait contract | `docs/architecture/state-and-dispatch.md`, `docs/workflows/adding-a-hero.md` |
 | `src/actions/heroes/broodmother.rs` | Broodmother spider micro and auto-items/abilities | `docs/heroes/broodmother.md` |
 | `src/actions/heroes/huskar.rs` | Huskar Berserker Blood cleanse plus shared armlet-survivability wiring | `docs/heroes/huskar.md` |
+| `src/actions/heroes/invoker.rs` | Invoker plumbing-only script (Task 1): hero/config wiring, survivability, and placeholder standalone trigger | `docs/heroes/invoker.md` |
 | `src/actions/heroes/largo.rs` | Largo ultimate state, beat timing, manual song hooks | `docs/heroes/largo.md` |
 | `src/actions/heroes/legion_commander.rs` | Legion Commander combo automation | `docs/heroes/legion_commander.md` |
 | `src/actions/heroes/meepo_macro.rs` | Meepo farm-assist macro state, gating, and pulse decisions | `docs/heroes/meepo.md` |
@@ -187,10 +188,16 @@
 | `docs/features/soul-ring.md` | Soul Ring state and trigger rules |
 | `docs/features/survivability.md` | Shared healing, dispel, neutral items |
 | `docs/features/updates.md` | Update check/apply/restart flow |
+| `docs/heroes/broodmother.md` | Broodmother automation doc |
+| `docs/heroes/huskar.md` | Huskar automation doc |
+| `docs/heroes/invoker.md` | Invoker automation doc (Task 1 plumbing-only state) |
+| `docs/heroes/largo.md` | Largo automation doc |
+| `docs/heroes/legion_commander.md` | Legion Commander automation doc |
 | `docs/heroes/meepo.md` | Meepo automation doc |
-| `docs/heroes/hero-template.md` | Template for new hero docs |
-| `docs/heroes/*.md` | Hero-specific automation docs |
 | `docs/heroes/outworld_destroyer.md` | Outworld Destroyer automation doc |
+| `docs/heroes/shadow_fiend.md` | Shadow Fiend automation doc |
+| `docs/heroes/tiny.md` | Tiny automation doc |
+| `docs/heroes/hero-template.md` | Template for new hero docs |
 | `docs/reference/configuration.md` | Section-by-section config reference and fallback defaults |
 | `docs/reference/gsi-schema-and-usage.md` | Consumed GSI fields, event flow, debug pointers |
 | `docs/reference/file-index.md` | This repo map |
