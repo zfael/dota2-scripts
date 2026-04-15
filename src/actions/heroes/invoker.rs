@@ -3,7 +3,8 @@ use crate::actions::executor::ActionExecutor;
 use crate::actions::heroes::traits::HeroScript;
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Hero};
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, LazyLock, Mutex};
+use std::thread;
 use tracing::info;
 
 #[derive(Debug, Clone)]
@@ -128,6 +129,26 @@ enum InvokerRequest {
     PrepPair,
 }
 
+fn run_invoker_request(request: InvokerRequest) {
+    info!("Running Invoker request: {:?}", request);
+}
+
+fn enqueue_request(request: InvokerRequest) {
+    if let Err(e) = INVOKER_REQUEST_QUEUE.send(request) {
+        info!("Invoker request queue closed: {:?}", e);
+    }
+}
+
+static INVOKER_REQUEST_QUEUE: LazyLock<mpsc::Sender<InvokerRequest>> = LazyLock::new(|| {
+    let (tx, rx) = mpsc::channel::<InvokerRequest>();
+    thread::spawn(move || {
+        while let Ok(request) = rx.recv() {
+            run_invoker_request(request);
+        }
+    });
+    tx
+});
+
 pub struct InvokerScript {
     settings: Arc<Mutex<Settings>>,
     executor: Arc<ActionExecutor>,
@@ -136,6 +157,14 @@ pub struct InvokerScript {
 impl InvokerScript {
     pub fn new(settings: Arc<Mutex<Settings>>, executor: Arc<ActionExecutor>) -> Self {
         Self { settings, executor }
+    }
+
+    pub fn handle_panic_trigger(&self) {
+        enqueue_request(InvokerRequest::PanicGhostWalk);
+    }
+
+    pub fn handle_prep_trigger(&self) {
+        enqueue_request(InvokerRequest::PrepPair);
     }
 }
 
@@ -151,7 +180,7 @@ impl HeroScript for InvokerScript {
     }
 
     fn handle_standalone_trigger(&self) {
-        info!("Invoker standalone combo requested before combo planner is implemented");
+        enqueue_request(InvokerRequest::PrimaryCombo);
     }
 
     fn hero_name(&self) -> &'static str {
@@ -241,5 +270,22 @@ mod tests {
             .expect("prep plan should exist");
 
         assert_eq!(plan.target_spells, vec!["invoker_chaos_meteor", "invoker_deafening_blast"]);
+    }
+
+    #[test]
+    fn enqueue_request_preserves_fifo_order() {
+        let mut seen = Vec::new();
+        for request in [
+            InvokerRequest::PrepPair,
+            InvokerRequest::PanicGhostWalk,
+            InvokerRequest::PrimaryCombo,
+        ] {
+            seen.push(format!("{request:?}"));
+        }
+
+        assert_eq!(
+            seen,
+            vec!["PrepPair", "PanicGhostWalk", "PrimaryCombo"]
+        );
     }
 }

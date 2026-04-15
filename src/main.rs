@@ -250,6 +250,12 @@ async fn main() {
                         }
                     }
                 }
+                input::keyboard::HotkeyEvent::InvokerPanic => {
+                    dispatcher_clone2.dispatch_invoker_panic();
+                }
+                input::keyboard::HotkeyEvent::InvokerPrep => {
+                    dispatcher_clone2.dispatch_invoker_prep();
+                }
             }
         }
     });

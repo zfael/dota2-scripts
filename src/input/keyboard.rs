@@ -18,6 +18,7 @@ use crate::config::{AutoAbilityConfig, Settings};
 use crate::input::simulation::SIMULATING_KEYS;
 use crate::state::app_state::AppState;
 
+#[derive(Debug, PartialEq)]
 pub enum HotkeyEvent {
     ComboTrigger,
     MeepoFarmToggle,
@@ -26,6 +27,8 @@ pub enum HotkeyEvent {
     LargoW,
     LargoE,
     LargoR,
+    InvokerPanic,
+    InvokerPrep,
 }
 
 pub struct KeyboardListenerConfig {
@@ -565,6 +568,8 @@ pub struct KeyboardSnapshot {
     pub broodmother: BroodmotherKeyboardSnapshot,
     /// Static Soul Ring keyboard config (thresholds, key sets, delays).
     pub soul_ring: SoulRingKeyboardConfig,
+    pub invoker_panic_key: Option<Key>,
+    pub invoker_prep_key: Option<Key>,
 }
 
 #[derive(Debug, Clone)]
@@ -727,6 +732,45 @@ impl KeyboardSnapshot {
                 ],
             },
             soul_ring: SoulRingKeyboardConfig::from_settings(settings),
+            invoker_panic_key: parse_key(&settings.heroes.invoker.panic_key),
+            invoker_prep_key: parse_key(&settings.heroes.invoker.prep_key),
+        }
+    }
+}
+
+impl Default for KeyboardSnapshot {
+    fn default() -> Self {
+        Self {
+            trigger_key: None,
+            meepo_farm_toggle_key: None,
+            armlet_roshan_toggle_key: None,
+            sf_enabled: false,
+            od_enabled: false,
+            shadow_fiend: ShadowFiendKeyboardSnapshot {
+                raze_intercept_enabled: false,
+                auto_bkb_on_ultimate: false,
+                raze_delay_ms: 0,
+                auto_d_on_ultimate: false,
+            },
+            outworld_destroyer: OutworldDestroyerKeyboardSnapshot {
+                ultimate_intercept_enabled: false,
+                astral_self_cast_enabled: false,
+                astral_self_cast_key: None,
+                combo_config: build_keyboard_combo_config(&Settings::default()),
+            },
+            broodmother: BroodmotherKeyboardSnapshot {
+                spider_micro_enabled: false,
+                auto_items_enabled: false,
+                spider_micro_key: None,
+                hero_reselect_key: None,
+                auto_items: vec![],
+                auto_abilities: vec![],
+                abilities_first: false,
+                slot_keys: ['a', 's', 'd', 'f', 'g', 'h'],
+            },
+            soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
+            invoker_panic_key: None,
+            invoker_prep_key: None,
         }
     }
 }
@@ -775,6 +819,20 @@ fn plan_global_hotkey_event(key: Key, snapshot: &KeyboardSnapshot) -> Option<Hot
         return Some(HotkeyEvent::ArmletRoshanToggle);
     }
 
+    if snapshot
+        .invoker_panic_key
+        .is_some_and(|panic_key| key == panic_key)
+    {
+        return Some(HotkeyEvent::InvokerPanic);
+    }
+
+    if snapshot
+        .invoker_prep_key
+        .is_some_and(|prep_key| key == prep_key)
+    {
+        return Some(HotkeyEvent::InvokerPrep);
+    }
+
     if snapshot.trigger_key.is_some_and(|trigger_key| key == trigger_key) {
         return Some(HotkeyEvent::ComboTrigger);
     }
@@ -821,6 +879,8 @@ mod tests {
                 slot_keys: ['a', 's', 'd', 'f', 'g', 'h'],
             },
             soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
+            invoker_panic_key: None,
+            invoker_prep_key: None,
         }
     }
 
@@ -1138,5 +1198,27 @@ mod tests {
         });
 
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn plan_global_hotkey_event_returns_invoker_panic() {
+        let mut snapshot = KeyboardSnapshot::default();
+        snapshot.invoker_panic_key = Some(parse_key_string("End").unwrap());
+
+        assert_eq!(
+            plan_global_hotkey_event(rdev::Key::End, &snapshot),
+            Some(HotkeyEvent::InvokerPanic)
+        );
+    }
+
+    #[test]
+    fn plan_global_hotkey_event_returns_invoker_prep() {
+        let mut snapshot = KeyboardSnapshot::default();
+        snapshot.invoker_prep_key = Some(parse_key_string("PageUp").unwrap());
+
+        assert_eq!(
+            plan_global_hotkey_event(rdev::Key::PageUp, &snapshot),
+            Some(HotkeyEvent::InvokerPrep)
+        );
     }
 }
