@@ -260,9 +260,12 @@ Current movement-supported items:
 - `item_phase_boots`
 
 The feature is controlled by `[phase_boots_automation]`. It only fires when
-`hero.xpos` / `hero.ypos` move by at least
-`phase_boots_automation.minimum_distance_units` between GSI events. Small
-position jitter and stationary farming should stay below that threshold.
+`hero.xpos` / `hero.ypos` show the hero has walked at least
+`phase_boots_automation.minimum_distance_units` during the current movement
+segment. The runtime tracks distance from the start of the current walk instead
+of relying on a single GSI sample, then resets once the hero settles in place
+again. Small position jitter and stationary farming should stay below that
+threshold.
 
 ---
 

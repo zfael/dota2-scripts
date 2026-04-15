@@ -209,7 +209,7 @@ mod tests {
     use std::any::Any;
     use std::collections::HashMap;
     use std::sync::mpsc;
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Mutex, OnceLock};
     use std::thread;
     use std::time::Duration;
 
@@ -267,6 +267,11 @@ mod tests {
             executor: executor.clone(),
             survivability: SurvivabilityActions::new(settings, executor),
         }
+    }
+
+    fn shared_pre_hook_test_lock() -> &'static Mutex<()> {
+        static TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        TEST_LOCK.get_or_init(|| Mutex::new(()))
     }
 
     #[test]
@@ -382,6 +387,7 @@ mod tests {
 
     #[test]
     fn dispatch_gsi_event_runs_low_mana_pre_hook_for_custom_hero_scripts() {
+        let _guard = shared_pre_hook_test_lock().lock().unwrap();
         reset_low_mana_check_call_count_for_tests();
 
         let settings = Arc::new(Mutex::new(Settings::default()));
@@ -488,6 +494,7 @@ mod tests {
 
     #[test]
     fn dispatch_gsi_event_runs_movement_pre_hook_for_custom_hero_scripts() {
+        let _guard = shared_pre_hook_test_lock().lock().unwrap();
         reset_movement_check_call_count_for_tests();
 
         let settings = Arc::new(Mutex::new(Settings::default()));

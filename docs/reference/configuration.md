@@ -152,7 +152,7 @@ See `docs/features/survivability.md`.
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |
 |---|---:|---:|---|
 | `enabled` | `true` | `true` | Master switch for shared walking-triggered Phase Boots automation. |
-| `minimum_distance_units` | `100` | `100` | Minimum between-sample travel distance required before the runtime treats the hero as truly walking. |
+| `minimum_distance_units` | `100` | `100` | Minimum distance the hero must walk during the current movement segment before Phase Boots fires. |
 | `excluded_heroes` | `[]` | `[]` | Exact internal hero names skipped by Phase Boots movement automation. |
 
 See `docs/features/survivability.md`.

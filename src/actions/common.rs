@@ -16,6 +16,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 const SELF_CAST_DELAY_MS: u64 = 50;
 const ITEM_AUTOMATION_LOCKOUT_MS: u64 = 120;
+const MOVEMENT_IDLE_TOLERANCE_UNITS: f64 = 5.0;
+const MOVEMENT_IDLE_RESET_SAMPLES: u8 = 2;
 
 #[cfg(test)]
 lazy_static::lazy_static! {
@@ -255,6 +257,65 @@ fn movement_distance_units(
     (dx * dx + dy * dy).sqrt()
 }
 
+fn new_movement_snapshot(event: &GsiWebhookEvent) -> MovementSnapshot {
+    MovementSnapshot {
+        hero_name: event.hero.name.clone(),
+        alive: event.hero.alive,
+        anchor_xpos: event.hero.xpos,
+        anchor_ypos: event.hero.ypos,
+        last_xpos: event.hero.xpos,
+        last_ypos: event.hero.ypos,
+        idle_samples: 0,
+    }
+}
+
+fn advance_movement_snapshot(
+    previous: Option<MovementSnapshot>,
+    event: &GsiWebhookEvent,
+) -> MovementSnapshot {
+    let Some(previous) = previous else {
+        return new_movement_snapshot(event);
+    };
+
+    if !previous.alive || previous.hero_name != event.hero.name {
+        return new_movement_snapshot(event);
+    }
+
+    let step_distance = movement_distance_units(
+        previous.last_xpos,
+        previous.last_ypos,
+        event.hero.xpos,
+        event.hero.ypos,
+    );
+
+    if step_distance <= MOVEMENT_IDLE_TOLERANCE_UNITS {
+        let idle_samples = previous.idle_samples.saturating_add(1);
+        if idle_samples >= MOVEMENT_IDLE_RESET_SAMPLES {
+            return new_movement_snapshot(event);
+        }
+
+        return MovementSnapshot {
+            hero_name: previous.hero_name,
+            alive: event.hero.alive,
+            anchor_xpos: previous.anchor_xpos,
+            anchor_ypos: previous.anchor_ypos,
+            last_xpos: event.hero.xpos,
+            last_ypos: event.hero.ypos,
+            idle_samples,
+        };
+    }
+
+    MovementSnapshot {
+        hero_name: previous.hero_name,
+        alive: event.hero.alive,
+        anchor_xpos: previous.anchor_xpos,
+        anchor_ypos: previous.anchor_ypos,
+        last_xpos: event.hero.xpos,
+        last_ypos: event.hero.ypos,
+        idle_samples: 0,
+    }
+}
+
 fn eligible_low_mana_item(
     event: &GsiWebhookEvent,
     settings: &Settings,
@@ -316,14 +377,15 @@ fn eligible_movement_item(
     }
 
     let previous = read_movement_snapshot()?;
-    if !previous.alive || previous.hero_name != event.hero.name {
+    let movement = advance_movement_snapshot(Some(previous), event);
+    if !movement.alive || movement.hero_name != event.hero.name {
         return None;
     }
     if movement_distance_units(
-        previous.xpos,
-        previous.ypos,
-        event.hero.xpos,
-        event.hero.ypos,
+        movement.anchor_xpos,
+        movement.anchor_ypos,
+        movement.last_xpos,
+        movement.last_ypos,
     ) < settings.phase_boots_automation.minimum_distance_units as f64
     {
         return None;
@@ -687,20 +749,31 @@ impl SurvivabilityActions {
         }
 
         let settings = self.settings.lock().unwrap();
-        let decision = eligible_movement_item(event, &settings);
-        let current_snapshot = MovementSnapshot {
-            hero_name: event.hero.name.clone(),
-            alive: event.hero.alive,
-            xpos: event.hero.xpos,
-            ypos: event.hero.ypos,
-        };
 
         if !event.hero.is_alive() {
             clear_movement_snapshot();
             return;
         }
 
-        write_movement_snapshot(current_snapshot);
+        let current_snapshot = advance_movement_snapshot(read_movement_snapshot(), event);
+        let decision = if !settings.phase_boots_automation.enabled
+            || hero_is_excluded(
+                &event.hero.name,
+                &settings.phase_boots_automation.excluded_heroes,
+            )
+            || movement_distance_units(
+                current_snapshot.anchor_xpos,
+                current_snapshot.anchor_ypos,
+                current_snapshot.last_xpos,
+                current_snapshot.last_ypos,
+            ) < settings.phase_boots_automation.minimum_distance_units as f64
+        {
+            None
+        } else {
+            eligible_movement_item(event, &settings)
+        };
+
+        write_movement_snapshot(current_snapshot.clone());
 
         let Some((spec, item_key)) = decision else {
             return;
@@ -717,6 +790,7 @@ impl SurvivabilityActions {
             item_key,
             settings.neutral_items.self_cast_key,
         );
+        write_movement_snapshot(new_movement_snapshot(event));
         drop(settings);
 
         info!("🏃 Using movement automation item: {}", spec.item_name);
@@ -941,7 +1015,7 @@ mod tests {
 
 #[cfg(test)]
 mod snapshot_tests {
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Mutex, OnceLock};
 
     use crate::actions::executor::ActionExecutor;
     use crate::actions::item_automation::{
@@ -956,6 +1030,11 @@ mod snapshot_tests {
         eligible_movement_item, healing_threshold_for_event, should_consider_defensive_items,
         should_consider_neutral_item, SurvivabilityActions,
     };
+
+    fn shared_state_test_lock() -> &'static Mutex<()> {
+        static TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        TEST_LOCK.get_or_init(|| Mutex::new(()))
+    }
 
     fn empty_ability() -> Ability {
         Ability {
@@ -1210,6 +1289,7 @@ mod snapshot_tests {
 
     #[test]
     fn danger_neutral_gate_respects_global_lockout() {
+        let _guard = shared_state_test_lock().lock().unwrap();
         reset_global_lockouts_for_tests();
 
         assert!(acquire_item_trigger_lockout(
@@ -1307,6 +1387,7 @@ mod snapshot_tests {
 
     #[test]
     fn movement_gate_requires_previous_sample_before_phase_boots_can_trigger() {
+        let _guard = shared_state_test_lock().lock().unwrap();
         reset_global_lockouts_for_tests();
         replace_movement_snapshot_for_tests(None);
 
@@ -1332,6 +1413,7 @@ mod snapshot_tests {
 
     #[test]
     fn movement_gate_rejects_sub_threshold_motion_and_accepts_real_travel() {
+        let _guard = shared_state_test_lock().lock().unwrap();
         reset_global_lockouts_for_tests();
 
         let mut settings = Settings::default();
@@ -1348,8 +1430,11 @@ mod snapshot_tests {
         replace_movement_snapshot_for_tests(Some(MovementSnapshot {
             hero_name: "npc_dota_hero_axe".to_string(),
             alive: true,
-            xpos: 1000,
-            ypos: 1000,
+            anchor_xpos: 1000,
+            anchor_ypos: 1000,
+            last_xpos: 1000,
+            last_ypos: 1000,
+            idle_samples: 0,
         }));
 
         let mut jitter_hero = hero_with_health(100, 100);
@@ -1371,7 +1456,106 @@ mod snapshot_tests {
     }
 
     #[test]
+    fn movement_gate_can_cross_threshold_across_multiple_walking_samples() {
+        let _guard = shared_state_test_lock().lock().unwrap();
+        reset_global_lockouts_for_tests();
+        replace_movement_snapshot_for_tests(None);
+
+        let mut settings = Settings::default();
+        settings.phase_boots_automation.enabled = true;
+        settings.phase_boots_automation.minimum_distance_units = 90;
+
+        let mut items = empty_items();
+        items.slot0 = Item {
+            name: "item_phase_boots".to_string(),
+            can_cast: Some(true),
+            ..Default::default()
+        };
+
+        let actions = test_actions(settings.clone());
+
+        let mut start_hero = hero_with_health(100, 100);
+        start_hero.name = "npc_dota_hero_axe".to_string();
+        start_hero.xpos = 1000;
+        start_hero.ypos = 1000;
+        actions.check_and_use_movement_items(&base_event(start_hero, items.clone()));
+
+        let mut mid_hero = hero_with_health(100, 100);
+        mid_hero.name = "npc_dota_hero_axe".to_string();
+        mid_hero.xpos = 1045;
+        mid_hero.ypos = 1000;
+        actions.check_and_use_movement_items(&base_event(mid_hero, items.clone()));
+
+        let mut end_hero = hero_with_health(100, 100);
+        end_hero.name = "npc_dota_hero_axe".to_string();
+        end_hero.xpos = 1090;
+        end_hero.ypos = 1000;
+        let end_event = base_event(end_hero, items);
+
+        let (spec, slot_key) = eligible_movement_item(&end_event, &settings).unwrap();
+
+        assert_eq!(spec.item_name, "item_phase_boots");
+        assert_eq!(slot_key, settings.keybindings.slot0);
+    }
+
+    #[test]
+    fn movement_gate_resets_after_idle_before_counting_a_new_walk() {
+        let _guard = shared_state_test_lock().lock().unwrap();
+        reset_global_lockouts_for_tests();
+        replace_movement_snapshot_for_tests(None);
+
+        let mut settings = Settings::default();
+        settings.phase_boots_automation.enabled = true;
+        settings.phase_boots_automation.minimum_distance_units = 90;
+
+        let mut items = empty_items();
+        items.slot0 = Item {
+            name: "item_phase_boots".to_string(),
+            can_cast: Some(true),
+            ..Default::default()
+        };
+
+        let actions = test_actions(settings.clone());
+
+        let mut start_hero = hero_with_health(100, 100);
+        start_hero.name = "npc_dota_hero_axe".to_string();
+        start_hero.xpos = 1000;
+        start_hero.ypos = 1000;
+        actions.check_and_use_movement_items(&base_event(start_hero, items.clone()));
+
+        let mut short_walk_hero = hero_with_health(100, 100);
+        short_walk_hero.name = "npc_dota_hero_axe".to_string();
+        short_walk_hero.xpos = 1045;
+        short_walk_hero.ypos = 1000;
+        actions.check_and_use_movement_items(&base_event(short_walk_hero.clone(), items.clone()));
+        actions.check_and_use_movement_items(&base_event(short_walk_hero.clone(), items.clone()));
+        actions.check_and_use_movement_items(&base_event(short_walk_hero, items.clone()));
+
+        assert_eq!(
+            read_movement_snapshot(),
+            Some(MovementSnapshot {
+                hero_name: "npc_dota_hero_axe".to_string(),
+                alive: true,
+                anchor_xpos: 1045,
+                anchor_ypos: 1000,
+                last_xpos: 1045,
+                last_ypos: 1000,
+                idle_samples: 0,
+            })
+        );
+
+        let mut second_walk_hero = hero_with_health(100, 100);
+        second_walk_hero.name = "npc_dota_hero_axe".to_string();
+        second_walk_hero.xpos = 1090;
+        second_walk_hero.ypos = 1000;
+        let second_walk_event = base_event(second_walk_hero, items);
+
+        assert!(eligible_movement_item(&second_walk_event, &settings).is_none());
+    }
+
+    #[test]
     fn movement_gate_respects_phase_boots_excluded_heroes() {
+        let _guard = shared_state_test_lock().lock().unwrap();
         let mut settings = Settings::default();
         settings.phase_boots_automation.enabled = true;
         settings.phase_boots_automation.excluded_heroes = vec!["npc_dota_hero_huskar".to_string()];
@@ -1386,8 +1570,11 @@ mod snapshot_tests {
         replace_movement_snapshot_for_tests(Some(MovementSnapshot {
             hero_name: "npc_dota_hero_huskar".to_string(),
             alive: true,
-            xpos: 1000,
-            ypos: 1000,
+            anchor_xpos: 1000,
+            anchor_ypos: 1000,
+            last_xpos: 1000,
+            last_ypos: 1000,
+            idle_samples: 0,
         }));
 
         let mut hero = hero_with_health(100, 100);
@@ -1401,6 +1588,7 @@ mod snapshot_tests {
 
     #[test]
     fn movement_gate_skips_non_automation_items_before_phase_boots() {
+        let _guard = shared_state_test_lock().lock().unwrap();
         let mut settings = Settings::default();
         settings.phase_boots_automation.enabled = true;
         settings.phase_boots_automation.minimum_distance_units = 100;
@@ -1420,8 +1608,11 @@ mod snapshot_tests {
         replace_movement_snapshot_for_tests(Some(MovementSnapshot {
             hero_name: "npc_dota_hero_axe".to_string(),
             alive: true,
-            xpos: 1000,
-            ypos: 1000,
+            anchor_xpos: 1000,
+            anchor_ypos: 1000,
+            last_xpos: 1000,
+            last_ypos: 1000,
+            idle_samples: 0,
         }));
 
         let mut hero = hero_with_health(100, 100);
@@ -1438,6 +1629,7 @@ mod snapshot_tests {
 
     #[test]
     fn movement_check_records_first_sample_for_future_events() {
+        let _guard = shared_state_test_lock().lock().unwrap();
         replace_movement_snapshot_for_tests(None);
 
         let actions = test_actions(Settings::default());
@@ -1453,19 +1645,26 @@ mod snapshot_tests {
             Some(MovementSnapshot {
                 hero_name: "npc_dota_hero_axe".to_string(),
                 alive: true,
-                xpos: 1000,
-                ypos: 1000,
+                anchor_xpos: 1000,
+                anchor_ypos: 1000,
+                last_xpos: 1000,
+                last_ypos: 1000,
+                idle_samples: 0,
             })
         );
     }
 
     #[test]
     fn movement_check_clears_snapshot_when_hero_is_dead() {
+        let _guard = shared_state_test_lock().lock().unwrap();
         replace_movement_snapshot_for_tests(Some(MovementSnapshot {
             hero_name: "npc_dota_hero_axe".to_string(),
             alive: true,
-            xpos: 1000,
-            ypos: 1000,
+            anchor_xpos: 1000,
+            anchor_ypos: 1000,
+            last_xpos: 1000,
+            last_ypos: 1000,
+            idle_samples: 0,
         }));
 
         let actions = test_actions(Settings::default());

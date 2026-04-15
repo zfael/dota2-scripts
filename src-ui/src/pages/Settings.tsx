@@ -60,8 +60,8 @@ export default function Settings() {
               suffix="u"
             />
             <p className="text-xs text-subtle">
-              Only triggers when the hero actually changes position by at least
-              this distance between GSI updates.
+              Only triggers once the hero has actually walked at least this far
+              during the current movement segment.
             </p>
           </Card>
         </div>

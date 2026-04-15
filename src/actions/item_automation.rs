@@ -27,8 +27,11 @@ pub enum SupportStatus {
 pub struct MovementSnapshot {
     pub hero_name: String,
     pub alive: bool,
-    pub xpos: i32,
-    pub ypos: i32,
+    pub anchor_xpos: i32,
+    pub anchor_ypos: i32,
+    pub last_xpos: i32,
+    pub last_ypos: i32,
+    pub idle_samples: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
