@@ -1,0 +1,165 @@
+{
+  "hero": {
+    "aghanims_scepter": false,
+    "aghanims_shard": false,
+    "alive": true,
+    "attributes_level": 2,
+    "break": false,
+    "buyback_cooldown": 0,
+    "buyback_cost": 300,
+    "disarmed": false,
+    "facet": 0,
+    "has_debuff": false,
+    "health": 620,
+    "health_percent": 85,
+    "hexed": false,
+    "id": 74,
+    "level": 10,
+    "magicimmune": false,
+    "mana": 850,
+    "mana_percent": 80,
+    "max_health": 730,
+    "max_mana": 1062,
+    "muted": false,
+    "name": "npc_dota_hero_invoker",
+    "respawn_seconds": 0,
+    "silenced": false,
+    "smoked": false,
+    "stunned": false,
+    "talent_1": false,
+    "talent_2": false,
+    "talent_3": false,
+    "talent_4": false,
+    "talent_5": false,
+    "talent_6": false,
+    "talent_7": false,
+    "talent_8": false,
+    "xp": 5240,
+    "xpos": -1850,
+    "ypos": 2100
+  },
+  "abilities": {
+    "ability0": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 4,
+      "name": "invoker_quas",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability1": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 4,
+      "name": "invoker_wex",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability2": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 1,
+      "name": "invoker_exort",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability3": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 1,
+      "name": "invoker_invoke",
+      "passive": false,
+      "ultimate": true
+    },
+    "ability4": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 4,
+      "name": "invoker_tornado",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability5": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 4,
+      "name": "invoker_emp",
+      "passive": false,
+      "ultimate": false
+    }
+  },
+  "items": {
+    "neutral0": {
+      "name": "empty"
+    },
+    "slot0": {
+      "name": "item_power_treads",
+      "can_cast": false,
+      "passive": true
+    },
+    "slot1": {
+      "name": "item_urn_of_shadows",
+      "can_cast": true,
+      "cooldown": 0,
+      "charges": 3
+    },
+    "slot2": {
+      "name": "item_magic_wand",
+      "can_cast": true,
+      "cooldown": 0,
+      "charges": 12
+    },
+    "slot3": {
+      "name": "item_rod_of_atos",
+      "can_cast": true,
+      "cooldown": 0
+    },
+    "slot4": {
+      "name": "empty"
+    },
+    "slot5": {
+      "name": "empty"
+    },
+    "slot6": {
+      "name": "empty"
+    },
+    "slot7": {
+      "name": "empty"
+    },
+    "slot8": {
+      "name": "empty"
+    },
+    "stash0": {
+      "name": "empty"
+    },
+    "stash1": {
+      "name": "empty"
+    },
+    "stash2": {
+      "name": "empty"
+    },
+    "stash3": {
+      "name": "empty"
+    },
+    "stash4": {
+      "name": "empty"
+    },
+    "stash5": {
+      "name": "empty"
+    },
+    "teleport0": {
+      "name": "item_tpscroll",
+      "can_cast": true,
+      "cooldown": 0
+    }
+  },
+  "map": {
+    "clock_time": 780
+  }
+}

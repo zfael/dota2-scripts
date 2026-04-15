@@ -129,3 +129,29 @@ async fn test_meepo_fixture_exposes_combo_items() {
     assert_eq!(event.items.slot1.name, "item_sheepstick");
     assert_eq!(event.items.slot2.name, "item_disperser");
 }
+
+#[tokio::test]
+async fn test_load_invoker_qw_fixture() {
+    let json_data = fs::read_to_string("tests/fixtures/invoker_qw_event.json")
+        .expect("Failed to read Invoker QW fixture");
+
+    let event: GsiWebhookEvent =
+        serde_json::from_str(&json_data).expect("Failed to deserialize Invoker QW event");
+
+    assert_eq!(event.hero.name, "npc_dota_hero_invoker");
+    assert_eq!(event.abilities.ability4.name, "invoker_tornado");
+    assert_eq!(event.abilities.ability5.name, "invoker_emp");
+}
+
+#[tokio::test]
+async fn test_load_invoker_qe_fixture() {
+    let json_data = fs::read_to_string("tests/fixtures/invoker_qe_event.json")
+        .expect("Failed to read Invoker QE fixture");
+
+    let event: GsiWebhookEvent =
+        serde_json::from_str(&json_data).expect("Failed to deserialize Invoker QE event");
+
+    assert_eq!(event.hero.name, "npc_dota_hero_invoker");
+    assert_eq!(event.abilities.ability4.name, "invoker_chaos_meteor");
+    assert_eq!(event.abilities.ability5.name, "invoker_deafening_blast");
+}
