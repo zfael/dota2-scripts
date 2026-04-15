@@ -280,8 +280,24 @@ fn run_primary_combo(
         }
     }
 
+    // Track active spells through the combo to handle mid-combo invokes correctly
+    let mut current_active_spells = state.active_spells.clone();
+
     for spell_name in &sequence.spells {
-        let Some(plan) = plan_single_spell(spell_name, state, config) else {
+        // Build a fresh state view with current slot tracking
+        let current_state = InvokerObservedState {
+            quas_level: state.quas_level,
+            wex_level: state.wex_level,
+            exort_level: state.exort_level,
+            invoke_ready: state.invoke_ready,
+            active_spells: current_active_spells.clone(),
+            hero_alive: state.hero_alive,
+            hero_disabled: state.hero_disabled,
+            has_scepter: state.has_scepter,
+            has_shard: state.has_shard,
+        };
+
+        let Some(plan) = plan_single_spell(spell_name, &current_state, config) else {
             info!("🔮 Spell {} not plannable, skipping", spell_name);
             continue;
         };
@@ -293,6 +309,9 @@ fn run_primary_combo(
 
         if !plan.prepare_keys.is_empty() {
             thread::sleep(Duration::from_millis(50));
+
+            // Update slot tracking: invoking moves the new spell to secondary
+            current_active_spells[1] = Some(spell_name.to_string());
         }
 
         crate::input::simulation::press_key(plan.cast_key);
@@ -563,5 +582,65 @@ mod tests {
                 "invoker_deafening_blast"
             ]
         );
+    }
+
+    #[test]
+    fn multi_spell_combo_tracks_slot_state_after_mid_combo_invoke() {
+        let event = invoker_qe_fixture();
+        let mut settings = Settings::default();
+        settings.heroes.invoker.primary_profile = "qe_burst".to_string();
+        let config = &settings.heroes.invoker;
+
+        // Initial state: meteor in primary slot, blast in secondary slot
+        let mut state = InvokerObservedState::from_event(&event);
+        state.active_spells = [
+            Some("invoker_chaos_meteor".to_string()),
+            Some("invoker_deafening_blast".to_string()),
+        ];
+
+        // QE burst sequence: [sun_strike, meteor, blast]
+        // Expected behavior:
+        // 1. Sun Strike: not active, must invoke → moves to secondary slot
+        // 2. Meteor: already active in primary slot → press primary key
+        // 3. Blast: WAS in secondary slot initially, but after Sun Strike invoke,
+        //    the secondary slot now has Sun Strike, so Blast needs re-invoking
+
+        // Plan Sun Strike (first spell)
+        let sun_strike_plan = plan_single_spell("invoker_sun_strike", &state, config)
+            .expect("sun strike should be plannable");
+        assert!(!sun_strike_plan.prepare_keys.is_empty(), "sun strike should require invoke");
+        assert_eq!(sun_strike_plan.cast_key, config.spell_slot_secondary_key);
+
+        // Simulate the invoke effect: Sun Strike moves to secondary slot
+        let mut current_active_spells = state.active_spells.clone();
+        current_active_spells[1] = Some("invoker_sun_strike".to_string());
+
+        // Plan Meteor (second spell) with updated state
+        let state_after_sun_strike = InvokerObservedState {
+            quas_level: state.quas_level,
+            wex_level: state.wex_level,
+            exort_level: state.exort_level,
+            invoke_ready: state.invoke_ready,
+            active_spells: current_active_spells.clone(),
+            hero_alive: state.hero_alive,
+            hero_disabled: state.hero_disabled,
+            has_scepter: state.has_scepter,
+            has_shard: state.has_shard,
+        };
+        let meteor_plan = plan_single_spell("invoker_chaos_meteor", &state_after_sun_strike, config)
+            .expect("meteor should be plannable");
+        assert!(meteor_plan.prepare_keys.is_empty(), "meteor should already be active");
+        assert_eq!(meteor_plan.cast_key, config.spell_slot_primary_key, "meteor should use primary slot");
+
+        // Plan Blast (third spell) with updated state
+        // CRITICAL: Blast is no longer in secondary slot (Sun Strike displaced it)
+        let blast_plan = plan_single_spell("invoker_deafening_blast", &state_after_sun_strike, config)
+            .expect("blast should be plannable");
+        assert!(!blast_plan.prepare_keys.is_empty(), "blast should require invoke after being displaced");
+        assert_eq!(blast_plan.cast_key, config.spell_slot_secondary_key);
+
+        // This test verifies the fix: without slot tracking, blast_plan would incorrectly
+        // think Blast is still in the secondary slot and press F without invoking,
+        // casting Sun Strike instead.
     }
 }
