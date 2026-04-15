@@ -69,7 +69,7 @@
 | `src/actions/heroes/traits.rs` | `HeroScript` trait contract | `docs/architecture/state-and-dispatch.md`, `docs/workflows/adding-a-hero.md` |
 | `src/actions/heroes/broodmother.rs` | Broodmother spider micro and auto-items/abilities | `docs/heroes/broodmother.md` |
 | `src/actions/heroes/huskar.rs` | Huskar Berserker Blood cleanse plus shared armlet-survivability wiring | `docs/heroes/huskar.md` |
-| `src/actions/heroes/invoker.rs` | Invoker plumbing-only script (Task 1): hero/config wiring, survivability, and placeholder standalone trigger | `docs/heroes/invoker.md` |
+| `src/actions/heroes/invoker.rs` | Invoker combo profiles, invoke planning, panic Ghost Walk, and prep sequences | `docs/heroes/invoker.md` |
 | `src/actions/heroes/largo.rs` | Largo ultimate state, beat timing, manual song hooks | `docs/heroes/largo.md` |
 | `src/actions/heroes/legion_commander.rs` | Legion Commander combo automation | `docs/heroes/legion_commander.md` |
 | `src/actions/heroes/meepo_macro.rs` | Meepo farm-assist macro state, gating, and pulse decisions | `docs/heroes/meepo.md` |
@@ -190,7 +190,7 @@
 | `docs/features/updates.md` | Update check/apply/restart flow |
 | `docs/heroes/broodmother.md` | Broodmother automation doc |
 | `docs/heroes/huskar.md` | Huskar automation doc |
-| `docs/heroes/invoker.md` | Invoker automation doc (Task 1 plumbing-only state) |
+| `docs/heroes/invoker.md` | Invoker automation doc: combo profiles, invoke planning, panic/prep triggers |
 | `docs/heroes/largo.md` | Largo automation doc |
 | `docs/heroes/legion_commander.md` | Legion Commander automation doc |
 | `docs/heroes/meepo.md` | Meepo automation doc |

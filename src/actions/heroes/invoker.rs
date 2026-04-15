@@ -5,7 +5,13 @@ use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Hero};
 use std::sync::{mpsc, Arc, LazyLock, Mutex};
 use std::thread;
+use std::time::Duration;
 use tracing::info;
+
+static INVOKER_LAST_EVENT: LazyLock<Mutex<Option<GsiWebhookEvent>>> =
+    LazyLock::new(|| Mutex::new(None));
+static INVOKER_SETTINGS: LazyLock<Mutex<Option<Settings>>> =
+    LazyLock::new(|| Mutex::new(None));
 
 #[derive(Debug, Clone)]
 struct InvokerObservedState {
@@ -60,6 +66,12 @@ struct PlannedSpellCast {
 struct PlannedPrepPair {
     target_spells: Vec<&'static str>,
     prepare_keys: Vec<char>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PlannedComboSequence {
+    spells: Vec<&'static str>,
+    item_names: Vec<String>,
 }
 
 fn orb_recipe(spell_name: &str, config: &crate::config::settings::InvokerConfig) -> Option<[char; 4]> {
@@ -122,6 +134,27 @@ fn plan_prep_profile(
     })
 }
 
+fn build_primary_combo_sequence(
+    state: &InvokerObservedState,
+    config: &crate::config::settings::InvokerConfig,
+) -> Option<PlannedComboSequence> {
+    let spells = match config.primary_profile.as_str() {
+        "qw_pickoff" => vec!["invoker_tornado", "invoker_emp"],
+        "qe_burst" => vec![
+            "invoker_sun_strike",
+            "invoker_chaos_meteor",
+            "invoker_deafening_blast",
+        ],
+        _ => return None,
+    };
+
+    let _ = state;
+    Some(PlannedComboSequence {
+        spells,
+        item_names: config.combo_items.clone(),
+    })
+}
+
 #[derive(Debug, Clone)]
 enum InvokerRequest {
     PrimaryCombo,
@@ -151,6 +184,118 @@ fn run_invoker_request(request: InvokerRequest) {
         }
     }
     info!("Running Invoker request: {:?}", request);
+
+    let event = INVOKER_LAST_EVENT.lock().unwrap().clone();
+    let settings = INVOKER_SETTINGS.lock().unwrap().clone();
+
+    let Some(event) = event else {
+        info!("🔮 Invoker request skipped: no GSI event available");
+        return;
+    };
+
+    let Some(settings) = settings else {
+        info!("🔮 Invoker request skipped: no settings available");
+        return;
+    };
+
+    let state = InvokerObservedState::from_event(&event);
+    let config = &settings.heroes.invoker;
+
+    if !state.hero_alive || state.hero_disabled {
+        info!("🔮 Invoker request skipped: hero not available");
+        return;
+    }
+
+    match request {
+        InvokerRequest::PanicGhostWalk => run_panic_ghost_walk(&state, config),
+        InvokerRequest::PrepPair => run_prep_pair(&state, config),
+        InvokerRequest::PrimaryCombo => run_primary_combo(&state, config),
+    }
+}
+
+fn run_panic_ghost_walk(
+    state: &InvokerObservedState,
+    config: &crate::config::settings::InvokerConfig,
+) {
+    info!("🔮 Invoker: Panic Ghost Walk");
+
+    let Some(plan) = plan_single_spell("invoker_ghost_walk", state, config) else {
+        info!("🔮 Ghost Walk not plannable");
+        return;
+    };
+
+    for &key in &plan.prepare_keys {
+        crate::input::simulation::press_key(key);
+        thread::sleep(Duration::from_millis(10));
+    }
+
+    if !plan.prepare_keys.is_empty() {
+        thread::sleep(Duration::from_millis(50));
+    }
+
+    crate::input::simulation::press_key(plan.cast_key);
+    info!("🔮 Ghost Walk cast complete");
+}
+
+fn run_prep_pair(
+    state: &InvokerObservedState,
+    config: &crate::config::settings::InvokerConfig,
+) {
+    info!("🔮 Invoker: Prep Pair - {}", config.prep_profile);
+
+    let Some(plan) = plan_prep_profile(&config.prep_profile, state, config) else {
+        info!("🔮 Prep profile {} not recognized", config.prep_profile);
+        return;
+    };
+
+    for &key in &plan.prepare_keys {
+        crate::input::simulation::press_key(key);
+        thread::sleep(Duration::from_millis(10));
+    }
+
+    info!("🔮 Prep pair complete: {:?}", plan.target_spells);
+}
+
+fn run_primary_combo(
+    state: &InvokerObservedState,
+    config: &crate::config::settings::InvokerConfig,
+) {
+    info!("🔮 Invoker: Primary Combo - {}", config.primary_profile);
+
+    let Some(sequence) = build_primary_combo_sequence(state, config) else {
+        info!("🔮 Primary profile {} not recognized", config.primary_profile);
+        return;
+    };
+
+    for spell_name in &sequence.spells {
+        let Some(plan) = plan_single_spell(spell_name, state, config) else {
+            info!("🔮 Spell {} not plannable, skipping", spell_name);
+            continue;
+        };
+
+        for &key in &plan.prepare_keys {
+            crate::input::simulation::press_key(key);
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        if !plan.prepare_keys.is_empty() {
+            thread::sleep(Duration::from_millis(50));
+        }
+
+        crate::input::simulation::press_key(plan.cast_key);
+        info!("🔮 Cast {}", spell_name);
+
+        let delay = match (config.primary_profile.as_str(), *spell_name) {
+            ("qw_pickoff", "invoker_tornado") => config.tornado_emp_delay_ms,
+            ("qe_burst", "invoker_sun_strike") => config.sun_strike_delay_ms,
+            ("qe_burst", "invoker_chaos_meteor") => config.meteor_blast_delay_ms,
+            _ => 100,
+        };
+
+        thread::sleep(Duration::from_millis(delay));
+    }
+
+    info!("🔮 Primary combo complete");
 }
 
 /// Worker loop that processes requests from the queue in FIFO order.
@@ -220,6 +365,10 @@ impl InvokerScript {
 
 impl HeroScript for InvokerScript {
     fn handle_gsi_event(&self, event: &GsiWebhookEvent) {
+        // Store latest event and settings for request worker
+        *INVOKER_LAST_EVENT.lock().unwrap() = Some(event.clone());
+        *INVOKER_SETTINGS.lock().unwrap() = Some(self.settings.lock().unwrap().clone());
+
         let survivability = SurvivabilityActions::new(self.settings.clone(), self.executor.clone());
         let settings = self.settings.lock().unwrap();
         let in_danger = crate::actions::danger_detector::update(event, &settings.danger_detection);
@@ -362,5 +511,44 @@ mod tests {
         assert!(matches!(received[0], InvokerRequest::PrepPair));
         assert!(matches!(received[1], InvokerRequest::PanicGhostWalk));
         assert!(matches!(received[2], InvokerRequest::PrimaryCombo));
+    }
+
+    fn invoker_qe_fixture() -> GsiWebhookEvent {
+        serde_json::from_str(include_str!(
+            "../../../tests/fixtures/invoker_qe_event.json"
+        ))
+        .expect("Invoker QE fixture should deserialize")
+    }
+
+    #[test]
+    fn qw_profile_expands_to_tornado_then_emp() {
+        let event = invoker_qw_fixture();
+        let settings = Settings::default();
+        let state = InvokerObservedState::from_event(&event);
+
+        let sequence = build_primary_combo_sequence(&state, &settings.heroes.invoker)
+            .expect("QW profile should build");
+
+        assert_eq!(sequence.spells, vec!["invoker_tornado", "invoker_emp"]);
+    }
+
+    #[test]
+    fn qe_profile_expands_to_strike_meteor_blast() {
+        let event = invoker_qe_fixture();
+        let mut settings = Settings::default();
+        settings.heroes.invoker.primary_profile = "qe_burst".to_string();
+        let state = InvokerObservedState::from_event(&event);
+
+        let sequence = build_primary_combo_sequence(&state, &settings.heroes.invoker)
+            .expect("QE profile should build");
+
+        assert_eq!(
+            sequence.spells,
+            vec![
+                "invoker_sun_strike",
+                "invoker_chaos_meteor",
+                "invoker_deafening_blast"
+            ]
+        );
     }
 }

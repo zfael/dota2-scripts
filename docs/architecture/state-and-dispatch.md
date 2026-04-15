@@ -10,7 +10,7 @@
 
 | Field | Type | Owner / meaning |
 |---|---|---|
-| `selected_hero` | `Option<HeroType>` | UI + hotkey routing for `Huskar`, `Largo`, `LegionCommander`, `OutworldDestroyer`, `ShadowFiend`, `Tiny` |
+| `selected_hero` | `Option<HeroType>` | UI + hotkey routing for `Huskar`, `Invoker`, `Largo`, `LegionCommander`, `OutworldDestroyer`, `ShadowFiend`, `Tiny` |
 | `gsi_enabled` | `bool` | Master gate for async dispatch from `process_gsi_events()` |
 | `standalone_enabled` | `bool` | Master gate for hotkey-triggered standalone combos |
 | `last_event` | `Option<GsiWebhookEvent>` | Latest GSI payload for UI/status rendering |
@@ -54,6 +54,8 @@ These are not part of `AppState`, but they matter when tracing dispatch:
 | `SOUL_RING_STATE` | `src/actions/soul_ring.rs` | Shared Soul Ring inventory/health/mana snapshot used by GSI + keyboard paths |
 | `SF_LAST_EVENT` | `src/actions/heroes/shadow_fiend.rs` | Cached event for BKB/Blink checks during intercepted SF combos |
 | `OD_LAST_EVENT` | `src/actions/heroes/outworld_destroyer.rs` | Cached event for OD ultimate interception, self-Astral, and standalone combo checks |
+| `INVOKER_LAST_EVENT` | `src/actions/heroes/invoker.rs` | Cached event for Invoker combo execution and invoke planning |
+| `INVOKER_SETTINGS` | `src/actions/heroes/invoker.rs` | Cached settings for Invoker request worker |
 | `HP_TRACKER` | `src/actions/danger_detector.rs` | Global danger heuristic state |
 | `LATEST_GSI_EVENT` | `src/actions/auto_items.rs` | Cached inventory/ability state for Broodmother auto-items |
 | `DISPEL_TRIGGERED` | `src/actions/dispel.rs` | Prevent repeated Manta/Lotus usage during one silence |

@@ -73,7 +73,7 @@ Supported heroes: **Broodmother, Huskar, Invoker, Largo, Legion Commander, Meepo
 | `actions/heroes/traits.rs` | `HeroScript` trait — implement this to add a hero |
 | `actions/heroes/broodmother.rs` | Broodmother automation |
 | `actions/heroes/huskar.rs` | Huskar armlet + Berserker Blood automation |
-| `actions/heroes/invoker.rs` | Invoker plumbing-only script (Task 1) |
+| `actions/heroes/invoker.rs` | Invoker combo profiles, invoke planning, panic Ghost Walk, and prep sequences |
 | `actions/heroes/largo.rs` | Largo Amphibian Rhapsody beat-timing automation |
 | `actions/heroes/legion_commander.rs` | Legion Commander combo automation |
 | `actions/heroes/meepo.rs` | Meepo dig and Megameepo automation on danger; combo sequences with Blink and items |

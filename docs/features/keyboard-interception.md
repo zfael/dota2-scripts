@@ -8,10 +8,11 @@
 
 | Path | What it owns |
 |---|---|
-| `src/input/keyboard.rs` | Global `rdev::grab` hook, decision tree, `HotkeyEvent` channel, Soul Ring replay helper, Armlet Roshan toggle hotkey |
+| `src/input/keyboard.rs` | Global `rdev::grab` hook, decision tree, `HotkeyEvent` channel, Soul Ring replay helper, Armlet Roshan toggle hotkey, Invoker panic/prep hotkeys |
 | `src/actions/heroes/outworld_destroyer.rs` | Outworld Destroyer intercepted-sequence planning and dedicated request worker (`R` combo, self-Astral, standalone combo) |
 | `src/actions/soul_ring.rs` | Soul Ring shared state, key eligibility rules, health/mana/cooldown gates |
 | `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend intercepted-sequence planning and dedicated request worker (`Q/W/E` razes, `R` ultimate combo, standalone combo) |
+| `src/actions/heroes/invoker.rs` | Invoker combo profiles, invoke planning, dedicated request worker (panic Ghost Walk, prep pairs, primary combo) |
 | `src/input/simulation.rs` | High-level synthetic keys/mouse emission + `SIMULATING_KEYS` guard |
 | `src/ui/app.rs` | Per-frame refresh of the shared `KeyboardSnapshot` |
 
@@ -323,6 +324,15 @@ These are still part of the interception surface even though this page centers o
 - middle mouse blocks the click and enqueues spider micro to the same worker
 - activation is keyed off `BROODMOTHER_ACTIVE`, not `AppState.selected_hero`
 - Soul Ring remains on its own separate dedicated replay worker
+
+### Invoker
+
+- Invoker uses dedicated hotkeys for panic Ghost Walk (`panic_key`) and prep spell pairs (`prep_key`)
+- These hotkeys emit `HotkeyEvent::InvokerPanic` and `HotkeyEvent::InvokerPrep`
+- Hotkeys do not block the original key - they pass through to Dota 2
+- Requests are enqueued to a dedicated Invoker worker that handles invoke planning and spell casting
+- Standalone combo uses the generic `HotkeyEvent::ComboTrigger` path like other heroes
+- No orb interception - Invoker does not modify Q/W/E/R/D/F core gameplay
 
 ---
 
