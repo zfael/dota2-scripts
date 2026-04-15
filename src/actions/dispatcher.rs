@@ -1,7 +1,7 @@
 use crate::actions::executor::ActionExecutor;
 use crate::actions::heroes::{
-    BroodmotherScript, HeroScript, HuskarScript, LargoScript, LegionCommanderScript, MeepoScript,
-    OutworldDestroyerScript, ShadowFiendScript, TinyScript,
+    BroodmotherScript, HeroScript, HuskarScript, InvokerScript, LargoScript,
+    LegionCommanderScript, MeepoScript, OutworldDestroyerScript, ShadowFiendScript, TinyScript,
 };
 use crate::actions::{armlet, common::SurvivabilityActions};
 use crate::config::Settings;
@@ -103,6 +103,9 @@ impl ActionDispatcher {
         // Register hero scripts
         let huskar = Arc::new(HuskarScript::new(settings.clone(), executor.clone()));
         hero_scripts.insert(huskar.hero_name().to_string(), huskar);
+
+        let invoker = Arc::new(InvokerScript::new(settings.clone(), executor.clone()));
+        hero_scripts.insert(invoker.hero_name().to_string(), invoker);
 
         let largo = Arc::new(LargoScript::new(settings.clone(), executor.clone()));
         hero_scripts.insert(largo.hero_name().to_string(), largo);

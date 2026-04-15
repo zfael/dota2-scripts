@@ -116,6 +116,7 @@ async fn main() {
                         if let Some(hero_type) = state.selected_hero {
                             let hero_name = match hero_type {
                                 state::HeroType::Huskar => models::Hero::Huskar.to_game_name(),
+                                state::HeroType::Invoker => models::Hero::Invoker.to_game_name(),
                                 state::HeroType::Largo => models::Hero::Largo.to_game_name(),
                                 state::HeroType::LegionCommander => {
                                     models::Hero::LegionCommander.to_game_name()

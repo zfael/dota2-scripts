@@ -164,6 +164,7 @@ fn handle_hotkey_events(
                     if let Some(hero_type) = state.selected_hero {
                         let hero_name = match hero_type {
                             HeroType::Huskar => Hero::Huskar.to_game_name(),
+                            HeroType::Invoker => Hero::Invoker.to_game_name(),
                             HeroType::Largo => Hero::Largo.to_game_name(),
                             HeroType::LegionCommander => Hero::LegionCommander.to_game_name(),
                             HeroType::Meepo => Hero::Meepo.to_game_name(),

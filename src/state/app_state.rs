@@ -9,6 +9,7 @@ const GSI_ACTIVITY_TIMEOUT: Duration = Duration::from_secs(5);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HeroType {
     Huskar,
+    Invoker,
     Largo,
     LegionCommander,
     Meepo,
@@ -41,6 +42,7 @@ impl HeroType {
     pub fn from_hero_name(name: &str) -> Option<Self> {
         match name {
             name if name == Hero::Huskar.to_game_name() => Some(HeroType::Huskar),
+            name if name == Hero::Invoker.to_game_name() => Some(HeroType::Invoker),
             name if name == Hero::Largo.to_game_name() => Some(HeroType::Largo),
             name if name == Hero::LegionCommander.to_game_name() => Some(HeroType::LegionCommander),
             name if name == Hero::Meepo.to_game_name() => Some(HeroType::Meepo),
@@ -56,6 +58,7 @@ impl HeroType {
     pub fn to_display_name(&self) -> &'static str {
         match self {
             HeroType::Huskar => "Huskar",
+            HeroType::Invoker => "Invoker",
             HeroType::Largo => "Largo",
             HeroType::LegionCommander => "Legion Commander",
             HeroType::Meepo => "Meepo",
@@ -156,5 +159,14 @@ mod tests {
         let game_name = Hero::Meepo.to_game_name();
         assert_eq!(HeroType::from_hero_name(game_name), Some(HeroType::Meepo));
         assert_eq!(HeroType::Meepo.to_display_name(), "Meepo");
+    }
+
+    #[test]
+    fn invoker_round_trips_from_game_name() {
+        assert_eq!(
+            HeroType::from_hero_name(crate::models::Hero::Invoker.to_game_name()),
+            Some(HeroType::Invoker)
+        );
+        assert_eq!(HeroType::Invoker.to_display_name(), "Invoker");
     }
 }

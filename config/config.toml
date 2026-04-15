@@ -234,6 +234,23 @@ suspend_after_manual_combo_ms = 2500
 poof_press_count = 1
 poof_press_interval_ms = 35
 
+[heroes.invoker]
+standalone_key = "Home"
+panic_key = "End"
+prep_key = "PageUp"
+quas_key = "q"
+wex_key = "w"
+exort_key = "e"
+invoke_key = "r"
+spell_slot_primary_key = "d"
+spell_slot_secondary_key = "f"
+primary_profile = "qw_pickoff"
+prep_profile = "tornado_emp"
+combo_items = ["item_spirit_vessel", "item_rod_of_atos"]
+tornado_emp_delay_ms = 700
+sun_strike_delay_ms = 150
+meteor_blast_delay_ms = 450
+
 [gsi_logging]
 enabled = false
 output_dir = "logs/gsi_events"

@@ -1,5 +1,6 @@
 pub mod broodmother;
 pub mod huskar;
+pub mod invoker;
 pub mod largo;
 pub mod legion_commander;
 pub mod meepo;
@@ -12,6 +13,7 @@ pub mod traits;
 
 pub use broodmother::BroodmotherScript;
 pub use huskar::HuskarScript;
+pub use invoker::InvokerScript;
 pub use largo::LargoScript;
 pub use legion_commander::LegionCommanderScript;
 pub use meepo::MeepoScript;
