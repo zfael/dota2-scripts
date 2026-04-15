@@ -408,7 +408,7 @@ See `docs/heroes/broodmother.md` and `docs/reference/gsi-schema-and-usage.md`.
 | `spell_slot_secondary_key` | `"f"` | `"f"` | Key for secondary invoked spell slot (second spell slot). Must match in-game binding. |
 | `primary_profile` | `"qw_pickoff"` | `"qw_pickoff"` | Combo profile name used by `standalone_key`. Supported profiles: `"qw_pickoff"` (Tornado→EMP), `"qe_burst"` (Sun Strike→Meteor→Blast). |
 | `prep_profile` | `"tornado_emp"` | `"tornado_emp"` | Prep combo profile name used by `prep_key`. Supported profiles: `"tornado_emp"`, `"meteor_blast"`, `"cold_snap_forge_spirit"`, `"ghost_walk_ice_wall"`. |
-| `combo_items` | `["item_spirit_vessel", "item_rod_of_atos"]` | `["item_spirit_vessel", "item_rod_of_atos"]` | Reserved for future enhancement. Item names to use during combos. |
+| `combo_items` | `["item_spirit_vessel", "item_rod_of_atos"]` | `["item_spirit_vessel", "item_rod_of_atos"]` | Ordered list of item name substrings to use before spell sequence. Items are pressed in order with 50ms delays. Uses partial name matching (e.g., "item_orchid" matches orchid/bloodthorn). Skips items not in inventory. |
 | `tornado_emp_delay_ms` | `700` | `700` | Delay in milliseconds between Tornado cast and EMP cast. Tune based on Wex level and target distance. |
 | `sun_strike_delay_ms` | `150` | `150` | Delay in milliseconds between Sun Strike cast and Meteor cast. Accounts for cast point and client-server sync. |
 | `meteor_blast_delay_ms` | `450` | `450` | Delay in milliseconds between Meteor cast and Deafening Blast cast in the QE burst combo. |

@@ -12,7 +12,7 @@ Learn how the Invoker script automates combo profiles, panic Ghost Walk, and spe
 - **Panic Ghost Walk** – Dedicated hotkey that invokes and casts Ghost Walk for emergency escape
 - **Spell preparation** – Hotkey-triggered prep sequences to set up two spells without casting them
 - **Configurable timing delays** – Profile-specific delays between spells (Tornado→EMP, Sun Strike→Meteor→Blast)
-- **Combo item support** – Optional item usage during combo execution (reserved for future enhancement)
+- **Combo item support** – Optional item usage before spell execution; configured items are pressed in order with 50ms delays
 - **Survivability actions** – Auto-use healing, defensive items, and neutral items
 
 ## Configuration
@@ -69,7 +69,7 @@ meteor_blast_delay_ms = 450
 | `spell_slot_secondary_key` | char | `'f'` | Secondary invoked spell slot keybind |
 | `primary_profile` | string | `"qw_pickoff"` | Combo profile name: `"qw_pickoff"` or `"qe_burst"` |
 | `prep_profile` | string | `"tornado_emp"` | Prep combo profile: `"tornado_emp"`, `"meteor_blast"`, `"cold_snap_forge_spirit"`, or `"ghost_walk_ice_wall"` |
-| `combo_items` | array | `["item_spirit_vessel", "item_rod_of_atos"]` | Items to use during combos (reserved) |
+| `combo_items` | array | `["item_spirit_vessel", "item_rod_of_atos"]` | Items to use before combo spell sequence |
 | `tornado_emp_delay_ms` | u64 | `700` | Tornado → EMP timing delay in ms |
 | `sun_strike_delay_ms` | u64 | `150` | Sun Strike → Meteor timing delay in ms |
 | `meteor_blast_delay_ms` | u64 | `450` | Meteor → Blast timing delay in ms |
@@ -109,6 +109,22 @@ Invoker supports two primary combo profiles:
 3. Deafening Blast (delayed by `meteor_blast_delay_ms`)
 
 **Use case:** QE build burst damage combo
+
+### Combo Items
+
+The `combo_items` config setting allows you to use items before the spell sequence executes:
+
+- **Execution order** – Items are pressed in the configured order, before any spells are cast
+- **Item lookup** – Uses partial name matching (e.g., `"item_orchid"` matches `"item_orchid"` and `"item_bloodthorn"`)
+- **Skips missing items** – If an item is not in inventory or not found, logs a skip message and continues
+- **50ms delay** – Each item press is followed by a 50ms delay before the next item or spell
+
+**Example:**
+```toml
+combo_items = ["item_orchid", "item_spirit_vessel", "item_rod_of_atos"]
+```
+
+This configuration will use Orchid/Bloodthorn, Spirit Vessel, and Rod of Atos (in that order) before casting the spell sequence.
 
 ### Invoke Planning
 
@@ -202,7 +218,7 @@ With `level = "debug"`, survivability actions may log additional item usage deta
 - **Fixed ability keys** – Assumes configured keybindings match in-game settings
 - **No cooldown checks** – Does not verify abilities are off cooldown before attempting cast
 - **No Scepter/Shard awareness** – Does not adapt combo logic based on Aghanim's upgrades
-- **Combo items not yet implemented** – `combo_items` config is reserved for future enhancement
+- **No item cooldown checks** – Combo items are pressed regardless of cooldown state
 
 ---
 

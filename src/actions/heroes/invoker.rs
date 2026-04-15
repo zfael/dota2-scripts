@@ -1,4 +1,4 @@
-use crate::actions::common::SurvivabilityActions;
+use crate::actions::common::{find_item_slot_by_name, SurvivabilityActions};
 use crate::actions::executor::ActionExecutor;
 use crate::actions::heroes::traits::HeroScript;
 use crate::config::Settings;
@@ -209,7 +209,7 @@ fn run_invoker_request(request: InvokerRequest) {
     match request {
         InvokerRequest::PanicGhostWalk => run_panic_ghost_walk(&state, config),
         InvokerRequest::PrepPair => run_prep_pair(&state, config),
-        InvokerRequest::PrimaryCombo => run_primary_combo(&state, config),
+        InvokerRequest::PrimaryCombo => run_primary_combo(&event, &settings, &state, config),
     }
 }
 
@@ -257,6 +257,8 @@ fn run_prep_pair(
 }
 
 fn run_primary_combo(
+    event: &GsiWebhookEvent,
+    settings: &Settings,
     state: &InvokerObservedState,
     config: &crate::config::settings::InvokerConfig,
 ) {
@@ -266,6 +268,17 @@ fn run_primary_combo(
         info!("🔮 Primary profile {} not recognized", config.primary_profile);
         return;
     };
+
+    // Use configured combo items before spell sequence
+    for item_name in &sequence.item_names {
+        if let Some(key) = find_item_slot_by_name(event, settings, item_name) {
+            info!("🔮 Using combo item: {}", item_name);
+            crate::input::simulation::press_key(key);
+            thread::sleep(Duration::from_millis(50));
+        } else {
+            info!("🔮 Combo item {} not found, skipping", item_name);
+        }
+    }
 
     for spell_name in &sequence.spells {
         let Some(plan) = plan_single_spell(spell_name, state, config) else {
