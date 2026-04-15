@@ -43,7 +43,7 @@ spell_slot_secondary_key = "f"
 primary_profile = "qw_pickoff"
 # Prep combo profile name
 prep_profile = "tornado_emp"
-# Combo items to use during sequences (reserved for future use)
+# Combo items to use during sequences
 combo_items = ["item_spirit_vessel", "item_rod_of_atos"]
 # Tornado → EMP timing delay
 tornado_emp_delay_ms = 700
@@ -195,7 +195,7 @@ These features share the global `[common]`, `[danger_detection]`, and `[neutral_
 
 - Adjust `tornado_emp_delay_ms` to match Tornado travel time (depends on Wex level and distance)
 - Tune `sun_strike_delay_ms` and `meteor_blast_delay_ms` for your cast-point and target prediction
-- Modify `combo_items` list for future item orchestration enhancement
+- Modify `combo_items` list to include items you want to use before spell execution
 - Set `prep_profile` to match your intended follow-up combo
 
 ### Logging
