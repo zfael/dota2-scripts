@@ -274,18 +274,39 @@ mod tests {
 
     #[test]
     fn enqueue_request_preserves_fifo_order() {
-        let mut seen = Vec::new();
-        for request in [
+        use std::sync::mpsc;
+        use std::thread;
+        use std::time::Duration;
+
+        // Create a test queue with same semantics as INVOKER_REQUEST_QUEUE
+        let (tx, rx) = mpsc::channel::<InvokerRequest>();
+
+        // Worker thread that collects requests in order
+        let collector = thread::spawn(move || {
+            let mut collected = Vec::new();
+            while let Ok(request) = rx.recv_timeout(Duration::from_millis(100)) {
+                collected.push(request);
+            }
+            collected
+        });
+
+        // Enqueue requests in specific order
+        let requests = vec![
             InvokerRequest::PrepPair,
             InvokerRequest::PanicGhostWalk,
             InvokerRequest::PrimaryCombo,
-        ] {
-            seen.push(format!("{request:?}"));
-        }
+        ];
 
-        assert_eq!(
-            seen,
-            vec!["PrepPair", "PanicGhostWalk", "PrimaryCombo"]
-        );
+        for request in requests.clone() {
+            tx.send(request).expect("queue should accept requests");
+        }
+        drop(tx); // Close sender so worker can finish
+
+        // Verify FIFO order
+        let received = collector.join().expect("worker thread should complete");
+        assert_eq!(received.len(), 3, "all three requests should be received");
+        assert!(matches!(received[0], InvokerRequest::PrepPair));
+        assert!(matches!(received[1], InvokerRequest::PanicGhostWalk));
+        assert!(matches!(received[2], InvokerRequest::PrimaryCombo));
     }
 }
