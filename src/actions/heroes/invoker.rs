@@ -129,7 +129,27 @@ enum InvokerRequest {
     PrepPair,
 }
 
+#[cfg(test)]
+static TEST_OBSERVER: LazyLock<Mutex<Option<mpsc::Sender<InvokerRequest>>>> =
+    LazyLock::new(|| Mutex::new(None));
+
+#[cfg(test)]
+pub(crate) fn set_test_observer(tx: mpsc::Sender<InvokerRequest>) {
+    *TEST_OBSERVER.lock().unwrap() = Some(tx);
+}
+
+#[cfg(test)]
+pub(crate) fn clear_test_observer() {
+    *TEST_OBSERVER.lock().unwrap() = None;
+}
+
 fn run_invoker_request(request: InvokerRequest) {
+    #[cfg(test)]
+    {
+        if let Some(observer) = TEST_OBSERVER.lock().unwrap().as_ref() {
+            observer.send(request.clone()).ok();
+        }
+    }
     info!("Running Invoker request: {:?}", request);
 }
 
@@ -299,55 +319,42 @@ mod tests {
     }
 
     #[test]
-    fn process_request_queue_preserves_fifo_order() {
+    fn production_queue_preserves_fifo_order() {
         use std::sync::{mpsc, Arc, Mutex};
         use std::thread;
         use std::time::Duration;
 
-        // Create a side-channel to observe request processing order
+        // Create observer channel to watch what the real worker processes
         let (observe_tx, observe_rx) = mpsc::channel::<InvokerRequest>();
+        set_test_observer(observe_tx);
+
         let observed = Arc::new(Mutex::new(Vec::new()));
         let observed_clone = Arc::clone(&observed);
 
-        // Observer thread that collects requests as they're processed
-        let observer = thread::spawn(move || {
-            while let Ok(request) = observe_rx.recv_timeout(Duration::from_millis(200)) {
+        // Collector thread that records processing order
+        let collector = thread::spawn(move || {
+            while let Ok(request) = observe_rx.recv_timeout(Duration::from_millis(300)) {
                 observed_clone.lock().unwrap().push(request);
             }
         });
 
-        // Intercept run_invoker_request calls by wrapping the receiver
-        let (tx, rx) = mpsc::channel::<InvokerRequest>();
-        let observe_tx_clone = observe_tx.clone();
-        let (wrapped_tx, wrapped_rx) = mpsc::channel::<InvokerRequest>();
-        
-        // Interceptor that observes then forwards to production worker
-        let interceptor = thread::spawn(move || {
-            while let Ok(request) = rx.recv_timeout(Duration::from_millis(100)) {
-                observe_tx_clone.send(request.clone()).ok();
-                wrapped_tx.send(request).ok();
-            }
-        });
+        // Force initialization of the real production queue
+        let _ = &*INVOKER_REQUEST_QUEUE;
 
-        // Worker thread using production queue processing logic
-        let worker = thread::spawn(move || {
-            process_request_queue_with_timeout(wrapped_rx, Duration::from_millis(100));
-        });
+        // Enqueue through the actual production path
+        enqueue_request(InvokerRequest::PrepPair);
+        enqueue_request(InvokerRequest::PanicGhostWalk);
+        enqueue_request(InvokerRequest::PrimaryCombo);
 
-        // Enqueue requests in specific order
-        tx.send(InvokerRequest::PrepPair).expect("queue should accept");
-        tx.send(InvokerRequest::PanicGhostWalk).expect("queue should accept");
-        tx.send(InvokerRequest::PrimaryCombo).expect("queue should accept");
-        drop(tx);
-        drop(observe_tx);
+        // Wait for worker to process
+        thread::sleep(Duration::from_millis(200));
+        clear_test_observer();
 
-        interceptor.join().expect("interceptor should complete");
-        worker.join().expect("worker should complete");
-        observer.join().expect("observer should complete");
+        collector.join().expect("collector should complete");
 
-        // Verify FIFO order was preserved through the production queue worker
+        // Verify the real production worker preserved FIFO order
         let received = observed.lock().unwrap();
-        assert_eq!(received.len(), 3, "all three requests should be processed");
+        assert_eq!(received.len(), 3, "all three requests should be processed by production worker");
         assert!(matches!(received[0], InvokerRequest::PrepPair));
         assert!(matches!(received[1], InvokerRequest::PanicGhostWalk));
         assert!(matches!(received[2], InvokerRequest::PrimaryCombo));
