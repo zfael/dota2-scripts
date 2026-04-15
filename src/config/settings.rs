@@ -1768,6 +1768,7 @@ impl Settings {
     fn hero_armlet_override(&self, hero_name: &str) -> Option<HeroArmletOverrideConfig> {
         match hero_name {
             "npc_dota_hero_huskar" => Some(self.huskar_armlet_override()),
+            "npc_dota_hero_invoker" => Some(self.heroes.invoker.armlet.clone()),
             "npc_dota_hero_legion_commander" => Some(self.heroes.legion_commander.armlet.clone()),
             "npc_dota_hero_nevermore" => Some(self.heroes.shadow_fiend.armlet.clone()),
             "npc_dota_hero_tiny" => Some(self.heroes.tiny.armlet.clone()),
@@ -1929,5 +1930,24 @@ mod tests {
         assert_eq!(settings.heroes.invoker.prep_key, "PageUp");
         assert_eq!(settings.heroes.invoker.quas_key, 'q');
         assert_eq!(settings.heroes.invoker.invoke_key, 'r');
+    }
+
+    #[test]
+    fn hero_armlet_override_returns_config_for_all_supported_heroes() {
+        let settings = Settings::default();
+
+        // Test that all heroes with armlet configs are registered
+        assert!(settings.hero_armlet_override("npc_dota_hero_huskar").is_some());
+        assert!(settings.hero_armlet_override("npc_dota_hero_invoker").is_some());
+        assert!(settings.hero_armlet_override("npc_dota_hero_legion_commander").is_some());
+        assert!(settings.hero_armlet_override("npc_dota_hero_nevermore").is_some());
+        assert!(settings.hero_armlet_override("npc_dota_hero_tiny").is_some());
+        assert!(settings.hero_armlet_override("npc_dota_hero_obsidian_destroyer").is_some());
+        assert!(settings.hero_armlet_override("npc_dota_hero_largo").is_some());
+        assert!(settings.hero_armlet_override("npc_dota_hero_broodmother").is_some());
+        assert!(settings.hero_armlet_override("npc_dota_hero_meepo").is_some());
+
+        // Test that unknown heroes return None
+        assert!(settings.hero_armlet_override("npc_dota_hero_unknown").is_none());
     }
 }
