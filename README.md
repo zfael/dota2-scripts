@@ -12,8 +12,10 @@ The app combines:
 
 - Broodmother
 - Huskar
+- Invoker
 - Largo
 - Legion Commander
+- Meepo
 - Outworld Destroyer
 - Shadow Fiend
 - Tiny
@@ -115,6 +117,7 @@ The current checked-in config surface includes:
 - `[gsi_logging]`
 - `[soul_ring]`
 - `[heroes.huskar]`
+- `[heroes.invoker]`
 - `[heroes.legion_commander]`
 - `[heroes.shadow_fiend]`
 - `[heroes.tiny]`

@@ -393,6 +393,35 @@ See `docs/heroes/broodmother.md` and `docs/reference/gsi-schema-and-usage.md`.
 | `predictive_offset` | omitted | inherits `[armlet].predictive_offset` | Optional per-hero override for the shared predictive buffer. |
 | `toggle_cooldown_ms` | omitted | inherits `[armlet].toggle_cooldown_ms` | Optional per-hero override for the shared cooldown. |
 
+## `[heroes.invoker]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `standalone_key` | `"Home"` | `"Home"` | Hotkey for the primary standalone combo. Executes the combo specified by `primary_profile`. |
+| `panic_key` | `"End"` | `"End"` | Panic hotkey that instantly executes Ghost Walk for emergency escape. |
+| `prep_key` | `"PageUp"` | `"PageUp"` | Prep hotkey for pre-positioning spells. Executes the combo specified by `prep_profile`. |
+| `quas_key` | `"q"` | `"q"` | Orb key for Quas. Must match in-game binding. |
+| `wex_key` | `"w"` | `"w"` | Orb key for Wex. Must match in-game binding. |
+| `exort_key` | `"e"` | `"e"` | Orb key for Exort. Must match in-game binding. |
+| `invoke_key` | `"r"` | `"r"` | Key for Invoke ability. Must match in-game binding. |
+| `spell_slot_primary_key` | `"d"` | `"d"` | Key for primary invoked spell slot (typically first spell slot). Must match in-game binding. |
+| `spell_slot_secondary_key` | `"f"` | `"f"` | Key for secondary invoked spell slot (typically second spell slot). Must match in-game binding. |
+| `primary_profile` | `"qw_pickoff"` | `"qw_pickoff"` | Default combo profile name used by `standalone_key`. Profiles define the orb sequence, invoke pattern, and spell cast order for automated combos. |
+| `prep_profile` | `"tornado_emp"` | `"tornado_emp"` | Prep combo profile name used by `prep_key`. Useful for pre-invoking combos like Tornado→EMP without casting. |
+| `combo_items` | `["item_spirit_vessel", "item_rod_of_atos"]` | `["item_spirit_vessel", "item_rod_of_atos"]` | List of item internal names to use during combos. Items are cast before spells if they are equipped and off cooldown. |
+| `tornado_emp_delay_ms` | `700` | `700` | Delay in milliseconds between Tornado cast and EMP cast for proper synchronization. |
+| `sun_strike_delay_ms` | `150` | `150` | Delay in milliseconds after invoking Sun Strike before casting it, to ensure proper client-server synchronization. |
+| `meteor_blast_delay_ms` | `450` | `450` | Delay in milliseconds between Meteor and Blast casts in the Exort combo. |
+
+### `[heroes.invoker.armlet]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `enabled` | omitted | inherits `[armlet].enabled` | Optional per-hero override for the shared armlet master switch. |
+| `toggle_threshold` | omitted | inherits `[armlet].toggle_threshold` | Optional per-hero override for the shared armlet base threshold. |
+| `predictive_offset` | omitted | inherits `[armlet].predictive_offset` | Optional per-hero override for the shared predictive buffer. |
+| `toggle_cooldown_ms` | omitted | inherits `[armlet].toggle_cooldown_ms` | Optional per-hero override for the shared cooldown. |
+
 ---
 
 ## When you change config surface area
