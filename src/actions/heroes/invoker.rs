@@ -183,6 +183,8 @@ fn enqueue_request(request: InvokerRequest) {
 static INVOKER_REQUEST_QUEUE: LazyLock<mpsc::Sender<InvokerRequest>> = LazyLock::new(|| {
     let (tx, rx) = mpsc::channel::<InvokerRequest>();
     thread::spawn(move || {
+        info!("🔮 Invoker request worker started");
+
         #[cfg(not(test))]
         process_request_queue(rx);
         #[cfg(test)]
@@ -191,6 +193,8 @@ static INVOKER_REQUEST_QUEUE: LazyLock<mpsc::Sender<InvokerRequest>> = LazyLock:
             use std::time::Duration;
             process_request_queue_with_timeout(rx, Duration::from_secs(60));
         }
+
+        info!("🔮 Invoker request worker exited");
     });
     tx
 });
