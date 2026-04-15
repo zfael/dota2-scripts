@@ -1,6 +1,7 @@
 export type HeroType =
   | "broodmother"
   | "huskar"
+  | "invoker"
   | "largo"
   | "legion_commander"
   | "meepo"
@@ -19,6 +20,7 @@ export interface HeroInfo {
 export const HEROES: HeroInfo[] = [
   { id: "broodmother", displayName: "Broodmother", internalName: "npc_dota_hero_broodmother", icon: "🕷️", role: "Pusher / Carry" },
   { id: "huskar", displayName: "Huskar", internalName: "npc_dota_hero_huskar", icon: "🔥", role: "Carry / Durable" },
+  { id: "invoker", displayName: "Invoker", internalName: "npc_dota_hero_invoker", icon: "🔮", role: "Carry / Nuker" },
   { id: "largo", displayName: "Largo", internalName: "npc_dota_hero_largo", icon: "🎵", role: "Support / Healer" },
   { id: "legion_commander", displayName: "Legion Commander", internalName: "npc_dota_hero_legion_commander", icon: "⚔️", role: "Initiator / Durable" },
   { id: "meepo", displayName: "Meepo", internalName: "npc_dota_hero_meepo", icon: "🐾", role: "Carry / Escape" },

@@ -5,6 +5,7 @@ const configs: Record<HeroType, () => Promise<{ default: ComponentType }>> = {
   meepo: () => import("./MeepoConfig"),
   broodmother: () => import("./BroodmotherConfig"),
   huskar: () => import("./HuskarConfig"),
+  invoker: () => import("./InvokerConfig"),
   largo: () => import("./LargoConfig"),
   legion_commander: () => import("./LegionCommanderConfig"),
   outworld_destroyer: () => import("./OutworldDestroyerConfig"),

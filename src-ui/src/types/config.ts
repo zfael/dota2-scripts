@@ -185,8 +185,28 @@ export interface OutworldDestroyerConfig {
   armlet: HeroArmletOverride;
 }
 
+export interface InvokerConfig {
+  standalone_key: string;
+  panic_key: string;
+  prep_key: string;
+  quas_key: string;
+  wex_key: string;
+  exort_key: string;
+  invoke_key: string;
+  spell_slot_primary_key: string;
+  spell_slot_secondary_key: string;
+  primary_profile: string;
+  prep_profile: string;
+  combo_items: string[];
+  tornado_emp_delay_ms: number;
+  sun_strike_delay_ms: number;
+  meteor_blast_delay_ms: number;
+  armlet: HeroArmletOverride;
+}
+
 export interface HeroesConfig {
   huskar: HuskarConfig;
+  invoker: InvokerConfig;
   legion_commander: LegionCommanderConfig;
   shadow_fiend: ShadowFiendConfig;
   tiny: TinyConfig;
