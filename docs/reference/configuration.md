@@ -417,6 +417,9 @@ See `docs/heroes/broodmother.md` and `docs/reference/gsi-schema-and-usage.md`.
 | `profiles[].steps[].completion_timeout_ms` | preset-specific | `3000` | Timeout used when waiting for cooldown confirmation. |
 | `profiles[].steps[].notes` | preset-specific | `""` | Optional UI note for the step. |
 
+Ordered spell steps are authored in natural cast order, but the runtime may
+preload them into `F` then `D` because Invoked spell slots rotate by recency.
+
 See `docs/heroes/invoker.md`.
 
 ### `[heroes.invoker.armlet]`

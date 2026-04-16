@@ -14,8 +14,8 @@ own hotkey, ordered steps, and per-step delays.
   `delay_after_ms`.
 - **Per-step completion mode** - Steps can use fixed delay or wait for a spell
   to enter cooldown before continuing.
-- **Dynamic invoke planning** - The runtime reuses active spells when possible
-  and updates slot tracking after each invoke.
+- **Pair-aware invoke planning** - Consecutive spell steps are preloaded into
+  the real `D`/`F` slots before casting.
 - **Prep mode** - Prep profiles invoke spells without casting them.
 - **Shared survivability** - Healing, defensive items, and neutral items still
   run through the common survivability pipeline.
@@ -114,11 +114,29 @@ into custom profiles instead of editing raw config strings.
 Combo profiles execute their steps in order:
 
 1. Item steps try to find the matching inventory slot and press it.
-2. Spell steps check whether the spell is already active.
-3. Missing spells are invoked via the configured orb recipe.
-4. After an invoke, slot tracking is updated before planning the next spell.
+2. Consecutive spell steps are grouped into one- or two-spell batches.
+3. A two-spell batch is preloaded in profile order so the older prepared spell
+   lands on `F` and the newer prepared spell lands on `D`.
+4. Single trailing spell steps still use whichever slot they actually occupy,
+   invoking first when needed.
 5. The step either waits on `delay_after_ms` or, for manual spell steps, waits
    for cooldown confirmation first and then applies `delay_after_ms`.
+
+### Spell preload behavior
+
+Invoker spell profiles are still authored in natural cast order, such as:
+
+`Tornado -> EMP -> Sun Strike`
+
+The runtime now preloads up to two consecutive spell steps in profile order and
+casts them using their actual Invoked slots:
+
+- when two spells are loaded, the older prepared spell is usually on `F`
+- the newer prepared spell is usually on `D`
+- so a preloaded pair executes as `F` first, then `D`
+
+For the example above, the runtime prepares Tornado then EMP, casts Tornado from
+`F`, casts EMP from `D`, then invokes and casts Sun Strike from `D`.
 
 ### Prep profiles
 
