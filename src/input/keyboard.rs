@@ -905,6 +905,13 @@ fn plan_global_hotkey_event(key: Key, snapshot: &KeyboardSnapshot) -> Option<Hot
             return Some(HotkeyEvent::InvokerCycleComboProfile);
         }
 
+        if snapshot
+            .trigger_key
+            .is_some_and(|trigger_key| key == trigger_key)
+        {
+            return Some(HotkeyEvent::ComboTrigger);
+        }
+
         if let Some(profile) = snapshot
             .invoker_profiles
             .iter()
@@ -1335,6 +1342,7 @@ mod tests {
     fn plan_global_hotkey_event_maps_invoker_profile_hotkeys() {
         let mut snapshot = KeyboardSnapshot::default();
         snapshot.selected_hero = Some(HeroType::Invoker);
+        snapshot.trigger_key = Some(Key::End);
         snapshot.invoker_profiles = vec![InvokerHotkeyProfileSnapshot {
             id: "qw-pickoff".to_string(),
             hotkey: Some(parse_key_string("Home").unwrap()),
@@ -1345,6 +1353,24 @@ mod tests {
         assert_eq!(
             plan_global_hotkey_event(rdev::Key::Home, &snapshot),
             Some(HotkeyEvent::InvokerProfile("qw-pickoff".to_string()))
+        );
+    }
+
+    #[test]
+    fn plan_global_hotkey_event_prefers_combo_trigger_over_invoker_profile_on_shared_key() {
+        let mut snapshot = KeyboardSnapshot::default();
+        snapshot.selected_hero = Some(HeroType::Invoker);
+        snapshot.trigger_key = Some(Key::Home);
+        snapshot.invoker_profiles = vec![InvokerHotkeyProfileSnapshot {
+            id: "qw-pickoff".to_string(),
+            hotkey: Some(Key::Home),
+            mode: crate::config::settings::InvokerProfileMode::Combo,
+            enabled: true,
+        }];
+
+        assert_eq!(
+            plan_global_hotkey_event(Key::Home, &snapshot),
+            Some(HotkeyEvent::ComboTrigger)
         );
     }
 
