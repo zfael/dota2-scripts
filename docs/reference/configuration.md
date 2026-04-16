@@ -397,21 +397,23 @@ See `docs/heroes/broodmother.md` and `docs/reference/gsi-schema-and-usage.md`.
 
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |
 |---|---:|---:|---|
-| `standalone_key` | `"Home"` | `"Home"` | Hotkey for the primary standalone combo. Executes the combo sequence specified by `primary_profile`. |
-| `panic_key` | `"End"` | `"End"` | Panic hotkey that dynamically invokes and casts Ghost Walk for emergency escape. |
-| `prep_key` | `"PageUp"` | `"PageUp"` | Prep hotkey for pre-invoking spell pairs. Executes the sequence specified by `prep_profile` without casting. |
 | `quas_key` | `"q"` | `"q"` | Orb key for Quas. Must match in-game binding. |
 | `wex_key` | `"w"` | `"w"` | Orb key for Wex. Must match in-game binding. |
 | `exort_key` | `"e"` | `"e"` | Orb key for Exort. Must match in-game binding. |
 | `invoke_key` | `"r"` | `"r"` | Key for Invoke ability. Must match in-game binding. |
 | `spell_slot_primary_key` | `"d"` | `"d"` | Key for primary invoked spell slot (first spell slot). Must match in-game binding. |
 | `spell_slot_secondary_key` | `"f"` | `"f"` | Key for secondary invoked spell slot (second spell slot). Must match in-game binding. |
-| `primary_profile` | `"qw_pickoff"` | `"qw_pickoff"` | Combo profile name used by `standalone_key`. Supported profiles: `"qw_pickoff"` (Tornado→EMP), `"qe_burst"` (Sun Strike→Meteor→Blast). |
-| `prep_profile` | `"tornado_emp"` | `"tornado_emp"` | Prep combo profile name used by `prep_key`. Supported profiles: `"tornado_emp"`, `"meteor_blast"`, `"cold_snap_forge_spirit"`, `"ghost_walk_ice_wall"`. |
-| `combo_items` | `["item_spirit_vessel", "item_rod_of_atos"]` | `["item_spirit_vessel", "item_rod_of_atos"]` | Ordered list of item name substrings to use before spell sequence. Items are pressed in order with 50ms delays. Uses partial name matching (e.g., "item_orchid" matches orchid/bloodthorn). Skips items not in inventory. |
-| `tornado_emp_delay_ms` | `700` | `700` | Delay in milliseconds between Tornado cast and EMP cast. Tune based on Wex level and target distance. |
-| `sun_strike_delay_ms` | `150` | `150` | Delay in milliseconds between Sun Strike cast and Meteor cast. Accounts for cast point and client-server sync. |
-| `meteor_blast_delay_ms` | `450` | `450` | Delay in milliseconds between Meteor cast and Deafening Blast cast in the QE burst combo. |
+| `profiles` | seeded preset list | seeded preset list | Ordered named Invoker profiles. Each profile has its own hotkey, mode, build tag, and ordered steps. |
+| `profiles[].id` | preset-specific | preset-specific | Stable runtime identifier used by the keyboard and request queue. |
+| `profiles[].name` | preset-specific | preset-specific | Operator-facing display name shown in the React UI. |
+| `profiles[].enabled` | preset-specific | `true` | Whether the profile hotkey is active. |
+| `profiles[].hotkey` | preset-specific | preset-specific | Trigger key for this profile. |
+| `profiles[].mode` | preset-specific | preset-specific | `combo` casts steps; `prep` only invokes spell steps. |
+| `profiles[].build_tag` | preset-specific | `""` | UI-facing build hint such as `general`, `qw`, or `qe`. |
+| `profiles[].steps[].kind` | preset-specific | n/a | `spell` or `item`. |
+| `profiles[].steps[].target` | preset-specific | n/a | Stable spell/item id such as `invoker_tornado` or `item_spirit_vessel`. |
+| `profiles[].steps[].delay_after_ms` | preset-specific | `0` | Delay applied after the step executes. |
+| `profiles[].steps[].notes` | preset-specific | `""` | Optional UI note for the step. |
 
 See `docs/heroes/invoker.md`.
 

@@ -435,12 +435,6 @@ pub struct InvokerProfile {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InvokerConfig {
-    #[serde(default = "default_standalone_key")]
-    pub standalone_key: String,
-    #[serde(default = "default_invoker_panic_key")]
-    pub panic_key: String,
-    #[serde(default = "default_invoker_prep_key")]
-    pub prep_key: String,
     #[serde(default = "default_invoker_quas_key")]
     pub quas_key: char,
     #[serde(default = "default_invoker_wex_key")]
@@ -455,18 +449,6 @@ pub struct InvokerConfig {
     pub spell_slot_secondary_key: char,
     #[serde(default = "default_invoker_profiles")]
     pub profiles: Vec<InvokerProfile>,
-    #[serde(default = "default_invoker_primary_profile")]
-    pub primary_profile: String,
-    #[serde(default = "default_invoker_prep_profile")]
-    pub prep_profile: String,
-    #[serde(default = "default_invoker_combo_items")]
-    pub combo_items: Vec<String>,
-    #[serde(default = "default_invoker_tornado_emp_delay_ms")]
-    pub tornado_emp_delay_ms: u64,
-    #[serde(default = "default_invoker_sun_strike_delay_ms")]
-    pub sun_strike_delay_ms: u64,
-    #[serde(default = "default_invoker_meteor_blast_delay_ms")]
-    pub meteor_blast_delay_ms: u64,
     #[serde(default)]
     pub armlet: HeroArmletOverrideConfig,
 }
@@ -1134,12 +1116,6 @@ fn default_meepo_farm_assist_poof_press_interval_ms() -> u64 {
 fn default_invoker_profile_enabled() -> bool {
     true
 }
-fn default_invoker_panic_key() -> String {
-    "End".to_string()
-}
-fn default_invoker_prep_key() -> String {
-    "PageUp".to_string()
-}
 fn default_invoker_quas_key() -> char {
     'q'
 }
@@ -1259,24 +1235,6 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
             ],
         },
     ]
-}
-fn default_invoker_primary_profile() -> String {
-    "qw_pickoff".to_string()
-}
-fn default_invoker_prep_profile() -> String {
-    "tornado_emp".to_string()
-}
-fn default_invoker_combo_items() -> Vec<String> {
-    vec!["item_spirit_vessel".to_string(), "item_rod_of_atos".to_string()]
-}
-fn default_invoker_tornado_emp_delay_ms() -> u64 {
-    700
-}
-fn default_invoker_sun_strike_delay_ms() -> u64 {
-    150
-}
-fn default_invoker_meteor_blast_delay_ms() -> u64 {
-    450
 }
 
 fn default_danger_enabled() -> bool {
@@ -1683,9 +1641,6 @@ impl Default for MeepoConfig {
 impl Default for InvokerConfig {
     fn default() -> Self {
         Self {
-            standalone_key: default_standalone_key(),
-            panic_key: default_invoker_panic_key(),
-            prep_key: default_invoker_prep_key(),
             quas_key: default_invoker_quas_key(),
             wex_key: default_invoker_wex_key(),
             exort_key: default_invoker_exort_key(),
@@ -1693,12 +1648,6 @@ impl Default for InvokerConfig {
             spell_slot_primary_key: default_invoker_spell_slot_primary_key(),
             spell_slot_secondary_key: default_invoker_spell_slot_secondary_key(),
             profiles: default_invoker_profiles(),
-            primary_profile: default_invoker_primary_profile(),
-            prep_profile: default_invoker_prep_profile(),
-            combo_items: default_invoker_combo_items(),
-            tornado_emp_delay_ms: default_invoker_tornado_emp_delay_ms(),
-            sun_strike_delay_ms: default_invoker_sun_strike_delay_ms(),
-            meteor_blast_delay_ms: default_invoker_meteor_blast_delay_ms(),
             armlet: HeroArmletOverrideConfig::default(),
         }
     }
@@ -1968,7 +1917,14 @@ impl Settings {
     pub fn get_standalone_key(&self, hero: &str) -> String {
         match hero {
             "huskar" => self.heroes.huskar.standalone_key.clone(),
-            "invoker" => self.heroes.invoker.standalone_key.clone(),
+            "invoker" => self
+                .heroes
+                .invoker
+                .profiles
+                .iter()
+                .find(|profile| profile.enabled && profile.mode == InvokerProfileMode::Combo)
+                .map(|profile| profile.hotkey.clone())
+                .unwrap_or_else(default_standalone_key),
             "legion_commander" => self.heroes.legion_commander.standalone_key.clone(),
             "shadow_fiend" => "q".to_string(), // SF uses Q/W/E interception
             "tiny" => self.heroes.tiny.standalone_key.clone(),
@@ -2081,8 +2037,6 @@ mod tests {
     fn invoker_defaults_expose_expected_hotkeys() {
         let settings = Settings::default();
         assert_eq!(settings.get_standalone_key("invoker"), "Home");
-        assert_eq!(settings.heroes.invoker.panic_key, "End");
-        assert_eq!(settings.heroes.invoker.prep_key, "PageUp");
         assert_eq!(settings.heroes.invoker.quas_key, 'q');
         assert_eq!(settings.heroes.invoker.invoke_key, 'r');
     }

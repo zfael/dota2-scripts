@@ -206,9 +206,6 @@ export interface InvokerProfile {
 }
 
 export interface InvokerConfig {
-  standalone_key: string;
-  panic_key: string;
-  prep_key: string;
   quas_key: string;
   wex_key: string;
   exort_key: string;
@@ -216,12 +213,6 @@ export interface InvokerConfig {
   spell_slot_primary_key: string;
   spell_slot_secondary_key: string;
   profiles: InvokerProfile[];
-  primary_profile: string;
-  prep_profile: string;
-  combo_items: string[];
-  tornado_emp_delay_ms: number;
-  sun_strike_delay_ms: number;
-  meteor_blast_delay_ms: number;
   armlet: HeroArmletOverride;
 }
 

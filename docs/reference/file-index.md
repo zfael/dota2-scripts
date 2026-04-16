@@ -123,6 +123,11 @@
 | File | Purpose | Linked Doc |
 |---|---|---|
 | `src-ui/src/App.tsx` | React shell that wires stores, routing, and global hooks | `docs/superpowers/specs/2026-03-31-react-ui-design.md` |
+| `src-ui/src/components/heroes/configs/InvokerConfig.tsx` | Invoker profile-builder shell that wires preset library, profile list, and editor state | `docs/heroes/invoker.md` |
+| `src-ui/src/components/heroes/configs/InvokerConfig.test.tsx` | Vitest coverage for Invoker profile rendering and duplication | `docs/heroes/invoker.md` |
+| `src-ui/src/components/heroes/configs/invoker/invokerCatalog.tsx` | Local Invoker spell/item metadata, preset definitions, and chip visuals | `docs/heroes/invoker.md` |
+| `src-ui/src/components/heroes/configs/invoker/InvokerProfileList.tsx` | Invoker preset library and configured profile list UI | `docs/heroes/invoker.md` |
+| `src-ui/src/components/heroes/configs/invoker/InvokerProfileEditor.tsx` | Invoker profile step editor with reorder, target, and timing controls | `docs/heroes/invoker.md` |
 | `src-ui/src/hooks/useRuneAlert.ts` | Frontend-owned rune alert gating and Web Audio playback | `docs/superpowers/specs/2026-03-31-react-ui-design.md`, `docs/reference/configuration.md` |
 
 ## `src/models/`
@@ -190,7 +195,7 @@
 | `docs/features/updates.md` | Update check/apply/restart flow |
 | `docs/heroes/broodmother.md` | Broodmother automation doc |
 | `docs/heroes/huskar.md` | Huskar automation doc |
-| `docs/heroes/invoker.md` | Invoker automation doc: combo profiles, invoke planning, panic/prep triggers |
+| `docs/heroes/invoker.md` | Invoker automation doc: named profiles, invoke planning, and profile-builder UI |
 | `docs/heroes/largo.md` | Largo automation doc |
 | `docs/heroes/legion_commander.md` | Legion Commander automation doc |
 | `docs/heroes/meepo.md` | Meepo automation doc |

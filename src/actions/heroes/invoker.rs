@@ -622,10 +622,14 @@ mod tests {
             "meteor should require re-invoke after being displaced"
         );
         assert_eq!(spell_steps[2].0, "invoker_deafening_blast");
+        assert!(
+            !spell_steps[2].1.is_empty(),
+            "blast should require a fresh invoke after meteor displaces it"
+        );
         assert_eq!(
             spell_steps[2].2,
-            config.spell_slot_primary_key,
-            "blast should use primary slot after slot shifting"
+            config.spell_slot_secondary_key,
+            "blast should cast from the newly invoked secondary slot"
         );
     }
 }

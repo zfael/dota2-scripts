@@ -327,11 +327,12 @@ These are still part of the interception surface even though this page centers o
 
 ### Invoker
 
-- Invoker uses dedicated hotkeys for panic Ghost Walk (`panic_key`) and prep spell pairs (`prep_key`)
-- These hotkeys emit `HotkeyEvent::InvokerPanic` and `HotkeyEvent::InvokerPrep`
+- Invoker hotkeys now come from `heroes.invoker.profiles[].hotkey`
+- The keyboard layer emits `HotkeyEvent::InvokerProfile(<id>)` for enabled Invoker profiles
+- Profile hotkeys only fire when `AppState.selected_hero == Invoker`
 - Hotkeys do not block the original key - they pass through to Dota 2
-- Requests are enqueued to a dedicated Invoker worker that handles invoke planning and spell casting
-- Standalone combo uses the generic `HotkeyEvent::ComboTrigger` path like other heroes
+- Requests are enqueued to a dedicated Invoker worker that handles named profile planning and execution
+- The generic standalone trigger still resolves to the first enabled combo profile for compatibility with shared runtime plumbing
 - No orb interception - Invoker does not modify Q/W/E/R/D/F core gameplay
 
 ---
