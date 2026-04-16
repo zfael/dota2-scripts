@@ -1,6 +1,7 @@
 use crate::actions::common::{find_item_slot_by_name, SurvivabilityActions};
 use crate::actions::executor::ActionExecutor;
 use crate::actions::heroes::traits::HeroScript;
+use crate::config::settings::{InvokerProfile, InvokerProfileMode, InvokerProfileStepKind};
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Hero};
 use std::sync::{mpsc, Arc, LazyLock, Mutex};
@@ -63,15 +64,18 @@ struct PlannedSpellCast {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct PlannedPrepPair {
-    target_spells: Vec<&'static str>,
-    prepare_keys: Vec<char>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct PlannedComboSequence {
-    spells: Vec<&'static str>,
-    item_names: Vec<String>,
+enum PlannedInvokerAction {
+    Item {
+        target: String,
+        delay_after_ms: u64,
+    },
+    Spell {
+        target: String,
+        prepare_keys: Vec<char>,
+        cast_key: char,
+        delay_after_ms: u64,
+        should_cast: bool,
+    },
 }
 
 fn orb_recipe(spell_name: &str, config: &crate::config::settings::InvokerConfig) -> Option<[char; 4]> {
@@ -108,58 +112,66 @@ fn plan_single_spell(
     })
 }
 
-fn plan_prep_profile(
-    profile: &str,
+fn find_profile<'a>(
+    config: &'a crate::config::settings::InvokerConfig,
+    profile_id: &str,
+) -> Option<&'a InvokerProfile> {
+    config.profiles.iter().find(|profile| profile.id == profile_id)
+}
+
+fn first_enabled_combo_profile_id(
+    config: &crate::config::settings::InvokerConfig,
+) -> Option<String> {
+    config
+        .profiles
+        .iter()
+        .find(|profile| profile.enabled && profile.mode == InvokerProfileMode::Combo)
+        .map(|profile| profile.id.clone())
+}
+
+fn build_profile_execution_plan(
+    profile: &InvokerProfile,
     state: &InvokerObservedState,
     config: &crate::config::settings::InvokerConfig,
-) -> Option<PlannedPrepPair> {
-    let target_spells = match profile {
-        "tornado_emp" => vec!["invoker_tornado", "invoker_emp"],
-        "meteor_blast" => vec!["invoker_chaos_meteor", "invoker_deafening_blast"],
-        "cold_snap_forge_spirit" => vec!["invoker_cold_snap", "invoker_forge_spirit"],
-        "ghost_walk_ice_wall" => vec!["invoker_ghost_walk", "invoker_ice_wall"],
-        _ => return None,
-    };
+) -> Option<Vec<PlannedInvokerAction>> {
+    let mut actions = Vec::new();
+    let mut current_active_spells = state.active_spells.clone();
 
-    let mut prepare_keys = Vec::new();
-    for spell_name in &target_spells {
-        if state.active_spell_key(spell_name, config).is_none() {
-            prepare_keys.extend(orb_recipe(spell_name, config)?);
+    for step in &profile.steps {
+        match step.kind {
+            InvokerProfileStepKind::Item => actions.push(PlannedInvokerAction::Item {
+                target: step.target.clone(),
+                delay_after_ms: step.delay_after_ms,
+            }),
+            InvokerProfileStepKind::Spell => {
+                let current_state = InvokerObservedState {
+                    active_spells: current_active_spells.clone(),
+                    ..state.clone()
+                };
+                let cast_plan = plan_single_spell(&step.target, &current_state, config)?;
+
+                if !cast_plan.prepare_keys.is_empty() {
+                    current_active_spells[0] = current_active_spells[1].clone();
+                    current_active_spells[1] = Some(step.target.clone());
+                }
+
+                actions.push(PlannedInvokerAction::Spell {
+                    target: step.target.clone(),
+                    prepare_keys: cast_plan.prepare_keys,
+                    cast_key: cast_plan.cast_key,
+                    delay_after_ms: step.delay_after_ms,
+                    should_cast: profile.mode == InvokerProfileMode::Combo,
+                });
+            }
         }
     }
 
-    Some(PlannedPrepPair {
-        target_spells,
-        prepare_keys,
-    })
+    Some(actions)
 }
 
-fn build_primary_combo_sequence(
-    state: &InvokerObservedState,
-    config: &crate::config::settings::InvokerConfig,
-) -> Option<PlannedComboSequence> {
-    let spells = match config.primary_profile.as_str() {
-        "qw_pickoff" => vec!["invoker_tornado", "invoker_emp"],
-        "qe_burst" => vec![
-            "invoker_sun_strike",
-            "invoker_chaos_meteor",
-            "invoker_deafening_blast",
-        ],
-        _ => return None,
-    };
-
-    let _ = state;
-    Some(PlannedComboSequence {
-        spells,
-        item_names: config.combo_items.clone(),
-    })
-}
-
-#[derive(Debug, Clone)]
-enum InvokerRequest {
-    PrimaryCombo,
-    PanicGhostWalk,
-    PrepPair,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum InvokerRequest {
+    RunProfile(String),
 }
 
 #[cfg(test)]
@@ -206,129 +218,87 @@ fn run_invoker_request(request: InvokerRequest) {
         return;
     }
 
-    match request {
-        InvokerRequest::PanicGhostWalk => run_panic_ghost_walk(&state, config),
-        InvokerRequest::PrepPair => run_prep_pair(&state, config),
-        InvokerRequest::PrimaryCombo => run_primary_combo(&event, &settings, &state, config),
-    }
-}
+    let InvokerRequest::RunProfile(profile_id) = request;
 
-fn run_panic_ghost_walk(
-    state: &InvokerObservedState,
-    config: &crate::config::settings::InvokerConfig,
-) {
-    info!("🔮 Invoker: Panic Ghost Walk");
-
-    let Some(plan) = plan_single_spell("invoker_ghost_walk", state, config) else {
-        info!("🔮 Ghost Walk not plannable");
+    let Some(profile) = find_profile(config, &profile_id) else {
+        info!("🔮 Invoker request skipped: profile {} not found", profile_id);
         return;
     };
 
-    for &key in &plan.prepare_keys {
-        crate::input::simulation::press_key(key);
-        thread::sleep(Duration::from_millis(10));
-    }
-
-    if !plan.prepare_keys.is_empty() {
-        thread::sleep(Duration::from_millis(50));
-    }
-
-    crate::input::simulation::press_key(plan.cast_key);
-    info!("🔮 Ghost Walk cast complete");
+    run_profile(&event, &settings, &state, config, profile);
 }
 
-fn run_prep_pair(
-    state: &InvokerObservedState,
-    config: &crate::config::settings::InvokerConfig,
-) {
-    info!("🔮 Invoker: Prep Pair - {}", config.prep_profile);
-
-    let Some(plan) = plan_prep_profile(&config.prep_profile, state, config) else {
-        info!("🔮 Prep profile {} not recognized", config.prep_profile);
-        return;
-    };
-
-    for &key in &plan.prepare_keys {
-        crate::input::simulation::press_key(key);
-        thread::sleep(Duration::from_millis(10));
-    }
-
-    info!("🔮 Prep pair complete: {:?}", plan.target_spells);
-}
-
-fn run_primary_combo(
+fn run_profile(
     event: &GsiWebhookEvent,
     settings: &Settings,
     state: &InvokerObservedState,
     config: &crate::config::settings::InvokerConfig,
+    profile: &InvokerProfile,
 ) {
-    info!("🔮 Invoker: Primary Combo - {}", config.primary_profile);
-
-    let Some(sequence) = build_primary_combo_sequence(state, config) else {
-        info!("🔮 Primary profile {} not recognized", config.primary_profile);
+    let Some(plan) = build_profile_execution_plan(profile, state, config) else {
+        info!("🔮 Invoker profile {} could not be planned", profile.id);
         return;
     };
 
-    // Use configured combo items before spell sequence
-    for item_name in &sequence.item_names {
-        if let Some(key) = find_item_slot_by_name(event, settings, item_name) {
-            info!("🔮 Using combo item: {}", item_name);
-            crate::input::simulation::press_key(key);
-            thread::sleep(Duration::from_millis(50));
-        } else {
-            info!("🔮 Combo item {} not found, skipping", item_name);
-        }
-    }
+    info!("🔮 Invoker profile: {} ({})", profile.name, profile.mode.as_str());
+    info!("🔮 Planned steps: {:?}", profile.steps);
 
-    // Track active spells through the combo to handle mid-combo invokes correctly
     let mut current_active_spells = state.active_spells.clone();
 
-    for spell_name in &sequence.spells {
-        // Build a fresh state view with current slot tracking
-        let current_state = InvokerObservedState {
-            quas_level: state.quas_level,
-            wex_level: state.wex_level,
-            exort_level: state.exort_level,
-            invoke_ready: state.invoke_ready,
-            active_spells: current_active_spells.clone(),
-            hero_alive: state.hero_alive,
-            hero_disabled: state.hero_disabled,
-            has_scepter: state.has_scepter,
-            has_shard: state.has_shard,
-        };
+    for action in plan {
+        match action {
+            PlannedInvokerAction::Item {
+                target,
+                delay_after_ms,
+            } => {
+                if profile.mode == InvokerProfileMode::Prep {
+                    info!("🔮 Skipping prep item step: {}", target);
+                    continue;
+                }
 
-        let Some(plan) = plan_single_spell(spell_name, &current_state, config) else {
-            info!("🔮 Spell {} not plannable, skipping", spell_name);
-            continue;
-        };
+                if let Some(key) = find_item_slot_by_name(event, settings, &target) {
+                    info!("🔮 Using combo item: {}", target);
+                    crate::input::simulation::press_key(key);
+                } else {
+                    info!("🔮 Combo item {} not found, skipping", target);
+                }
 
-        for &key in &plan.prepare_keys {
-            crate::input::simulation::press_key(key);
-            thread::sleep(Duration::from_millis(10));
+                thread::sleep(Duration::from_millis(delay_after_ms));
+            }
+            PlannedInvokerAction::Spell {
+                target,
+                prepare_keys,
+                cast_key,
+                delay_after_ms,
+                should_cast,
+            } => {
+                info!("🔮 Active slots before step: {:?}", current_active_spells);
+
+                for &key in &prepare_keys {
+                    crate::input::simulation::press_key(key);
+                    thread::sleep(Duration::from_millis(10));
+                }
+
+                if !prepare_keys.is_empty() {
+                    thread::sleep(Duration::from_millis(50));
+                    current_active_spells[0] = current_active_spells[1].clone();
+                    current_active_spells[1] = Some(target.clone());
+                    info!("🔮 Active slots after invoke: {:?}", current_active_spells);
+                }
+
+                if should_cast {
+                    info!("🔮 Casting {} from {}", target, cast_key);
+                    crate::input::simulation::press_key(cast_key);
+                } else {
+                    info!("🔮 Prepared {} without casting", target);
+                }
+
+                thread::sleep(Duration::from_millis(delay_after_ms));
+            }
         }
-
-        if !plan.prepare_keys.is_empty() {
-            thread::sleep(Duration::from_millis(50));
-
-            // Update slot tracking: invoke shifts secondary to primary, new spell to secondary
-            current_active_spells[0] = current_active_spells[1].clone();
-            current_active_spells[1] = Some(spell_name.to_string());
-        }
-
-        crate::input::simulation::press_key(plan.cast_key);
-        info!("🔮 Cast {}", spell_name);
-
-        let delay = match (config.primary_profile.as_str(), *spell_name) {
-            ("qw_pickoff", "invoker_tornado") => config.tornado_emp_delay_ms,
-            ("qe_burst", "invoker_sun_strike") => config.sun_strike_delay_ms,
-            ("qe_burst", "invoker_chaos_meteor") => config.meteor_blast_delay_ms,
-            _ => 100,
-        };
-
-        thread::sleep(Duration::from_millis(delay));
     }
 
-    info!("🔮 Primary combo complete");
+    info!("🔮 Invoker profile complete: {}", profile.name);
 }
 
 /// Worker loop that processes requests from the queue in FIFO order.
@@ -387,12 +357,8 @@ impl InvokerScript {
         Self { settings, executor }
     }
 
-    pub fn handle_panic_trigger(&self) {
-        enqueue_request(InvokerRequest::PanicGhostWalk);
-    }
-
-    pub fn handle_prep_trigger(&self) {
-        enqueue_request(InvokerRequest::PrepPair);
+    pub fn handle_profile_trigger(&self, profile_id: &str) {
+        enqueue_request(InvokerRequest::RunProfile(profile_id.to_string()));
     }
 }
 
@@ -412,7 +378,12 @@ impl HeroScript for InvokerScript {
     }
 
     fn handle_standalone_trigger(&self) {
-        enqueue_request(InvokerRequest::PrimaryCombo);
+        let settings = self.settings.lock().unwrap();
+        if let Some(profile_id) = first_enabled_combo_profile_id(&settings.heroes.invoker) {
+            enqueue_request(InvokerRequest::RunProfile(profile_id));
+        } else {
+            info!("🔮 Invoker standalone trigger skipped: no enabled combo profile");
+        }
     }
 
     fn hero_name(&self) -> &'static str {
@@ -497,11 +468,21 @@ mod tests {
         let event = invoker_qw_fixture();
         let settings = Settings::default();
         let state = InvokerObservedState::from_event(&event);
+        let profile = find_profile(&settings.heroes.invoker, "meteor-blast-prep")
+            .expect("prep profile should exist");
 
-        let plan = plan_prep_profile("meteor_blast", &state, &settings.heroes.invoker)
+        let plan = build_profile_execution_plan(profile, &state, &settings.heroes.invoker)
             .expect("prep plan should exist");
 
-        assert_eq!(plan.target_spells, vec!["invoker_chaos_meteor", "invoker_deafening_blast"]);
+        assert_eq!(
+            plan.iter()
+                .filter_map(|step| match step {
+                    PlannedInvokerAction::Spell { target, .. } => Some(target.as_str()),
+                    PlannedInvokerAction::Item { .. } => None,
+                })
+                .collect::<Vec<_>>(),
+            vec!["invoker_chaos_meteor", "invoker_deafening_blast"]
+        );
     }
 
     #[test]
@@ -528,9 +509,9 @@ mod tests {
         let _ = &*INVOKER_REQUEST_QUEUE;
 
         // Enqueue through the actual production path
-        enqueue_request(InvokerRequest::PrepPair);
-        enqueue_request(InvokerRequest::PanicGhostWalk);
-        enqueue_request(InvokerRequest::PrimaryCombo);
+        enqueue_request(InvokerRequest::RunProfile("meteor-blast-prep".to_string()));
+        enqueue_request(InvokerRequest::RunProfile("ghost-walk-panic".to_string()));
+        enqueue_request(InvokerRequest::RunProfile("qw-pickoff".to_string()));
 
         // Wait for worker to process
         thread::sleep(Duration::from_millis(200));
@@ -541,9 +522,9 @@ mod tests {
         // Verify the real production worker preserved FIFO order
         let received = observed.lock().unwrap();
         assert_eq!(received.len(), 3, "all three requests should be processed by production worker");
-        assert!(matches!(received[0], InvokerRequest::PrepPair));
-        assert!(matches!(received[1], InvokerRequest::PanicGhostWalk));
-        assert!(matches!(received[2], InvokerRequest::PrimaryCombo));
+        assert_eq!(received[0], InvokerRequest::RunProfile("meteor-blast-prep".to_string()));
+        assert_eq!(received[1], InvokerRequest::RunProfile("ghost-walk-panic".to_string()));
+        assert_eq!(received[2], InvokerRequest::RunProfile("qw-pickoff".to_string()));
     }
 
     fn invoker_qe_fixture() -> GsiWebhookEvent {
@@ -554,29 +535,46 @@ mod tests {
     }
 
     #[test]
-    fn qw_profile_expands_to_tornado_then_emp() {
+    fn invoker_profile_runner_keeps_declared_tornado_then_emp_order() {
         let event = invoker_qw_fixture();
         let settings = Settings::default();
         let state = InvokerObservedState::from_event(&event);
+        let profile = find_profile(&settings.heroes.invoker, "qw-pickoff")
+            .expect("QW profile should exist");
 
-        let sequence = build_primary_combo_sequence(&state, &settings.heroes.invoker)
+        let plan = build_profile_execution_plan(profile, &state, &settings.heroes.invoker)
             .expect("QW profile should build");
 
-        assert_eq!(sequence.spells, vec!["invoker_tornado", "invoker_emp"]);
+        assert_eq!(
+            plan.iter()
+                .filter_map(|step| match step {
+                    PlannedInvokerAction::Spell { target, .. } => Some(target.as_str()),
+                    PlannedInvokerAction::Item { .. } => None,
+                })
+                .collect::<Vec<_>>(),
+            vec!["invoker_tornado", "invoker_emp"]
+        );
     }
 
     #[test]
     fn qe_profile_expands_to_strike_meteor_blast() {
         let event = invoker_qe_fixture();
-        let mut settings = Settings::default();
-        settings.heroes.invoker.primary_profile = "qe_burst".to_string();
+        let settings = Settings::default();
         let state = InvokerObservedState::from_event(&event);
+        let profile = find_profile(&settings.heroes.invoker, "qe-burst")
+            .expect("QE profile should exist");
 
-        let sequence = build_primary_combo_sequence(&state, &settings.heroes.invoker)
+        let sequence = build_profile_execution_plan(profile, &state, &settings.heroes.invoker)
             .expect("QE profile should build");
 
         assert_eq!(
-            sequence.spells,
+            sequence
+                .iter()
+                .filter_map(|step| match step {
+                    PlannedInvokerAction::Spell { target, .. } => Some(target.as_str()),
+                    PlannedInvokerAction::Item { .. } => None,
+                })
+                .collect::<Vec<_>>(),
             vec![
                 "invoker_sun_strike",
                 "invoker_chaos_meteor",
@@ -588,9 +586,9 @@ mod tests {
     #[test]
     fn multi_spell_combo_tracks_slot_state_after_mid_combo_invoke() {
         let event = invoker_qe_fixture();
-        let mut settings = Settings::default();
-        settings.heroes.invoker.primary_profile = "qe_burst".to_string();
+        let settings = Settings::default();
         let config = &settings.heroes.invoker;
+        let profile = find_profile(config, "qe-burst").expect("QE profile should exist");
 
         // Initial state: meteor in primary slot, blast in secondary slot
         let mut state = InvokerObservedState::from_event(&event);
@@ -599,50 +597,35 @@ mod tests {
             Some("invoker_deafening_blast".to_string()),
         ];
 
-        // QE burst sequence: [sun_strike, meteor, blast]
-        // Expected behavior:
-        // 1. Sun Strike: not active, must invoke → moves to secondary slot
-        //    After invoke: slots become [blast, sun_strike] (old secondary shifts to primary)
-        // 2. Meteor: no longer in any slot after Sun Strike invoke → must re-invoke
-        // 3. Blast: now in primary slot (shifted during Sun Strike invoke) → press primary key
+        let plan = build_profile_execution_plan(profile, &state, config)
+            .expect("QE profile should build");
 
-        // Plan Sun Strike (first spell)
-        let sun_strike_plan = plan_single_spell("invoker_sun_strike", &state, config)
-            .expect("sun strike should be plannable");
-        assert!(!sun_strike_plan.prepare_keys.is_empty(), "sun strike should require invoke");
-        assert_eq!(sun_strike_plan.cast_key, config.spell_slot_secondary_key);
+        let spell_steps: Vec<_> = plan
+            .iter()
+            .filter_map(|step| match step {
+                PlannedInvokerAction::Spell {
+                    target,
+                    prepare_keys,
+                    cast_key,
+                    ..
+                } => Some((target.as_str(), prepare_keys.clone(), *cast_key)),
+                PlannedInvokerAction::Item { .. } => None,
+            })
+            .collect();
 
-        // Simulate the invoke effect: old secondary shifts to primary, Sun Strike to secondary
-        let mut current_active_spells = state.active_spells.clone();
-        current_active_spells[0] = current_active_spells[1].clone();
-        current_active_spells[1] = Some("invoker_sun_strike".to_string());
-
-        // Plan Meteor (second spell) with updated state
-        let state_after_sun_strike = InvokerObservedState {
-            quas_level: state.quas_level,
-            wex_level: state.wex_level,
-            exort_level: state.exort_level,
-            invoke_ready: state.invoke_ready,
-            active_spells: current_active_spells.clone(),
-            hero_alive: state.hero_alive,
-            hero_disabled: state.hero_disabled,
-            has_scepter: state.has_scepter,
-            has_shard: state.has_shard,
-        };
-        let meteor_plan = plan_single_spell("invoker_chaos_meteor", &state_after_sun_strike, config)
-            .expect("meteor should be plannable");
-        assert!(!meteor_plan.prepare_keys.is_empty(), "meteor should require invoke after being displaced");
-        assert_eq!(meteor_plan.cast_key, config.spell_slot_secondary_key);
-
-        // Plan Blast (third spell) with updated state
-        // CRITICAL: Blast is now in primary slot (shifted from secondary during Sun Strike invoke)
-        let blast_plan = plan_single_spell("invoker_deafening_blast", &state_after_sun_strike, config)
-            .expect("blast should be plannable");
-        assert!(blast_plan.prepare_keys.is_empty(), "blast should already be active in primary");
-        assert_eq!(blast_plan.cast_key, config.spell_slot_primary_key, "blast should use primary slot");
-
-        // This test verifies the fix: without slot tracking, meteor_plan would incorrectly
-        // think Meteor is still in the primary slot and press D without invoking,
-        // casting Blast instead.
+        assert_eq!(spell_steps.len(), 3);
+        assert_eq!(spell_steps[0].0, "invoker_sun_strike");
+        assert!(!spell_steps[0].1.is_empty(), "sun strike should require invoke");
+        assert_eq!(spell_steps[1].0, "invoker_chaos_meteor");
+        assert!(
+            !spell_steps[1].1.is_empty(),
+            "meteor should require re-invoke after being displaced"
+        );
+        assert_eq!(spell_steps[2].0, "invoker_deafening_blast");
+        assert_eq!(
+            spell_steps[2].2,
+            config.spell_slot_primary_key,
+            "blast should use primary slot after slot shifting"
+        );
     }
 }

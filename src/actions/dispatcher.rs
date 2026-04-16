@@ -196,18 +196,10 @@ impl ActionDispatcher {
         }
     }
 
-    pub fn dispatch_invoker_panic(&self) {
+    pub fn dispatch_invoker_profile(&self, profile_id: &str) {
         if let Some(hero) = self.hero_scripts.get(crate::models::Hero::Invoker.to_game_name()) {
             if let Some(invoker) = hero.as_any().downcast_ref::<crate::actions::heroes::InvokerScript>() {
-                invoker.handle_panic_trigger();
-            }
-        }
-    }
-
-    pub fn dispatch_invoker_prep(&self) {
-        if let Some(hero) = self.hero_scripts.get(crate::models::Hero::Invoker.to_game_name()) {
-            if let Some(invoker) = hero.as_any().downcast_ref::<crate::actions::heroes::InvokerScript>() {
-                invoker.handle_prep_trigger();
+                invoker.handle_profile_trigger(profile_id);
             }
         }
     }

@@ -234,11 +234,8 @@ fn handle_hotkey_events(
                     largo.deactivate_ultimate();
                 });
             }
-            HotkeyEvent::InvokerPanic => {
-                dispatcher.dispatch_invoker_panic();
-            }
-            HotkeyEvent::InvokerPrep => {
-                dispatcher.dispatch_invoker_prep();
+            HotkeyEvent::InvokerProfile(profile_id) => {
+                dispatcher.dispatch_invoker_profile(&profile_id);
             }
         }
     }

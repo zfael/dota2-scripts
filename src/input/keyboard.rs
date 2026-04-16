@@ -18,7 +18,7 @@ use crate::config::{AutoAbilityConfig, Settings};
 use crate::input::simulation::SIMULATING_KEYS;
 use crate::state::app_state::AppState;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum HotkeyEvent {
     ComboTrigger,
     MeepoFarmToggle,
@@ -27,8 +27,7 @@ pub enum HotkeyEvent {
     LargoW,
     LargoE,
     LargoR,
-    InvokerPanic,
-    InvokerPrep,
+    InvokerProfile(String),
 }
 
 pub struct KeyboardListenerConfig {
@@ -552,7 +551,15 @@ pub struct BroodmotherKeyboardSnapshot {
 /// The callback reads this snapshot once per event instead of locking
 /// `Settings`, `sf_enabled`, and `trigger_key` separately.
 #[derive(Debug, Clone)]
+pub struct InvokerHotkeyProfileSnapshot {
+    pub id: String,
+    pub hotkey: Option<Key>,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone)]
 pub struct KeyboardSnapshot {
+    pub selected_hero: Option<crate::state::HeroType>,
     /// The parsed combo-trigger key, or `None` if the configured string is
     /// not a recognised key name.
     pub trigger_key: Option<Key>,
@@ -568,8 +575,7 @@ pub struct KeyboardSnapshot {
     pub broodmother: BroodmotherKeyboardSnapshot,
     /// Static Soul Ring keyboard config (thresholds, key sets, delays).
     pub soul_ring: SoulRingKeyboardConfig,
-    pub invoker_panic_key: Option<Key>,
-    pub invoker_prep_key: Option<Key>,
+    pub invoker_profiles: Vec<InvokerHotkeyProfileSnapshot>,
 }
 
 #[derive(Debug, Clone)]
@@ -686,6 +692,7 @@ impl KeyboardSnapshot {
         let bm = &settings.heroes.broodmother;
 
         Self {
+            selected_hero: state.selected_hero.clone(),
             trigger_key,
             meepo_farm_toggle_key: if state.selected_hero == Some(crate::state::HeroType::Meepo)
                 && state.standalone_enabled
@@ -732,8 +739,17 @@ impl KeyboardSnapshot {
                 ],
             },
             soul_ring: SoulRingKeyboardConfig::from_settings(settings),
-            invoker_panic_key: parse_key(&settings.heroes.invoker.panic_key),
-            invoker_prep_key: parse_key(&settings.heroes.invoker.prep_key),
+            invoker_profiles: settings
+                .heroes
+                .invoker
+                .profiles
+                .iter()
+                .map(|profile| InvokerHotkeyProfileSnapshot {
+                    id: profile.id.clone(),
+                    hotkey: parse_key(&profile.hotkey),
+                    enabled: profile.enabled,
+                })
+                .collect(),
         }
     }
 }
@@ -741,6 +757,7 @@ impl KeyboardSnapshot {
 impl Default for KeyboardSnapshot {
     fn default() -> Self {
         Self {
+            selected_hero: None,
             trigger_key: None,
             meepo_farm_toggle_key: None,
             armlet_roshan_toggle_key: None,
@@ -769,8 +786,7 @@ impl Default for KeyboardSnapshot {
                 slot_keys: ['a', 's', 'd', 'f', 'g', 'h'],
             },
             soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
-            invoker_panic_key: None,
-            invoker_prep_key: None,
+            invoker_profiles: vec![],
         }
     }
 }
@@ -819,18 +835,14 @@ fn plan_global_hotkey_event(key: Key, snapshot: &KeyboardSnapshot) -> Option<Hot
         return Some(HotkeyEvent::ArmletRoshanToggle);
     }
 
-    if snapshot
-        .invoker_panic_key
-        .is_some_and(|panic_key| key == panic_key)
-    {
-        return Some(HotkeyEvent::InvokerPanic);
-    }
-
-    if snapshot
-        .invoker_prep_key
-        .is_some_and(|prep_key| key == prep_key)
-    {
-        return Some(HotkeyEvent::InvokerPrep);
+    if snapshot.selected_hero == Some(crate::state::HeroType::Invoker) {
+        if let Some(profile) = snapshot
+            .invoker_profiles
+            .iter()
+            .find(|profile| profile.enabled && profile.hotkey == Some(key))
+        {
+            return Some(HotkeyEvent::InvokerProfile(profile.id.clone()));
+        }
     }
 
     if snapshot.trigger_key.is_some_and(|trigger_key| key == trigger_key) {
@@ -851,6 +863,7 @@ mod tests {
 
     fn broodmother_test_snapshot() -> KeyboardSnapshot {
         KeyboardSnapshot {
+            selected_hero: None,
             trigger_key: None,
             meepo_farm_toggle_key: None,
             armlet_roshan_toggle_key: None,
@@ -879,8 +892,7 @@ mod tests {
                 slot_keys: ['a', 's', 'd', 'f', 'g', 'h'],
             },
             soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
-            invoker_panic_key: None,
-            invoker_prep_key: None,
+            invoker_profiles: vec![],
         }
     }
 
@@ -1201,24 +1213,18 @@ mod tests {
     }
 
     #[test]
-    fn plan_global_hotkey_event_returns_invoker_panic() {
+    fn plan_global_hotkey_event_maps_invoker_profile_hotkeys() {
         let mut snapshot = KeyboardSnapshot::default();
-        snapshot.invoker_panic_key = Some(parse_key_string("End").unwrap());
+        snapshot.selected_hero = Some(HeroType::Invoker);
+        snapshot.invoker_profiles = vec![InvokerHotkeyProfileSnapshot {
+            id: "qw-pickoff".to_string(),
+            hotkey: Some(parse_key_string("Home").unwrap()),
+            enabled: true,
+        }];
 
         assert_eq!(
-            plan_global_hotkey_event(rdev::Key::End, &snapshot),
-            Some(HotkeyEvent::InvokerPanic)
-        );
-    }
-
-    #[test]
-    fn plan_global_hotkey_event_returns_invoker_prep() {
-        let mut snapshot = KeyboardSnapshot::default();
-        snapshot.invoker_prep_key = Some(parse_key_string("PageUp").unwrap());
-
-        assert_eq!(
-            plan_global_hotkey_event(rdev::Key::PageUp, &snapshot),
-            Some(HotkeyEvent::InvokerPrep)
+            plan_global_hotkey_event(rdev::Key::Home, &snapshot),
+            Some(HotkeyEvent::InvokerProfile("qw-pickoff".to_string()))
         );
     }
 }
