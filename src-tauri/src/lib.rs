@@ -160,7 +160,7 @@ pub fn run() {
 }
 
 fn resolve_tauri_invoker_combo_trigger_profile_id(
-    app_state: &mut AppState,
+    app_state: &AppState,
     settings: &Settings,
 ) -> Option<String> {
     let profile_id = app_state
@@ -180,9 +180,7 @@ fn resolve_tauri_invoker_combo_trigger_profile_id(
                 .invoker
                 .profiles
                 .iter()
-                .find(|profile| {
-                    profile.enabled && profile.mode == InvokerProfileMode::Combo
-                })
+                .find(|profile| profile.enabled && profile.mode == InvokerProfileMode::Combo)
                 .map(|profile| profile.id.clone())
         });
     profile_id
@@ -235,11 +233,8 @@ fn handle_hotkey_events(
                     Some(HeroType::Invoker) => {
                         let settings_snapshot = settings.lock().unwrap().clone();
                         let profile_id = {
-                            let mut state = app_state.lock().unwrap();
-                            resolve_tauri_invoker_combo_trigger_profile_id(
-                                &mut state,
-                                &settings_snapshot,
-                            )
+                            let state = app_state.lock().unwrap();
+                            resolve_tauri_invoker_combo_trigger_profile_id(&state, &settings_snapshot)
                         };
 
                         if let Some(profile_id) = profile_id {
@@ -445,33 +440,12 @@ mod tests {
         let mut app_state = AppState::default();
         app_state.invoker_active_combo_profile_id = Some("combo-b".to_string());
 
-        let selected_profile_id =
-            resolve_tauri_invoker_combo_trigger_profile_id(&mut app_state, &settings);
+        let selected_profile_id = resolve_tauri_invoker_combo_trigger_profile_id(&app_state, &settings);
 
         assert_eq!(selected_profile_id.as_deref(), Some("combo-b"));
         assert_eq!(
             app_state.invoker_active_combo_profile_id.as_deref(),
             Some("combo-b")
-        );
-    }
-
-    #[test]
-    fn combo_trigger_falls_back_to_first_enabled_combo_without_mutating_state() {
-        let settings = settings_with_profiles(vec![
-            profile("prep", true, InvokerProfileMode::Prep),
-            profile("combo-a", true, InvokerProfileMode::Combo),
-            profile("combo-b", true, InvokerProfileMode::Combo),
-        ]);
-        let mut app_state = AppState::default();
-        app_state.invoker_active_combo_profile_id = Some("missing".to_string());
-
-        let selected_profile_id =
-            resolve_tauri_invoker_combo_trigger_profile_id(&mut app_state, &settings);
-
-        assert_eq!(selected_profile_id.as_deref(), Some("combo-a"));
-        assert_eq!(
-            app_state.invoker_active_combo_profile_id.as_deref(),
-            Some("missing")
         );
     }
 
@@ -485,8 +459,7 @@ mod tests {
         let mut app_state = AppState::default();
         app_state.invoker_active_combo_profile_id = Some("missing".to_string());
 
-        let selected_profile_id =
-            resolve_tauri_invoker_combo_trigger_profile_id(&mut app_state, &settings);
+        let selected_profile_id = resolve_tauri_invoker_combo_trigger_profile_id(&app_state, &settings);
 
         assert_eq!(selected_profile_id.as_deref(), Some("combo-a"));
         assert_eq!(
