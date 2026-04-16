@@ -185,7 +185,6 @@ fn resolve_tauri_invoker_combo_trigger_profile_id(
                 })
                 .map(|profile| profile.id.clone())
         });
-    app_state.invoker_active_combo_profile_id = profile_id.clone();
     profile_id
 }
 
@@ -457,7 +456,7 @@ mod tests {
     }
 
     #[test]
-    fn combo_trigger_repairs_invalid_active_combo_with_first_enabled_combo() {
+    fn combo_trigger_falls_back_to_first_enabled_combo_without_mutating_state() {
         let settings = settings_with_profiles(vec![
             profile("prep", true, InvokerProfileMode::Prep),
             profile("combo-a", true, InvokerProfileMode::Combo),
@@ -472,7 +471,27 @@ mod tests {
         assert_eq!(selected_profile_id.as_deref(), Some("combo-a"));
         assert_eq!(
             app_state.invoker_active_combo_profile_id.as_deref(),
-            Some("combo-a")
+            Some("missing")
+        );
+    }
+
+    #[test]
+    fn combo_trigger_resolution_leaves_active_combo_state_unchanged() {
+        let settings = settings_with_profiles(vec![
+            profile("prep", true, InvokerProfileMode::Prep),
+            profile("combo-a", true, InvokerProfileMode::Combo),
+            profile("combo-b", true, InvokerProfileMode::Combo),
+        ]);
+        let mut app_state = AppState::default();
+        app_state.invoker_active_combo_profile_id = Some("missing".to_string());
+
+        let selected_profile_id =
+            resolve_tauri_invoker_combo_trigger_profile_id(&mut app_state, &settings);
+
+        assert_eq!(selected_profile_id.as_deref(), Some("combo-a"));
+        assert_eq!(
+            app_state.invoker_active_combo_profile_id.as_deref(),
+            Some("missing")
         );
     }
 
