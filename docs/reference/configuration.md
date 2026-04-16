@@ -420,6 +420,12 @@ See `docs/heroes/broodmother.md` and `docs/reference/gsi-schema-and-usage.md`.
 Ordered spell steps are authored in natural cast order, but the runtime may
 preload them into `F` then `D` because Invoked spell slots rotate by recency.
 
+Invoker profiles are still defined entirely in `config/config.toml`; the app
+does not persist a separate active-combo setting back into config. The current
+active combo profile is runtime state only, and UI clicks on enabled combo
+profiles, direct combo hotkeys, and the global Invoker cycle hotkey can all
+change that in-memory selection while the app is running.
+
 See `docs/heroes/invoker.md`.
 
 ### `[heroes.invoker.armlet]`

@@ -10,6 +10,8 @@ own hotkey, ordered steps, and per-step delays.
 
 - **Named profiles** - Combo and prep profiles live in one ordered list.
 - **Per-profile hotkeys** - Each profile binds its own trigger key.
+- **One active combo profile** - Exactly one enabled combo profile is treated as
+  the generic active combo at runtime.
 - **Ordered steps** - Every step is either a spell or an item with its own
   `delay_after_ms`.
 - **Per-step completion mode** - Steps can use fixed delay or wait for a spell
@@ -122,6 +124,28 @@ Combo profiles execute their steps in order:
 5. The step either waits on `delay_after_ms` or, for manual spell steps, waits
    for cooldown confirmation first and then applies `delay_after_ms`.
 
+### Active combo selection
+
+Invoker now tracks one active combo profile at a time. This is the profile used
+by the generic combo trigger; the runtime no longer blindly picks the first
+enabled combo in the list unless it needs to repair a missing or invalid active
+selection.
+
+- Clicking an **enabled combo** profile in the React UI marks that profile as
+  the active combo and opens it in the editor.
+- Clicking a **prep** profile still opens it in the editor and keeps it directly
+  runnable, but it does **not** replace the active combo.
+- Per-profile **combo** hotkeys still run their profile immediately and also
+  promote that profile to the active combo.
+- Per-profile **prep** hotkeys still run directly without changing the active
+  combo.
+- The global Invoker cycle hotkey rotates only through enabled `mode = "combo"`
+  profiles.
+
+If the active combo changes, the app emits an activity entry so the operator can
+see the switch in the recent-event feed, for example
+`Invoker active combo changed to QE Burst`.
+
 ### Spell preload behavior
 
 Invoker spell profiles are still authored in natural cast order, such as:
@@ -166,6 +190,10 @@ Instead, the keyboard layer scans `profiles[]` and emits
 `HotkeyEvent::InvokerProfile(<id>)` for the selected hero's enabled profile
 hotkeys.
 
+The generic combo trigger resolves the current active combo profile first. The
+global Invoker cycle hotkey updates that active combo selection without running
+the profile, so the next generic combo trigger uses the newly selected combo.
+
 ### Request queue
 
 Invoker still uses a dedicated FIFO worker queue. The queued request is now
@@ -195,6 +223,7 @@ they do not rely on scraped external art.
 At `info` level, Invoker now logs:
 
 ```text
+Invoker active combo profile set to qe-burst
 🔮 Invoker profile: QW Pickoff (combo)
 🔮 Planned steps: [...]
 🔮 Active slots before step: [...]
@@ -204,8 +233,9 @@ At `info` level, Invoker now logs:
 🔮 Invoker profile complete: QW Pickoff
 ```
 
-These logs are the first place to look when a spell order feels wrong in live
-play.
+The activity feed also records active-combo changes when UI clicks, per-profile
+combo hotkeys, or the cycle hotkey switch the current combo. These logs are the
+first place to look when a spell order feels wrong in live play.
 
 ## Limitations
 
