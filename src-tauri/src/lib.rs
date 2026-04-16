@@ -6,6 +6,7 @@ use dota2_scripts::actions::executor::{ActionExecutor, ExecutorMetrics};
 use dota2_scripts::actions::heroes::{LargoScript, MeepoScript};
 use dota2_scripts::actions::activity::{push_activity, ActivityCategory};
 use dota2_scripts::actions::ActionDispatcher;
+use dota2_scripts::config::settings::InvokerProfileMode;
 use dota2_scripts::config::Settings;
 use dota2_scripts::gsi::start_gsi_server;
 use dota2_scripts::input::keyboard::{
@@ -158,6 +159,59 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
+fn resolve_tauri_invoker_combo_trigger_profile_id(
+    app_state: &mut AppState,
+    settings: &Settings,
+) -> Option<String> {
+    let profile_id = app_state
+        .invoker_active_combo_profile_id
+        .as_deref()
+        .and_then(|active_profile_id| {
+            settings.heroes.invoker.profiles.iter().find(|profile| {
+                profile.enabled
+                    && profile.mode == InvokerProfileMode::Combo
+                    && profile.id == active_profile_id
+            })
+        })
+        .map(|profile| profile.id.clone())
+        .or_else(|| {
+            settings
+                .heroes
+                .invoker
+                .profiles
+                .iter()
+                .find(|profile| {
+                    profile.enabled && profile.mode == InvokerProfileMode::Combo
+                })
+                .map(|profile| profile.id.clone())
+        });
+    app_state.invoker_active_combo_profile_id = profile_id.clone();
+    profile_id
+}
+
+fn sync_tauri_invoker_profile_hotkey(
+    app_state: &mut AppState,
+    settings: &Settings,
+    profile_id: &str,
+) -> Option<String> {
+    let profile = settings
+        .heroes
+        .invoker
+        .profiles
+        .iter()
+        .find(|profile| profile.id == profile_id)?;
+
+    if profile.enabled && profile.mode == InvokerProfileMode::Combo {
+        app_state.invoker_active_combo_profile_id = Some(profile.id.clone());
+        Some(format!(
+            "Invoker active combo profile set to {}",
+            profile.id
+        ))
+    } else {
+        None
+    }
+}
+
 /// Processes hotkey events from the keyboard listener and dispatches actions.
 fn handle_hotkey_events(
     hotkey_rx: std::sync::mpsc::Receiver<HotkeyEvent>,
@@ -168,12 +222,41 @@ fn handle_hotkey_events(
     while let Ok(event) = hotkey_rx.recv() {
         match event {
             HotkeyEvent::ComboTrigger => {
-                let state = app_state.lock().unwrap();
-                if state.standalone_enabled {
-                    if let Some(hero_type) = state.selected_hero {
+                let (standalone_enabled, selected_hero) = {
+                    let state = app_state.lock().unwrap();
+                    (state.standalone_enabled, state.selected_hero)
+                };
+
+                if !standalone_enabled {
+                    info!("Standalone scripts disabled");
+                    continue;
+                }
+
+                match selected_hero {
+                    Some(HeroType::Invoker) => {
+                        let settings_snapshot = settings.lock().unwrap().clone();
+                        let profile_id = {
+                            let mut state = app_state.lock().unwrap();
+                            resolve_tauri_invoker_combo_trigger_profile_id(
+                                &mut state,
+                                &settings_snapshot,
+                            )
+                        };
+
+                        if let Some(profile_id) = profile_id {
+                            info!(
+                                "Triggering standalone combo for {} with profile {}",
+                                Hero::Invoker.to_game_name(),
+                                profile_id
+                            );
+                            dispatcher.dispatch_invoker_profile(&profile_id);
+                        } else {
+                            info!("Invoker standalone combo skipped: no enabled combo profile");
+                        }
+                    }
+                    Some(hero_type) => {
                         let hero_name = match hero_type {
                             HeroType::Huskar => Hero::Huskar.to_game_name(),
-                            HeroType::Invoker => Hero::Invoker.to_game_name(),
                             HeroType::Largo => Hero::Largo.to_game_name(),
                             HeroType::LegionCommander => Hero::LegionCommander.to_game_name(),
                             HeroType::Meepo => Hero::Meepo.to_game_name(),
@@ -182,15 +265,14 @@ fn handle_hotkey_events(
                             }
                             HeroType::ShadowFiend => Hero::Nevermore.to_game_name(),
                             HeroType::Tiny => Hero::Tiny.to_game_name(),
+                            HeroType::Invoker => unreachable!(),
                         };
                         info!("Triggering standalone combo for {}", hero_name);
-                        drop(state);
                         dispatcher.dispatch_standalone_trigger(hero_name);
-                    } else {
+                    }
+                    None => {
                         info!("No hero selected for standalone combo");
                     }
-                } else {
-                    info!("Standalone scripts disabled");
                 }
             }
             HotkeyEvent::MeepoFarmToggle => {
@@ -292,6 +374,20 @@ fn handle_hotkey_events(
                 });
             }
             HotkeyEvent::InvokerProfile(profile_id) => {
+                let settings_snapshot = settings.lock().unwrap().clone();
+                let activity_message = {
+                    let mut state = app_state.lock().unwrap();
+                    sync_tauri_invoker_profile_hotkey(
+                        &mut state,
+                        &settings_snapshot,
+                        &profile_id,
+                    )
+                };
+
+                if let Some(activity_message) = activity_message {
+                    info!("{}", activity_message);
+                    push_activity(ActivityCategory::System, activity_message);
+                }
                 dispatcher.dispatch_invoker_profile(&profile_id);
             }
         }
@@ -312,5 +408,110 @@ fn dispatch_largo_song(
                 action(largo_script);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        resolve_tauri_invoker_combo_trigger_profile_id, sync_tauri_invoker_profile_hotkey,
+    };
+    use dota2_scripts::config::settings::{InvokerProfile, InvokerProfileMode, Settings};
+    use dota2_scripts::state::AppState;
+
+    fn profile(id: &str, enabled: bool, mode: InvokerProfileMode) -> InvokerProfile {
+        InvokerProfile {
+            id: id.to_string(),
+            name: id.to_string(),
+            enabled,
+            hotkey: "F1".to_string(),
+            mode,
+            build_tag: String::new(),
+            steps: Vec::new(),
+        }
+    }
+
+    fn settings_with_profiles(profiles: Vec<InvokerProfile>) -> Settings {
+        let mut settings = Settings::default();
+        settings.heroes.invoker.profiles = profiles;
+        settings
+    }
+
+    #[test]
+    fn combo_trigger_prefers_existing_enabled_active_combo() {
+        let settings = settings_with_profiles(vec![
+            profile("combo-a", true, InvokerProfileMode::Combo),
+            profile("combo-b", true, InvokerProfileMode::Combo),
+        ]);
+        let mut app_state = AppState::default();
+        app_state.invoker_active_combo_profile_id = Some("combo-b".to_string());
+
+        let selected_profile_id =
+            resolve_tauri_invoker_combo_trigger_profile_id(&mut app_state, &settings);
+
+        assert_eq!(selected_profile_id.as_deref(), Some("combo-b"));
+        assert_eq!(
+            app_state.invoker_active_combo_profile_id.as_deref(),
+            Some("combo-b")
+        );
+    }
+
+    #[test]
+    fn combo_trigger_repairs_invalid_active_combo_with_first_enabled_combo() {
+        let settings = settings_with_profiles(vec![
+            profile("prep", true, InvokerProfileMode::Prep),
+            profile("combo-a", true, InvokerProfileMode::Combo),
+            profile("combo-b", true, InvokerProfileMode::Combo),
+        ]);
+        let mut app_state = AppState::default();
+        app_state.invoker_active_combo_profile_id = Some("missing".to_string());
+
+        let selected_profile_id =
+            resolve_tauri_invoker_combo_trigger_profile_id(&mut app_state, &settings);
+
+        assert_eq!(selected_profile_id.as_deref(), Some("combo-a"));
+        assert_eq!(
+            app_state.invoker_active_combo_profile_id.as_deref(),
+            Some("combo-a")
+        );
+    }
+
+    #[test]
+    fn combo_profile_hotkey_updates_active_combo_state_and_returns_activity() {
+        let settings = settings_with_profiles(vec![
+            profile("combo-a", true, InvokerProfileMode::Combo),
+            profile("prep", true, InvokerProfileMode::Prep),
+        ]);
+        let mut app_state = AppState::default();
+
+        let activity =
+            sync_tauri_invoker_profile_hotkey(&mut app_state, &settings, "combo-a");
+
+        assert_eq!(
+            app_state.invoker_active_combo_profile_id.as_deref(),
+            Some("combo-a")
+        );
+        assert_eq!(
+            activity.as_deref(),
+            Some("Invoker active combo profile set to combo-a")
+        );
+    }
+
+    #[test]
+    fn prep_profile_hotkey_leaves_active_combo_state_unchanged() {
+        let settings = settings_with_profiles(vec![
+            profile("combo-a", true, InvokerProfileMode::Combo),
+            profile("prep", true, InvokerProfileMode::Prep),
+        ]);
+        let mut app_state = AppState::default();
+        app_state.invoker_active_combo_profile_id = Some("combo-a".to_string());
+
+        let activity = sync_tauri_invoker_profile_hotkey(&mut app_state, &settings, "prep");
+
+        assert_eq!(
+            app_state.invoker_active_combo_profile_id.as_deref(),
+            Some("combo-a")
+        );
+        assert_eq!(activity, None);
     }
 }
