@@ -185,6 +185,26 @@ export interface OutworldDestroyerConfig {
   armlet: HeroArmletOverride;
 }
 
+export type InvokerProfileMode = "combo" | "prep";
+export type InvokerProfileStepKind = "spell" | "item";
+
+export interface InvokerProfileStep {
+  kind: InvokerProfileStepKind;
+  target: string;
+  delay_after_ms: number;
+  notes: string;
+}
+
+export interface InvokerProfile {
+  id: string;
+  name: string;
+  enabled: boolean;
+  hotkey: string;
+  mode: InvokerProfileMode;
+  build_tag: string;
+  steps: InvokerProfileStep[];
+}
+
 export interface InvokerConfig {
   standalone_key: string;
   panic_key: string;
@@ -195,6 +215,7 @@ export interface InvokerConfig {
   invoke_key: string;
   spell_slot_primary_key: string;
   spell_slot_secondary_key: string;
+  profiles: InvokerProfile[];
   primary_profile: string;
   prep_profile: string;
   combo_items: string[];

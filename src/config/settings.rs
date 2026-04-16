@@ -386,6 +386,53 @@ pub struct MeepoConfig {
     pub armlet: HeroArmletOverrideConfig,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum InvokerProfileMode {
+    Combo,
+    Prep,
+}
+
+impl InvokerProfileMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Combo => "combo",
+            Self::Prep => "prep",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum InvokerProfileStepKind {
+    Spell,
+    Item,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct InvokerProfileStep {
+    pub kind: InvokerProfileStepKind,
+    pub target: String,
+    #[serde(default)]
+    pub delay_after_ms: u64,
+    #[serde(default)]
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct InvokerProfile {
+    pub id: String,
+    pub name: String,
+    #[serde(default = "default_invoker_profile_enabled")]
+    pub enabled: bool,
+    pub hotkey: String,
+    pub mode: InvokerProfileMode,
+    #[serde(default)]
+    pub build_tag: String,
+    #[serde(default)]
+    pub steps: Vec<InvokerProfileStep>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InvokerConfig {
     #[serde(default = "default_standalone_key")]
@@ -406,6 +453,8 @@ pub struct InvokerConfig {
     pub spell_slot_primary_key: char,
     #[serde(default = "default_invoker_spell_slot_secondary_key")]
     pub spell_slot_secondary_key: char,
+    #[serde(default = "default_invoker_profiles")]
+    pub profiles: Vec<InvokerProfile>,
     #[serde(default = "default_invoker_primary_profile")]
     pub primary_profile: String,
     #[serde(default = "default_invoker_prep_profile")]
@@ -1082,6 +1131,9 @@ fn default_meepo_farm_assist_poof_press_interval_ms() -> u64 {
     35
 }
 
+fn default_invoker_profile_enabled() -> bool {
+    true
+}
 fn default_invoker_panic_key() -> String {
     "End".to_string()
 }
@@ -1105,6 +1157,108 @@ fn default_invoker_spell_slot_primary_key() -> char {
 }
 fn default_invoker_spell_slot_secondary_key() -> char {
     'f'
+}
+fn default_invoker_profiles() -> Vec<InvokerProfile> {
+    vec![
+        InvokerProfile {
+            id: "qw-pickoff".to_string(),
+            name: "QW Pickoff".to_string(),
+            enabled: true,
+            hotkey: "Home".to_string(),
+            mode: InvokerProfileMode::Combo,
+            build_tag: "qw".to_string(),
+            steps: vec![
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Item,
+                    target: "item_spirit_vessel".to_string(),
+                    delay_after_ms: 50,
+                    notes: String::new(),
+                },
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Item,
+                    target: "item_rod_of_atos".to_string(),
+                    delay_after_ms: 50,
+                    notes: String::new(),
+                },
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Spell,
+                    target: "invoker_tornado".to_string(),
+                    delay_after_ms: 700,
+                    notes: String::new(),
+                },
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Spell,
+                    target: "invoker_emp".to_string(),
+                    delay_after_ms: 100,
+                    notes: String::new(),
+                },
+            ],
+        },
+        InvokerProfile {
+            id: "qe-burst".to_string(),
+            name: "QE Burst".to_string(),
+            enabled: false,
+            hotkey: "PageDown".to_string(),
+            mode: InvokerProfileMode::Combo,
+            build_tag: "qe".to_string(),
+            steps: vec![
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Spell,
+                    target: "invoker_sun_strike".to_string(),
+                    delay_after_ms: 150,
+                    notes: String::new(),
+                },
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Spell,
+                    target: "invoker_chaos_meteor".to_string(),
+                    delay_after_ms: 450,
+                    notes: String::new(),
+                },
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Spell,
+                    target: "invoker_deafening_blast".to_string(),
+                    delay_after_ms: 100,
+                    notes: String::new(),
+                },
+            ],
+        },
+        InvokerProfile {
+            id: "ghost-walk-panic".to_string(),
+            name: "Ghost Walk Panic".to_string(),
+            enabled: true,
+            hotkey: "End".to_string(),
+            mode: InvokerProfileMode::Combo,
+            build_tag: "general".to_string(),
+            steps: vec![InvokerProfileStep {
+                kind: InvokerProfileStepKind::Spell,
+                target: "invoker_ghost_walk".to_string(),
+                delay_after_ms: 100,
+                notes: String::new(),
+            }],
+        },
+        InvokerProfile {
+            id: "meteor-blast-prep".to_string(),
+            name: "Meteor + Blast Prep".to_string(),
+            enabled: true,
+            hotkey: "PageUp".to_string(),
+            mode: InvokerProfileMode::Prep,
+            build_tag: "qe".to_string(),
+            steps: vec![
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Spell,
+                    target: "invoker_chaos_meteor".to_string(),
+                    delay_after_ms: 0,
+                    notes: String::new(),
+                },
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Spell,
+                    target: "invoker_deafening_blast".to_string(),
+                    delay_after_ms: 0,
+                    notes: String::new(),
+                },
+            ],
+        },
+    ]
 }
 fn default_invoker_primary_profile() -> String {
     "qw_pickoff".to_string()
@@ -1538,6 +1692,7 @@ impl Default for InvokerConfig {
             invoke_key: default_invoker_invoke_key(),
             spell_slot_primary_key: default_invoker_spell_slot_primary_key(),
             spell_slot_secondary_key: default_invoker_spell_slot_secondary_key(),
+            profiles: default_invoker_profiles(),
             primary_profile: default_invoker_primary_profile(),
             prep_profile: default_invoker_prep_profile(),
             combo_items: default_invoker_combo_items(),
@@ -1930,6 +2085,28 @@ mod tests {
         assert_eq!(settings.heroes.invoker.prep_key, "PageUp");
         assert_eq!(settings.heroes.invoker.quas_key, 'q');
         assert_eq!(settings.heroes.invoker.invoke_key, 'r');
+    }
+
+    #[test]
+    fn invoker_defaults_seed_named_profiles() {
+        let settings = Settings::default();
+        let invoker = settings.heroes.invoker;
+
+        let names: Vec<_> = invoker
+            .profiles
+            .iter()
+            .map(|profile| (profile.name.as_str(), profile.mode.as_str(), profile.enabled))
+            .collect();
+
+        assert_eq!(
+            names,
+            vec![
+                ("QW Pickoff", "combo", true),
+                ("QE Burst", "combo", false),
+                ("Ghost Walk Panic", "combo", true),
+                ("Meteor + Blast Prep", "prep", true),
+            ]
+        );
     }
 
     #[test]

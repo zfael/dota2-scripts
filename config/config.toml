@@ -251,6 +251,88 @@ tornado_emp_delay_ms = 700
 sun_strike_delay_ms = 150
 meteor_blast_delay_ms = 450
 
+[[heroes.invoker.profiles]]
+id = "qw-pickoff"
+name = "QW Pickoff"
+enabled = true
+hotkey = "Home"
+mode = "combo"
+build_tag = "qw"
+
+[[heroes.invoker.profiles.steps]]
+kind = "item"
+target = "item_spirit_vessel"
+delay_after_ms = 50
+
+[[heroes.invoker.profiles.steps]]
+kind = "item"
+target = "item_rod_of_atos"
+delay_after_ms = 50
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_tornado"
+delay_after_ms = 700
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_emp"
+delay_after_ms = 100
+
+[[heroes.invoker.profiles]]
+id = "qe-burst"
+name = "QE Burst"
+enabled = false
+hotkey = "PageDown"
+mode = "combo"
+build_tag = "qe"
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_sun_strike"
+delay_after_ms = 150
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_chaos_meteor"
+delay_after_ms = 450
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_deafening_blast"
+delay_after_ms = 100
+
+[[heroes.invoker.profiles]]
+id = "ghost-walk-panic"
+name = "Ghost Walk Panic"
+enabled = true
+hotkey = "End"
+mode = "combo"
+build_tag = "general"
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_ghost_walk"
+delay_after_ms = 100
+
+[[heroes.invoker.profiles]]
+id = "meteor-blast-prep"
+name = "Meteor + Blast Prep"
+enabled = true
+hotkey = "PageUp"
+mode = "prep"
+build_tag = "qe"
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_chaos_meteor"
+delay_after_ms = 0
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_deafening_blast"
+delay_after_ms = 0
+
 [gsi_logging]
 enabled = false
 output_dir = "logs/gsi_events"
