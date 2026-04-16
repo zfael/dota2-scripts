@@ -38,6 +38,7 @@ describe("uiStore armlet Roshan mode", () => {
       standaloneEnabled: false,
       appVersion: "0.1.0",
       armletRoshanArmed: false,
+      invokerActiveComboProfileId: null,
     });
   });
 
@@ -85,5 +86,51 @@ describe("uiStore armlet Roshan mode", () => {
     expect(useUIStore.getState().armletRoshanArmed).toBe(true);
 
     unlisten();
+  });
+
+  it("loads and updates the Invoker active combo profile from app state payloads", async () => {
+    invokeMock.mockResolvedValueOnce({
+      selectedHero: null,
+      gsiEnabled: true,
+      standaloneEnabled: false,
+      appVersion: "0.15.0",
+      armletRoshanArmed: false,
+      invokerActiveComboProfileId: "qe-burst",
+    });
+
+    await useUIStore.getState().loadInitialState();
+
+    expect(useUIStore.getState().invokerActiveComboProfileId).toBe("qe-burst");
+
+    const unlisten = await useUIStore.getState().startListening();
+
+    emitEvent("app_state_update", {
+      selectedHero: null,
+      gsiEnabled: true,
+      standaloneEnabled: false,
+      appVersion: "0.15.0",
+      armletRoshanArmed: false,
+      invokerActiveComboProfileId: "cataclysm-finish",
+    });
+
+    expect(useUIStore.getState().invokerActiveComboProfileId).toBe("cataclysm-finish");
+
+    unlisten();
+  });
+
+  it("persists active combo profile changes through the backend command", async () => {
+    invokeMock.mockResolvedValue(undefined);
+
+    const setInvokerActiveComboProfileId = useUIStore.getState().setInvokerActiveComboProfileId;
+
+    expect(setInvokerActiveComboProfileId).toBeTypeOf("function");
+    setInvokerActiveComboProfileId?.("qe-burst");
+
+    expect(useUIStore.getState().invokerActiveComboProfileId).toBe("qe-burst");
+    await vi.waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("set_invoker_active_combo_profile", {
+        profileId: "qe-burst",
+      });
+    });
   });
 });

@@ -84,6 +84,7 @@ fn build_app_state_dto(state: &dota2_scripts::state::AppState) -> AppStateDto {
         gsi_enabled: state.gsi_enabled,
         standalone_enabled: state.standalone_enabled,
         armlet_roshan_armed: armlet::is_roshan_mode_armed(),
+        invoker_active_combo_profile_id: state.invoker_active_combo_profile_id.clone(),
         app_version: env!("CARGO_PKG_VERSION").to_string(),
     }
 }

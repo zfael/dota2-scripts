@@ -27,6 +27,7 @@ pub struct AppStateDto {
     pub gsi_enabled: bool,
     pub standalone_enabled: bool,
     pub armlet_roshan_armed: bool,
+    pub invoker_active_combo_profile_id: Option<String>,
     pub app_version: String,
 }
 
@@ -220,5 +221,23 @@ mod tests {
         assert_eq!(json["gsiConnected"], true);
         assert_eq!(json["queueMetrics"]["eventsProcessed"], 100);
         assert_eq!(json["syntheticInput"]["peakDepth"], 5);
+    }
+
+    #[test]
+    fn app_state_dto_serializes_invoker_active_combo_profile_id_in_camel_case() {
+        let dto = AppStateDto {
+            selected_hero: Some("Invoker".to_string()),
+            gsi_enabled: true,
+            standalone_enabled: true,
+            armlet_roshan_armed: false,
+            invoker_active_combo_profile_id: Some("qe-burst".to_string()),
+            app_version: "0.15.0".to_string(),
+        };
+
+        let json = serde_json::to_value(&dto).unwrap();
+
+        assert_eq!(json["selectedHero"], "Invoker");
+        assert_eq!(json["invokerActiveComboProfileId"], "qe-burst");
+        assert!(json.get("invoker_active_combo_profile_id").is_none());
     }
 }

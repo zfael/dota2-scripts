@@ -1,5 +1,6 @@
 use crate::ipc_types::AppStateDto;
 use crate::TauriAppState;
+use dota2_scripts::actions::activity::{push_activity, ActivityCategory};
 use dota2_scripts::actions::armlet;
 use dota2_scripts::input::keyboard::KeyboardSnapshot;
 use dota2_scripts::state::HeroType;
@@ -17,6 +18,7 @@ pub fn get_app_state(state: tauri::State<'_, TauriAppState>) -> Result<AppStateD
         gsi_enabled: app.gsi_enabled,
         standalone_enabled: app.standalone_enabled,
         armlet_roshan_armed: armlet::is_roshan_mode_armed(),
+        invoker_active_combo_profile_id: app.invoker_active_combo_profile_id.clone(),
         app_version: env!("CARGO_PKG_VERSION").to_string(),
     })
 }
@@ -57,6 +59,29 @@ pub fn set_armlet_roshan_mode_armed(
     _state: tauri::State<'_, TauriAppState>,
 ) -> Result<(), String> {
     armlet::set_roshan_mode_armed(armed);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_invoker_active_combo_profile(
+    profile_id: Option<String>,
+    state: tauri::State<'_, TauriAppState>,
+) -> Result<(), String> {
+    let mut app = state
+        .app_state
+        .lock()
+        .map_err(|e| format!("Failed to lock app state: {}", e))?;
+
+    app.invoker_active_combo_profile_id = profile_id.clone();
+
+    if let Some(profile_id) = profile_id {
+        push_activity(
+            ActivityCategory::System,
+            format!("Invoker active combo profile set to {}", profile_id),
+        );
+    }
+
+    refresh_keyboard_snapshot(&state, &app)?;
     Ok(())
 }
 

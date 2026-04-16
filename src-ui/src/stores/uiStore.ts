@@ -8,9 +8,11 @@ interface UIStore {
   standaloneEnabled: boolean;
   appVersion: string;
   armletRoshanArmed: boolean;
+  invokerActiveComboProfileId: string | null;
   setGsiEnabled: (enabled: boolean) => void;
   setStandaloneEnabled: (enabled: boolean) => void;
   setArmletRoshanArmed: (armed: boolean) => void;
+  setInvokerActiveComboProfileId: (profileId: string | null) => void;
   loadInitialState: () => Promise<void>;
   startListening: () => Promise<() => void>;
 }
@@ -22,6 +24,7 @@ export const useUIStore = create<UIStore>((set) => ({
   standaloneEnabled: false,
   appVersion: "0.1.0",
   armletRoshanArmed: false,
+  invokerActiveComboProfileId: null,
 
   setGsiEnabled: (enabled) => {
     set({ gsiEnabled: enabled });
@@ -50,6 +53,15 @@ export const useUIStore = create<UIStore>((set) => ({
     }
   },
 
+  setInvokerActiveComboProfileId: (profileId) => {
+    set({ invokerActiveComboProfileId: profileId });
+    if (isTauri()) {
+      import("@tauri-apps/api/core").then(({ invoke }) => {
+        invoke("set_invoker_active_combo_profile", { profileId }).catch(console.error);
+      });
+    }
+  },
+
   loadInitialState: async () => {
     if (!isTauri()) return;
     try {
@@ -59,12 +71,14 @@ export const useUIStore = create<UIStore>((set) => ({
         gsiEnabled: boolean;
         standaloneEnabled: boolean;
         armletRoshanArmed: boolean;
+        invokerActiveComboProfileId: string | null;
         appVersion: string;
       }>("get_app_state");
       set({
         gsiEnabled: state.gsiEnabled,
         standaloneEnabled: state.standaloneEnabled,
         armletRoshanArmed: state.armletRoshanArmed,
+        invokerActiveComboProfileId: state.invokerActiveComboProfileId,
         appVersion: state.appVersion,
       });
     } catch (e) {
@@ -81,12 +95,14 @@ export const useUIStore = create<UIStore>((set) => ({
       gsiEnabled: boolean;
       standaloneEnabled: boolean;
       armletRoshanArmed: boolean;
+      invokerActiveComboProfileId: string | null;
       appVersion: string;
     }>("app_state_update", (event) => {
       set({
         gsiEnabled: event.payload.gsiEnabled,
         standaloneEnabled: event.payload.standaloneEnabled,
         armletRoshanArmed: event.payload.armletRoshanArmed,
+        invokerActiveComboProfileId: event.payload.invokerActiveComboProfileId,
         appVersion: event.payload.appVersion,
       });
     });

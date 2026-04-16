@@ -4,6 +4,7 @@ pub mod ipc_types;
 
 use dota2_scripts::actions::executor::{ActionExecutor, ExecutorMetrics};
 use dota2_scripts::actions::heroes::{LargoScript, MeepoScript};
+use dota2_scripts::actions::activity::{push_activity, ActivityCategory};
 use dota2_scripts::actions::ActionDispatcher;
 use dota2_scripts::config::Settings;
 use dota2_scripts::gsi::start_gsi_server;
@@ -110,8 +111,14 @@ pub fn run() {
     // Start hotkey event handler in background
     let hotkey_app_state = app_state.clone();
     let hotkey_dispatcher = dispatcher.clone();
+    let hotkey_settings = settings.clone();
     std::thread::spawn(move || {
-        handle_hotkey_events(hotkey_rx, hotkey_app_state, hotkey_dispatcher);
+        handle_hotkey_events(
+            hotkey_rx,
+            hotkey_app_state,
+            hotkey_dispatcher,
+            hotkey_settings,
+        );
     });
 
     // Build and run Tauri application
@@ -136,6 +143,7 @@ pub fn run() {
             commands::state::set_gsi_enabled,
             commands::state::set_standalone_enabled,
             commands::state::set_armlet_roshan_mode_armed,
+            commands::state::set_invoker_active_combo_profile,
             commands::state::select_hero,
             commands::game::get_game_state,
             commands::diagnostics::get_diagnostics,
@@ -155,6 +163,7 @@ fn handle_hotkey_events(
     hotkey_rx: std::sync::mpsc::Receiver<HotkeyEvent>,
     app_state: Arc<Mutex<AppState>>,
     dispatcher: Arc<ActionDispatcher>,
+    settings: Arc<Mutex<Settings>>,
 ) {
     while let Ok(event) = hotkey_rx.recv() {
         match event {
@@ -206,6 +215,54 @@ fn handle_hotkey_events(
                 info!(
                     "Armlet Roshan mode {} via hotkey",
                     if armed { "armed" } else { "disarmed" }
+                );
+            }
+            HotkeyEvent::InvokerCycleComboProfile => {
+                let settings = settings.lock().unwrap();
+                let enabled_combo_profile_ids: Vec<String> = settings
+                    .heroes
+                    .invoker
+                    .profiles
+                    .iter()
+                    .filter(|profile| {
+                        profile.enabled
+                            && profile.mode
+                                == dota2_scripts::config::settings::InvokerProfileMode::Combo
+                    })
+                    .map(|profile| profile.id.clone())
+                    .collect();
+                drop(settings);
+
+                let mut state = app_state.lock().unwrap();
+                if !state.standalone_enabled || state.selected_hero != Some(HeroType::Invoker) {
+                    continue;
+                }
+
+                if enabled_combo_profile_ids.is_empty() {
+                    info!("Invoker cycle hotkey ignored: no enabled combo profiles");
+                    continue;
+                }
+
+                let current_index =
+                    state
+                        .invoker_active_combo_profile_id
+                        .as_ref()
+                        .and_then(|active_id| {
+                            enabled_combo_profile_ids
+                                .iter()
+                                .position(|profile_id| profile_id == active_id)
+                        });
+                let next_index = current_index
+                    .map(|index| (index + 1) % enabled_combo_profile_ids.len())
+                    .unwrap_or(0);
+                let next_profile_id = enabled_combo_profile_ids[next_index].clone();
+                state.invoker_active_combo_profile_id = Some(next_profile_id.clone());
+                drop(state);
+
+                info!("Invoker active combo profile set to {}", next_profile_id);
+                push_activity(
+                    ActivityCategory::System,
+                    format!("Invoker active combo profile set to {}", next_profile_id),
                 );
             }
             HotkeyEvent::LargoQ => {
