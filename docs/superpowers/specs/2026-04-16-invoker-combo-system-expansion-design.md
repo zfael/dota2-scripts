@@ -211,10 +211,6 @@ The Invoker item catalog should be expanded to include at least:
 - `item_refresher`
 - `item_cyclone`
 
-The Invoker spell catalog should be expanded to include at least:
-
-- `invoker_alacrity`
-
 The current missing-item runtime behavior should stay:
 
 - if the configured item is present, use it
@@ -260,11 +256,11 @@ The requested **Laning Pressure Combo** should be included only as a
 **partial-support preset** in this project:
 
 - Forge Spirit
-- self-Alacrity
-- Cold Snap
 
 It should **not** attempt:
 
+- self-Alacrity
+- Cold Snap
 - spirit-targeted Alacrity
 - selecting the Forge Spirit
 - issuing hero-plus-spirit attack orders
