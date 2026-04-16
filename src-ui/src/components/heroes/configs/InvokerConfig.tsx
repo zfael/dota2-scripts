@@ -1,157 +1,210 @@
+import { useEffect, useMemo, useState } from "react";
+import { Button } from "../../common/Button";
 import { Card } from "../../common/Card";
 import { KeyInput } from "../../common/KeyInput";
 import { useConfigStore } from "../../../stores/configStore";
+import type { InvokerProfile } from "../../../types/config";
+import { InvokerProfileEditor } from "./invoker/InvokerProfileEditor";
+import { InvokerProfileList } from "./invoker/InvokerProfileList";
+import {
+  INVOKER_PRESET_PROFILES,
+  createInvokerStep,
+} from "./invoker/invokerCatalog";
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function nextProfileId(baseName: string, profiles: InvokerProfile[]) {
+  const base = slugify(baseName) || "invoker-profile";
+  let candidate = base;
+  let counter = 2;
+
+  while (profiles.some((profile) => profile.id === candidate)) {
+    candidate = `${base}-${counter}`;
+    counter += 1;
+  }
+
+  return candidate;
+}
+
+function cloneProfile(profile: InvokerProfile, profiles: InvokerProfile[]) {
+  const copyName = `${profile.name} Copy`;
+  return {
+    ...profile,
+    id: nextProfileId(copyName, profiles),
+    name: copyName,
+    steps: profile.steps.map((step) => ({ ...step })),
+  };
+}
+
+function createBlankProfile(
+  mode: InvokerProfile["mode"],
+  profiles: InvokerProfile[],
+): InvokerProfile {
+  const name = mode === "combo" ? "Custom Combo" : "Custom Prep";
+  return {
+    id: nextProfileId(name, profiles),
+    name,
+    enabled: true,
+    hotkey: "",
+    mode,
+    build_tag: "general",
+    steps: [createInvokerStep("spell")],
+  };
+}
 
 export default function InvokerConfig() {
-  const config = useConfigStore((s) => s.config.heroes.invoker);
-  const update = useConfigStore((s) => s.updateHeroConfig);
+  const config = useConfigStore((state) => state.config.heroes.invoker);
+  const update = useConfigStore((state) => state.updateHeroConfig);
   const set = (updates: Partial<typeof config>) => update("invoker", updates);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    config.profiles[0]?.id ?? null,
+  );
+
+  useEffect(() => {
+    if (selectedId && config.profiles.some((profile) => profile.id === selectedId)) {
+      return;
+    }
+
+    setSelectedId(config.profiles[0]?.id ?? null);
+  }, [config.profiles, selectedId]);
+
+  const selected = useMemo(
+    () =>
+      config.profiles.find((profile) => profile.id === selectedId) ??
+      config.profiles[0] ??
+      null,
+    [config.profiles, selectedId],
+  );
+
+  const setProfiles = (profiles: InvokerProfile[]) => set({ profiles });
 
   return (
     <>
       <div className="space-y-4">
-        <Card title="Keybindings">
-          <KeyInput label="Standalone Combo Key" value={config.standalone_key} onChange={(v) => set({ standalone_key: v })} />
-          <KeyInput label="Panic Key" value={config.panic_key} onChange={(v) => set({ panic_key: v })} />
-          <KeyInput label="Prep Key" value={config.prep_key} onChange={(v) => set({ prep_key: v })} />
-        </Card>
-
-        <Card title="Orb Keys">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <label className="w-24 text-xs text-content">Quas:</label>
-              <input
-                type="text"
-                maxLength={1}
-                value={config.quas_key}
-                onChange={(e) => set({ quas_key: e.target.value })}
-                className="w-12 rounded bg-elevated px-2 py-1 text-center text-xs"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="w-24 text-xs text-content">Wex:</label>
-              <input
-                type="text"
-                maxLength={1}
-                value={config.wex_key}
-                onChange={(e) => set({ wex_key: e.target.value })}
-                className="w-12 rounded bg-elevated px-2 py-1 text-center text-xs"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="w-24 text-xs text-content">Exort:</label>
-              <input
-                type="text"
-                maxLength={1}
-                value={config.exort_key}
-                onChange={(e) => set({ exort_key: e.target.value })}
-                className="w-12 rounded bg-elevated px-2 py-1 text-center text-xs"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="w-24 text-xs text-content">Invoke:</label>
-              <input
-                type="text"
-                maxLength={1}
-                value={config.invoke_key}
-                onChange={(e) => set({ invoke_key: e.target.value })}
-                className="w-12 rounded bg-elevated px-2 py-1 text-center text-xs"
-              />
-            </div>
+        <Card title="Core Keys">
+          <div className="grid gap-3 md:grid-cols-2">
+            <KeyInput
+              label="Quas"
+              value={config.quas_key}
+              onChange={(quas_key) => set({ quas_key })}
+            />
+            <KeyInput
+              label="Wex"
+              value={config.wex_key}
+              onChange={(wex_key) => set({ wex_key })}
+            />
+            <KeyInput
+              label="Exort"
+              value={config.exort_key}
+              onChange={(exort_key) => set({ exort_key })}
+            />
+            <KeyInput
+              label="Invoke"
+              value={config.invoke_key}
+              onChange={(invoke_key) => set({ invoke_key })}
+            />
+            <KeyInput
+              label="Primary Spell Slot"
+              value={config.spell_slot_primary_key}
+              onChange={(spell_slot_primary_key) => set({ spell_slot_primary_key })}
+            />
+            <KeyInput
+              label="Secondary Spell Slot"
+              value={config.spell_slot_secondary_key}
+              onChange={(spell_slot_secondary_key) =>
+                set({ spell_slot_secondary_key })
+              }
+            />
           </div>
         </Card>
 
-        <Card title="Spell Slots">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <label className="w-24 text-xs text-content">Primary:</label>
-              <input
-                type="text"
-                maxLength={1}
-                value={config.spell_slot_primary_key}
-                onChange={(e) => set({ spell_slot_primary_key: e.target.value })}
-                className="w-12 rounded bg-elevated px-2 py-1 text-center text-xs"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="w-24 text-xs text-content">Secondary:</label>
-              <input
-                type="text"
-                maxLength={1}
-                value={config.spell_slot_secondary_key}
-                onChange={(e) => set({ spell_slot_secondary_key: e.target.value })}
-                className="w-12 rounded bg-elevated px-2 py-1 text-center text-xs"
-              />
-            </div>
+        <Card title="Profiles">
+          <div className="mb-3 flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const profile = createBlankProfile("combo", config.profiles);
+                setProfiles([...config.profiles, profile]);
+                setSelectedId(profile.id);
+              }}
+            >
+              New Combo Profile
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const profile = createBlankProfile("prep", config.profiles);
+                setProfiles([...config.profiles, profile]);
+                setSelectedId(profile.id);
+              }}
+            >
+              New Prep Profile
+            </Button>
           </div>
-        </Card>
 
-        <Card title="Combo Profiles">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <label className="w-32 text-xs text-content">Primary Profile:</label>
-              <input
-                type="text"
-                value={config.primary_profile}
-                onChange={(e) => set({ primary_profile: e.target.value })}
-                className="flex-1 rounded bg-elevated px-2 py-1 text-xs"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="w-32 text-xs text-content">Prep Profile:</label>
-              <input
-                type="text"
-                value={config.prep_profile}
-                onChange={(e) => set({ prep_profile: e.target.value })}
-                className="flex-1 rounded bg-elevated px-2 py-1 text-xs"
-              />
-            </div>
-          </div>
-        </Card>
+          <InvokerProfileList
+            profiles={config.profiles}
+            selectedId={selected?.id ?? null}
+            onSelect={setSelectedId}
+            onDuplicate={(id) => {
+              const source = config.profiles.find((profile) => profile.id === id);
+              if (!source) {
+                return;
+              }
 
-        <Card title="Combo Timings (ms)">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <label className="w-40 text-xs text-content">Tornado → EMP Delay:</label>
-              <input
-                type="number"
-                value={config.tornado_emp_delay_ms}
-                onChange={(e) => set({ tornado_emp_delay_ms: parseInt(e.target.value) || 0 })}
-                className="w-20 rounded bg-elevated px-2 py-1 text-xs"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="w-40 text-xs text-content">Sun Strike Delay:</label>
-              <input
-                type="number"
-                value={config.sun_strike_delay_ms}
-                onChange={(e) => set({ sun_strike_delay_ms: parseInt(e.target.value) || 0 })}
-                className="w-20 rounded bg-elevated px-2 py-1 text-xs"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="w-40 text-xs text-content">Meteor → Blast Delay:</label>
-              <input
-                type="number"
-                value={config.meteor_blast_delay_ms}
-                onChange={(e) => set({ meteor_blast_delay_ms: parseInt(e.target.value) || 0 })}
-                className="w-20 rounded bg-elevated px-2 py-1 text-xs"
-              />
-            </div>
-          </div>
+              const copy = cloneProfile(source, config.profiles);
+              setProfiles([...config.profiles, copy]);
+              setSelectedId(copy.id);
+            }}
+            onDelete={(id) => {
+              const remaining = config.profiles.filter((profile) => profile.id !== id);
+              setProfiles(remaining);
+              if (selected?.id === id) {
+                setSelectedId(remaining[0]?.id ?? null);
+              }
+            }}
+            onAddPreset={(presetId) => {
+              const preset = INVOKER_PRESET_PROFILES.find(
+                (profile) => profile.id === presetId,
+              );
+              if (!preset) {
+                return;
+              }
+
+              const next = cloneProfile(preset, config.profiles);
+              setProfiles([...config.profiles, next]);
+              setSelectedId(next.id);
+            }}
+          />
         </Card>
       </div>
 
       <div className="space-y-4">
-        <Card title="Combo Items" collapsible>
-          <p className="text-xs text-muted">
-            Configure combo items for Invoker automation. Default items: Spirit Vessel, Rod of Atos.
-          </p>
+        <Card title="Profile Editor">
+          {selected ? (
+            <InvokerProfileEditor
+              profile={selected}
+              onChange={(next) =>
+                setProfiles(
+                  config.profiles.map((profile) =>
+                    profile.id === next.id ? next : profile,
+                  ),
+                )
+              }
+            />
+          ) : (
+            <p className="text-sm text-subtle">Select a profile to edit.</p>
+          )}
         </Card>
 
         <Card title="Armlet Override" collapsible>
           <p className="text-xs text-muted">
-            Configure armlet override thresholds on the Armlet page.
+            Invoker still uses the shared Armlet page for override thresholds.
           </p>
         </Card>
       </div>
