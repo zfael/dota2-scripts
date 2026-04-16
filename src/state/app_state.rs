@@ -87,6 +87,13 @@ impl Default for QueueMetrics {
 }
 
 #[derive(Debug, Clone)]
+pub struct InvokerComboProfileState {
+    pub id: String,
+    pub enabled: bool,
+    pub mode: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct AppState {
     pub selected_hero: Option<HeroType>,
     pub gsi_enabled: bool,
@@ -98,6 +105,7 @@ pub struct AppState {
     pub sf_enabled: Arc<Mutex<bool>>,
     pub od_enabled: Arc<Mutex<bool>>,
     pub update_state: Arc<Mutex<UpdateCheckState>>,
+    pub invoker_active_combo_profile_id: Option<String>,
     pub rune_alerts: Option<RuneAlertSnapshot>,
     pub minimap_capture: Option<MinimapCaptureStatusSnapshot>,
 }
@@ -115,6 +123,7 @@ impl Default for AppState {
             sf_enabled: Arc::new(Mutex::new(false)),
             od_enabled: Arc::new(Mutex::new(false)),
             update_state: Arc::new(Mutex::new(UpdateCheckState::Idle)),
+            invoker_active_combo_profile_id: None,
             rune_alerts: None,
             minimap_capture: None,
         }
@@ -147,11 +156,36 @@ impl AppState {
             .map(|elapsed| elapsed <= GSI_ACTIVITY_TIMEOUT)
             .unwrap_or(false)
     }
+
+    pub fn repair_invoker_active_combo(
+        &mut self,
+        profiles: &[InvokerComboProfileState],
+    ) -> Option<String> {
+        let active_id = self
+            .invoker_active_combo_profile_id
+            .as_ref()
+            .and_then(|id| {
+                profiles.iter().find(|profile| {
+                    profile.enabled && profile.mode == "combo" && profile.id == *id
+                })
+            })
+            .map(|profile| profile.id.clone());
+
+        let next_active_id = active_id.or_else(|| {
+            profiles
+                .iter()
+                .find(|profile| profile.enabled && profile.mode == "combo")
+                .map(|profile| profile.id.clone())
+        });
+
+        self.invoker_active_combo_profile_id = next_active_id.clone();
+        next_active_id
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{HeroType};
+    use super::{AppState, HeroType, InvokerComboProfileState};
     use crate::models::Hero;
 
     #[test]
@@ -168,5 +202,44 @@ mod tests {
             Some(HeroType::Invoker)
         );
         assert_eq!(HeroType::Invoker.to_display_name(), "Invoker");
+    }
+
+    #[test]
+    fn app_state_defaults_invoker_active_combo_profile_id_to_none() {
+        let state = AppState::default();
+        assert_eq!(state.invoker_active_combo_profile_id, None);
+    }
+
+    #[test]
+    fn repair_invoker_active_combo_ignores_prep_profiles_and_uses_first_enabled_combo() {
+        let mut state = AppState::default();
+        state.invoker_active_combo_profile_id = Some("invalid".to_string());
+
+        let profiles = vec![
+            InvokerComboProfileState {
+                id: "prep".to_string(),
+                enabled: true,
+                mode: "prep".to_string(),
+            },
+            InvokerComboProfileState {
+                id: "combo-a".to_string(),
+                enabled: true,
+                mode: "combo".to_string(),
+            },
+            InvokerComboProfileState {
+                id: "combo-b".to_string(),
+                enabled: true,
+                mode: "combo".to_string(),
+            },
+        ];
+
+        assert_eq!(
+            state.repair_invoker_active_combo(&profiles),
+            Some("combo-a".to_string())
+        );
+        assert_eq!(
+            state.invoker_active_combo_profile_id,
+            Some("combo-a".to_string())
+        );
     }
 }

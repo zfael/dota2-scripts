@@ -910,6 +910,7 @@ mod tests {
             sf_enabled: Arc::new(Mutex::new(true)),
             od_enabled: Arc::new(Mutex::new(false)),
             update_state: Arc::new(Mutex::new(UpdateCheckState::Idle)),
+            invoker_active_combo_profile_id: None,
             rune_alerts: None,
             minimap_capture: None,
         };
@@ -936,6 +937,7 @@ mod tests {
             sf_enabled: Arc::new(Mutex::new(false)),
             od_enabled: Arc::new(Mutex::new(true)),
             update_state: Arc::new(Mutex::new(UpdateCheckState::Idle)),
+            invoker_active_combo_profile_id: None,
             rune_alerts: None,
             minimap_capture: None,
         };
