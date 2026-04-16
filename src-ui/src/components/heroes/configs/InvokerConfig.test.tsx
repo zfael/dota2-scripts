@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import InvokerConfig from "./InvokerConfig";
 import { useConfigStore } from "../../../stores/configStore";
 import { mockConfig } from "../../../stores/mockData";
+import { useUIStore } from "../../../stores/uiStore";
 
 vi.mock("../../../lib/tauri", () => ({
   isTauri: () => false,
@@ -13,6 +14,9 @@ describe("InvokerConfig", () => {
     useConfigStore.setState({
       config: JSON.parse(JSON.stringify(mockConfig)),
       loaded: true,
+    });
+    useUIStore.setState({
+      invokerActiveComboProfileId: null,
     });
   });
 
@@ -56,6 +60,61 @@ describe("InvokerConfig", () => {
       .config.heroes.invoker.profiles.find((profile) => profile.id === "qe-burst");
 
     expect(qeProfile?.steps[0].completion_mode).toBe("fixed_delay");
+  });
+
+  it("marks an enabled combo profile as the active combo when clicked", () => {
+    render(<InvokerConfig />);
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /Ghost Walk Panic.*combo.*End.*enabled.*general.*Ghost Walk/i,
+      }),
+    );
+
+    expect(screen.getByText(/Active combo:/i)).toHaveTextContent(
+      "Active combo: Ghost Walk Panic",
+    );
+    expect(useUIStore.getState().invokerActiveComboProfileId).toBe(
+      "ghost-walk-panic",
+    );
+  });
+
+  it("does not change the active combo when a prep profile is clicked", () => {
+    useUIStore.setState({ invokerActiveComboProfileId: "ghost-walk-panic" });
+
+    render(<InvokerConfig />);
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /Meteor \+ Blast Prep.*prep.*PageUp.*enabled.*qe.*Chaos Meteor → Deafening Blast/i,
+      }),
+    );
+
+    expect(screen.getByText(/Active combo:/i)).toHaveTextContent(
+      "Active combo: Ghost Walk Panic",
+    );
+    expect(useUIStore.getState().invokerActiveComboProfileId).toBe(
+      "ghost-walk-panic",
+    );
+  });
+
+  it("does not change the active combo when a disabled combo profile is clicked", () => {
+    useUIStore.setState({ invokerActiveComboProfileId: "ghost-walk-panic" });
+
+    render(<InvokerConfig />);
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /QE Burst.*combo.*PageDown.*disabled.*qe.*Sun Strike \[manual\] → Chaos Meteor → Deafening Blast/i,
+      }),
+    );
+
+    expect(screen.getByText(/Active combo:/i)).toHaveTextContent(
+      "Active combo: Ghost Walk Panic",
+    );
+    expect(useUIStore.getState().invokerActiveComboProfileId).toBe(
+      "ghost-walk-panic",
+    );
   });
 });
 

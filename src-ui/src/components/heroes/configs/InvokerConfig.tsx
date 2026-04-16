@@ -3,6 +3,7 @@ import { Button } from "../../common/Button";
 import { Card } from "../../common/Card";
 import { KeyInput } from "../../common/KeyInput";
 import { useConfigStore } from "../../../stores/configStore";
+import { useUIStore } from "../../../stores/uiStore";
 import type { InvokerProfile } from "../../../types/config";
 import { InvokerProfileEditor } from "./invoker/InvokerProfileEditor";
 import { InvokerProfileList } from "./invoker/InvokerProfileList";
@@ -60,6 +61,10 @@ function createBlankProfile(
 export default function InvokerConfig() {
   const config = useConfigStore((state) => state.config.heroes.invoker);
   const update = useConfigStore((state) => state.updateHeroConfig);
+  const activeComboId = useUIStore((state) => state.invokerActiveComboProfileId);
+  const setActiveComboId = useUIStore(
+    (state) => state.setInvokerActiveComboProfileId,
+  );
   const set = (updates: Partial<typeof config>) => update("invoker", updates);
   const [selectedId, setSelectedId] = useState<string | null>(
     config.profiles[0]?.id ?? null,
@@ -80,8 +85,25 @@ export default function InvokerConfig() {
       null,
     [config.profiles, selectedId],
   );
+  const activeComboName = useMemo(
+    () =>
+      config.profiles.find(
+        (profile) =>
+          profile.id === activeComboId && profile.mode === "combo",
+      )?.name ?? null,
+    [activeComboId, config.profiles],
+  );
 
   const setProfiles = (profiles: InvokerProfile[]) => set({ profiles });
+
+  const handleSelectProfile = (id: string) => {
+    setSelectedId(id);
+
+    const profile = config.profiles.find((candidate) => candidate.id === id);
+    if (profile?.mode === "combo" && profile.enabled) {
+      setActiveComboId(profile.id);
+    }
+  };
 
   return (
     <>
@@ -124,6 +146,13 @@ export default function InvokerConfig() {
         </Card>
 
         <Card title="Profiles">
+          <p className="text-sm text-subtle">
+            Active combo:{" "}
+            <span className="font-medium text-content">
+              {activeComboName ?? "None"}
+            </span>
+          </p>
+
           <div className="mb-3 flex flex-wrap gap-2">
             <Button
               variant="secondary"
@@ -149,8 +178,9 @@ export default function InvokerConfig() {
 
           <InvokerProfileList
             profiles={config.profiles}
+            activeComboId={activeComboId}
             selectedId={selected?.id ?? null}
-            onSelect={setSelectedId}
+            onSelect={handleSelectProfile}
             onDuplicate={(id) => {
               const source = config.profiles.find((profile) => profile.id === id);
               if (!source) {
