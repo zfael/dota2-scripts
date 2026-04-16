@@ -116,5 +116,39 @@ describe("InvokerConfig", () => {
       "ghost-walk-panic",
     );
   });
+
+  it("clears the active combo when the active profile is disabled", () => {
+    render(<InvokerConfig />);
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /Ghost Walk Panic.*combo.*End.*enabled.*general.*Ghost Walk/i,
+      }),
+    );
+    fireEvent.click(screen.getByRole("switch", { name: /Enable Profile/i }));
+
+    expect(screen.getByText(/Active combo:/i)).toHaveTextContent(
+      "Active combo: None",
+    );
+    expect(useUIStore.getState().invokerActiveComboProfileId).toBeNull();
+  });
+
+  it("clears the active combo when the active profile is deleted", () => {
+    render(<InvokerConfig />);
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /Ghost Walk Panic.*combo.*End.*enabled.*general.*Ghost Walk/i,
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /Delete Ghost Walk Panic/i }),
+    );
+
+    expect(screen.getByText(/Active combo:/i)).toHaveTextContent(
+      "Active combo: None",
+    );
+    expect(useUIStore.getState().invokerActiveComboProfileId).toBeNull();
+  });
 });
 

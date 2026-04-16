@@ -89,10 +89,30 @@ export default function InvokerConfig() {
     () =>
       config.profiles.find(
         (profile) =>
-          profile.id === activeComboId && profile.mode === "combo",
+          profile.id === activeComboId &&
+          profile.mode === "combo" &&
+          profile.enabled,
       )?.name ?? null,
     [activeComboId, config.profiles],
   );
+
+  useEffect(() => {
+    if (!activeComboId) {
+      return;
+    }
+
+    const activeProfile = config.profiles.find(
+      (profile) => profile.id === activeComboId,
+    );
+
+    if (
+      !activeProfile ||
+      activeProfile.mode !== "combo" ||
+      !activeProfile.enabled
+    ) {
+      setActiveComboId(null);
+    }
+  }, [activeComboId, config.profiles, setActiveComboId]);
 
   const setProfiles = (profiles: InvokerProfile[]) => set({ profiles });
 
