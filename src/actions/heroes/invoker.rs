@@ -50,13 +50,7 @@ impl InvokerObservedState {
     }
 
     fn active_spell_key(&self, spell_name: &str, config: &crate::config::settings::InvokerConfig) -> Option<char> {
-        if self.active_spells[0].as_deref() == Some(spell_name) {
-            Some(config.spell_slot_primary_key)
-        } else if self.active_spells[1].as_deref() == Some(spell_name) {
-            Some(config.spell_slot_secondary_key)
-        } else {
-            None
-        }
+        spell_cast_key_from_slots(&self.active_spells, spell_name, config)
     }
 }
 
@@ -64,6 +58,16 @@ impl InvokerObservedState {
 struct PlannedSpellCast {
     prepare_keys: Vec<char>,
     cast_key: char,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PreparedSpellStep {
+    target: String,
+    prepare_keys: Vec<char>,
+    cast_key: char,
+    delay_after_ms: u64,
+    completion_mode: InvokerProfileStepCompletionMode,
+    completion_timeout_ms: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,6 +127,109 @@ fn plan_single_spell(
         prepare_keys,
         cast_key: config.spell_slot_secondary_key,
     })
+}
+
+fn apply_invoke_to_slot_state(
+    slots: &[Option<String>; 2],
+    spell_name: &str,
+) -> [Option<String>; 2] {
+    [Some(spell_name.to_string()), slots[0].clone()]
+}
+
+fn spell_cast_key_from_slots(
+    slots: &[Option<String>; 2],
+    spell_name: &str,
+    config: &crate::config::settings::InvokerConfig,
+) -> Option<char> {
+    if slots[0].as_deref() == Some(spell_name) {
+        Some(config.spell_slot_primary_key)
+    } else if slots[1].as_deref() == Some(spell_name) {
+        Some(config.spell_slot_secondary_key)
+    } else {
+        None
+    }
+}
+
+fn build_spell_batch(
+    steps: &[crate::config::settings::InvokerProfileStep],
+    starting_slots: &[Option<String>; 2],
+    config: &crate::config::settings::InvokerConfig,
+) -> Option<(Vec<PreparedSpellStep>, [Option<String>; 2], usize)> {
+    let consumed = steps.len().min(2);
+    if consumed == 0 {
+        return None;
+    }
+
+    if consumed == 1 {
+        let step = &steps[0];
+        let mut current_slots = starting_slots.clone();
+        let prepare_keys = if spell_cast_key_from_slots(&current_slots, &step.target, config).is_some() {
+            Vec::new()
+        } else {
+            let keys = orb_recipe(&step.target, config)?.to_vec();
+            current_slots = apply_invoke_to_slot_state(&current_slots, &step.target);
+            keys
+        };
+
+        return Some((
+            vec![PreparedSpellStep {
+                target: step.target.clone(),
+                prepare_keys,
+                cast_key: spell_cast_key_from_slots(&current_slots, &step.target, config)?,
+                delay_after_ms: step.delay_after_ms,
+                completion_mode: step.completion_mode.clone(),
+                completion_timeout_ms: step.completion_timeout_ms,
+            }],
+            current_slots,
+            1,
+        ));
+    }
+
+    let first = &steps[0];
+    let second = &steps[1];
+    let mut current_slots = starting_slots.clone();
+    let desired_slots = [
+        Some(second.target.clone()),
+        Some(first.target.clone()),
+    ];
+    let mut preload_keys = Vec::new();
+
+    if current_slots != desired_slots {
+        if current_slots[0].as_deref() == Some(first.target.as_str()) {
+            preload_keys.extend(orb_recipe(&second.target, config)?);
+            current_slots = apply_invoke_to_slot_state(&current_slots, &second.target);
+        } else {
+            preload_keys.extend(orb_recipe(&first.target, config)?);
+            current_slots = apply_invoke_to_slot_state(&current_slots, &first.target);
+            if current_slots != desired_slots {
+                preload_keys.extend(orb_recipe(&second.target, config)?);
+                current_slots = apply_invoke_to_slot_state(&current_slots, &second.target);
+            }
+        }
+    }
+
+    Some((
+        vec![
+            PreparedSpellStep {
+                target: first.target.clone(),
+                prepare_keys: preload_keys,
+                cast_key: spell_cast_key_from_slots(&current_slots, &first.target, config)?,
+                delay_after_ms: first.delay_after_ms,
+                completion_mode: first.completion_mode.clone(),
+                completion_timeout_ms: first.completion_timeout_ms,
+            },
+            PreparedSpellStep {
+                target: second.target.clone(),
+                prepare_keys: Vec::new(),
+                cast_key: spell_cast_key_from_slots(&current_slots, &second.target, config)?,
+                delay_after_ms: second.delay_after_ms,
+                completion_mode: second.completion_mode.clone(),
+                completion_timeout_ms: second.completion_timeout_ms,
+            },
+        ],
+        current_slots,
+        2,
+    ))
 }
 
 fn find_profile<'a>(
@@ -529,6 +636,61 @@ mod tests {
         assert_eq!(
             state.active_spell_key("invoker_emp", &config),
             Some(config.spell_slot_secondary_key)
+        );
+    }
+
+    #[test]
+    fn apply_invoke_to_slot_state_places_new_spell_in_primary_and_shifts_old_primary_to_secondary() {
+        let slots = [
+            Some("invoker_emp".to_string()),
+            Some("invoker_tornado".to_string()),
+        ];
+
+        assert_eq!(
+            apply_invoke_to_slot_state(&slots, "invoker_sun_strike"),
+            [
+                Some("invoker_sun_strike".to_string()),
+                Some("invoker_emp".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn build_spell_batch_for_qw_pickoff_casts_secondary_then_primary() {
+        let event = invoker_qw_fixture();
+        let settings = Settings::default();
+        let config = &settings.heroes.invoker;
+        let state = InvokerObservedState::from_event(&event);
+        let profile = find_profile(config, "qw-pickoff").expect("QW profile should exist");
+
+        let spell_steps: Vec<_> = profile
+            .steps
+            .iter()
+            .filter(|step| step.kind == InvokerProfileStepKind::Spell)
+            .cloned()
+            .collect();
+
+        let (batch, next_slots, consumed) =
+            build_spell_batch(&spell_steps, &state.active_spells, config)
+                .expect("QW spell batch should build");
+
+        assert_eq!(consumed, 2);
+        assert_eq!(
+            batch
+                .iter()
+                .map(|step| (step.target.as_str(), step.cast_key))
+                .collect::<Vec<_>>(),
+            vec![
+                ("invoker_tornado", config.spell_slot_secondary_key),
+                ("invoker_emp", config.spell_slot_primary_key),
+            ]
+        );
+        assert_eq!(
+            next_slots,
+            [
+                Some("invoker_emp".to_string()),
+                Some("invoker_tornado".to_string()),
+            ]
         );
     }
 
