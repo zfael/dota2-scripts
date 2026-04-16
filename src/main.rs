@@ -10,8 +10,10 @@ mod state;
 
 mod update;
 
+use crate::actions::activity::{push_activity, ActivityCategory};
 use crate::actions::executor::ActionExecutor;
 use crate::actions::ActionDispatcher;
+use crate::config::settings::InvokerProfileMode;
 use crate::config::Settings;
 use crate::gsi::start_gsi_server;
 use crate::input::keyboard::{start_keyboard_listener, KeyboardSnapshot};
@@ -107,6 +109,7 @@ async fn main() {
     // Start hotkey event handler in background
     let app_state_clone2 = app_state.clone();
     let dispatcher_clone2 = dispatcher.clone();
+    let hotkey_settings = settings.clone();
     std::thread::spawn(move || {
         while let Ok(event) = hotkey_rx.recv() {
             match event {
@@ -152,8 +155,8 @@ async fn main() {
                         {
                             if let Some(meepo_script) = script
                                 .as_any()
-                                .downcast_ref::<crate::actions::heroes::MeepoScript>()
-                            {
+                                .downcast_ref::<crate::actions::heroes::MeepoScript>(
+                            ) {
                                 meepo_script.toggle_farm_assist();
                             }
                         }
@@ -164,6 +167,54 @@ async fn main() {
                     info!(
                         "Armlet Roshan mode {} via hotkey",
                         if armed { "armed" } else { "disarmed" }
+                    );
+                }
+                input::keyboard::HotkeyEvent::InvokerCycleComboProfile => {
+                    let enabled_combo_profile_ids = hotkey_settings
+                        .lock()
+                        .unwrap()
+                        .heroes
+                        .invoker
+                        .profiles
+                        .iter()
+                        .filter(|profile| {
+                            profile.enabled && profile.mode == InvokerProfileMode::Combo
+                        })
+                        .map(|profile| profile.id.clone())
+                        .collect::<Vec<_>>();
+
+                    let mut state = app_state_clone2.lock().unwrap();
+                    if !state.standalone_enabled
+                        || state.selected_hero != Some(state::HeroType::Invoker)
+                    {
+                        continue;
+                    }
+
+                    if enabled_combo_profile_ids.is_empty() {
+                        info!("Invoker cycle hotkey ignored: no enabled combo profiles");
+                        continue;
+                    }
+
+                    let current_index =
+                        state
+                            .invoker_active_combo_profile_id
+                            .as_ref()
+                            .and_then(|active_id| {
+                                enabled_combo_profile_ids
+                                    .iter()
+                                    .position(|profile_id| profile_id == active_id)
+                            });
+                    let next_index = current_index
+                        .map(|index| (index + 1) % enabled_combo_profile_ids.len())
+                        .unwrap_or(0);
+                    let next_profile_id = enabled_combo_profile_ids[next_index].clone();
+                    state.invoker_active_combo_profile_id = Some(next_profile_id.clone());
+                    drop(state);
+
+                    info!("Invoker active combo profile set to {}", next_profile_id);
+                    push_activity(
+                        ActivityCategory::System,
+                        format!("Invoker active combo profile set to {}", next_profile_id),
                     );
                 }
                 input::keyboard::HotkeyEvent::LargoQ => {
@@ -264,5 +315,3 @@ async fn main() {
         std::thread::park();
     }
 }
-
-

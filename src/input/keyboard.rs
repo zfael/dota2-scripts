@@ -12,8 +12,9 @@ use crate::actions::heroes::outworld_destroyer::{
     build_keyboard_combo_config, OutworldDestroyerComboConfig, OutworldDestroyerState,
 };
 use crate::actions::heroes::shadow_fiend::ShadowFiendState;
-use crate::actions::SOUL_RING_STATE;
 use crate::actions::soul_ring::{SoulRingKeyboardConfig, SoulRingState};
+use crate::actions::SOUL_RING_STATE;
+use crate::config::settings::InvokerProfileMode;
 use crate::config::{AutoAbilityConfig, Settings};
 use crate::input::simulation::SIMULATING_KEYS;
 use crate::state::app_state::AppState;
@@ -23,6 +24,7 @@ pub enum HotkeyEvent {
     ComboTrigger,
     MeepoFarmToggle,
     ArmletRoshanToggle,
+    InvokerCycleComboProfile,
     LargoQ,
     LargoW,
     LargoE,
@@ -200,22 +202,23 @@ struct SoulRingReplayRequest {
 /// The worker thread starts on the first enqueue.
 static SOUL_RING_REPLAY_QUEUE: LazyLock<Sender<SoulRingReplayRequest>> = LazyLock::new(|| {
     let (tx, rx) = mpsc::channel::<SoulRingReplayRequest>();
-    
+
     // Spawn dedicated worker thread
     thread::spawn(move || {
         info!("Soul Ring replay worker started");
-        
+
         while let Ok(request) = rx.recv() {
             // Lock state and compute the replay plan
             let soul_ring_state = SOUL_RING_STATE.lock().unwrap();
-            let plan = plan_soul_ring_replay(&soul_ring_state, request.original_key, &request.config);
+            let plan =
+                plan_soul_ring_replay(&soul_ring_state, request.original_key, &request.config);
             // Execute using shared helper to ensure identical behavior between worker and fallback
             execute_soul_ring_plan_with_context(soul_ring_state, plan, "");
         }
-        
+
         info!("Soul Ring replay worker exited");
     });
-    
+
     tx
 });
 
@@ -223,7 +226,7 @@ static SOUL_RING_REPLAY_QUEUE: LazyLock<Sender<SoulRingReplayRequest>> = LazyLoc
 /// Sets SIMULATING_KEYS flag to prevent re-interception
 pub fn simulate_key(key: Key) {
     SIMULATING_KEYS.store(true, Ordering::SeqCst);
-    
+
     if let Err(e) = simulate(&EventType::KeyPress(key)) {
         warn!("Failed to simulate key press: {:?}", e);
     }
@@ -231,7 +234,7 @@ pub fn simulate_key(key: Key) {
     if let Err(e) = simulate(&EventType::KeyRelease(key)) {
         warn!("Failed to simulate key release: {:?}", e);
     }
-    
+
     thread::sleep(Duration::from_millis(5));
     SIMULATING_KEYS.store(false, Ordering::SeqCst);
 }
@@ -245,7 +248,11 @@ fn execute_soul_ring_plan_with_context(
     context: &str,
 ) {
     match plan {
-        SoulRingReplayPlan::TriggerThenOriginal { soul_ring_key, delay_ms, original_key } => {
+        SoulRingReplayPlan::TriggerThenOriginal {
+            soul_ring_key,
+            delay_ms,
+            original_key,
+        } => {
             // Mark as triggered before dropping lock, then execute replay
             guard.mark_triggered();
             drop(guard);
@@ -273,11 +280,14 @@ fn spawn_soul_ring_then_key(original_key: Key, sr_config: SoulRingKeyboardConfig
         original_key,
         config: sr_config.clone(),
     };
-    
+
     if let Err(e) = SOUL_RING_REPLAY_QUEUE.send(request) {
         // Queue is closed unexpectedly - fall back to spawning a thread to avoid dropping input
-        warn!("Soul Ring replay queue closed unexpectedly, falling back to thread spawn: {:?}", e);
-        
+        warn!(
+            "Soul Ring replay queue closed unexpectedly, falling back to thread spawn: {:?}",
+            e
+        );
+
         thread::spawn(move || {
             let soul_ring_state = SOUL_RING_STATE.lock().unwrap();
             let plan = plan_soul_ring_replay(&soul_ring_state, original_key, &sr_config);
@@ -313,7 +323,7 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                 }
                 _ => {}
             }
-            
+
             // Handle Broodmother callback actions without touching snapshot unless needed.
             match event.event_type {
                 EventType::ButtonPress(Button::Right) => {
@@ -359,12 +369,14 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                 // Read snapshot once per keyboard event — static config comes from here.
                 // Convert key to char to check if we should intercept
                 let key_char = key_to_char(key);
-                
+
                 // Single live SOUL_RING_STATE read for all Soul Ring interception decisions
                 let should_intercept_for_soul_ring = if let Some(ch) = key_char {
                     let soul_ring_state = SOUL_RING_STATE.lock().unwrap();
-                    let should_intercept = soul_ring_state.should_intercept_key_with_config(ch, &snapshot.soul_ring);
-                    let should_trigger = soul_ring_state.should_trigger_with_config(&snapshot.soul_ring);
+                    let should_intercept =
+                        soul_ring_state.should_intercept_key_with_config(ch, &snapshot.soul_ring);
+                    let should_trigger =
+                        soul_ring_state.should_trigger_with_config(&snapshot.soul_ring);
                     debug!(
                         "💍 Key '{}': intercept={}, trigger={}, available={}, can_cast={}, mana={}%, health={}%",
                         ch, should_intercept, should_trigger,
@@ -377,15 +389,19 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                 };
 
                 // Handle Shadow Fiend Q/W/E keys (when SF is selected AND raze interception is enabled)
-                let sf_raze_active = snapshot.sf_enabled && snapshot.shadow_fiend.raze_intercept_enabled;
+                let sf_raze_active =
+                    snapshot.sf_enabled && snapshot.shadow_fiend.raze_intercept_enabled;
                 if sf_raze_active {
                     match key {
                         Key::KeyQ | Key::KeyW | Key::KeyE => {
                             let raze_key = key_to_char(key).unwrap();
                             info!("{} key pressed - SF raze", raze_key.to_ascii_uppercase());
-                            
-                            ShadowFiendState::execute_raze(raze_key, snapshot.shadow_fiend.raze_delay_ms);
-                            
+
+                            ShadowFiendState::execute_raze(
+                                raze_key,
+                                snapshot.shadow_fiend.raze_delay_ms,
+                            );
+
                             // Block original key
                             return None;
                         }
@@ -394,11 +410,16 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                 }
 
                 // Handle Shadow Fiend R key for auto-BKB on ultimate
-                if snapshot.sf_enabled && snapshot.shadow_fiend.auto_bkb_on_ultimate && key == Key::KeyR {
+                if snapshot.sf_enabled
+                    && snapshot.shadow_fiend.auto_bkb_on_ultimate
+                    && key == Key::KeyR
+                {
                     info!("R key pressed - SF auto-BKB ultimate combo");
-                    
-                    ShadowFiendState::execute_ultimate_combo(snapshot.shadow_fiend.auto_d_on_ultimate);
-                    
+
+                    ShadowFiendState::execute_ultimate_combo(
+                        snapshot.shadow_fiend.auto_d_on_ultimate,
+                    );
+
                     // Block original key (will be pressed by execute_ultimate_combo)
                     return None;
                 }
@@ -420,7 +441,10 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                         {
                             if key == astral_self_cast_key {
                                 if OutworldDestroyerState::can_self_cast_astral() {
-                                    info!("{:?} key pressed - OD self-Astral", astral_self_cast_key);
+                                    info!(
+                                        "{:?} key pressed - OD self-Astral",
+                                        astral_self_cast_key
+                                    );
                                     OutworldDestroyerState::execute_self_astral(
                                         snapshot
                                             .outworld_destroyer
@@ -445,31 +469,39 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                     Key::KeyQ | Key::KeyW | Key::KeyE | Key::KeyR | Key::KeyD | Key::KeyF => {
                         // Send Largo events for beat timing
                         match key {
-                            Key::KeyQ => { let _ = event_tx.send(HotkeyEvent::LargoQ); }
-                            Key::KeyW => { let _ = event_tx.send(HotkeyEvent::LargoW); }
-                            Key::KeyE => { let _ = event_tx.send(HotkeyEvent::LargoE); }
-                            Key::KeyR => { let _ = event_tx.send(HotkeyEvent::LargoR); }
+                            Key::KeyQ => {
+                                let _ = event_tx.send(HotkeyEvent::LargoQ);
+                            }
+                            Key::KeyW => {
+                                let _ = event_tx.send(HotkeyEvent::LargoW);
+                            }
+                            Key::KeyE => {
+                                let _ = event_tx.send(HotkeyEvent::LargoE);
+                            }
+                            Key::KeyR => {
+                                let _ = event_tx.send(HotkeyEvent::LargoR);
+                            }
                             _ => {}
                         }
-                        
+
                         // If Soul Ring should trigger, spawn handler and block original
                         if should_intercept_for_soul_ring {
                             spawn_soul_ring_then_key(key, snapshot.soul_ring.clone());
                             return None; // Block original
                         }
-                        
+
                         // Pass through if not intercepting for Soul Ring
                         return Some(event);
                     }
                     _ => {}
                 }
-                
+
                 // Check for item slot keys (for Soul Ring triggering on non-ability keys)
                 if should_intercept_for_soul_ring {
                     spawn_soul_ring_then_key(key, snapshot.soul_ring.clone());
                     return None; // Block original
                 }
-                
+
                 if let Some(hotkey_event) = plan_global_hotkey_event(key, &snapshot) {
                     match hotkey_event {
                         HotkeyEvent::ArmletRoshanToggle => {
@@ -489,13 +521,19 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                                 snapshot.meepo_farm_toggle_key
                             );
                         }
+                        HotkeyEvent::InvokerCycleComboProfile => {
+                            info!(
+                                "{:?} key pressed - cycling Invoker combo profile",
+                                snapshot.invoker_cycle_hotkey
+                            );
+                        }
                         _ => {}
                     }
 
                     let _ = event_tx.send(hotkey_event);
                 }
             }
-            
+
             // Pass through all other events (key releases, mouse events, etc.)
             Some(event)
         };
@@ -554,6 +592,7 @@ pub struct BroodmotherKeyboardSnapshot {
 pub struct InvokerHotkeyProfileSnapshot {
     pub id: String,
     pub hotkey: Option<Key>,
+    pub mode: InvokerProfileMode,
     pub enabled: bool,
 }
 
@@ -567,6 +606,8 @@ pub struct KeyboardSnapshot {
     pub meepo_farm_toggle_key: Option<Key>,
     /// Parsed Armlet Roshan mode toggle key, if enabled.
     pub armlet_roshan_toggle_key: Option<Key>,
+    /// Hardcoded Invoker combo-cycle key for v1.
+    pub invoker_cycle_hotkey: Option<Key>,
     /// Whether Shadow Fiend raze interception is active.
     pub sf_enabled: bool,
     pub od_enabled: bool,
@@ -600,22 +641,23 @@ struct BroodmotherCallbackRequest {
 
 /// Single-worker queue for Broodmother callback actions (auto-items and spider micro).
 /// Uses LazyLock to initialize once on first access.
-static BROODMOTHER_CALLBACK_QUEUE: LazyLock<Sender<BroodmotherCallbackRequest>> = LazyLock::new(|| {
-    let (tx, rx) = mpsc::channel();
-    thread::spawn(move || broodmother_callback_worker(rx));
-    tx
-});
+static BROODMOTHER_CALLBACK_QUEUE: LazyLock<Sender<BroodmotherCallbackRequest>> =
+    LazyLock::new(|| {
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || broodmother_callback_worker(rx));
+        tx
+    });
 
 /// Worker thread that executes Broodmother callback actions sequentially.
 fn broodmother_callback_worker(rx: Receiver<BroodmotherCallbackRequest>) {
     info!("Broodmother callback worker started");
-    
+
     while let Ok(request) = rx.recv() {
         execute_broodmother_callback_action_with_guard("", || {
             execute_broodmother_callback_action(request.action, "");
         });
     }
-    
+
     info!("Broodmother callback worker exited");
 }
 
@@ -644,7 +686,12 @@ where
 /// Used by both the worker and fallback thread to ensure identical behavior.
 fn execute_broodmother_callback_action(action: BroodmotherCallbackAction, context: &str) {
     match action {
-        BroodmotherCallbackAction::AutoItems { slot_keys, auto_items, auto_abilities, abilities_first } => {
+        BroodmotherCallbackAction::AutoItems {
+            slot_keys,
+            auto_items,
+            auto_abilities,
+            abilities_first,
+        } => {
             debug!("🕷️ Executing Broodmother auto-items{}", context);
             crate::actions::auto_items::execute_auto_items(
                 &slot_keys,
@@ -653,7 +700,10 @@ fn execute_broodmother_callback_action(action: BroodmotherCallbackAction, contex
                 abilities_first,
             );
         }
-        BroodmotherCallbackAction::SpiderMicro { spider_key, hero_key } => {
+        BroodmotherCallbackAction::SpiderMicro {
+            spider_key,
+            hero_key,
+        } => {
             debug!("🕷️ Executing Broodmother spider micro{}", context);
             crate::actions::heroes::broodmother::BroodmotherScript::execute_spider_attack_move_with_keys(
                 spider_key,
@@ -666,11 +716,16 @@ fn execute_broodmother_callback_action(action: BroodmotherCallbackAction, contex
 /// Enqueue Broodmother callback action to the dedicated worker thread.
 /// Falls back to spawning a thread if the queue is unexpectedly closed.
 fn enqueue_broodmother_callback_action(action: BroodmotherCallbackAction) {
-    let request = BroodmotherCallbackRequest { action: action.clone() };
-    
+    let request = BroodmotherCallbackRequest {
+        action: action.clone(),
+    };
+
     if let Err(e) = BROODMOTHER_CALLBACK_QUEUE.send(request) {
-        warn!("Broodmother callback queue closed unexpectedly, falling back to thread spawn: {:?}", e);
-        
+        warn!(
+            "Broodmother callback queue closed unexpectedly, falling back to thread spawn: {:?}",
+            e
+        );
+
         thread::spawn(move || {
             execute_broodmother_callback_action_with_guard(" (fallback)", || {
                 execute_broodmother_callback_action(action, " (fallback)");
@@ -707,6 +762,7 @@ impl KeyboardSnapshot {
             } else {
                 None
             },
+            invoker_cycle_hotkey: Some(Key::Delete),
             sf_enabled,
             od_enabled,
             shadow_fiend: ShadowFiendKeyboardSnapshot {
@@ -747,6 +803,7 @@ impl KeyboardSnapshot {
                 .map(|profile| InvokerHotkeyProfileSnapshot {
                     id: profile.id.clone(),
                     hotkey: parse_key(&profile.hotkey),
+                    mode: profile.mode.clone(),
                     enabled: profile.enabled,
                 })
                 .collect(),
@@ -761,6 +818,7 @@ impl Default for KeyboardSnapshot {
             trigger_key: None,
             meepo_farm_toggle_key: None,
             armlet_roshan_toggle_key: None,
+            invoker_cycle_hotkey: None,
             sf_enabled: false,
             od_enabled: false,
             shadow_fiend: ShadowFiendKeyboardSnapshot {
@@ -836,6 +894,17 @@ fn plan_global_hotkey_event(key: Key, snapshot: &KeyboardSnapshot) -> Option<Hot
     }
 
     if snapshot.selected_hero == Some(crate::state::HeroType::Invoker) {
+        if snapshot
+            .invoker_cycle_hotkey
+            .is_some_and(|cycle_key| key == cycle_key)
+            && snapshot
+                .invoker_profiles
+                .iter()
+                .any(|profile| profile.enabled && profile.mode == InvokerProfileMode::Combo)
+        {
+            return Some(HotkeyEvent::InvokerCycleComboProfile);
+        }
+
         if let Some(profile) = snapshot
             .invoker_profiles
             .iter()
@@ -845,7 +914,10 @@ fn plan_global_hotkey_event(key: Key, snapshot: &KeyboardSnapshot) -> Option<Hot
         }
     }
 
-    if snapshot.trigger_key.is_some_and(|trigger_key| key == trigger_key) {
+    if snapshot
+        .trigger_key
+        .is_some_and(|trigger_key| key == trigger_key)
+    {
         return Some(HotkeyEvent::ComboTrigger);
     }
 
@@ -855,11 +927,11 @@ fn plan_global_hotkey_event(key: Key, snapshot: &KeyboardSnapshot) -> Option<Hot
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use crate::actions::soul_ring::{SoulRingKeyboardConfig, SoulRingState};
     use crate::state::app_state::{HeroType, QueueMetrics, UpdateCheckState};
-    use crate::actions::soul_ring::{SoulRingState, SoulRingKeyboardConfig};
     use std::collections::HashSet;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Mutex;
 
     fn broodmother_test_snapshot() -> KeyboardSnapshot {
         KeyboardSnapshot {
@@ -867,6 +939,7 @@ mod tests {
             trigger_key: None,
             meepo_farm_toggle_key: None,
             armlet_roshan_toggle_key: None,
+            invoker_cycle_hotkey: None,
             sf_enabled: false,
             od_enabled: false,
             shadow_fiend: ShadowFiendKeyboardSnapshot {
@@ -946,7 +1019,10 @@ mod tests {
 
         assert!(snapshot.od_enabled);
         assert!(snapshot.outworld_destroyer.ultimate_intercept_enabled);
-        assert_eq!(snapshot.outworld_destroyer.astral_self_cast_key, Some(Key::F5));
+        assert_eq!(
+            snapshot.outworld_destroyer.astral_self_cast_key,
+            Some(Key::F5)
+        );
     }
 
     #[test]
@@ -1023,6 +1099,28 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn keyboard_snapshot_maps_invoker_profile_modes_and_cycle_hotkey() {
+        let settings = Settings::default();
+        let snapshot = KeyboardSnapshot::from_runtime(&settings, &AppState::default());
+
+        assert_eq!(snapshot.invoker_cycle_hotkey, Some(Key::Delete));
+        assert_eq!(
+            snapshot
+                .invoker_profiles
+                .iter()
+                .map(|profile| (&profile.id, &profile.mode))
+                .collect::<Vec<_>>(),
+            settings
+                .heroes
+                .invoker
+                .profiles
+                .iter()
+                .map(|profile| (&profile.id, &profile.mode))
+                .collect::<Vec<_>>()
+        );
+    }
+
     // Soul Ring replay-plan tests
     fn soul_ring_test_config() -> SoulRingKeyboardConfig {
         SoulRingKeyboardConfig {
@@ -1051,7 +1149,11 @@ mod tests {
         let plan = crate::input::keyboard::plan_soul_ring_replay(&state, Key::KeyQ, &config);
 
         match plan {
-            crate::input::keyboard::SoulRingReplayPlan::TriggerThenOriginal { soul_ring_key, delay_ms, original_key } => {
+            crate::input::keyboard::SoulRingReplayPlan::TriggerThenOriginal {
+                soul_ring_key,
+                delay_ms,
+                original_key,
+            } => {
                 assert_eq!(soul_ring_key, Key::KeyZ);
                 assert_eq!(delay_ms, config.delay_before_ability_ms);
                 assert_eq!(original_key, Key::KeyQ);
@@ -1120,10 +1222,18 @@ mod tests {
         );
 
         match action {
-            Some(BroodmotherCallbackAction::AutoItems { slot_keys, auto_items, auto_abilities, abilities_first }) => {
+            Some(BroodmotherCallbackAction::AutoItems {
+                slot_keys,
+                auto_items,
+                auto_abilities,
+                abilities_first,
+            }) => {
                 assert_eq!(slot_keys, snapshot.broodmother.slot_keys);
                 assert_eq!(auto_items, snapshot.broodmother.auto_items);
-                assert_eq!(auto_abilities.len(), snapshot.broodmother.auto_abilities.len());
+                assert_eq!(
+                    auto_abilities.len(),
+                    snapshot.broodmother.auto_abilities.len()
+                );
                 assert_eq!(abilities_first, snapshot.broodmother.abilities_first);
             }
             _ => panic!("expected AutoItems action"),
@@ -1141,7 +1251,10 @@ mod tests {
         );
 
         match action {
-            Some(BroodmotherCallbackAction::SpiderMicro { spider_key, hero_key }) => {
+            Some(BroodmotherCallbackAction::SpiderMicro {
+                spider_key,
+                hero_key,
+            }) => {
                 assert_eq!(spider_key, snapshot.broodmother.spider_micro_key);
                 assert_eq!(hero_key, snapshot.broodmother.hero_reselect_key);
             }
@@ -1165,7 +1278,9 @@ mod tests {
         }
 
         let mut spider_micro_disabled_snapshot = broodmother_test_snapshot();
-        spider_micro_disabled_snapshot.broodmother.spider_micro_enabled = false;
+        spider_micro_disabled_snapshot
+            .broodmother
+            .spider_micro_enabled = false;
 
         match plan_broodmother_callback_action(
             &EventType::ButtonPress(Button::Middle),
@@ -1178,7 +1293,9 @@ mod tests {
         }
 
         let mut broodmother_inactive_snapshot = broodmother_test_snapshot();
-        broodmother_inactive_snapshot.broodmother.spider_micro_enabled = true;
+        broodmother_inactive_snapshot
+            .broodmother
+            .spider_micro_enabled = true;
 
         match plan_broodmother_callback_action(
             &EventType::ButtonPress(Button::Middle),
@@ -1221,6 +1338,7 @@ mod tests {
         snapshot.invoker_profiles = vec![InvokerHotkeyProfileSnapshot {
             id: "qw-pickoff".to_string(),
             hotkey: Some(parse_key_string("Home").unwrap()),
+            mode: crate::config::settings::InvokerProfileMode::Combo,
             enabled: true,
         }];
 
@@ -1228,5 +1346,61 @@ mod tests {
             plan_global_hotkey_event(rdev::Key::Home, &snapshot),
             Some(HotkeyEvent::InvokerProfile("qw-pickoff".to_string()))
         );
+    }
+
+    #[test]
+    fn plan_global_hotkey_event_cycles_invoker_combo_profiles_only_for_invoker() {
+        let mut snapshot = KeyboardSnapshot::default();
+        snapshot.selected_hero = Some(HeroType::Invoker);
+        snapshot.invoker_cycle_hotkey = Some(Key::Delete);
+        snapshot.invoker_profiles = vec![
+            InvokerHotkeyProfileSnapshot {
+                id: "prep".to_string(),
+                hotkey: Some(Key::Insert),
+                mode: crate::config::settings::InvokerProfileMode::Prep,
+                enabled: true,
+            },
+            InvokerHotkeyProfileSnapshot {
+                id: "combo".to_string(),
+                hotkey: Some(Key::Home),
+                mode: crate::config::settings::InvokerProfileMode::Combo,
+                enabled: true,
+            },
+        ];
+
+        assert_eq!(
+            plan_global_hotkey_event(Key::Delete, &snapshot),
+            Some(HotkeyEvent::InvokerCycleComboProfile)
+        );
+    }
+
+    #[test]
+    fn plan_global_hotkey_event_ignores_invoker_cycle_hotkey_for_other_heroes() {
+        let mut snapshot = KeyboardSnapshot::default();
+        snapshot.selected_hero = Some(HeroType::ShadowFiend);
+        snapshot.invoker_cycle_hotkey = Some(Key::Delete);
+        snapshot.invoker_profiles = vec![InvokerHotkeyProfileSnapshot {
+            id: "combo".to_string(),
+            hotkey: Some(Key::Home),
+            mode: crate::config::settings::InvokerProfileMode::Combo,
+            enabled: true,
+        }];
+
+        assert_eq!(plan_global_hotkey_event(Key::Delete, &snapshot), None);
+    }
+
+    #[test]
+    fn plan_global_hotkey_event_ignores_invoker_cycle_hotkey_without_enabled_combo_profiles() {
+        let mut snapshot = KeyboardSnapshot::default();
+        snapshot.selected_hero = Some(HeroType::Invoker);
+        snapshot.invoker_cycle_hotkey = Some(Key::Delete);
+        snapshot.invoker_profiles = vec![InvokerHotkeyProfileSnapshot {
+            id: "prep".to_string(),
+            hotkey: Some(Key::Insert),
+            mode: crate::config::settings::InvokerProfileMode::Prep,
+            enabled: true,
+        }];
+
+        assert_eq!(plan_global_hotkey_event(Key::Delete, &snapshot), None);
     }
 }
