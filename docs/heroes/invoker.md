@@ -12,6 +12,8 @@ own hotkey, ordered steps, and per-step delays.
 - **Per-profile hotkeys** - Each profile binds its own trigger key.
 - **Ordered steps** - Every step is either a spell or an item with its own
   `delay_after_ms`.
+- **Per-step completion mode** - Steps can use fixed delay or wait for a spell
+  to enter cooldown before continuing.
 - **Dynamic invoke planning** - The runtime reuses active spells when possible
   and updates slot tracking after each invoke.
 - **Prep mode** - Prep profiles invoke spells without casting them.
@@ -43,21 +45,29 @@ build_tag = "qw"
 kind = "item"
 target = "item_spirit_vessel"
 delay_after_ms = 50
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
 
 [[heroes.invoker.profiles.steps]]
 kind = "item"
 target = "item_rod_of_atos"
 delay_after_ms = 50
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
 
 [[heroes.invoker.profiles.steps]]
 kind = "spell"
 target = "invoker_tornado"
 delay_after_ms = 700
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
 
 [[heroes.invoker.profiles.steps]]
 kind = "spell"
 target = "invoker_emp"
 delay_after_ms = 100
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
 ```
 
 ### Config fields
@@ -80,6 +90,8 @@ delay_after_ms = 100
 | `profiles[].steps[].kind` | string | n/a | `spell` or `item` |
 | `profiles[].steps[].target` | string | n/a | Stable spell/item target id such as `invoker_emp` or `item_rod_of_atos` |
 | `profiles[].steps[].delay_after_ms` | u64 | preset-specific | Delay after this step executes |
+| `profiles[].steps[].completion_mode` | string | `fixed_delay` | `fixed_delay` or `wait_for_cooldown` for spell steps |
+| `profiles[].steps[].completion_timeout_ms` | u64 | `3000` | Timeout used when waiting for cooldown confirmation |
 | `profiles[].steps[].notes` | string | `""` | Optional operator note shown in the UI |
 | `armlet.*` | object | inherits `[armlet]` | Optional Invoker-specific armlet overrides |
 
@@ -88,7 +100,7 @@ delay_after_ms = 100
 The checked-in defaults seed four starter profiles:
 
 1. **QW Pickoff** - Spirit Vessel -> Rod of Atos -> Tornado -> EMP
-2. **QE Burst** - Sun Strike -> Chaos Meteor -> Deafening Blast
+2. **QE Burst** - Sun Strike -> Chaos Meteor -> Deafening Blast, with Sun Strike waiting for manual cooldown confirmation
 3. **Ghost Walk Panic** - single-step emergency Ghost Walk cast
 4. **Meteor + Blast Prep** - prepares Meteor and Blast without casting
 
@@ -105,7 +117,8 @@ Combo profiles execute their steps in order:
 2. Spell steps check whether the spell is already active.
 3. Missing spells are invoked via the configured orb recipe.
 4. After an invoke, slot tracking is updated before planning the next spell.
-5. The configured `delay_after_ms` is applied after every step.
+5. The step either waits on `delay_after_ms` or, for manual spell steps, waits
+   for cooldown confirmation first and then applies `delay_after_ms`.
 
 ### Prep profiles
 
@@ -114,6 +127,19 @@ those spells after invoke. This is what fixes the old raw `prep_profile`
 special-casing: the runtime now trusts the declared profile order directly.
 
 Item steps are ignored in prep mode and logged as skipped.
+
+### Manual cooldown-wait steps
+
+Spell steps can choose how completion is detected:
+
+- `fixed_delay` keeps the existing execute-then-delay behavior
+- `wait_for_cooldown` is for manual-targeted spells such as Sun Strike
+
+When `wait_for_cooldown` is selected, the runner presses the active spell key
+once and then waits for the spell to enter cooldown before advancing. If the
+spell is already on cooldown when the step begins, the runner logs that the
+step is already consumed and skips it. If cooldown never starts before
+`completion_timeout_ms`, the remaining profile is aborted.
 
 ### Hotkeys
 
@@ -140,7 +166,7 @@ fields:
 - configured profile list
 - per-profile hotkey / mode / build-tag controls
 - ordered step editor with local chip visuals
-- per-step delays and notes
+- per-step delays, completion controls, and notes
 - add / duplicate / delete / reorder actions
 
 The visual chips in the editor are local app-owned assets generated in code;
@@ -156,6 +182,7 @@ At `info` level, Invoker now logs:
 🔮 Active slots before step: [...]
 🔮 Active slots after invoke: [...]
 🔮 Casting invoker_tornado from f
+🔮 Waiting for invoker_sun_strike cooldown to start
 🔮 Invoker profile complete: QW Pickoff
 ```
 

@@ -413,6 +413,8 @@ See `docs/heroes/broodmother.md` and `docs/reference/gsi-schema-and-usage.md`.
 | `profiles[].steps[].kind` | preset-specific | n/a | `spell` or `item`. |
 | `profiles[].steps[].target` | preset-specific | n/a | Stable spell/item id such as `invoker_tornado` or `item_spirit_vessel`. |
 | `profiles[].steps[].delay_after_ms` | preset-specific | `0` | Delay applied after the step executes. |
+| `profiles[].steps[].completion_mode` | preset-specific | `fixed_delay` | `fixed_delay` or `wait_for_cooldown` for spell steps. |
+| `profiles[].steps[].completion_timeout_ms` | preset-specific | `3000` | Timeout used when waiting for cooldown confirmation. |
 | `profiles[].steps[].notes` | preset-specific | `""` | Optional UI note for the step. |
 
 See `docs/heroes/invoker.md`.
