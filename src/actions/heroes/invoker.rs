@@ -48,16 +48,6 @@ impl InvokerObservedState {
             has_shard: event.hero.aghanims_shard,
         }
     }
-
-    fn active_spell_key(&self, spell_name: &str, config: &crate::config::settings::InvokerConfig) -> Option<char> {
-        spell_cast_key_from_slots(&self.active_spells, spell_name, config)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct PlannedSpellCast {
-    prepare_keys: Vec<char>,
-    cast_key: char,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -110,25 +100,6 @@ fn orb_recipe(spell_name: &str, config: &crate::config::settings::InvokerConfig)
         "invoker_sun_strike" => Some([config.exort_key, config.exort_key, config.exort_key, config.invoke_key]),
         _ => None,
     }
-}
-
-fn plan_single_spell(
-    spell_name: &str,
-    state: &InvokerObservedState,
-    config: &crate::config::settings::InvokerConfig,
-) -> Option<PlannedSpellCast> {
-    if let Some(cast_key) = state.active_spell_key(spell_name, config) {
-        return Some(PlannedSpellCast {
-            prepare_keys: Vec::new(),
-            cast_key,
-        });
-    }
-
-    let prepare_keys = orb_recipe(spell_name, config)?.to_vec();
-    Some(PlannedSpellCast {
-        prepare_keys,
-        cast_key: config.spell_slot_secondary_key,
-    })
 }
 
 fn apply_invoke_to_slot_state(
@@ -655,7 +626,7 @@ mod tests {
         let state = InvokerObservedState::from_event(&event);
 
         assert_eq!(
-            state.active_spell_key("invoker_emp", &config),
+            spell_cast_key_from_slots(&state.active_spells, "invoker_emp", &config),
             Some(config.spell_slot_secondary_key)
         );
     }
@@ -716,34 +687,64 @@ mod tests {
     }
 
     #[test]
-    fn planner_uses_existing_slot_when_spell_is_already_active() {
+    fn single_spell_batch_uses_existing_slot_when_spell_is_already_active() {
         let event = invoker_qw_fixture();
         let settings = Settings::default();
+        let config = &settings.heroes.invoker;
         let state = InvokerObservedState::from_event(&event);
+        let step = crate::config::settings::InvokerProfileStep {
+            kind: InvokerProfileStepKind::Spell,
+            target: "invoker_tornado".to_string(),
+            delay_after_ms: 100,
+            completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+            completion_timeout_ms: 3000,
+            notes: String::new(),
+        };
 
-        let step = plan_single_spell("invoker_tornado", &state, &settings.heroes.invoker)
-            .expect("spell should be plannable");
+        let (batch, _, consumed) =
+            build_spell_batch(&[step], &state.active_spells, config)
+                .expect("spell should be plannable");
 
-        assert_eq!(step.cast_key, settings.heroes.invoker.spell_slot_primary_key);
-        assert!(step.prepare_keys.is_empty());
+        assert_eq!(consumed, 1);
+        assert_eq!(batch[0].cast_key, config.spell_slot_primary_key);
+        assert!(batch[0].prepare_keys.is_empty());
     }
 
     #[test]
-    fn planner_prepares_meteor_when_not_currently_invoked() {
+    fn single_spell_batch_prepares_meteor_when_not_currently_invoked() {
         let event = invoker_qw_fixture();
         let settings = Settings::default();
+        let config = &settings.heroes.invoker;
         let state = InvokerObservedState::from_event(&event);
+        let step = crate::config::settings::InvokerProfileStep {
+            kind: InvokerProfileStepKind::Spell,
+            target: "invoker_chaos_meteor".to_string(),
+            delay_after_ms: 100,
+            completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+            completion_timeout_ms: 3000,
+            notes: String::new(),
+        };
 
-        let step = plan_single_spell("invoker_chaos_meteor", &state, &settings.heroes.invoker)
-            .expect("meteor should be plannable");
+        let (batch, next_slots, consumed) =
+            build_spell_batch(&[step], &state.active_spells, config)
+                .expect("meteor should be plannable");
 
+        assert_eq!(consumed, 1);
         assert_eq!(
-            step.prepare_keys,
+            batch[0].prepare_keys,
             vec![
-                settings.heroes.invoker.exort_key,
-                settings.heroes.invoker.exort_key,
-                settings.heroes.invoker.wex_key,
-                settings.heroes.invoker.invoke_key,
+                config.exort_key,
+                config.exort_key,
+                config.wex_key,
+                config.invoke_key,
+            ]
+        );
+        assert_eq!(batch[0].cast_key, config.spell_slot_primary_key);
+        assert_eq!(
+            next_slots,
+            [
+                Some("invoker_chaos_meteor".to_string()),
+                Some("invoker_tornado".to_string()),
             ]
         );
     }
