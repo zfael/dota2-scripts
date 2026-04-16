@@ -1,7 +1,10 @@
 use crate::actions::common::{find_item_slot_by_name, SurvivabilityActions};
 use crate::actions::executor::ActionExecutor;
 use crate::actions::heroes::traits::HeroScript;
-use crate::config::settings::{InvokerProfile, InvokerProfileMode, InvokerProfileStepKind};
+use crate::config::settings::{
+    InvokerProfile, InvokerProfileMode, InvokerProfileStepCompletionMode,
+    InvokerProfileStepKind,
+};
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Hero};
 use std::sync::{mpsc, Arc, LazyLock, Mutex};
@@ -74,8 +77,18 @@ enum PlannedInvokerAction {
         prepare_keys: Vec<char>,
         cast_key: char,
         delay_after_ms: u64,
+        completion_mode: InvokerProfileStepCompletionMode,
+        completion_timeout_ms: u64,
         should_cast: bool,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum CooldownWaitOutcome {
+    Started,
+    TimedOut,
+    HeroUnavailable,
+    SpellNotObserved,
 }
 
 fn orb_recipe(spell_name: &str, config: &crate::config::settings::InvokerConfig) -> Option<[char; 4]> {
@@ -160,6 +173,8 @@ fn build_profile_execution_plan(
                     prepare_keys: cast_plan.prepare_keys,
                     cast_key: cast_plan.cast_key,
                     delay_after_ms: step.delay_after_ms,
+                    completion_mode: step.completion_mode.clone(),
+                    completion_timeout_ms: step.completion_timeout_ms,
                     should_cast: profile.mode == InvokerProfileMode::Combo,
                 });
             }
@@ -167,6 +182,46 @@ fn build_profile_execution_plan(
     }
 
     Some(actions)
+}
+
+fn spell_cooldown_in_event(event: &GsiWebhookEvent, spell_name: &str) -> Option<u32> {
+    [4u8, 5u8]
+        .into_iter()
+        .filter_map(|index| event.abilities.get_by_index(index))
+        .find(|ability| ability.name == spell_name)
+        .map(|ability| ability.cooldown)
+}
+
+fn spell_is_on_cooldown(event: &GsiWebhookEvent, spell_name: &str) -> bool {
+    matches!(spell_cooldown_in_event(event, spell_name), Some(cooldown) if cooldown > 0)
+}
+
+fn wait_for_spell_cooldown_start(
+    spell_name: &str,
+    timeout_ms: u64,
+    poll_interval_ms: u64,
+) -> CooldownWaitOutcome {
+    let started_at = std::time::Instant::now();
+
+    loop {
+        let Some(event) = INVOKER_LAST_EVENT.lock().unwrap().clone() else {
+            return CooldownWaitOutcome::SpellNotObserved;
+        };
+
+        if !event.hero.alive || event.hero.stunned || event.hero.hexed || event.hero.silenced {
+            return CooldownWaitOutcome::HeroUnavailable;
+        }
+
+        if spell_is_on_cooldown(&event, spell_name) {
+            return CooldownWaitOutcome::Started;
+        }
+
+        if started_at.elapsed() >= Duration::from_millis(timeout_ms) {
+            return CooldownWaitOutcome::TimedOut;
+        }
+
+        thread::sleep(Duration::from_millis(poll_interval_ms));
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -270,6 +325,8 @@ fn run_profile(
                 prepare_keys,
                 cast_key,
                 delay_after_ms,
+                completion_mode,
+                completion_timeout_ms,
                 should_cast,
             } => {
                 info!("🔮 Active slots before step: {:?}", current_active_spells);
@@ -287,8 +344,50 @@ fn run_profile(
                 }
 
                 if should_cast {
+                    let current_event = INVOKER_LAST_EVENT
+                        .lock()
+                        .unwrap()
+                        .clone()
+                        .unwrap_or_else(|| event.clone());
+                    if completion_mode == InvokerProfileStepCompletionMode::WaitForCooldown
+                        && spell_is_on_cooldown(&current_event, &target)
+                    {
+                        info!("🔮 Manual step {} already on cooldown, skipping", target);
+                        continue;
+                    }
+
                     info!("🔮 Casting {} from {}", target, cast_key);
                     crate::input::simulation::press_key(cast_key);
+
+                    if completion_mode == InvokerProfileStepCompletionMode::WaitForCooldown {
+                        info!("🔮 Waiting for {} cooldown to start", target);
+                        match wait_for_spell_cooldown_start(&target, completion_timeout_ms, 25) {
+                            CooldownWaitOutcome::Started => {
+                                info!("🔮 {} entered cooldown; continuing profile", target);
+                            }
+                            CooldownWaitOutcome::TimedOut => {
+                                info!(
+                                    "🔮 Manual step {} timed out after {}ms; aborting profile",
+                                    target, completion_timeout_ms
+                                );
+                                break;
+                            }
+                            CooldownWaitOutcome::HeroUnavailable => {
+                                info!(
+                                    "🔮 Hero unavailable while waiting for {}; aborting profile",
+                                    target
+                                );
+                                break;
+                            }
+                            CooldownWaitOutcome::SpellNotObserved => {
+                                info!(
+                                    "🔮 Could not observe {} while waiting for cooldown; aborting profile",
+                                    target
+                                );
+                                break;
+                            }
+                        }
+                    }
                 } else {
                     info!("🔮 Prepared {} without casting", target);
                 }
@@ -398,6 +497,9 @@ impl HeroScript for InvokerScript {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{LazyLock, Mutex};
+
+    static MANUAL_WAIT_TEST_GUARD: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
     fn invoker_qw_fixture() -> GsiWebhookEvent {
         serde_json::from_str(include_str!(
@@ -631,5 +733,101 @@ mod tests {
             config.spell_slot_secondary_key,
             "blast should cast from the newly invoked secondary slot"
         );
+    }
+
+    #[test]
+    fn manual_wait_planner_copies_completion_metadata() {
+        let event = invoker_qe_fixture();
+        let settings = Settings::default();
+        let state = InvokerObservedState::from_event(&event);
+        let profile = find_profile(&settings.heroes.invoker, "qe-burst")
+            .expect("QE profile should exist");
+
+        let plan = build_profile_execution_plan(profile, &state, &settings.heroes.invoker)
+            .expect("QE profile should build");
+
+        let first_spell = plan
+            .iter()
+            .find_map(|step| match step {
+                PlannedInvokerAction::Spell {
+                    completion_mode,
+                    completion_timeout_ms,
+                    ..
+                } => Some((completion_mode.clone(), *completion_timeout_ms)),
+                PlannedInvokerAction::Item { .. } => None,
+            })
+            .expect("QE profile should include a spell step");
+
+        assert_eq!(
+            first_spell.0,
+            InvokerProfileStepCompletionMode::WaitForCooldown
+        );
+        assert_eq!(first_spell.1, 3000);
+    }
+
+    #[test]
+    fn manual_wait_detects_already_on_cooldown() {
+        let _guard = MANUAL_WAIT_TEST_GUARD.lock().unwrap();
+        let mut event = invoker_qe_fixture();
+        event.abilities.ability4.name = "invoker_sun_strike".to_string();
+        event.abilities.ability4.cooldown = 12;
+        event.abilities.ability4.can_cast = false;
+
+        assert!(spell_is_on_cooldown(&event, "invoker_sun_strike"));
+    }
+
+    #[test]
+    fn manual_wait_completes_after_gsi_update() {
+        let _guard = MANUAL_WAIT_TEST_GUARD.lock().unwrap();
+        let mut event = invoker_qe_fixture();
+        event.abilities.ability4.name = "invoker_sun_strike".to_string();
+        event.abilities.ability4.cooldown = 0;
+        *INVOKER_LAST_EVENT.lock().unwrap() = Some(event.clone());
+
+        let updater = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(30));
+            let mut cooling = event;
+            cooling.abilities.ability4.cooldown = 25;
+            cooling.abilities.ability4.can_cast = false;
+            *INVOKER_LAST_EVENT.lock().unwrap() = Some(cooling);
+        });
+
+        let outcome = wait_for_spell_cooldown_start("invoker_sun_strike", 300, 5);
+        updater.join().expect("updater should finish");
+
+        assert_eq!(outcome, CooldownWaitOutcome::Started);
+    }
+
+    #[test]
+    fn manual_wait_times_out_without_cooldown_start() {
+        let _guard = MANUAL_WAIT_TEST_GUARD.lock().unwrap();
+        let mut event = invoker_qe_fixture();
+        event.abilities.ability4.name = "invoker_sun_strike".to_string();
+        event.abilities.ability4.cooldown = 0;
+        *INVOKER_LAST_EVENT.lock().unwrap() = Some(event);
+
+        assert_eq!(
+            wait_for_spell_cooldown_start("invoker_sun_strike", 20, 5),
+            CooldownWaitOutcome::TimedOut
+        );
+    }
+
+    #[test]
+    fn manual_wait_stops_when_hero_becomes_unavailable() {
+        let _guard = MANUAL_WAIT_TEST_GUARD.lock().unwrap();
+        let event = invoker_qe_fixture();
+        *INVOKER_LAST_EVENT.lock().unwrap() = Some(event);
+
+        let updater = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            let mut disabled = invoker_qe_fixture();
+            disabled.hero.alive = false;
+            *INVOKER_LAST_EVENT.lock().unwrap() = Some(disabled);
+        });
+
+        let outcome = wait_for_spell_cooldown_start("invoker_sun_strike", 200, 5);
+        updater.join().expect("updater should finish");
+
+        assert_eq!(outcome, CooldownWaitOutcome::HeroUnavailable);
     }
 }
