@@ -6,6 +6,7 @@ import { Toggle } from "../../../common/Toggle";
 import type {
   InvokerProfile,
   InvokerProfileStep,
+  InvokerProfileStepCompletionMode,
   InvokerProfileStepKind,
 } from "../../../../types/config";
 import {
@@ -37,6 +38,11 @@ const KIND_OPTIONS = [
   { value: "item", label: "Item" },
 ];
 
+const COMPLETION_MODE_OPTIONS = [
+  { value: "fixed_delay", label: "Fixed Delay" },
+  { value: "wait_for_cooldown", label: "Wait for Cooldown" },
+];
+
 function cloneSteps(steps: InvokerProfileStep[]) {
   return steps.map((step) => ({ ...step }));
 }
@@ -44,6 +50,13 @@ function cloneSteps(steps: InvokerProfileStep[]) {
 function targetOptions(kind: InvokerProfileStepKind) {
   const source = kind === "spell" ? INVOKER_SPELLS : INVOKER_ITEMS;
   return source.map((entry) => ({ value: entry.id, label: entry.label }));
+}
+
+function stepPreviewLabel(step: InvokerProfileStep) {
+  const label = getInvokerStepLabel(step.target);
+  return step.completion_mode === "wait_for_cooldown"
+    ? `${label} [manual]`
+    : label;
 }
 
 export function InvokerProfileEditor({
@@ -128,7 +141,7 @@ export function InvokerProfileEditor({
         </div>
         <div className="mt-2 text-sm text-content">
           {profile.steps.length
-            ? profile.steps.map((step) => getInvokerStepLabel(step.target)).join(" → ")
+            ? profile.steps.map((step) => stepPreviewLabel(step)).join(" → ")
             : "No steps configured"}
         </div>
       </div>
@@ -202,6 +215,9 @@ export function InvokerProfileEditor({
                       kind: nextKind,
                       target: nextTarget,
                       delay_after_ms: step.delay_after_ms,
+                      completion_mode:
+                        nextKind === "item" ? "fixed_delay" : step.completion_mode,
+                      completion_timeout_ms: step.completion_timeout_ms,
                       notes: step.notes,
                     });
                   }}
@@ -230,6 +246,40 @@ export function InvokerProfileEditor({
                   }
                   suffix="ms"
                 />
+                {step.kind === "spell" ? (
+                  <>
+                    <Dropdown
+                      label="Completion Mode"
+                      value={step.completion_mode}
+                      options={COMPLETION_MODE_OPTIONS}
+                      onChange={(completion_mode) =>
+                        setStep(index, {
+                          ...step,
+                          completion_mode:
+                            completion_mode as InvokerProfileStepCompletionMode,
+                        })
+                      }
+                    />
+                    {step.completion_mode === "wait_for_cooldown" ? (
+                      <NumberInput
+                        label="Completion Timeout"
+                        value={step.completion_timeout_ms}
+                        onChange={(completion_timeout_ms) =>
+                          setStep(index, { ...step, completion_timeout_ms })
+                        }
+                        suffix="ms"
+                      />
+                    ) : (
+                      <div className="rounded-md border border-border bg-input px-3 py-2 text-xs text-subtle">
+                        Fixed delay steps continue after the normal post-step delay.
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="rounded-md border border-border bg-input px-3 py-2 text-xs text-subtle md:col-span-2">
+                    Items always use fixed delay completion.
+                  </div>
+                )}
               </div>
 
               <div className="mt-3 space-y-1">

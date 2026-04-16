@@ -33,5 +33,29 @@ describe("InvokerConfig", () => {
 
     expect(screen.getAllByText(/QW Pickoff/i).length).toBeGreaterThan(1);
   });
+
+  it("renders QE Burst with manual cooldown wait controls", () => {
+    render(<InvokerConfig />);
+
+    fireEvent.click(screen.getByText(/PageDown/).closest("button")!);
+
+    expect(screen.getAllByText("Completion Mode").length).toBeGreaterThan(0);
+    expect(screen.getByDisplayValue("3000")).toBeInTheDocument();
+  });
+
+  it("persists completion mode edits into the config store", () => {
+    render(<InvokerConfig />);
+
+    fireEvent.click(screen.getByText(/PageDown/).closest("button")!);
+    fireEvent.change(screen.getAllByDisplayValue("Wait for Cooldown")[0], {
+      target: { value: "fixed_delay" },
+    });
+
+    const qeProfile = useConfigStore
+      .getState()
+      .config.heroes.invoker.profiles.find((profile) => profile.id === "qe-burst");
+
+    expect(qeProfile?.steps[0].completion_mode).toBe("fixed_delay");
+  });
 });
 

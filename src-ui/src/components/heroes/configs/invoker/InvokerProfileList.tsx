@@ -20,7 +20,12 @@ function stepSummary(profile: InvokerProfile) {
   }
 
   return profile.steps
-    .map((step) => getInvokerStepLabel(step.target))
+    .map((step) => {
+      const label = getInvokerStepLabel(step.target);
+      return step.completion_mode === "wait_for_cooldown"
+        ? `${label} [manual]`
+        : label;
+    })
     .join(" → ");
 }
 
