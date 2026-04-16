@@ -223,14 +223,26 @@ fn find_profile<'a>(
     config.profiles.iter().find(|profile| profile.id == profile_id)
 }
 
-fn first_enabled_combo_profile_id(
+pub(crate) fn resolve_active_combo_profile_id(
     config: &crate::config::settings::InvokerConfig,
+    active_profile_id: Option<&str>,
 ) -> Option<String> {
-    config
-        .profiles
-        .iter()
-        .find(|profile| profile.enabled && profile.mode == InvokerProfileMode::Combo)
+    active_profile_id
+        .and_then(|profile_id| {
+            config.profiles.iter().find(|profile| {
+                profile.enabled
+                    && profile.mode == InvokerProfileMode::Combo
+                    && profile.id == profile_id
+            })
+        })
         .map(|profile| profile.id.clone())
+        .or_else(|| {
+            config
+                .profiles
+                .iter()
+                .find(|profile| profile.enabled && profile.mode == InvokerProfileMode::Combo)
+                .map(|profile| profile.id.clone())
+        })
 }
 
 fn build_profile_execution_plan(
@@ -577,7 +589,7 @@ impl HeroScript for InvokerScript {
 
     fn handle_standalone_trigger(&self) {
         let settings = self.settings.lock().unwrap();
-        if let Some(profile_id) = first_enabled_combo_profile_id(&settings.heroes.invoker) {
+        if let Some(profile_id) = resolve_active_combo_profile_id(&settings.heroes.invoker, None) {
             enqueue_request(InvokerRequest::RunProfile(profile_id));
         } else {
             info!("🔮 Invoker standalone trigger skipped: no enabled combo profile");
@@ -644,6 +656,38 @@ mod tests {
                 Some("invoker_sun_strike".to_string()),
                 Some("invoker_emp".to_string()),
             ]
+        );
+    }
+
+    #[test]
+    fn resolve_active_combo_profile_id_prefers_explicit_enabled_combo_profile() {
+        let mut config = Settings::default().heroes.invoker;
+        let qe_burst = config
+            .profiles
+            .iter_mut()
+            .find(|profile| profile.id == "qe-burst")
+            .expect("QE Burst profile should exist");
+        qe_burst.enabled = true;
+
+        assert_eq!(
+            resolve_active_combo_profile_id(&config, Some("qe-burst")),
+            Some("qe-burst".to_string())
+        );
+    }
+
+    #[test]
+    fn resolve_active_combo_profile_id_repairs_invalid_active_profile_with_first_enabled_combo() {
+        let mut config = Settings::default().heroes.invoker;
+        config
+            .profiles
+            .iter_mut()
+            .find(|profile| profile.id == "qw-pickoff")
+            .expect("QW Pickoff profile should exist")
+            .enabled = false;
+
+        assert_eq!(
+            resolve_active_combo_profile_id(&config, Some("meteor-blast-prep")),
+            Some("ghost-walk-panic".to_string())
         );
     }
 

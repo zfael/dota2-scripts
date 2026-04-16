@@ -12,6 +12,7 @@ mod update;
 
 use crate::actions::activity::{push_activity, ActivityCategory};
 use crate::actions::executor::ActionExecutor;
+use crate::actions::heroes::invoker::resolve_active_combo_profile_id;
 use crate::actions::ActionDispatcher;
 use crate::config::settings::InvokerProfileMode;
 use crate::config::Settings;
@@ -114,12 +115,44 @@ async fn main() {
         while let Ok(event) = hotkey_rx.recv() {
             match event {
                 input::keyboard::HotkeyEvent::ComboTrigger => {
-                    let state = app_state_clone2.lock().unwrap();
-                    if state.standalone_enabled {
-                        if let Some(hero_type) = state.selected_hero {
+                    let (standalone_enabled, selected_hero, active_profile_id) = {
+                        let state = app_state_clone2.lock().unwrap();
+                        (
+                            state.standalone_enabled,
+                            state.selected_hero,
+                            state.invoker_active_combo_profile_id.clone(),
+                        )
+                    };
+
+                    if !standalone_enabled {
+                        info!("Standalone scripts disabled");
+                        continue;
+                    }
+
+                    match selected_hero {
+                        Some(state::HeroType::Invoker) => {
+                            let profile_id = {
+                                let settings = hotkey_settings.lock().unwrap();
+                                resolve_active_combo_profile_id(
+                                    &settings.heroes.invoker,
+                                    active_profile_id.as_deref(),
+                                )
+                            };
+
+                            if let Some(profile_id) = profile_id {
+                                info!(
+                                    "Triggering standalone combo for {} with profile {}",
+                                    models::Hero::Invoker.to_game_name(),
+                                    profile_id
+                                );
+                                dispatcher_clone2.dispatch_invoker_profile(&profile_id);
+                            } else {
+                                info!("Invoker standalone combo skipped: no enabled combo profile");
+                            }
+                        }
+                        Some(hero_type) => {
                             let hero_name = match hero_type {
                                 state::HeroType::Huskar => models::Hero::Huskar.to_game_name(),
-                                state::HeroType::Invoker => models::Hero::Invoker.to_game_name(),
                                 state::HeroType::Largo => models::Hero::Largo.to_game_name(),
                                 state::HeroType::LegionCommander => {
                                     models::Hero::LegionCommander.to_game_name()
@@ -132,15 +165,14 @@ async fn main() {
                                     models::Hero::Nevermore.to_game_name()
                                 }
                                 state::HeroType::Tiny => models::Hero::Tiny.to_game_name(),
+                                state::HeroType::Invoker => unreachable!(),
                             };
                             info!("Triggering standalone combo for {}", hero_name);
-                            drop(state); // Release lock before calling dispatcher
                             dispatcher_clone2.dispatch_standalone_trigger(hero_name);
-                        } else {
+                        }
+                        None => {
                             info!("No hero selected for standalone combo");
                         }
-                    } else {
-                        info!("Standalone scripts disabled");
                     }
                 }
                 input::keyboard::HotkeyEvent::MeepoFarmToggle => {
@@ -302,6 +334,30 @@ async fn main() {
                     }
                 }
                 input::keyboard::HotkeyEvent::InvokerProfile(profile_id) => {
+                    let profile = {
+                        let settings = hotkey_settings.lock().unwrap();
+                        settings
+                            .heroes
+                            .invoker
+                            .profiles
+                            .iter()
+                            .find(|profile| profile.id == profile_id)
+                            .cloned()
+                    };
+
+                    if let Some(profile) = profile {
+                        if profile.enabled && profile.mode == InvokerProfileMode::Combo {
+                            let mut state = app_state_clone2.lock().unwrap();
+                            state.invoker_active_combo_profile_id = Some(profile.id.clone());
+                            drop(state);
+
+                            info!("Invoker active combo profile set to {}", profile.id);
+                            push_activity(
+                                ActivityCategory::System,
+                                format!("Invoker active combo profile set to {}", profile.id),
+                            );
+                        }
+                    }
                     dispatcher_clone2.dispatch_invoker_profile(&profile_id);
                 }
             }
