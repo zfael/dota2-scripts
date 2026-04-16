@@ -54,10 +54,10 @@ export const INVOKER_PRESET_PROFILES: InvokerProfile[] = [
     mode: "combo",
     build_tag: "qw",
     steps: [
-      { kind: "item", target: "item_spirit_vessel", delay_after_ms: 50, notes: "" },
-      { kind: "item", target: "item_rod_of_atos", delay_after_ms: 50, notes: "" },
-      { kind: "spell", target: "invoker_tornado", delay_after_ms: 700, notes: "" },
-      { kind: "spell", target: "invoker_emp", delay_after_ms: 100, notes: "" },
+      { kind: "item", target: "item_spirit_vessel", delay_after_ms: 50, completion_mode: "fixed_delay", completion_timeout_ms: 3000, notes: "" },
+      { kind: "item", target: "item_rod_of_atos", delay_after_ms: 50, completion_mode: "fixed_delay", completion_timeout_ms: 3000, notes: "" },
+      { kind: "spell", target: "invoker_tornado", delay_after_ms: 700, completion_mode: "fixed_delay", completion_timeout_ms: 3000, notes: "" },
+      { kind: "spell", target: "invoker_emp", delay_after_ms: 100, completion_mode: "fixed_delay", completion_timeout_ms: 3000, notes: "" },
     ],
   },
   {
@@ -68,9 +68,9 @@ export const INVOKER_PRESET_PROFILES: InvokerProfile[] = [
     mode: "combo",
     build_tag: "qe",
     steps: [
-      { kind: "spell", target: "invoker_sun_strike", delay_after_ms: 150, notes: "" },
-      { kind: "spell", target: "invoker_chaos_meteor", delay_after_ms: 450, notes: "" },
-      { kind: "spell", target: "invoker_deafening_blast", delay_after_ms: 100, notes: "" },
+      { kind: "spell", target: "invoker_sun_strike", delay_after_ms: 150, completion_mode: "wait_for_cooldown", completion_timeout_ms: 3000, notes: "" },
+      { kind: "spell", target: "invoker_chaos_meteor", delay_after_ms: 450, completion_mode: "fixed_delay", completion_timeout_ms: 3000, notes: "" },
+      { kind: "spell", target: "invoker_deafening_blast", delay_after_ms: 100, completion_mode: "fixed_delay", completion_timeout_ms: 3000, notes: "" },
     ],
   },
   {
@@ -80,7 +80,7 @@ export const INVOKER_PRESET_PROFILES: InvokerProfile[] = [
     hotkey: "End",
     mode: "combo",
     build_tag: "general",
-    steps: [{ kind: "spell", target: "invoker_ghost_walk", delay_after_ms: 100, notes: "" }],
+    steps: [{ kind: "spell", target: "invoker_ghost_walk", delay_after_ms: 100, completion_mode: "fixed_delay", completion_timeout_ms: 3000, notes: "" }],
   },
   {
     id: "meteor-blast-prep",
@@ -90,8 +90,8 @@ export const INVOKER_PRESET_PROFILES: InvokerProfile[] = [
     mode: "prep",
     build_tag: "qe",
     steps: [
-      { kind: "spell", target: "invoker_chaos_meteor", delay_after_ms: 0, notes: "" },
-      { kind: "spell", target: "invoker_deafening_blast", delay_after_ms: 0, notes: "" },
+      { kind: "spell", target: "invoker_chaos_meteor", delay_after_ms: 0, completion_mode: "fixed_delay", completion_timeout_ms: 3000, notes: "" },
+      { kind: "spell", target: "invoker_deafening_blast", delay_after_ms: 0, completion_mode: "fixed_delay", completion_timeout_ms: 3000, notes: "" },
     ],
   },
 ];
@@ -110,6 +110,8 @@ export function createInvokerStep(kind: InvokerProfileStepKind): InvokerProfileS
     kind,
     target: fallback.id,
     delay_after_ms: kind === "spell" ? 100 : 50,
+    completion_mode: "fixed_delay",
+    completion_timeout_ms: 3000,
     notes: "",
   };
 }

@@ -410,11 +410,30 @@ pub enum InvokerProfileStepKind {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum InvokerProfileStepCompletionMode {
+    FixedDelay,
+    WaitForCooldown,
+}
+
+fn default_invoker_profile_step_completion_mode() -> InvokerProfileStepCompletionMode {
+    InvokerProfileStepCompletionMode::FixedDelay
+}
+
+fn default_invoker_profile_step_completion_timeout_ms() -> u64 {
+    3000
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InvokerProfileStep {
     pub kind: InvokerProfileStepKind,
     pub target: String,
     #[serde(default)]
     pub delay_after_ms: u64,
+    #[serde(default = "default_invoker_profile_step_completion_mode")]
+    pub completion_mode: InvokerProfileStepCompletionMode,
+    #[serde(default = "default_invoker_profile_step_completion_timeout_ms")]
+    pub completion_timeout_ms: u64,
     #[serde(default)]
     pub notes: String,
 }
@@ -1148,24 +1167,32 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
                     kind: InvokerProfileStepKind::Item,
                     target: "item_spirit_vessel".to_string(),
                     delay_after_ms: 50,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
                     notes: String::new(),
                 },
                 InvokerProfileStep {
                     kind: InvokerProfileStepKind::Item,
                     target: "item_rod_of_atos".to_string(),
                     delay_after_ms: 50,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
                     notes: String::new(),
                 },
                 InvokerProfileStep {
                     kind: InvokerProfileStepKind::Spell,
                     target: "invoker_tornado".to_string(),
                     delay_after_ms: 700,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
                     notes: String::new(),
                 },
                 InvokerProfileStep {
                     kind: InvokerProfileStepKind::Spell,
                     target: "invoker_emp".to_string(),
                     delay_after_ms: 100,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
                     notes: String::new(),
                 },
             ],
@@ -1182,18 +1209,24 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
                     kind: InvokerProfileStepKind::Spell,
                     target: "invoker_sun_strike".to_string(),
                     delay_after_ms: 150,
+                    completion_mode: InvokerProfileStepCompletionMode::WaitForCooldown,
+                    completion_timeout_ms: 3000,
                     notes: String::new(),
                 },
                 InvokerProfileStep {
                     kind: InvokerProfileStepKind::Spell,
                     target: "invoker_chaos_meteor".to_string(),
                     delay_after_ms: 450,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
                     notes: String::new(),
                 },
                 InvokerProfileStep {
                     kind: InvokerProfileStepKind::Spell,
                     target: "invoker_deafening_blast".to_string(),
                     delay_after_ms: 100,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
                     notes: String::new(),
                 },
             ],
@@ -1209,6 +1242,8 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
                 kind: InvokerProfileStepKind::Spell,
                 target: "invoker_ghost_walk".to_string(),
                 delay_after_ms: 100,
+                completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                completion_timeout_ms: 3000,
                 notes: String::new(),
             }],
         },
@@ -1224,12 +1259,16 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
                     kind: InvokerProfileStepKind::Spell,
                     target: "invoker_chaos_meteor".to_string(),
                     delay_after_ms: 0,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
                     notes: String::new(),
                 },
                 InvokerProfileStep {
                     kind: InvokerProfileStepKind::Spell,
                     target: "invoker_deafening_blast".to_string(),
                     delay_after_ms: 0,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
                     notes: String::new(),
                 },
             ],
@@ -2061,6 +2100,29 @@ mod tests {
                 ("Meteor + Blast Prep", "prep", true),
             ]
         );
+    }
+
+    #[test]
+    fn invoker_qe_burst_defaults_to_manual_sun_strike_wait() {
+        let settings = Settings::default();
+        let qe = settings
+            .heroes
+            .invoker
+            .profiles
+            .iter()
+            .find(|profile| profile.id == "qe-burst")
+            .expect("QE Burst profile should exist");
+
+        let sun_strike = qe
+            .steps
+            .first()
+            .expect("QE Burst should seed Sun Strike as the first step");
+
+        assert_eq!(
+            sun_strike.completion_mode,
+            InvokerProfileStepCompletionMode::WaitForCooldown
+        );
+        assert_eq!(sun_strike.completion_timeout_ms, 3000);
     }
 
     #[test]

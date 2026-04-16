@@ -187,11 +187,16 @@ export interface OutworldDestroyerConfig {
 
 export type InvokerProfileMode = "combo" | "prep";
 export type InvokerProfileStepKind = "spell" | "item";
+export type InvokerProfileStepCompletionMode =
+  | "fixed_delay"
+  | "wait_for_cooldown";
 
 export interface InvokerProfileStep {
   kind: InvokerProfileStepKind;
   target: string;
   delay_after_ms: number;
+  completion_mode: InvokerProfileStepCompletionMode;
+  completion_timeout_ms: number;
   notes: string;
 }
 

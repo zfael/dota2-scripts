@@ -254,21 +254,29 @@ build_tag = "qw"
 kind = "item"
 target = "item_spirit_vessel"
 delay_after_ms = 50
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
 
 [[heroes.invoker.profiles.steps]]
 kind = "item"
 target = "item_rod_of_atos"
 delay_after_ms = 50
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
 
 [[heroes.invoker.profiles.steps]]
 kind = "spell"
 target = "invoker_tornado"
 delay_after_ms = 700
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
 
 [[heroes.invoker.profiles.steps]]
 kind = "spell"
 target = "invoker_emp"
 delay_after_ms = 100
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
 
 [[heroes.invoker.profiles]]
 id = "qe-burst"
@@ -282,16 +290,22 @@ build_tag = "qe"
 kind = "spell"
 target = "invoker_sun_strike"
 delay_after_ms = 150
+completion_mode = "wait_for_cooldown"
+completion_timeout_ms = 3000
 
 [[heroes.invoker.profiles.steps]]
 kind = "spell"
 target = "invoker_chaos_meteor"
 delay_after_ms = 450
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
 
 [[heroes.invoker.profiles.steps]]
 kind = "spell"
 target = "invoker_deafening_blast"
 delay_after_ms = 100
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
 
 [[heroes.invoker.profiles]]
 id = "ghost-walk-panic"
@@ -305,6 +319,8 @@ build_tag = "general"
 kind = "spell"
 target = "invoker_ghost_walk"
 delay_after_ms = 100
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
 
 [[heroes.invoker.profiles]]
 id = "meteor-blast-prep"
@@ -318,11 +334,15 @@ build_tag = "qe"
 kind = "spell"
 target = "invoker_chaos_meteor"
 delay_after_ms = 0
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
 
 [[heroes.invoker.profiles.steps]]
 kind = "spell"
 target = "invoker_deafening_blast"
 delay_after_ms = 0
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
 
 [gsi_logging]
 enabled = false
