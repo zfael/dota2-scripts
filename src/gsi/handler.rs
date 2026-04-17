@@ -274,6 +274,7 @@ mod tests {
         let dispatcher = std::sync::Arc::new(ActionDispatcher::new(
             settings.clone(),
             ActionExecutor::new(),
+            app_state.clone(),
         ));
         let (tx, rx) = mpsc::channel(1);
 
@@ -326,6 +327,7 @@ mod tests {
         let dispatcher = std::sync::Arc::new(ActionDispatcher::new(
             settings.clone(),
             ActionExecutor::new(),
+            app_state.clone(),
         ));
         let (tx, rx) = mpsc::channel(1);
 
@@ -381,6 +383,7 @@ mod tests {
         let dispatcher = std::sync::Arc::new(ActionDispatcher::new(
             settings.clone(),
             ActionExecutor::new(),
+            app_state.clone(),
         ));
         let (tx, rx) = mpsc::channel(1);
 
@@ -418,6 +421,7 @@ mod tests {
         let dispatcher = std::sync::Arc::new(ActionDispatcher::new(
             settings.clone(),
             ActionExecutor::new(),
+            app_state.clone(),
         ));
         let (tx, rx) = mpsc::channel(1);
 
@@ -453,6 +457,7 @@ mod tests {
         let dispatcher = std::sync::Arc::new(ActionDispatcher::new(
             settings.clone(),
             ActionExecutor::new(),
+            app_state.clone(),
         ));
         let (tx, rx) = mpsc::channel(2);
 

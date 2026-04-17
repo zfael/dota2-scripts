@@ -14,7 +14,6 @@ use tracing::info;
 
 static INVOKER_LAST_EVENT: LazyLock<Mutex<Option<GsiWebhookEvent>>> =
     LazyLock::new(|| Mutex::new(None));
-static INVOKER_SETTINGS: LazyLock<Mutex<Option<Settings>>> = LazyLock::new(|| Mutex::new(None));
 
 #[derive(Debug, Clone)]
 struct InvokerObservedState {
@@ -447,9 +446,19 @@ fn wait_for_spell_cooldown_start(
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub(crate) enum InvokerRequest {
-    RunProfile(String),
+    RunProfile {
+        profile_id: String,
+        settings: Settings,
+    },
+}
+
+fn build_run_profile_request(profile_id: &str, settings: &Settings) -> InvokerRequest {
+    InvokerRequest::RunProfile {
+        profile_id: profile_id.to_string(),
+        settings: settings.clone(),
+    }
 }
 
 #[cfg(test)]
@@ -476,17 +485,13 @@ fn run_invoker_request(request: InvokerRequest) {
     info!("Running Invoker request: {:?}", request);
 
     let event = INVOKER_LAST_EVENT.lock().unwrap().clone();
-    let settings = INVOKER_SETTINGS.lock().unwrap().clone();
 
     let Some(event) = event else {
         info!("🔮 Invoker request skipped: no GSI event available");
         return;
     };
 
-    let Some(settings) = settings else {
-        info!("🔮 Invoker request skipped: no settings available");
-        return;
-    };
+    let InvokerRequest::RunProfile { profile_id, settings } = request;
 
     let state = InvokerObservedState::from_event(&event);
     let config = &settings.heroes.invoker;
@@ -495,8 +500,6 @@ fn run_invoker_request(request: InvokerRequest) {
         info!("🔮 Invoker request skipped: hero not available");
         return;
     }
-
-    let InvokerRequest::RunProfile(profile_id) = request;
 
     let Some(profile) = find_profile(config, &profile_id) else {
         info!(
@@ -693,23 +696,32 @@ static INVOKER_REQUEST_QUEUE: LazyLock<mpsc::Sender<InvokerRequest>> = LazyLock:
 pub struct InvokerScript {
     settings: Arc<Mutex<Settings>>,
     executor: Arc<ActionExecutor>,
+    app_state: Arc<Mutex<crate::state::AppState>>,
 }
 
 impl InvokerScript {
-    pub fn new(settings: Arc<Mutex<Settings>>, executor: Arc<ActionExecutor>) -> Self {
-        Self { settings, executor }
+    pub fn new(
+        settings: Arc<Mutex<Settings>>,
+        executor: Arc<ActionExecutor>,
+        app_state: Arc<Mutex<crate::state::AppState>>,
+    ) -> Self {
+        Self {
+            settings,
+            executor,
+            app_state,
+        }
     }
 
     pub fn handle_profile_trigger(&self, profile_id: &str) {
-        enqueue_request(InvokerRequest::RunProfile(profile_id.to_string()));
+        let settings = self.settings.lock().unwrap();
+        enqueue_request(build_run_profile_request(profile_id, &settings));
     }
 }
 
 impl HeroScript for InvokerScript {
     fn handle_gsi_event(&self, event: &GsiWebhookEvent) {
-        // Store latest event and settings for request worker
+        // Store latest event for request worker
         *INVOKER_LAST_EVENT.lock().unwrap() = Some(event.clone());
-        *INVOKER_SETTINGS.lock().unwrap() = Some(self.settings.lock().unwrap().clone());
 
         let survivability = SurvivabilityActions::new(self.settings.clone(), self.executor.clone());
         let settings = self.settings.lock().unwrap();
@@ -722,8 +734,18 @@ impl HeroScript for InvokerScript {
 
     fn handle_standalone_trigger(&self) {
         let settings = self.settings.lock().unwrap();
-        if let Some(profile_id) = resolve_active_combo_profile_id(&settings.heroes.invoker, None) {
-            enqueue_request(InvokerRequest::RunProfile(profile_id));
+        let active_profile_id = self
+            .app_state
+            .lock()
+            .unwrap()
+            .invoker_active_combo_profile_id
+            .as_deref()
+            .map(|s| s.to_string());
+        if let Some(profile_id) = resolve_active_combo_profile_id(
+            &settings.heroes.invoker,
+            active_profile_id.as_deref(),
+        ) {
+            enqueue_request(build_run_profile_request(&profile_id, &settings));
         } else {
             info!("🔮 Invoker standalone trigger skipped: no enabled combo profile");
         }
@@ -744,6 +766,7 @@ mod tests {
     use std::sync::{LazyLock, Mutex};
 
     static MANUAL_WAIT_TEST_GUARD: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+    static QUEUE_TEST_GUARD: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
     fn invoker_qw_fixture() -> GsiWebhookEvent {
         serde_json::from_str(include_str!(
@@ -980,37 +1003,49 @@ mod tests {
 
     #[test]
     fn production_queue_preserves_fifo_order() {
+        let _guard = QUEUE_TEST_GUARD.lock().unwrap();
         use std::sync::{mpsc, Arc, Mutex};
         use std::thread;
         use std::time::Duration;
 
+        // Set up required GSI event state for worker
+        *INVOKER_LAST_EVENT.lock().unwrap() = Some(invoker_qw_fixture());
+
         // Create observer channel to watch what the real worker processes
         let (observe_tx, observe_rx) = mpsc::channel::<InvokerRequest>();
-        set_test_observer(observe_tx);
-
+        
         let observed = Arc::new(Mutex::new(Vec::new()));
         let observed_clone = Arc::clone(&observed);
 
-        // Collector thread that records processing order
-        let collector = thread::spawn(move || {
-            while let Ok(request) = observe_rx.recv_timeout(Duration::from_millis(300)) {
-                observed_clone.lock().unwrap().push(request);
-            }
-        });
+        set_test_observer(observe_tx);
 
         // Force initialization of the real production queue
         let _ = &*INVOKER_REQUEST_QUEUE;
 
         // Enqueue through the actual production path
-        enqueue_request(InvokerRequest::RunProfile("meteor-blast-prep".to_string()));
-        enqueue_request(InvokerRequest::RunProfile("ghost-walk-panic".to_string()));
-        enqueue_request(InvokerRequest::RunProfile("qw-pickoff".to_string()));
+        let settings = Settings::default();
+        enqueue_request(build_run_profile_request("meteor-blast-prep", &settings));
+        enqueue_request(build_run_profile_request("ghost-walk-panic", &settings));
+        enqueue_request(build_run_profile_request("qw-pickoff", &settings));
 
-        // Wait for worker to process
-        thread::sleep(Duration::from_millis(200));
-        clear_test_observer();
+        // Collector thread that records processing order - collect exactly 3 requests
+        let collector = thread::spawn(move || {
+            for _ in 0..3 {
+                match observe_rx.recv_timeout(Duration::from_secs(5)) {
+                    Ok(request) => {
+                        observed_clone.lock().unwrap().push(request);
+                    }
+                    Err(_) => {
+                        break;
+                    }
+                }
+            }
+        });
 
         collector.join().expect("collector should complete");
+        
+        // Clear observer now that we've collected all messages
+        clear_test_observer();
 
         // Verify the real production worker preserved FIFO order
         let received = observed.lock().unwrap();
@@ -1019,18 +1054,21 @@ mod tests {
             3,
             "all three requests should be processed by production worker"
         );
-        assert_eq!(
-            received[0],
-            InvokerRequest::RunProfile("meteor-blast-prep".to_string())
-        );
-        assert_eq!(
-            received[1],
-            InvokerRequest::RunProfile("ghost-walk-panic".to_string())
-        );
-        assert_eq!(
-            received[2],
-            InvokerRequest::RunProfile("qw-pickoff".to_string())
-        );
+        match &received[0] {
+            InvokerRequest::RunProfile { profile_id, .. } => {
+                assert_eq!(profile_id, "meteor-blast-prep");
+            }
+        }
+        match &received[1] {
+            InvokerRequest::RunProfile { profile_id, .. } => {
+                assert_eq!(profile_id, "ghost-walk-panic");
+            }
+        }
+        match &received[2] {
+            InvokerRequest::RunProfile { profile_id, .. } => {
+                assert_eq!(profile_id, "qw-pickoff");
+            }
+        }
     }
 
     fn invoker_qe_fixture() -> GsiWebhookEvent {
@@ -1355,5 +1393,84 @@ mod tests {
         updater.join().expect("updater should finish");
 
         assert_eq!(outcome, CooldownWaitOutcome::HeroUnavailable);
+    }
+
+    #[test]
+    fn build_run_profile_request_captures_settings_snapshot() {
+        let mut settings = Settings::default();
+        settings.heroes.invoker.profiles[0].steps.push(
+            crate::config::settings::InvokerProfileStep {
+                kind: InvokerProfileStepKind::Spell,
+                target: "invoker_cold_snap".to_string(),
+                delay_after_ms: 999,
+                cast_behavior: InvokerProfileStepCastBehavior::Normal,
+                completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                completion_timeout_ms: 3000,
+                notes: "test extra step".to_string(),
+            },
+        );
+
+        let request = build_run_profile_request("ghost-walk-panic", &settings);
+
+        let InvokerRequest::RunProfile { profile_id, settings: captured_settings } = request;
+        assert_eq!(profile_id, "ghost-walk-panic");
+        assert_eq!(
+            captured_settings.heroes.invoker.profiles[0]
+                .steps
+                .last()
+                .map(|s| s.delay_after_ms),
+            Some(999),
+            "captured settings should preserve custom extra step"
+        );
+    }
+
+    #[test]
+    fn handle_standalone_trigger_respects_user_selected_active_combo_profile() {
+        let _guard = QUEUE_TEST_GUARD.lock().unwrap();
+        use std::sync::mpsc;
+
+        // Set up required GSI event state for worker
+        *INVOKER_LAST_EVENT.lock().unwrap() = Some(invoker_qw_fixture());
+
+        let mut settings = Settings::default();
+        // Enable qe-burst profile
+        settings
+            .heroes
+            .invoker
+            .profiles
+            .iter_mut()
+            .find(|p| p.id == "qe-burst")
+            .unwrap()
+            .enabled = true;
+
+        let settings = Arc::new(Mutex::new(settings));
+        let executor = ActionExecutor::new();
+        let app_state = Arc::new(Mutex::new(crate::state::AppState::default()));
+
+        // Set qe-burst as the active profile in app_state
+        app_state.lock().unwrap().invoker_active_combo_profile_id = Some("qe-burst".to_string());
+
+        // Set up observer to capture enqueued request
+        let (observe_tx, observe_rx) = mpsc::channel::<InvokerRequest>();
+        set_test_observer(observe_tx);
+
+        let script = InvokerScript::new(settings, executor, app_state);
+        script.handle_standalone_trigger();
+
+        // Verify that qe-burst was enqueued (the user-selected profile)
+        let received = observe_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("should receive request");
+
+        clear_test_observer();
+
+        match received {
+            InvokerRequest::RunProfile { profile_id, .. } => {
+                assert_eq!(
+                    profile_id, "qe-burst",
+                    "standalone trigger should use user-selected active combo profile from app_state"
+                );
+            }
+        }
     }
 }

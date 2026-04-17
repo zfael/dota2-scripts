@@ -54,7 +54,7 @@ pub fn run() {
     // Initialize action executor and dispatcher
     let action_executor = ActionExecutor::new();
     let executor_metrics = action_executor.metrics();
-    let dispatcher = Arc::new(ActionDispatcher::new(settings.clone(), action_executor));
+    let dispatcher = Arc::new(ActionDispatcher::new(settings.clone(), action_executor, app_state.clone()));
 
     // Start keyboard listener with snapshot-based config
     let keyboard_config = KeyboardListenerConfig {

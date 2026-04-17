@@ -101,6 +101,45 @@ pub fn update_config(
     Ok(())
 }
 
+/// Repairs the active Invoker combo profile after hero config edits.
+/// Only affects Invoker edits; no-op for other heroes.
+fn repair_invoker_active_combo_after_hero_edit(
+    hero: &str,
+    state: &TauriAppState,
+) -> Result<(), String> {
+    if hero != "invoker" {
+        return Ok(());
+    }
+
+    let settings = state
+        .settings
+        .lock()
+        .map_err(|e| format!("Failed to lock settings: {}", e))?;
+
+    let profiles: Vec<dota2_scripts::state::app_state::InvokerComboProfileState> = settings
+        .heroes
+        .invoker
+        .profiles
+        .iter()
+        .map(|p| dota2_scripts::state::app_state::InvokerComboProfileState {
+            id: p.id.clone(),
+            enabled: p.enabled,
+            mode: p.mode.as_str().to_string(),
+        })
+        .collect();
+
+    drop(settings);
+
+    let mut app = state
+        .app_state
+        .lock()
+        .map_err(|e| format!("Failed to lock app state: {}", e))?;
+
+    app.repair_invoker_active_combo(&profiles);
+
+    Ok(())
+}
+
 /// Updates a hero-specific config section
 #[tauri::command]
 pub fn update_hero_config(
@@ -142,11 +181,20 @@ pub fn update_hero_config(
         .map_err(|e| format!("Failed to write config: {}", e))?;
 
     *settings = new_settings;
+    drop(settings);
+
+    repair_invoker_active_combo_after_hero_edit(&hero, &state)?;
+
+    let settings = state
+        .settings
+        .lock()
+        .map_err(|e| format!("Failed to lock settings: {}", e))?;
     let app = state
         .app_state
         .lock()
         .map_err(|e| format!("Failed to lock app state: {}", e))?;
     let snapshot = KeyboardSnapshot::from_runtime(&settings, &app);
+    drop(settings);
     drop(app);
     let mut keyboard_snapshot = state
         .keyboard_snapshot
@@ -156,4 +204,101 @@ pub fn update_hero_config(
     info!("Hero config '{}' updated and persisted", hero);
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dota2_scripts::actions::executor::ExecutorMetrics;
+    use dota2_scripts::config::settings::{InvokerProfile, InvokerProfileMode};
+    use dota2_scripts::state::app_state::AppState;
+    use std::sync::{Arc, Mutex, RwLock};
+
+    fn make_test_profile(id: &str, enabled: bool, mode: InvokerProfileMode) -> InvokerProfile {
+        InvokerProfile {
+            id: id.to_string(),
+            name: format!("{} Profile", id),
+            enabled,
+            hotkey: "F1".to_string(),
+            mode,
+            build_tag: String::new(),
+            steps: vec![],
+        }
+    }
+
+    fn make_test_app_state() -> TauriAppState {
+        TauriAppState {
+            app_state: Arc::new(Mutex::new(AppState::default())),
+            settings: Arc::new(Mutex::new(Settings::default())),
+            keyboard_snapshot: Arc::new(RwLock::new(KeyboardSnapshot::default())),
+            executor_metrics: ExecutorMetrics::new(),
+        }
+    }
+
+    #[test]
+    fn repair_invoker_active_combo_after_edit_valid_enabled_active_combo_remains_unchanged() {
+        let state = make_test_app_state();
+        {
+            let mut app = state.app_state.lock().unwrap();
+            app.invoker_active_combo_profile_id = Some("combo-a".to_string());
+        }
+
+        let mut settings = state.settings.lock().unwrap();
+        settings.heroes.invoker.profiles = vec![
+            make_test_profile("combo-a", true, InvokerProfileMode::Combo),
+            make_test_profile("combo-b", true, InvokerProfileMode::Combo),
+        ];
+        drop(settings);
+
+        repair_invoker_active_combo_after_hero_edit("invoker", &state).unwrap();
+
+        let app = state.app_state.lock().unwrap();
+        assert_eq!(
+            app.invoker_active_combo_profile_id,
+            Some("combo-a".to_string())
+        );
+    }
+
+    #[test]
+    fn repair_invoker_active_combo_after_edit_invalid_disabled_active_combo_falls_back_to_first_enabled(
+    ) {
+        let state = make_test_app_state();
+        {
+            let mut app = state.app_state.lock().unwrap();
+            app.invoker_active_combo_profile_id = Some("combo-a".to_string());
+        }
+
+        let mut settings = state.settings.lock().unwrap();
+        settings.heroes.invoker.profiles = vec![
+            make_test_profile("combo-a", false, InvokerProfileMode::Combo),
+            make_test_profile("combo-b", true, InvokerProfileMode::Combo),
+        ];
+        drop(settings);
+
+        repair_invoker_active_combo_after_hero_edit("invoker", &state).unwrap();
+
+        let app = state.app_state.lock().unwrap();
+        assert_eq!(
+            app.invoker_active_combo_profile_id,
+            Some("combo-b".to_string())
+        );
+    }
+
+    #[test]
+    fn repair_invoker_active_combo_after_edit_non_invoker_hero_edits_do_not_mutate_active_combo_state(
+    ) {
+        let state = make_test_app_state();
+        {
+            let mut app = state.app_state.lock().unwrap();
+            app.invoker_active_combo_profile_id = Some("original".to_string());
+        }
+
+        repair_invoker_active_combo_after_hero_edit("meepo", &state).unwrap();
+
+        let app = state.app_state.lock().unwrap();
+        assert_eq!(
+            app.invoker_active_combo_profile_id,
+            Some("original".to_string())
+        );
+    }
 }
