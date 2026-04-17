@@ -2,8 +2,8 @@ use crate::actions::common::{find_item_slot_by_name, SurvivabilityActions};
 use crate::actions::executor::ActionExecutor;
 use crate::actions::heroes::traits::HeroScript;
 use crate::config::settings::{
-    InvokerProfile, InvokerProfileMode, InvokerProfileStepCompletionMode,
-    InvokerProfileStepKind,
+    InvokerProfile, InvokerProfileMode, InvokerProfileStepCastBehavior,
+    InvokerProfileStepCompletionMode, InvokerProfileStepKind,
 };
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Hero};
@@ -14,8 +14,7 @@ use tracing::info;
 
 static INVOKER_LAST_EVENT: LazyLock<Mutex<Option<GsiWebhookEvent>>> =
     LazyLock::new(|| Mutex::new(None));
-static INVOKER_SETTINGS: LazyLock<Mutex<Option<Settings>>> =
-    LazyLock::new(|| Mutex::new(None));
+static INVOKER_SETTINGS: LazyLock<Mutex<Option<Settings>>> = LazyLock::new(|| Mutex::new(None));
 
 #[derive(Debug, Clone)]
 struct InvokerObservedState {
@@ -56,6 +55,7 @@ struct PreparedSpellStep {
     prepare_keys: Vec<char>,
     prepared_slots_after_prepare: Option<[Option<String>; 2]>,
     cast_key: char,
+    cast_behavior: InvokerProfileStepCastBehavior,
     delay_after_ms: u64,
     completion_mode: InvokerProfileStepCompletionMode,
     completion_timeout_ms: u64,
@@ -72,11 +72,72 @@ enum PlannedInvokerAction {
         prepare_keys: Vec<char>,
         prepared_slots_after_prepare: Option<[Option<String>; 2]>,
         cast_key: char,
+        cast_behavior: InvokerProfileStepCastBehavior,
         delay_after_ms: u64,
         completion_mode: InvokerProfileStepCompletionMode,
         completion_timeout_ms: u64,
         should_cast: bool,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum CastSequenceAction {
+    Press(char),
+    AltDown,
+    AltUp,
+    SleepMs(u64),
+}
+
+fn cast_sequence_for_behavior(
+    cast_key: char,
+    cast_behavior: &InvokerProfileStepCastBehavior,
+) -> Vec<CastSequenceAction> {
+    match cast_behavior {
+        InvokerProfileStepCastBehavior::Normal => vec![CastSequenceAction::Press(cast_key)],
+        InvokerProfileStepCastBehavior::ManualWaitCooldown => Vec::new(),
+        InvokerProfileStepCastBehavior::AltCast => vec![
+            CastSequenceAction::AltDown,
+            CastSequenceAction::Press(cast_key),
+            CastSequenceAction::AltUp,
+        ],
+        InvokerProfileStepCastBehavior::DoubleTap => vec![
+            CastSequenceAction::Press(cast_key),
+            CastSequenceAction::SleepMs(50),
+            CastSequenceAction::Press(cast_key),
+        ],
+        InvokerProfileStepCastBehavior::AltDoubleTap => vec![
+            CastSequenceAction::AltDown,
+            CastSequenceAction::Press(cast_key),
+            CastSequenceAction::SleepMs(50),
+            CastSequenceAction::Press(cast_key),
+            CastSequenceAction::AltUp,
+        ],
+    }
+}
+
+fn execute_cast_sequence(sequence: &[CastSequenceAction]) {
+    for action in sequence {
+        match action {
+            CastSequenceAction::Press(key) => crate::input::simulation::press_key(*key),
+            CastSequenceAction::AltDown => crate::input::simulation::alt_down(),
+            CastSequenceAction::AltUp => crate::input::simulation::alt_up(),
+            CastSequenceAction::SleepMs(duration_ms) => {
+                thread::sleep(Duration::from_millis(*duration_ms))
+            }
+        }
+    }
+}
+
+fn effective_completion_mode(
+    completion_mode: &InvokerProfileStepCompletionMode,
+    cast_behavior: &InvokerProfileStepCastBehavior,
+) -> InvokerProfileStepCompletionMode {
+    match cast_behavior {
+        InvokerProfileStepCastBehavior::ManualWaitCooldown => {
+            InvokerProfileStepCompletionMode::WaitForCooldown
+        }
+        _ => completion_mode.clone(),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,17 +148,65 @@ enum CooldownWaitOutcome {
     SpellNotObserved,
 }
 
-fn orb_recipe(spell_name: &str, config: &crate::config::settings::InvokerConfig) -> Option<[char; 4]> {
+fn orb_recipe(
+    spell_name: &str,
+    config: &crate::config::settings::InvokerConfig,
+) -> Option<[char; 4]> {
     match spell_name {
-        "invoker_tornado" => Some([config.wex_key, config.wex_key, config.quas_key, config.invoke_key]),
-        "invoker_emp" => Some([config.wex_key, config.wex_key, config.wex_key, config.invoke_key]),
-        "invoker_chaos_meteor" => Some([config.exort_key, config.exort_key, config.wex_key, config.invoke_key]),
-        "invoker_deafening_blast" => Some([config.quas_key, config.wex_key, config.exort_key, config.invoke_key]),
-        "invoker_cold_snap" => Some([config.quas_key, config.quas_key, config.quas_key, config.invoke_key]),
-        "invoker_forge_spirit" => Some([config.exort_key, config.exort_key, config.quas_key, config.invoke_key]),
-        "invoker_ghost_walk" => Some([config.quas_key, config.quas_key, config.wex_key, config.invoke_key]),
-        "invoker_ice_wall" => Some([config.quas_key, config.quas_key, config.exort_key, config.invoke_key]),
-        "invoker_sun_strike" => Some([config.exort_key, config.exort_key, config.exort_key, config.invoke_key]),
+        "invoker_tornado" => Some([
+            config.wex_key,
+            config.wex_key,
+            config.quas_key,
+            config.invoke_key,
+        ]),
+        "invoker_emp" => Some([
+            config.wex_key,
+            config.wex_key,
+            config.wex_key,
+            config.invoke_key,
+        ]),
+        "invoker_chaos_meteor" => Some([
+            config.exort_key,
+            config.exort_key,
+            config.wex_key,
+            config.invoke_key,
+        ]),
+        "invoker_deafening_blast" => Some([
+            config.quas_key,
+            config.wex_key,
+            config.exort_key,
+            config.invoke_key,
+        ]),
+        "invoker_cold_snap" => Some([
+            config.quas_key,
+            config.quas_key,
+            config.quas_key,
+            config.invoke_key,
+        ]),
+        "invoker_forge_spirit" => Some([
+            config.exort_key,
+            config.exort_key,
+            config.quas_key,
+            config.invoke_key,
+        ]),
+        "invoker_ghost_walk" => Some([
+            config.quas_key,
+            config.quas_key,
+            config.wex_key,
+            config.invoke_key,
+        ]),
+        "invoker_ice_wall" => Some([
+            config.quas_key,
+            config.quas_key,
+            config.exort_key,
+            config.invoke_key,
+        ]),
+        "invoker_sun_strike" => Some([
+            config.exort_key,
+            config.exort_key,
+            config.exort_key,
+            config.invoke_key,
+        ]),
         _ => None,
     }
 }
@@ -136,13 +245,14 @@ fn build_spell_batch(
     if consumed == 1 {
         let step = &steps[0];
         let mut current_slots = starting_slots.clone();
-        let prepare_keys = if spell_cast_key_from_slots(&current_slots, &step.target, config).is_some() {
-            Vec::new()
-        } else {
-            let keys = orb_recipe(&step.target, config)?.to_vec();
-            current_slots = apply_invoke_to_slot_state(&current_slots, &step.target);
-            keys
-        };
+        let prepare_keys =
+            if spell_cast_key_from_slots(&current_slots, &step.target, config).is_some() {
+                Vec::new()
+            } else {
+                let keys = orb_recipe(&step.target, config)?.to_vec();
+                current_slots = apply_invoke_to_slot_state(&current_slots, &step.target);
+                keys
+            };
 
         return Some((
             vec![PreparedSpellStep {
@@ -154,6 +264,7 @@ fn build_spell_batch(
                     Some(current_slots.clone())
                 },
                 cast_key: spell_cast_key_from_slots(&current_slots, &step.target, config)?,
+                cast_behavior: step.cast_behavior.clone(),
                 delay_after_ms: step.delay_after_ms,
                 completion_mode: step.completion_mode.clone(),
                 completion_timeout_ms: step.completion_timeout_ms,
@@ -166,10 +277,7 @@ fn build_spell_batch(
     let first = &steps[0];
     let second = &steps[1];
     let mut current_slots = starting_slots.clone();
-    let desired_slots = [
-        Some(second.target.clone()),
-        Some(first.target.clone()),
-    ];
+    let desired_slots = [Some(second.target.clone()), Some(first.target.clone())];
     let mut preload_keys = Vec::new();
 
     if current_slots != desired_slots {
@@ -197,6 +305,7 @@ fn build_spell_batch(
                     Some(current_slots.clone())
                 },
                 cast_key: spell_cast_key_from_slots(&current_slots, &first.target, config)?,
+                cast_behavior: first.cast_behavior.clone(),
                 delay_after_ms: first.delay_after_ms,
                 completion_mode: first.completion_mode.clone(),
                 completion_timeout_ms: first.completion_timeout_ms,
@@ -206,6 +315,7 @@ fn build_spell_batch(
                 prepare_keys: Vec::new(),
                 prepared_slots_after_prepare: None,
                 cast_key: spell_cast_key_from_slots(&current_slots, &second.target, config)?,
+                cast_behavior: second.cast_behavior.clone(),
                 delay_after_ms: second.delay_after_ms,
                 completion_mode: second.completion_mode.clone(),
                 completion_timeout_ms: second.completion_timeout_ms,
@@ -220,7 +330,10 @@ fn find_profile<'a>(
     config: &'a crate::config::settings::InvokerConfig,
     profile_id: &str,
 ) -> Option<&'a InvokerProfile> {
-    config.profiles.iter().find(|profile| profile.id == profile_id)
+    config
+        .profiles
+        .iter()
+        .find(|profile| profile.id == profile_id)
 }
 
 pub(crate) fn resolve_active_combo_profile_id(
@@ -276,6 +389,7 @@ fn build_profile_execution_plan(
                         prepare_keys: prepared.prepare_keys,
                         prepared_slots_after_prepare: prepared.prepared_slots_after_prepare,
                         cast_key: prepared.cast_key,
+                        cast_behavior: prepared.cast_behavior,
                         delay_after_ms: prepared.delay_after_ms,
                         completion_mode: prepared.completion_mode,
                         completion_timeout_ms: prepared.completion_timeout_ms,
@@ -385,7 +499,10 @@ fn run_invoker_request(request: InvokerRequest) {
     let InvokerRequest::RunProfile(profile_id) = request;
 
     let Some(profile) = find_profile(config, &profile_id) else {
-        info!("🔮 Invoker request skipped: profile {} not found", profile_id);
+        info!(
+            "🔮 Invoker request skipped: profile {} not found",
+            profile_id
+        );
         return;
     };
 
@@ -404,7 +521,11 @@ fn run_profile(
         return;
     };
 
-    info!("🔮 Invoker profile: {} ({})", profile.name, profile.mode.as_str());
+    info!(
+        "🔮 Invoker profile: {} ({})",
+        profile.name,
+        profile.mode.as_str()
+    );
     info!("🔮 Planned steps: {:?}", profile.steps);
 
     let mut current_active_spells = state.active_spells.clone();
@@ -434,6 +555,7 @@ fn run_profile(
                 prepare_keys,
                 prepared_slots_after_prepare,
                 cast_key,
+                cast_behavior,
                 delay_after_ms,
                 completion_mode,
                 completion_timeout_ms,
@@ -455,22 +577,33 @@ fn run_profile(
                 }
 
                 if should_cast {
+                    let effective_completion_mode =
+                        effective_completion_mode(&completion_mode, &cast_behavior);
                     let current_event = INVOKER_LAST_EVENT
                         .lock()
                         .unwrap()
                         .clone()
                         .unwrap_or_else(|| event.clone());
-                    if completion_mode == InvokerProfileStepCompletionMode::WaitForCooldown
+                    if effective_completion_mode == InvokerProfileStepCompletionMode::WaitForCooldown
                         && spell_is_on_cooldown(&current_event, &target)
                     {
                         info!("🔮 Manual step {} already on cooldown, skipping", target);
                         continue;
                     }
 
-                    info!("🔮 Casting {} from {}", target, cast_key);
-                    crate::input::simulation::press_key(cast_key);
+                    let cast_sequence = cast_sequence_for_behavior(cast_key, &cast_behavior);
+                    if cast_sequence.is_empty() {
+                        info!(
+                            "🔮 Prepared {} without auto-casting; waiting for manual completion",
+                            target
+                        );
+                    } else {
+                        info!("🔮 Casting {} from {} via {:?}", target, cast_key, cast_behavior);
+                        execute_cast_sequence(&cast_sequence);
+                    }
 
-                    if completion_mode == InvokerProfileStepCompletionMode::WaitForCooldown {
+                    if effective_completion_mode == InvokerProfileStepCompletionMode::WaitForCooldown
+                    {
                         info!("🔮 Waiting for {} cooldown to start", target);
                         match wait_for_spell_cooldown_start(&target, completion_timeout_ms, 25) {
                             CooldownWaitOutcome::Started => {
@@ -644,7 +777,8 @@ mod tests {
     }
 
     #[test]
-    fn apply_invoke_to_slot_state_places_new_spell_in_primary_and_shifts_old_primary_to_secondary() {
+    fn apply_invoke_to_slot_state_places_new_spell_in_primary_and_shifts_old_primary_to_secondary()
+    {
         let slots = [
             Some("invoker_emp".to_string()),
             Some("invoker_tornado".to_string()),
@@ -746,9 +880,8 @@ mod tests {
             notes: String::new(),
         };
 
-        let (batch, _, consumed) =
-            build_spell_batch(&[step], &state.active_spells, config)
-                .expect("spell should be plannable");
+        let (batch, _, consumed) = build_spell_batch(&[step], &state.active_spells, config)
+            .expect("spell should be plannable");
 
         assert_eq!(consumed, 1);
         assert_eq!(batch[0].cast_key, config.spell_slot_primary_key);
@@ -818,6 +951,34 @@ mod tests {
     }
 
     #[test]
+    fn cast_sequence_for_alt_double_tap_wraps_double_press_with_alt() {
+        assert_eq!(
+            cast_sequence_for_behavior(
+                'd',
+                &crate::config::settings::InvokerProfileStepCastBehavior::AltDoubleTap,
+            ),
+            vec![
+                CastSequenceAction::AltDown,
+                CastSequenceAction::Press('d'),
+                CastSequenceAction::SleepMs(50),
+                CastSequenceAction::Press('d'),
+                CastSequenceAction::AltUp,
+            ]
+        );
+    }
+
+    #[test]
+    fn cast_sequence_for_manual_wait_cooldown_is_empty() {
+        assert_eq!(
+            cast_sequence_for_behavior(
+                'd',
+                &crate::config::settings::InvokerProfileStepCastBehavior::ManualWaitCooldown,
+            ),
+            Vec::<CastSequenceAction>::new()
+        );
+    }
+
+    #[test]
     fn production_queue_preserves_fifo_order() {
         use std::sync::{mpsc, Arc, Mutex};
         use std::thread;
@@ -853,10 +1014,23 @@ mod tests {
 
         // Verify the real production worker preserved FIFO order
         let received = observed.lock().unwrap();
-        assert_eq!(received.len(), 3, "all three requests should be processed by production worker");
-        assert_eq!(received[0], InvokerRequest::RunProfile("meteor-blast-prep".to_string()));
-        assert_eq!(received[1], InvokerRequest::RunProfile("ghost-walk-panic".to_string()));
-        assert_eq!(received[2], InvokerRequest::RunProfile("qw-pickoff".to_string()));
+        assert_eq!(
+            received.len(),
+            3,
+            "all three requests should be processed by production worker"
+        );
+        assert_eq!(
+            received[0],
+            InvokerRequest::RunProfile("meteor-blast-prep".to_string())
+        );
+        assert_eq!(
+            received[1],
+            InvokerRequest::RunProfile("ghost-walk-panic".to_string())
+        );
+        assert_eq!(
+            received[2],
+            InvokerRequest::RunProfile("qw-pickoff".to_string())
+        );
     }
 
     fn invoker_qe_fixture() -> GsiWebhookEvent {
@@ -954,12 +1128,37 @@ mod tests {
     }
 
     #[test]
+    fn build_profile_execution_plan_for_qe_burst_carries_manual_wait_cast_behavior() {
+        let event = invoker_qe_fixture();
+        let settings = Settings::default();
+        let config = &settings.heroes.invoker;
+        let state = InvokerObservedState::from_event(&event);
+        let profile = find_profile(config, "qe-burst").expect("QE profile should exist");
+
+        let plan = build_profile_execution_plan(profile, &state, config)
+            .expect("QE execution plan should build");
+
+        let first_spell = plan
+            .iter()
+            .find_map(|action| match action {
+                PlannedInvokerAction::Spell { cast_behavior, .. } => Some(cast_behavior.clone()),
+                PlannedInvokerAction::Item { .. } => None,
+            })
+            .expect("QE profile should include a spell step");
+
+        assert_eq!(
+            first_spell,
+            crate::config::settings::InvokerProfileStepCastBehavior::ManualWaitCooldown
+        );
+    }
+
+    #[test]
     fn invoker_profile_runner_keeps_declared_tornado_then_emp_order() {
         let event = invoker_qw_fixture();
         let settings = Settings::default();
         let state = InvokerObservedState::from_event(&event);
-        let profile = find_profile(&settings.heroes.invoker, "qw-pickoff")
-            .expect("QW profile should exist");
+        let profile =
+            find_profile(&settings.heroes.invoker, "qw-pickoff").expect("QW profile should exist");
 
         let plan = build_profile_execution_plan(profile, &state, &settings.heroes.invoker)
             .expect("QW profile should build");
@@ -980,8 +1179,8 @@ mod tests {
         let event = invoker_qe_fixture();
         let settings = Settings::default();
         let state = InvokerObservedState::from_event(&event);
-        let profile = find_profile(&settings.heroes.invoker, "qe-burst")
-            .expect("QE profile should exist");
+        let profile =
+            find_profile(&settings.heroes.invoker, "qe-burst").expect("QE profile should exist");
 
         let sequence = build_profile_execution_plan(profile, &state, &settings.heroes.invoker)
             .expect("QE profile should build");
@@ -1016,8 +1215,8 @@ mod tests {
             Some("invoker_deafening_blast".to_string()),
         ];
 
-        let plan = build_profile_execution_plan(profile, &state, config)
-            .expect("QE profile should build");
+        let plan =
+            build_profile_execution_plan(profile, &state, config).expect("QE profile should build");
 
         let spell_steps: Vec<_> = plan
             .iter()
@@ -1034,10 +1233,12 @@ mod tests {
 
         assert_eq!(spell_steps.len(), 3);
         assert_eq!(spell_steps[0].0, "invoker_sun_strike");
-        assert!(!spell_steps[0].1.is_empty(), "sun strike should require invoke");
+        assert!(
+            !spell_steps[0].1.is_empty(),
+            "sun strike should require invoke"
+        );
         assert_eq!(
-            spell_steps[0].2,
-            config.spell_slot_secondary_key,
+            spell_steps[0].2, config.spell_slot_secondary_key,
             "sun strike should cast from the older prepared slot"
         );
         assert_eq!(spell_steps[1].0, "invoker_chaos_meteor");
@@ -1046,8 +1247,7 @@ mod tests {
             "meteor should already be loaded after the first pair is prepped"
         );
         assert_eq!(
-            spell_steps[1].2,
-            config.spell_slot_primary_key,
+            spell_steps[1].2, config.spell_slot_primary_key,
             "meteor should cast from the newer prepared primary slot"
         );
         assert_eq!(spell_steps[2].0, "invoker_deafening_blast");
@@ -1056,8 +1256,7 @@ mod tests {
             "blast should require a fresh invoke after the first pair completes"
         );
         assert_eq!(
-            spell_steps[2].2,
-            config.spell_slot_primary_key,
+            spell_steps[2].2, config.spell_slot_primary_key,
             "blast should cast from the newly invoked primary slot"
         );
     }
@@ -1067,8 +1266,8 @@ mod tests {
         let event = invoker_qe_fixture();
         let settings = Settings::default();
         let state = InvokerObservedState::from_event(&event);
-        let profile = find_profile(&settings.heroes.invoker, "qe-burst")
-            .expect("QE profile should exist");
+        let profile =
+            find_profile(&settings.heroes.invoker, "qe-burst").expect("QE profile should exist");
 
         let plan = build_profile_execution_plan(profile, &state, &settings.heroes.invoker)
             .expect("QE profile should build");
