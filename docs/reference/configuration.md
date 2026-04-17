@@ -403,6 +403,7 @@ See `docs/heroes/broodmother.md` and `docs/reference/gsi-schema-and-usage.md`.
 | `invoke_key` | `"r"` | `"r"` | Key for Invoke ability. Must match in-game binding. |
 | `spell_slot_primary_key` | `"d"` | `"d"` | Key for primary invoked spell slot (first spell slot). Must match in-game binding. |
 | `spell_slot_secondary_key` | `"f"` | `"f"` | Key for secondary invoked spell slot (second spell slot). Must match in-game binding. |
+| `cycle_combo_profiles_hotkey` | `"Delete"` | `"Delete"` | Global hotkey that rotates the active enabled combo profile without running it. |
 | `profiles` | seeded preset list | seeded preset list | Ordered named Invoker profiles. Each profile has its own hotkey, mode, build tag, and ordered steps. |
 | `profiles[].id` | preset-specific | preset-specific | Stable runtime identifier used by the keyboard and request queue. |
 | `profiles[].name` | preset-specific | preset-specific | Operator-facing display name shown in the React UI. |
@@ -413,12 +414,16 @@ See `docs/heroes/broodmother.md` and `docs/reference/gsi-schema-and-usage.md`.
 | `profiles[].steps[].kind` | preset-specific | n/a | `spell` or `item`. |
 | `profiles[].steps[].target` | preset-specific | n/a | Stable spell/item id such as `invoker_tornado` or `item_spirit_vessel`. |
 | `profiles[].steps[].delay_after_ms` | preset-specific | `0` | Delay applied after the step executes. |
+| `profiles[].steps[].cast_behavior` | preset-specific | `normal` | `normal`, `manual_wait_cooldown`, `alt_cast`, `double_tap`, or `alt_double_tap`. `manual_wait_cooldown` only prepares the spell and waits for the player's real cast to start cooldown. |
 | `profiles[].steps[].completion_mode` | preset-specific | `fixed_delay` | `fixed_delay` or `wait_for_cooldown` for spell steps. |
 | `profiles[].steps[].completion_timeout_ms` | preset-specific | `3000` | Timeout used when waiting for cooldown confirmation. |
 | `profiles[].steps[].notes` | preset-specific | `""` | Optional UI note for the step. |
 
 Ordered spell steps are authored in natural cast order, but the runtime may
 preload them into `F` then `D` because Invoked spell slots rotate by recency.
+
+Item steps are best-effort. If the configured item is missing, that step is
+logged as skipped and the remaining profile continues instead of aborting.
 
 Invoker profiles are still defined entirely in `config/config.toml`; the app
 does not persist a separate active-combo setting back into config. The current

@@ -34,6 +34,7 @@ exort_key = "e"
 invoke_key = "r"
 spell_slot_primary_key = "d"
 spell_slot_secondary_key = "f"
+cycle_combo_profiles_hotkey = "Delete"
 
 [[heroes.invoker.profiles]]
 id = "qw-pickoff"
@@ -47,6 +48,7 @@ build_tag = "qw"
 kind = "item"
 target = "item_spirit_vessel"
 delay_after_ms = 50
+cast_behavior = "normal"
 completion_mode = "fixed_delay"
 completion_timeout_ms = 3000
 
@@ -54,6 +56,7 @@ completion_timeout_ms = 3000
 kind = "item"
 target = "item_rod_of_atos"
 delay_after_ms = 50
+cast_behavior = "normal"
 completion_mode = "fixed_delay"
 completion_timeout_ms = 3000
 
@@ -61,6 +64,7 @@ completion_timeout_ms = 3000
 kind = "spell"
 target = "invoker_tornado"
 delay_after_ms = 700
+cast_behavior = "normal"
 completion_mode = "fixed_delay"
 completion_timeout_ms = 3000
 
@@ -68,6 +72,7 @@ completion_timeout_ms = 3000
 kind = "spell"
 target = "invoker_emp"
 delay_after_ms = 100
+cast_behavior = "normal"
 completion_mode = "fixed_delay"
 completion_timeout_ms = 3000
 ```
@@ -82,6 +87,7 @@ completion_timeout_ms = 3000
 | `invoke_key` | char | `'r'` | Invoke keybind |
 | `spell_slot_primary_key` | char | `'d'` | Primary invoked spell slot |
 | `spell_slot_secondary_key` | char | `'f'` | Secondary invoked spell slot |
+| `cycle_combo_profiles_hotkey` | string | `"Delete"` | Rotates the active enabled combo profile without running it |
 | `profiles` | array | seeded preset pack | Ordered named Invoker profiles |
 | `profiles[].id` | string | preset-specific | Stable runtime identifier |
 | `profiles[].name` | string | preset-specific | Operator-facing profile name |
@@ -92,6 +98,7 @@ completion_timeout_ms = 3000
 | `profiles[].steps[].kind` | string | n/a | `spell` or `item` |
 | `profiles[].steps[].target` | string | n/a | Stable spell/item target id such as `invoker_emp` or `item_rod_of_atos` |
 | `profiles[].steps[].delay_after_ms` | u64 | preset-specific | Delay after this step executes |
+| `profiles[].steps[].cast_behavior` | string | `normal` | `normal`, `manual_wait_cooldown`, `alt_cast`, `double_tap`, or `alt_double_tap` |
 | `profiles[].steps[].completion_mode` | string | `fixed_delay` | `fixed_delay` or `wait_for_cooldown` for spell steps |
 | `profiles[].steps[].completion_timeout_ms` | u64 | `3000` | Timeout used when waiting for cooldown confirmation |
 | `profiles[].steps[].notes` | string | `""` | Optional operator note shown in the UI |
@@ -99,12 +106,17 @@ completion_timeout_ms = 3000
 
 ## Preset Pack
 
-The checked-in defaults seed four starter profiles:
+The checked-in defaults seed these starter profiles:
 
 1. **QW Pickoff** - Spirit Vessel -> Rod of Atos -> Tornado -> EMP
-2. **QE Burst** - Sun Strike -> Chaos Meteor -> Deafening Blast, with Sun Strike waiting for manual cooldown confirmation
+2. **QE Burst** - Sun Strike -> Chaos Meteor -> Deafening Blast, with Sun Strike prepared first and then waiting for the player's real cast
 3. **Ghost Walk Panic** - single-step emergency Ghost Walk cast
 4. **Meteor + Blast Prep** - prepares Meteor and Blast without casting
+5. **Lane Pressure** - summon-only Forge Spirit preset; it does not append follow-up spells and does not automate Forge Spirit unit control after the summon
+6. **Meta Catch** - Tornado -> EMP -> Cold Snap
+7. **Shotgun Burst** - Rod of Atos -> Sun Strike -> Chaos Meteor -> Deafening Blast
+8. **Ice Floe Lockdown** - Ice Wall -> Chaos Meteor
+9. **Refresher Sequence** - Tornado -> EMP -> Chaos Meteor -> Deafening Blast -> Refresher -> self Sun Strike -> Chaos Meteor -> Deafening Blast
 
 The React UI exposes these as preset cards and lets operators duplicate them
 into custom profiles instead of editing raw config strings.
@@ -116,6 +128,8 @@ into custom profiles instead of editing raw config strings.
 Combo profiles execute their steps in order:
 
 1. Item steps try to find the matching inventory slot and press it.
+   Optional combo items are best-effort only: if the configured item is missing,
+   that step is logged as skipped and the rest of the profile continues.
 2. Consecutive spell steps are grouped into one- or two-spell batches.
 3. A two-spell batch is preloaded in profile order so the older prepared spell
    lands on `F` and the newer prepared spell lands on `D`.
@@ -170,18 +184,27 @@ special-casing: the runtime now trusts the declared profile order directly.
 
 Item steps are ignored in prep mode and logged as skipped.
 
-### Manual cooldown-wait steps
+### Cast behaviors and manual steps
 
-Spell steps can choose how completion is detected:
+Spell steps can choose how the cast key is pressed:
 
-- `fixed_delay` keeps the existing execute-then-delay behavior
-- `wait_for_cooldown` is for manual-targeted spells such as Sun Strike
+- `normal` - press the invoked spell key once
+- `manual_wait_cooldown` - prepare the spell but do not auto-cast it; the runner waits for the player's real cast to start cooldown before continuing
+- `alt_cast` - hold `Alt` while pressing the invoked spell key once
+- `double_tap` - press the invoked spell key twice with a short gap
+- `alt_double_tap` - hold `Alt` while double-tapping the invoked spell key
 
-When `wait_for_cooldown` is selected, the runner presses the active spell key
-once and then waits for the spell to enter cooldown before advancing. If the
-spell is already on cooldown when the step begins, the runner logs that the
-step is already consumed and skips it. If cooldown never starts before
-`completion_timeout_ms`, the remaining profile is aborted.
+Completion still controls when the next step starts:
+
+- `fixed_delay` applies `delay_after_ms` after the cast behavior runs
+- `wait_for_cooldown` waits for cooldown start before applying `delay_after_ms`
+
+`manual_wait_cooldown` forces cooldown waiting even if the step is authored with
+`completion_mode = "fixed_delay"`.
+
+If a manual-wait spell is already on cooldown when the step begins, the runner
+logs that the step is already consumed and skips it. If cooldown never starts
+before `completion_timeout_ms`, the remaining profile is aborted.
 
 ### Hotkeys
 
@@ -193,6 +216,8 @@ hotkeys.
 The generic combo trigger resolves the current active combo profile first. The
 global Invoker cycle hotkey updates that active combo selection without running
 the profile, so the next generic combo trigger uses the newly selected combo.
+That cycle key is configurable through
+`heroes.invoker.cycle_combo_profiles_hotkey`.
 
 ### Request queue
 
