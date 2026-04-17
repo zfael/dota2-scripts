@@ -70,14 +70,6 @@ export default function InvokerConfig() {
     config.profiles[0]?.id ?? null,
   );
 
-  useEffect(() => {
-    if (selectedId && config.profiles.some((profile) => profile.id === selectedId)) {
-      return;
-    }
-
-    setSelectedId(config.profiles[0]?.id ?? null);
-  }, [config.profiles, selectedId]);
-
   const selected = useMemo(
     () =>
       config.profiles.find((profile) => profile.id === selectedId) ??
@@ -160,6 +152,13 @@ export default function InvokerConfig() {
               value={config.spell_slot_secondary_key}
               onChange={(spell_slot_secondary_key) =>
                 set({ spell_slot_secondary_key })
+              }
+            />
+            <KeyInput
+              label="Cycle Combo Profiles"
+              value={config.cycle_combo_profiles_hotkey}
+              onChange={(cycle_combo_profiles_hotkey) =>
+                set({ cycle_combo_profiles_hotkey })
               }
             />
           </div>

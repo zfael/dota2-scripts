@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import InvokerConfig from "./InvokerConfig";
 import { useConfigStore } from "../../../stores/configStore";
 import { mockConfig } from "../../../stores/mockData";
@@ -51,6 +51,9 @@ describe("InvokerConfig", () => {
     render(<InvokerConfig />);
 
     fireEvent.click(screen.getByText(/PageDown/).closest("button")!);
+    fireEvent.change(screen.getAllByDisplayValue("Manual Wait Cooldown")[0], {
+      target: { value: "alt_cast" },
+    });
     fireEvent.change(screen.getAllByDisplayValue("Wait for Cooldown")[0], {
       target: { value: "fixed_delay" },
     });
@@ -60,6 +63,72 @@ describe("InvokerConfig", () => {
       .config.heroes.invoker.profiles.find((profile) => profile.id === "qe-burst");
 
     expect(qeProfile?.steps[0].completion_mode).toBe("fixed_delay");
+  });
+
+  it("renders and persists the cycle combo profiles hotkey", () => {
+    render(<InvokerConfig />);
+
+    const cycleHotkeyInput = screen
+      .getByText("Cycle Combo Profiles")
+      .parentElement
+      ?.querySelector("button");
+
+    expect(cycleHotkeyInput).not.toBeNull();
+    expect(cycleHotkeyInput).toHaveTextContent("Delete");
+
+    fireEvent.click(cycleHotkeyInput!);
+    fireEvent.keyDown(cycleHotkeyInput!, { key: "F10" });
+
+    expect(
+      useConfigStore.getState().config.heroes.invoker.cycle_combo_profiles_hotkey,
+    ).toBe("F10");
+    expect(screen.getByText("F10")).toBeInTheDocument();
+  });
+
+  it("persists cast behavior edits into the config store", () => {
+    render(<InvokerConfig />);
+
+    fireEvent.click(screen.getByText(/PageDown/).closest("button")!);
+    fireEvent.change(screen.getAllByDisplayValue("Manual Wait Cooldown")[0], {
+      target: { value: "alt_double_tap" },
+    });
+
+    const qeProfile = useConfigStore
+      .getState()
+      .config.heroes.invoker.profiles.find((profile) => profile.id === "qe-burst");
+
+    expect(qeProfile?.steps[0].cast_behavior).toBe("alt_double_tap");
+  });
+
+  it("keeps manual wait cooldown steps locked to wait for cooldown", () => {
+    render(<InvokerConfig />);
+
+    fireEvent.click(screen.getByText(/PageDown/).closest("button")!);
+
+    const completionModeInput = screen.getAllByDisplayValue("Wait for Cooldown")[0];
+
+    expect(completionModeInput).toBeDisabled();
+    fireEvent.change(completionModeInput, {
+      target: { value: "fixed_delay" },
+    });
+
+    const qeProfile = useConfigStore
+      .getState()
+      .config.heroes.invoker.profiles.find((profile) => profile.id === "qe-burst");
+
+    expect(qeProfile?.steps[0].completion_mode).toBe("wait_for_cooldown");
+  });
+
+  it("shows Lane Pressure and Refresher Sequence in the preset library", () => {
+    render(<InvokerConfig />);
+
+    const presetLibrary = screen.getByText("Preset Library").parentElement;
+
+    expect(presetLibrary).not.toBeNull();
+    expect(within(presetLibrary!).getByText("Lane Pressure")).toBeInTheDocument();
+    expect(
+      within(presetLibrary!).getByText("Refresher Sequence"),
+    ).toBeInTheDocument();
   });
 
   it("marks an enabled combo profile as the active combo when clicked", () => {

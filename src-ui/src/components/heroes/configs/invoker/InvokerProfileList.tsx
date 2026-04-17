@@ -23,9 +23,17 @@ function stepSummary(profile: InvokerProfile) {
   return profile.steps
     .map((step) => {
       const label = getInvokerStepLabel(step.target);
-      return step.completion_mode === "wait_for_cooldown"
-        ? `${label} [manual]`
-        : label;
+      const suffix =
+        step.cast_behavior === "manual_wait_cooldown"
+          ? " [manual]"
+          : step.cast_behavior === "alt_cast"
+            ? " [Alt]"
+            : step.cast_behavior === "double_tap"
+              ? " [x2]"
+              : step.cast_behavior === "alt_double_tap"
+                ? " [Alt x2]"
+                : "";
+      return `${label}${suffix}`;
     })
     .join(" → ");
 }

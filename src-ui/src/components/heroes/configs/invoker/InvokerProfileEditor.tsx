@@ -6,6 +6,7 @@ import { Toggle } from "../../../common/Toggle";
 import type {
   InvokerProfile,
   InvokerProfileStep,
+  InvokerProfileStepCastBehavior,
   InvokerProfileStepCompletionMode,
   InvokerProfileStepKind,
 } from "../../../../types/config";
@@ -43,6 +44,14 @@ const COMPLETION_MODE_OPTIONS = [
   { value: "wait_for_cooldown", label: "Wait for Cooldown" },
 ];
 
+const CAST_BEHAVIOR_OPTIONS = [
+  { value: "normal", label: "Normal" },
+  { value: "manual_wait_cooldown", label: "Manual Wait Cooldown" },
+  { value: "alt_cast", label: "Alt Cast" },
+  { value: "double_tap", label: "Double Tap" },
+  { value: "alt_double_tap", label: "Alt Double Tap" },
+];
+
 function cloneSteps(steps: InvokerProfileStep[]) {
   return steps.map((step) => ({ ...step }));
 }
@@ -54,9 +63,17 @@ function targetOptions(kind: InvokerProfileStepKind) {
 
 function stepPreviewLabel(step: InvokerProfileStep) {
   const label = getInvokerStepLabel(step.target);
-  return step.completion_mode === "wait_for_cooldown"
-    ? `${label} [manual]`
-    : label;
+  const suffix =
+    step.cast_behavior === "manual_wait_cooldown"
+      ? " [manual]"
+      : step.cast_behavior === "alt_cast"
+        ? " [Alt]"
+        : step.cast_behavior === "double_tap"
+          ? " [x2]"
+          : step.cast_behavior === "alt_double_tap"
+            ? " [Alt x2]"
+            : "";
+  return `${label}${suffix}`;
 }
 
 export function InvokerProfileEditor({
@@ -215,6 +232,8 @@ export function InvokerProfileEditor({
                       kind: nextKind,
                       target: nextTarget,
                       delay_after_ms: step.delay_after_ms,
+                      cast_behavior:
+                        nextKind === "item" ? "normal" : step.cast_behavior,
                       completion_mode:
                         nextKind === "item" ? "fixed_delay" : step.completion_mode,
                       completion_timeout_ms: step.completion_timeout_ms,
@@ -249,14 +268,34 @@ export function InvokerProfileEditor({
                 {step.kind === "spell" ? (
                   <>
                     <Dropdown
+                      label="Cast Behavior"
+                      value={step.cast_behavior}
+                      options={CAST_BEHAVIOR_OPTIONS}
+                      onChange={(cast_behavior) => {
+                        const nextCastBehavior =
+                          cast_behavior as InvokerProfileStepCastBehavior;
+                        setStep(index, {
+                          ...step,
+                          cast_behavior: nextCastBehavior,
+                          completion_mode:
+                            nextCastBehavior === "manual_wait_cooldown"
+                              ? "wait_for_cooldown"
+                              : step.completion_mode,
+                        });
+                      }}
+                    />
+                    <Dropdown
                       label="Completion Mode"
                       value={step.completion_mode}
                       options={COMPLETION_MODE_OPTIONS}
+                      disabled={step.cast_behavior === "manual_wait_cooldown"}
                       onChange={(completion_mode) =>
                         setStep(index, {
                           ...step,
                           completion_mode:
-                            completion_mode as InvokerProfileStepCompletionMode,
+                            step.cast_behavior === "manual_wait_cooldown"
+                              ? "wait_for_cooldown"
+                              : (completion_mode as InvokerProfileStepCompletionMode),
                         })
                       }
                     />
