@@ -14,6 +14,8 @@ own hotkey, ordered steps, and per-step delays.
   the generic active combo at runtime.
 - **Ordered steps** - Every step is either a spell or an item with its own
   `delay_after_ms`.
+- **Spell activation behavior** - `cast_behavior` only affects spell steps;
+  item steps still fire as normal single presses.
 - **Per-step completion mode** - Steps can use fixed delay or wait for a spell
   to enter cooldown before continuing.
 - **Pair-aware invoke planning** - Consecutive spell steps are preloaded into
@@ -130,6 +132,8 @@ Combo profiles execute their steps in order:
 1. Item steps try to find the matching inventory slot and press it.
    Optional combo items are best-effort only: if the configured item is missing,
    that step is logged as skipped and the rest of the profile continues.
+   `cast_behavior` does not change item steps; they still execute as single
+   presses.
 2. Consecutive spell steps are grouped into one- or two-spell batches.
 3. A two-spell batch is preloaded in profile order so the older prepared spell
    lands on `F` and the newer prepared spell lands on `D`.
