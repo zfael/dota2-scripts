@@ -53,7 +53,11 @@ async fn main() {
 
     // Initialize action dispatcher
     let action_executor = ActionExecutor::new();
-    let dispatcher = Arc::new(ActionDispatcher::new(settings.clone(), action_executor));
+    let dispatcher = Arc::new(ActionDispatcher::new(
+        settings.clone(),
+        action_executor,
+        app_state.clone(),
+    ));
 
     // Start keyboard listener with snapshot-based config
     let keyboard_config = input::keyboard::KeyboardListenerConfig {

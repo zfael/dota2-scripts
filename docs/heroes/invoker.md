@@ -222,6 +222,8 @@ global Invoker cycle hotkey updates that active combo selection without running
 the profile, so the next generic combo trigger uses the newly selected combo.
 That cycle key is configurable through
 `heroes.invoker.cycle_combo_profiles_hotkey`.
+Invoker hotkeys are edge-triggered: holding a combo/profile/cycle hotkey only
+fires once, and the key must be released before it can trigger again.
 
 ### Request queue
 

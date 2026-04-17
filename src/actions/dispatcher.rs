@@ -97,14 +97,22 @@ unsafe impl Send for ActionDispatcher {}
 unsafe impl Sync for ActionDispatcher {}
 
 impl ActionDispatcher {
-    pub fn new(settings: Arc<Mutex<Settings>>, executor: Arc<ActionExecutor>) -> Self {
+    pub fn new(
+        settings: Arc<Mutex<Settings>>,
+        executor: Arc<ActionExecutor>,
+        app_state: Arc<Mutex<crate::state::AppState>>,
+    ) -> Self {
         let mut hero_scripts: HashMap<String, Arc<dyn HeroScript>> = HashMap::new();
 
         // Register hero scripts
         let huskar = Arc::new(HuskarScript::new(settings.clone(), executor.clone()));
         hero_scripts.insert(huskar.hero_name().to_string(), huskar);
 
-        let invoker = Arc::new(InvokerScript::new(settings.clone(), executor.clone()));
+        let invoker = Arc::new(InvokerScript::new(
+            settings.clone(),
+            executor.clone(),
+            app_state.clone(),
+        ));
         hero_scripts.insert(invoker.hero_name().to_string(), invoker);
 
         let largo = Arc::new(LargoScript::new(settings.clone(), executor.clone()));
