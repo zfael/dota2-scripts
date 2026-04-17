@@ -241,6 +241,7 @@ exort_key = "e"
 invoke_key = "r"
 spell_slot_primary_key = "d"
 spell_slot_secondary_key = "f"
+cycle_combo_profiles_hotkey = "Delete"
 
 [[heroes.invoker.profiles]]
 id = "qw-pickoff"
@@ -254,6 +255,7 @@ build_tag = "qw"
 kind = "item"
 target = "item_spirit_vessel"
 delay_after_ms = 50
+cast_behavior = "normal"
 completion_mode = "fixed_delay"
 completion_timeout_ms = 3000
 
@@ -261,6 +263,7 @@ completion_timeout_ms = 3000
 kind = "item"
 target = "item_rod_of_atos"
 delay_after_ms = 50
+cast_behavior = "normal"
 completion_mode = "fixed_delay"
 completion_timeout_ms = 3000
 
@@ -268,6 +271,7 @@ completion_timeout_ms = 3000
 kind = "spell"
 target = "invoker_tornado"
 delay_after_ms = 700
+cast_behavior = "normal"
 completion_mode = "fixed_delay"
 completion_timeout_ms = 3000
 
@@ -275,6 +279,7 @@ completion_timeout_ms = 3000
 kind = "spell"
 target = "invoker_emp"
 delay_after_ms = 100
+cast_behavior = "normal"
 completion_mode = "fixed_delay"
 completion_timeout_ms = 3000
 
@@ -290,6 +295,7 @@ build_tag = "qe"
 kind = "spell"
 target = "invoker_sun_strike"
 delay_after_ms = 150
+cast_behavior = "manual_wait_cooldown"
 completion_mode = "wait_for_cooldown"
 completion_timeout_ms = 3000
 
@@ -297,6 +303,7 @@ completion_timeout_ms = 3000
 kind = "spell"
 target = "invoker_chaos_meteor"
 delay_after_ms = 450
+cast_behavior = "normal"
 completion_mode = "fixed_delay"
 completion_timeout_ms = 3000
 
@@ -304,6 +311,7 @@ completion_timeout_ms = 3000
 kind = "spell"
 target = "invoker_deafening_blast"
 delay_after_ms = 100
+cast_behavior = "normal"
 completion_mode = "fixed_delay"
 completion_timeout_ms = 3000
 
@@ -319,6 +327,7 @@ build_tag = "general"
 kind = "spell"
 target = "invoker_ghost_walk"
 delay_after_ms = 100
+cast_behavior = "normal"
 completion_mode = "fixed_delay"
 completion_timeout_ms = 3000
 
@@ -334,6 +343,7 @@ build_tag = "qe"
 kind = "spell"
 target = "invoker_chaos_meteor"
 delay_after_ms = 0
+cast_behavior = "normal"
 completion_mode = "fixed_delay"
 completion_timeout_ms = 3000
 
@@ -341,6 +351,191 @@ completion_timeout_ms = 3000
 kind = "spell"
 target = "invoker_deafening_blast"
 delay_after_ms = 0
+cast_behavior = "normal"
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
+
+[[heroes.invoker.profiles]]
+id = "lane-pressure"
+name = "Lane Pressure"
+enabled = false
+hotkey = "F5"
+mode = "combo"
+build_tag = "qe"
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_forge_spirit"
+delay_after_ms = 150
+cast_behavior = "normal"
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
+
+[[heroes.invoker.profiles]]
+id = "meta-catch"
+name = "Meta Catch"
+enabled = false
+hotkey = "F6"
+mode = "combo"
+build_tag = "qw"
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_tornado"
+delay_after_ms = 700
+cast_behavior = "normal"
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_emp"
+delay_after_ms = 100
+cast_behavior = "normal"
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_cold_snap"
+delay_after_ms = 100
+cast_behavior = "normal"
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
+
+[[heroes.invoker.profiles]]
+id = "shotgun-burst"
+name = "Shotgun Burst"
+enabled = false
+hotkey = "F7"
+mode = "combo"
+build_tag = "qe"
+
+[[heroes.invoker.profiles.steps]]
+kind = "item"
+target = "item_rod_of_atos"
+delay_after_ms = 50
+cast_behavior = "normal"
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_sun_strike"
+delay_after_ms = 150
+cast_behavior = "manual_wait_cooldown"
+completion_mode = "wait_for_cooldown"
+completion_timeout_ms = 3000
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_chaos_meteor"
+delay_after_ms = 450
+cast_behavior = "normal"
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_deafening_blast"
+delay_after_ms = 100
+cast_behavior = "normal"
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
+
+[[heroes.invoker.profiles]]
+id = "ice-floe-lockdown"
+name = "Ice Floe Lockdown"
+enabled = false
+hotkey = "F8"
+mode = "combo"
+build_tag = "qe"
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_ice_wall"
+delay_after_ms = 2500
+cast_behavior = "normal"
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_chaos_meteor"
+delay_after_ms = 450
+cast_behavior = "normal"
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
+
+[[heroes.invoker.profiles]]
+id = "refresher-sequence"
+name = "Refresher Sequence"
+enabled = false
+hotkey = "F9"
+mode = "combo"
+build_tag = "general"
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_tornado"
+delay_after_ms = 700
+cast_behavior = "normal"
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_emp"
+delay_after_ms = 100
+cast_behavior = "normal"
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_chaos_meteor"
+delay_after_ms = 350
+cast_behavior = "normal"
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_deafening_blast"
+delay_after_ms = 100
+cast_behavior = "normal"
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
+
+[[heroes.invoker.profiles.steps]]
+kind = "item"
+target = "item_refresher"
+delay_after_ms = 100
+cast_behavior = "normal"
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_sun_strike"
+delay_after_ms = 100
+cast_behavior = "alt_double_tap"
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_chaos_meteor"
+delay_after_ms = 350
+cast_behavior = "normal"
+completion_mode = "fixed_delay"
+completion_timeout_ms = 3000
+
+[[heroes.invoker.profiles.steps]]
+kind = "spell"
+target = "invoker_deafening_blast"
+delay_after_ms = 100
+cast_behavior = "normal"
 completion_mode = "fixed_delay"
 completion_timeout_ms = 3000
 

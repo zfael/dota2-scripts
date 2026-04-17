@@ -420,6 +420,20 @@ fn default_invoker_profile_step_completion_mode() -> InvokerProfileStepCompletio
     InvokerProfileStepCompletionMode::FixedDelay
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum InvokerProfileStepCastBehavior {
+    Normal,
+    ManualWaitCooldown,
+    AltCast,
+    DoubleTap,
+    AltDoubleTap,
+}
+
+fn default_invoker_profile_step_cast_behavior() -> InvokerProfileStepCastBehavior {
+    InvokerProfileStepCastBehavior::Normal
+}
+
 fn default_invoker_profile_step_completion_timeout_ms() -> u64 {
     3000
 }
@@ -430,6 +444,8 @@ pub struct InvokerProfileStep {
     pub target: String,
     #[serde(default)]
     pub delay_after_ms: u64,
+    #[serde(default = "default_invoker_profile_step_cast_behavior")]
+    pub cast_behavior: InvokerProfileStepCastBehavior,
     #[serde(default = "default_invoker_profile_step_completion_mode")]
     pub completion_mode: InvokerProfileStepCompletionMode,
     #[serde(default = "default_invoker_profile_step_completion_timeout_ms")]
@@ -466,6 +482,8 @@ pub struct InvokerConfig {
     pub spell_slot_primary_key: char,
     #[serde(default = "default_invoker_spell_slot_secondary_key")]
     pub spell_slot_secondary_key: char,
+    #[serde(default = "default_invoker_cycle_combo_profiles_hotkey")]
+    pub cycle_combo_profiles_hotkey: String,
     #[serde(default = "default_invoker_profiles")]
     pub profiles: Vec<InvokerProfile>,
     #[serde(default)]
@@ -1153,6 +1171,9 @@ fn default_invoker_spell_slot_primary_key() -> char {
 fn default_invoker_spell_slot_secondary_key() -> char {
     'f'
 }
+fn default_invoker_cycle_combo_profiles_hotkey() -> String {
+    "Delete".to_string()
+}
 fn default_invoker_profiles() -> Vec<InvokerProfile> {
     vec![
         InvokerProfile {
@@ -1167,6 +1188,7 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
                     kind: InvokerProfileStepKind::Item,
                     target: "item_spirit_vessel".to_string(),
                     delay_after_ms: 50,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
                     completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
                     completion_timeout_ms: 3000,
                     notes: String::new(),
@@ -1175,6 +1197,7 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
                     kind: InvokerProfileStepKind::Item,
                     target: "item_rod_of_atos".to_string(),
                     delay_after_ms: 50,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
                     completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
                     completion_timeout_ms: 3000,
                     notes: String::new(),
@@ -1183,6 +1206,7 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
                     kind: InvokerProfileStepKind::Spell,
                     target: "invoker_tornado".to_string(),
                     delay_after_ms: 700,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
                     completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
                     completion_timeout_ms: 3000,
                     notes: String::new(),
@@ -1191,6 +1215,7 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
                     kind: InvokerProfileStepKind::Spell,
                     target: "invoker_emp".to_string(),
                     delay_after_ms: 100,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
                     completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
                     completion_timeout_ms: 3000,
                     notes: String::new(),
@@ -1209,6 +1234,7 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
                     kind: InvokerProfileStepKind::Spell,
                     target: "invoker_sun_strike".to_string(),
                     delay_after_ms: 150,
+                    cast_behavior: InvokerProfileStepCastBehavior::ManualWaitCooldown,
                     completion_mode: InvokerProfileStepCompletionMode::WaitForCooldown,
                     completion_timeout_ms: 3000,
                     notes: String::new(),
@@ -1217,6 +1243,7 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
                     kind: InvokerProfileStepKind::Spell,
                     target: "invoker_chaos_meteor".to_string(),
                     delay_after_ms: 450,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
                     completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
                     completion_timeout_ms: 3000,
                     notes: String::new(),
@@ -1225,6 +1252,7 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
                     kind: InvokerProfileStepKind::Spell,
                     target: "invoker_deafening_blast".to_string(),
                     delay_after_ms: 100,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
                     completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
                     completion_timeout_ms: 3000,
                     notes: String::new(),
@@ -1242,6 +1270,7 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
                 kind: InvokerProfileStepKind::Spell,
                 target: "invoker_ghost_walk".to_string(),
                 delay_after_ms: 100,
+                cast_behavior: InvokerProfileStepCastBehavior::Normal,
                 completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
                 completion_timeout_ms: 3000,
                 notes: String::new(),
@@ -1259,6 +1288,7 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
                     kind: InvokerProfileStepKind::Spell,
                     target: "invoker_chaos_meteor".to_string(),
                     delay_after_ms: 0,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
                     completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
                     completion_timeout_ms: 3000,
                     notes: String::new(),
@@ -1267,6 +1297,217 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
                     kind: InvokerProfileStepKind::Spell,
                     target: "invoker_deafening_blast".to_string(),
                     delay_after_ms: 0,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
+                    notes: String::new(),
+                },
+            ],
+        },
+        InvokerProfile {
+            id: "lane-pressure".to_string(),
+            name: "Lane Pressure".to_string(),
+            enabled: false,
+            hotkey: "F5".to_string(),
+            mode: InvokerProfileMode::Combo,
+            build_tag: "qe".to_string(),
+            steps: vec![InvokerProfileStep {
+                kind: InvokerProfileStepKind::Spell,
+                target: "invoker_forge_spirit".to_string(),
+                delay_after_ms: 150,
+                cast_behavior: InvokerProfileStepCastBehavior::Normal,
+                completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                completion_timeout_ms: 3000,
+                notes: String::new(),
+            }],
+        },
+        InvokerProfile {
+            id: "meta-catch".to_string(),
+            name: "Meta Catch".to_string(),
+            enabled: false,
+            hotkey: "F6".to_string(),
+            mode: InvokerProfileMode::Combo,
+            build_tag: "qw".to_string(),
+            steps: vec![
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Spell,
+                    target: "invoker_tornado".to_string(),
+                    delay_after_ms: 700,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
+                    notes: String::new(),
+                },
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Spell,
+                    target: "invoker_emp".to_string(),
+                    delay_after_ms: 100,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
+                    notes: String::new(),
+                },
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Spell,
+                    target: "invoker_cold_snap".to_string(),
+                    delay_after_ms: 100,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
+                    notes: String::new(),
+                },
+            ],
+        },
+        InvokerProfile {
+            id: "shotgun-burst".to_string(),
+            name: "Shotgun Burst".to_string(),
+            enabled: false,
+            hotkey: "F7".to_string(),
+            mode: InvokerProfileMode::Combo,
+            build_tag: "qe".to_string(),
+            steps: vec![
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Item,
+                    target: "item_rod_of_atos".to_string(),
+                    delay_after_ms: 50,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
+                    notes: String::new(),
+                },
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Spell,
+                    target: "invoker_sun_strike".to_string(),
+                    delay_after_ms: 150,
+                    cast_behavior: InvokerProfileStepCastBehavior::ManualWaitCooldown,
+                    completion_mode: InvokerProfileStepCompletionMode::WaitForCooldown,
+                    completion_timeout_ms: 3000,
+                    notes: String::new(),
+                },
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Spell,
+                    target: "invoker_chaos_meteor".to_string(),
+                    delay_after_ms: 450,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
+                    notes: String::new(),
+                },
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Spell,
+                    target: "invoker_deafening_blast".to_string(),
+                    delay_after_ms: 100,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
+                    notes: String::new(),
+                },
+            ],
+        },
+        InvokerProfile {
+            id: "ice-floe-lockdown".to_string(),
+            name: "Ice Floe Lockdown".to_string(),
+            enabled: false,
+            hotkey: "F8".to_string(),
+            mode: InvokerProfileMode::Combo,
+            build_tag: "qe".to_string(),
+            steps: vec![
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Spell,
+                    target: "invoker_ice_wall".to_string(),
+                    delay_after_ms: 2500,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
+                    notes: String::new(),
+                },
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Spell,
+                    target: "invoker_chaos_meteor".to_string(),
+                    delay_after_ms: 450,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
+                    notes: String::new(),
+                },
+            ],
+        },
+        InvokerProfile {
+            id: "refresher-sequence".to_string(),
+            name: "Refresher Sequence".to_string(),
+            enabled: false,
+            hotkey: "F9".to_string(),
+            mode: InvokerProfileMode::Combo,
+            build_tag: "general".to_string(),
+            steps: vec![
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Spell,
+                    target: "invoker_tornado".to_string(),
+                    delay_after_ms: 700,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
+                    notes: String::new(),
+                },
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Spell,
+                    target: "invoker_emp".to_string(),
+                    delay_after_ms: 100,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
+                    notes: String::new(),
+                },
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Spell,
+                    target: "invoker_chaos_meteor".to_string(),
+                    delay_after_ms: 350,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
+                    notes: String::new(),
+                },
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Spell,
+                    target: "invoker_deafening_blast".to_string(),
+                    delay_after_ms: 100,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
+                    notes: String::new(),
+                },
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Item,
+                    target: "item_refresher".to_string(),
+                    delay_after_ms: 100,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
+                    notes: String::new(),
+                },
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Spell,
+                    target: "invoker_sun_strike".to_string(),
+                    delay_after_ms: 100,
+                    cast_behavior: InvokerProfileStepCastBehavior::AltDoubleTap,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
+                    notes: String::new(),
+                },
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Spell,
+                    target: "invoker_chaos_meteor".to_string(),
+                    delay_after_ms: 350,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
+                    completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
+                    completion_timeout_ms: 3000,
+                    notes: String::new(),
+                },
+                InvokerProfileStep {
+                    kind: InvokerProfileStepKind::Spell,
+                    target: "invoker_deafening_blast".to_string(),
+                    delay_after_ms: 100,
+                    cast_behavior: InvokerProfileStepCastBehavior::Normal,
                     completion_mode: InvokerProfileStepCompletionMode::FixedDelay,
                     completion_timeout_ms: 3000,
                     notes: String::new(),
@@ -1686,6 +1927,7 @@ impl Default for InvokerConfig {
             invoke_key: default_invoker_invoke_key(),
             spell_slot_primary_key: default_invoker_spell_slot_primary_key(),
             spell_slot_secondary_key: default_invoker_spell_slot_secondary_key(),
+            cycle_combo_profiles_hotkey: default_invoker_cycle_combo_profiles_hotkey(),
             profiles: default_invoker_profiles(),
             armlet: HeroArmletOverrideConfig::default(),
         }
@@ -2078,26 +2320,41 @@ mod tests {
         assert_eq!(settings.get_standalone_key("invoker"), "Home");
         assert_eq!(settings.heroes.invoker.quas_key, 'q');
         assert_eq!(settings.heroes.invoker.invoke_key, 'r');
+        assert_eq!(
+            settings.heroes.invoker.cycle_combo_profiles_hotkey,
+            "Delete"
+        );
     }
 
     #[test]
-    fn invoker_defaults_seed_named_profiles() {
+    fn invoker_defaults_seed_expected_profiles() {
         let settings = Settings::default();
         let invoker = settings.heroes.invoker;
 
-        let names: Vec<_> = invoker
+        let seeded_profiles: Vec<_> = invoker
             .profiles
             .iter()
-            .map(|profile| (profile.name.as_str(), profile.mode.as_str(), profile.enabled))
+            .map(|profile| {
+                (
+                    profile.id.as_str(),
+                    profile.hotkey.as_str(),
+                    profile.enabled,
+                )
+            })
             .collect();
 
         assert_eq!(
-            names,
+            seeded_profiles,
             vec![
-                ("QW Pickoff", "combo", true),
-                ("QE Burst", "combo", false),
-                ("Ghost Walk Panic", "combo", true),
-                ("Meteor + Blast Prep", "prep", true),
+                ("qw-pickoff", "Home", true),
+                ("qe-burst", "PageDown", false),
+                ("ghost-walk-panic", "End", true),
+                ("meteor-blast-prep", "PageUp", true),
+                ("lane-pressure", "F5", false),
+                ("meta-catch", "F6", false),
+                ("shotgun-burst", "F7", false),
+                ("ice-floe-lockdown", "F8", false),
+                ("refresher-sequence", "F9", false),
             ]
         );
     }
@@ -2123,6 +2380,10 @@ mod tests {
             InvokerProfileStepCompletionMode::WaitForCooldown
         );
         assert_eq!(sun_strike.completion_timeout_ms, 3000);
+        assert_eq!(
+            sun_strike.cast_behavior,
+            InvokerProfileStepCastBehavior::ManualWaitCooldown
+        );
     }
 
     #[test]
@@ -2130,17 +2391,37 @@ mod tests {
         let settings = Settings::default();
 
         // Test that all heroes with armlet configs are registered
-        assert!(settings.hero_armlet_override("npc_dota_hero_huskar").is_some());
-        assert!(settings.hero_armlet_override("npc_dota_hero_invoker").is_some());
-        assert!(settings.hero_armlet_override("npc_dota_hero_legion_commander").is_some());
-        assert!(settings.hero_armlet_override("npc_dota_hero_nevermore").is_some());
-        assert!(settings.hero_armlet_override("npc_dota_hero_tiny").is_some());
-        assert!(settings.hero_armlet_override("npc_dota_hero_obsidian_destroyer").is_some());
-        assert!(settings.hero_armlet_override("npc_dota_hero_largo").is_some());
-        assert!(settings.hero_armlet_override("npc_dota_hero_broodmother").is_some());
-        assert!(settings.hero_armlet_override("npc_dota_hero_meepo").is_some());
+        assert!(settings
+            .hero_armlet_override("npc_dota_hero_huskar")
+            .is_some());
+        assert!(settings
+            .hero_armlet_override("npc_dota_hero_invoker")
+            .is_some());
+        assert!(settings
+            .hero_armlet_override("npc_dota_hero_legion_commander")
+            .is_some());
+        assert!(settings
+            .hero_armlet_override("npc_dota_hero_nevermore")
+            .is_some());
+        assert!(settings
+            .hero_armlet_override("npc_dota_hero_tiny")
+            .is_some());
+        assert!(settings
+            .hero_armlet_override("npc_dota_hero_obsidian_destroyer")
+            .is_some());
+        assert!(settings
+            .hero_armlet_override("npc_dota_hero_largo")
+            .is_some());
+        assert!(settings
+            .hero_armlet_override("npc_dota_hero_broodmother")
+            .is_some());
+        assert!(settings
+            .hero_armlet_override("npc_dota_hero_meepo")
+            .is_some());
 
         // Test that unknown heroes return None
-        assert!(settings.hero_armlet_override("npc_dota_hero_unknown").is_none());
+        assert!(settings
+            .hero_armlet_override("npc_dota_hero_unknown")
+            .is_none());
     }
 }

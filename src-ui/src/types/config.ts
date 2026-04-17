@@ -187,6 +187,12 @@ export interface OutworldDestroyerConfig {
 
 export type InvokerProfileMode = "combo" | "prep";
 export type InvokerProfileStepKind = "spell" | "item";
+export type InvokerProfileStepCastBehavior =
+  | "normal"
+  | "manual_wait_cooldown"
+  | "alt_cast"
+  | "double_tap"
+  | "alt_double_tap";
 export type InvokerProfileStepCompletionMode =
   | "fixed_delay"
   | "wait_for_cooldown";
@@ -195,6 +201,7 @@ export interface InvokerProfileStep {
   kind: InvokerProfileStepKind;
   target: string;
   delay_after_ms: number;
+  cast_behavior: InvokerProfileStepCastBehavior;
   completion_mode: InvokerProfileStepCompletionMode;
   completion_timeout_ms: number;
   notes: string;
@@ -217,6 +224,7 @@ export interface InvokerConfig {
   invoke_key: string;
   spell_slot_primary_key: string;
   spell_slot_secondary_key: string;
+  cycle_combo_profiles_hotkey: string;
   profiles: InvokerProfile[];
   armlet: HeroArmletOverride;
 }
