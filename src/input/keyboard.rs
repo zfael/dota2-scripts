@@ -762,7 +762,7 @@ impl KeyboardSnapshot {
             } else {
                 None
             },
-            invoker_cycle_hotkey: Some(Key::Delete),
+            invoker_cycle_hotkey: parse_key_string(&settings.heroes.invoker.cycle_combo_profiles_hotkey),
             sf_enabled,
             od_enabled,
             shadow_fiend: ShadowFiendKeyboardSnapshot {
@@ -1108,10 +1108,11 @@ mod tests {
 
     #[test]
     fn keyboard_snapshot_maps_invoker_profile_modes_and_cycle_hotkey() {
-        let settings = Settings::default();
+        let mut settings = Settings::default();
+        settings.heroes.invoker.cycle_combo_profiles_hotkey = "F10".to_string();
         let snapshot = KeyboardSnapshot::from_runtime(&settings, &AppState::default());
 
-        assert_eq!(snapshot.invoker_cycle_hotkey, Some(Key::Delete));
+        assert_eq!(snapshot.invoker_cycle_hotkey, Some(Key::F10));
         assert_eq!(
             snapshot
                 .invoker_profiles
@@ -1126,6 +1127,11 @@ mod tests {
                 .map(|profile| (&profile.id, &profile.mode))
                 .collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn keyboard_snapshot_default_keeps_invoker_cycle_hotkey_empty() {
+        assert_eq!(KeyboardSnapshot::default().invoker_cycle_hotkey, None);
     }
 
     // Soul Ring replay-plan tests
@@ -1378,7 +1384,7 @@ mod tests {
     fn plan_global_hotkey_event_cycles_invoker_combo_profiles_only_for_invoker() {
         let mut snapshot = KeyboardSnapshot::default();
         snapshot.selected_hero = Some(HeroType::Invoker);
-        snapshot.invoker_cycle_hotkey = Some(Key::Delete);
+        snapshot.invoker_cycle_hotkey = Some(Key::F10);
         snapshot.invoker_profiles = vec![
             InvokerHotkeyProfileSnapshot {
                 id: "prep".to_string(),
@@ -1395,7 +1401,7 @@ mod tests {
         ];
 
         assert_eq!(
-            plan_global_hotkey_event(Key::Delete, &snapshot),
+            plan_global_hotkey_event(Key::F10, &snapshot),
             Some(HotkeyEvent::InvokerCycleComboProfile)
         );
     }
@@ -1404,7 +1410,7 @@ mod tests {
     fn plan_global_hotkey_event_ignores_invoker_cycle_hotkey_for_other_heroes() {
         let mut snapshot = KeyboardSnapshot::default();
         snapshot.selected_hero = Some(HeroType::ShadowFiend);
-        snapshot.invoker_cycle_hotkey = Some(Key::Delete);
+        snapshot.invoker_cycle_hotkey = Some(Key::F10);
         snapshot.invoker_profiles = vec![InvokerHotkeyProfileSnapshot {
             id: "combo".to_string(),
             hotkey: Some(Key::Home),
@@ -1412,14 +1418,14 @@ mod tests {
             enabled: true,
         }];
 
-        assert_eq!(plan_global_hotkey_event(Key::Delete, &snapshot), None);
+        assert_eq!(plan_global_hotkey_event(Key::F10, &snapshot), None);
     }
 
     #[test]
     fn plan_global_hotkey_event_ignores_invoker_cycle_hotkey_without_enabled_combo_profiles() {
         let mut snapshot = KeyboardSnapshot::default();
         snapshot.selected_hero = Some(HeroType::Invoker);
-        snapshot.invoker_cycle_hotkey = Some(Key::Delete);
+        snapshot.invoker_cycle_hotkey = Some(Key::F10);
         snapshot.invoker_profiles = vec![InvokerHotkeyProfileSnapshot {
             id: "prep".to_string(),
             hotkey: Some(Key::Insert),
@@ -1427,6 +1433,6 @@ mod tests {
             enabled: true,
         }];
 
-        assert_eq!(plan_global_hotkey_event(Key::Delete, &snapshot), None);
+        assert_eq!(plan_global_hotkey_event(Key::F10, &snapshot), None);
     }
 }
