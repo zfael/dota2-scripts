@@ -1,4 +1,6 @@
 use rdev::{grab, simulate, Button, Event, EventType, Key};
+use std::cell::RefCell;
+use std::collections::HashSet;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, LazyLock, RwLock};
@@ -305,8 +307,13 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
 
     thread::spawn(move || {
         info!("Starting keyboard listener with key interception (grab)...");
+        let pressed_hotkeys = RefCell::new(HashSet::new());
 
         let callback = move |event: Event| -> Option<Event> {
+            if let EventType::KeyRelease(key) = &event.event_type {
+                handle_global_hotkey_key_release(*key, &mut pressed_hotkeys.borrow_mut());
+            }
+
             // Pass through all events while we're simulating keys
             // This prevents re-interception of our own simulated keypresses
             if SIMULATING_KEYS.load(Ordering::SeqCst) {
@@ -502,7 +509,9 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                     return None; // Block original
                 }
 
-                if let Some(hotkey_event) = plan_global_hotkey_event(key, &snapshot) {
+                if let Some(hotkey_event) =
+                    plan_global_hotkey_press_event(key, &snapshot, &mut pressed_hotkeys.borrow_mut())
+                {
                     match hotkey_event {
                         HotkeyEvent::ArmletRoshanToggle => {
                             info!(
@@ -929,6 +938,27 @@ fn plan_global_hotkey_event(key: Key, snapshot: &KeyboardSnapshot) -> Option<Hot
     }
 
     None
+}
+
+fn plan_global_hotkey_press_event(
+    key: Key,
+    snapshot: &KeyboardSnapshot,
+    pressed_hotkeys: &mut HashSet<Key>,
+) -> Option<HotkeyEvent> {
+    if pressed_hotkeys.contains(&key) {
+        return None;
+    }
+
+    let hotkey_event = plan_global_hotkey_event(key, snapshot);
+    if hotkey_event.is_some() {
+        pressed_hotkeys.insert(key);
+    }
+
+    hotkey_event
+}
+
+fn handle_global_hotkey_key_release(key: Key, pressed_hotkeys: &mut HashSet<Key>) {
+    pressed_hotkeys.remove(&key);
 }
 
 #[cfg(test)]
@@ -1434,5 +1464,58 @@ mod tests {
         }];
 
         assert_eq!(plan_global_hotkey_event(Key::F10, &snapshot), None);
+    }
+
+    #[test]
+    fn plan_global_hotkey_press_event_ignores_repeated_combo_press_until_release() {
+        let mut snapshot = KeyboardSnapshot::default();
+        snapshot.selected_hero = Some(HeroType::Invoker);
+        snapshot.trigger_key = Some(Key::Home);
+        let mut pressed_hotkeys = HashSet::new();
+
+        assert_eq!(
+            plan_global_hotkey_press_event(Key::Home, &snapshot, &mut pressed_hotkeys),
+            Some(HotkeyEvent::ComboTrigger)
+        );
+        assert_eq!(
+            plan_global_hotkey_press_event(Key::Home, &snapshot, &mut pressed_hotkeys),
+            None
+        );
+
+        handle_global_hotkey_key_release(Key::Home, &mut pressed_hotkeys);
+
+        assert_eq!(
+            plan_global_hotkey_press_event(Key::Home, &snapshot, &mut pressed_hotkeys),
+            Some(HotkeyEvent::ComboTrigger)
+        );
+    }
+
+    #[test]
+    fn plan_global_hotkey_press_event_ignores_repeated_invoker_profile_press_until_release() {
+        let mut snapshot = KeyboardSnapshot::default();
+        snapshot.selected_hero = Some(HeroType::Invoker);
+        snapshot.invoker_profiles = vec![InvokerHotkeyProfileSnapshot {
+            id: "qw-pickoff".to_string(),
+            hotkey: Some(Key::End),
+            mode: crate::config::settings::InvokerProfileMode::Combo,
+            enabled: true,
+        }];
+        let mut pressed_hotkeys = HashSet::new();
+
+        assert_eq!(
+            plan_global_hotkey_press_event(Key::End, &snapshot, &mut pressed_hotkeys),
+            Some(HotkeyEvent::InvokerProfile("qw-pickoff".to_string()))
+        );
+        assert_eq!(
+            plan_global_hotkey_press_event(Key::End, &snapshot, &mut pressed_hotkeys),
+            None
+        );
+
+        handle_global_hotkey_key_release(Key::End, &mut pressed_hotkeys);
+
+        assert_eq!(
+            plan_global_hotkey_press_event(Key::End, &snapshot, &mut pressed_hotkeys),
+            Some(HotkeyEvent::InvokerProfile("qw-pickoff".to_string()))
+        );
     }
 }
