@@ -53,4 +53,36 @@ describe("StatusHeader", () => {
     render(<StatusHeader connected={false} {...defaultProps} />);
     expect(screen.getByText("Disconnected")).toBeInTheDocument();
   });
+
+  it("renders the Invoker profile chip when provided", () => {
+    render(
+      <StatusHeader
+        heroName="Invoker"
+        heroLevel={30}
+        hpPercent={100}
+        manaPercent={100}
+        connected={true}
+        // @ts-expect-error TDD: prop added in implementation step
+        invokerProfileLabel="Profile: QW Pickoff"
+        {...defaultProps}
+      />,
+    );
+
+    expect(screen.getByText("Profile: QW Pickoff")).toBeInTheDocument();
+  });
+
+  it("does not render a profile chip when none is provided", () => {
+    render(
+      <StatusHeader
+        heroName="Invoker"
+        heroLevel={30}
+        hpPercent={100}
+        manaPercent={100}
+        connected={true}
+        {...defaultProps}
+      />,
+    );
+
+    expect(screen.queryByText(/Profile:/i)).not.toBeInTheDocument();
+  });
 });

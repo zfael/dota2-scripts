@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Sidebar } from "./components/layout/Sidebar";
 import { StatusHeader } from "./components/layout/StatusHeader";
@@ -39,6 +39,10 @@ export default function App() {
 
   const game = useGameStore((s) => s.game);
   const appVersion = useUIStore((s) => s.appVersion);
+  const invokerActiveComboProfileId = useUIStore(
+    (s) => s.invokerActiveComboProfileId,
+  );
+  const invokerProfiles = useConfigStore((s) => s.config.heroes.invoker.profiles);
   const runeAlertsEnabled = useConfigStore((s) => s.config.rune_alerts.enabled);
   const runeAlertAudioEnabled = useConfigStore((s) => s.config.rune_alerts.audio_enabled);
 
@@ -50,6 +54,20 @@ export default function App() {
     category: e.category as "action" | "danger" | "warning" | "system",
     message: e.message,
   }));
+  const invokerProfileLabel = useMemo(() => {
+    if (game.heroName !== "Invoker") {
+      return undefined;
+    }
+
+    const activeProfile = invokerProfiles.find(
+      (profile) =>
+        profile.id === invokerActiveComboProfileId &&
+        profile.mode === "combo" &&
+        profile.enabled,
+    );
+
+    return `Profile: ${activeProfile?.name ?? "None"}`;
+  }, [game.heroName, invokerActiveComboProfileId, invokerProfiles]);
 
   return (
     <BrowserRouter>
@@ -59,6 +77,7 @@ export default function App() {
           <StatusHeader
             heroName={game.heroName ?? undefined}
             heroLevel={game.heroLevel}
+            invokerProfileLabel={invokerProfileLabel}
             hpPercent={game.hpPercent}
             manaPercent={game.manaPercent}
             inDanger={game.inDanger}

@@ -6,6 +6,7 @@ import { Wifi, WifiOff } from "lucide-react";
 interface StatusHeaderProps {
   heroName?: string;
   heroLevel?: number;
+  invokerProfileLabel?: string;
   hpPercent?: number;
   manaPercent?: number;
   inDanger?: boolean;
@@ -21,6 +22,7 @@ interface StatusHeaderProps {
 export function StatusHeader({
   heroName,
   heroLevel,
+  invokerProfileLabel,
   hpPercent,
   manaPercent,
   inDanger = false,
@@ -53,6 +55,14 @@ export function StatusHeader({
             <span className="rounded bg-elevated px-1.5 py-0.5 font-mono text-xs text-subtle">
               Lv. {heroLevel}
             </span>
+            {invokerProfileLabel && (
+              <span
+                className="max-w-48 truncate rounded bg-elevated px-2 py-0.5 text-xs text-subtle"
+                title={invokerProfileLabel}
+              >
+                {invokerProfileLabel}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3 flex-1">
             <div className="w-32">
