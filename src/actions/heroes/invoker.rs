@@ -80,6 +80,24 @@ enum PlannedInvokerAction {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+struct SemiAutoExecutionPlan {
+    monitored_slot_key: char,
+    steps: Vec<SemiAutoPlanStep>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum SemiAutoPlanStep {
+    Item {
+        target: String,
+        delay_after_ms: u64,
+    },
+    Spell {
+        target: String,
+        prepare_keys: Vec<char>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum CastSequenceAction {
     Press(char),
     AltDown,
@@ -404,6 +422,45 @@ fn build_profile_execution_plan(
     }
 
     Some(actions)
+}
+
+fn build_semi_auto_execution_plan(
+    profile: &InvokerProfile,
+    state: &InvokerObservedState,
+    config: &crate::config::settings::InvokerConfig,
+) -> Option<SemiAutoExecutionPlan> {
+    let mut current_slots = state.active_spells.clone();
+    let mut steps = Vec::new();
+
+    for step in &profile.steps {
+        match step.kind {
+            InvokerProfileStepKind::Item => steps.push(SemiAutoPlanStep::Item {
+                target: step.target.clone(),
+                delay_after_ms: step.delay_after_ms,
+            }),
+            InvokerProfileStepKind::Spell => {
+                let already_on_secondary =
+                    current_slots[1].as_deref() == Some(step.target.as_str());
+                let prepare_keys = if already_on_secondary {
+                    Vec::new()
+                } else {
+                    let keys = orb_recipe(&step.target, config)?.to_vec();
+                    current_slots = apply_invoke_to_slot_state(&current_slots, &step.target);
+                    keys
+                };
+
+                steps.push(SemiAutoPlanStep::Spell {
+                    target: step.target.clone(),
+                    prepare_keys,
+                });
+            }
+        }
+    }
+
+    Some(SemiAutoExecutionPlan {
+        monitored_slot_key: config.spell_slot_secondary_key,
+        steps,
+    })
 }
 
 fn spell_cooldown_in_event(event: &GsiWebhookEvent, spell_name: &str) -> Option<u32> {
@@ -1116,6 +1173,89 @@ mod tests {
                     InvokerProfileStepCompletionMode::FixedDelay,
                 ),
             ]
+        );
+    }
+
+    #[test]
+    fn build_semi_auto_execution_plan_for_qw_pickoff_keeps_items_then_secondary_slot_spells() {
+        let event = invoker_qw_fixture();
+        let settings = Settings::default();
+        let config = &settings.heroes.invoker;
+        let state = InvokerObservedState::from_event(&event);
+        let profile = find_profile(config, "qw-pickoff").expect("QW profile should exist");
+
+        let plan = build_semi_auto_execution_plan(profile, &state, config)
+            .expect("semi-auto plan should build");
+
+        assert_eq!(plan.monitored_slot_key, config.spell_slot_secondary_key);
+        assert_eq!(
+            plan.steps
+                .iter()
+                .map(|step| match step {
+                    SemiAutoPlanStep::Item { target, .. } => format!("item:{target}"),
+                    SemiAutoPlanStep::Spell { target, .. } => format!("spell:{target}"),
+                })
+                .collect::<Vec<_>>(),
+            vec![
+                "item:item_spirit_vessel",
+                "item:item_rod_of_atos",
+                "spell:invoker_tornado",
+                "spell:invoker_emp",
+            ]
+        );
+    }
+
+    #[test]
+    fn build_semi_auto_execution_plan_reuses_loaded_secondary_spell_without_extra_invoke() {
+        let event = invoker_qw_fixture();
+        let settings = Settings::default();
+        let config = &settings.heroes.invoker;
+        let mut state = InvokerObservedState::from_event(&event);
+        state.active_spells = [None, Some("invoker_tornado".to_string())];
+        let profile = find_profile(config, "qw-pickoff").expect("QW profile should exist");
+
+        let plan = build_semi_auto_execution_plan(profile, &state, config)
+            .expect("semi-auto plan should build");
+
+        let first_spell = plan
+            .steps
+            .iter()
+            .find_map(|step| match step {
+                SemiAutoPlanStep::Spell { prepare_keys, .. } => Some(prepare_keys.clone()),
+                SemiAutoPlanStep::Item { .. } => None,
+            })
+            .expect("plan should contain a spell");
+
+        assert!(
+            first_spell.is_empty(),
+            "already-loaded spell should not invoke again"
+        );
+    }
+
+    #[test]
+    fn build_semi_auto_execution_plan_reinvokes_spell_when_only_primary_slot_matches() {
+        let event = invoker_qw_fixture();
+        let settings = Settings::default();
+        let config = &settings.heroes.invoker;
+        let mut state = InvokerObservedState::from_event(&event);
+        state.active_spells = [Some("invoker_tornado".to_string()), None];
+        let profile = find_profile(config, "qw-pickoff").expect("QW profile should exist");
+
+        let plan = build_semi_auto_execution_plan(profile, &state, config)
+            .expect("semi-auto plan should build");
+
+        let first_spell = plan
+            .steps
+            .iter()
+            .find_map(|step| match step {
+                SemiAutoPlanStep::Spell { prepare_keys, .. } => Some(prepare_keys.clone()),
+                SemiAutoPlanStep::Item { .. } => None,
+            })
+            .expect("plan should contain a spell");
+
+        assert!(
+            !first_spell.is_empty(),
+            "spell on primary slot should re-invoke to land on the monitored secondary slot"
         );
     }
 
