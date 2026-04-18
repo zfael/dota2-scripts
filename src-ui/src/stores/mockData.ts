@@ -50,6 +50,7 @@ export const mockConfig: Settings = {
           enabled: true,
           hotkey: "Home",
           mode: "combo",
+          execution_style: "automatic",
           build_tag: "qw",
           steps: [
             { kind: "item", target: "item_spirit_vessel", delay_after_ms: 50, cast_behavior: "normal", completion_mode: "fixed_delay", completion_timeout_ms: 3000, notes: "" },
@@ -64,6 +65,7 @@ export const mockConfig: Settings = {
           enabled: false,
           hotkey: "PageDown",
           mode: "combo",
+          execution_style: "automatic",
           build_tag: "qe",
           steps: [
             { kind: "spell", target: "invoker_sun_strike", delay_after_ms: 150, cast_behavior: "manual_wait_cooldown", completion_mode: "wait_for_cooldown", completion_timeout_ms: 3000, notes: "" },
@@ -77,6 +79,7 @@ export const mockConfig: Settings = {
           enabled: true,
           hotkey: "End",
           mode: "combo",
+          execution_style: "automatic",
           build_tag: "general",
           steps: [{ kind: "spell", target: "invoker_ghost_walk", delay_after_ms: 100, cast_behavior: "normal", completion_mode: "fixed_delay", completion_timeout_ms: 3000, notes: "" }],
         },
@@ -86,6 +89,7 @@ export const mockConfig: Settings = {
           enabled: true,
           hotkey: "PageUp",
           mode: "prep",
+          execution_style: "automatic",
           build_tag: "qe",
           steps: [
             { kind: "spell", target: "invoker_chaos_meteor", delay_after_ms: 0, cast_behavior: "normal", completion_mode: "fixed_delay", completion_timeout_ms: 3000, notes: "" },
@@ -98,6 +102,7 @@ export const mockConfig: Settings = {
           enabled: false,
           hotkey: "F5",
           mode: "combo",
+          execution_style: "automatic",
           build_tag: "qe",
           steps: [
             { kind: "spell", target: "invoker_forge_spirit", delay_after_ms: 150, cast_behavior: "normal", completion_mode: "fixed_delay", completion_timeout_ms: 3000, notes: "" },
@@ -109,6 +114,7 @@ export const mockConfig: Settings = {
           enabled: false,
           hotkey: "F6",
           mode: "combo",
+          execution_style: "automatic",
           build_tag: "qw",
           steps: [
             { kind: "spell", target: "invoker_tornado", delay_after_ms: 700, cast_behavior: "normal", completion_mode: "fixed_delay", completion_timeout_ms: 3000, notes: "" },
@@ -122,6 +128,7 @@ export const mockConfig: Settings = {
           enabled: false,
           hotkey: "F7",
           mode: "combo",
+          execution_style: "automatic",
           build_tag: "qe",
           steps: [
             { kind: "item", target: "item_rod_of_atos", delay_after_ms: 50, cast_behavior: "normal", completion_mode: "fixed_delay", completion_timeout_ms: 3000, notes: "" },
@@ -136,6 +143,7 @@ export const mockConfig: Settings = {
           enabled: false,
           hotkey: "F8",
           mode: "combo",
+          execution_style: "automatic",
           build_tag: "qe",
           steps: [
             { kind: "spell", target: "invoker_ice_wall", delay_after_ms: 2500, cast_behavior: "normal", completion_mode: "fixed_delay", completion_timeout_ms: 3000, notes: "" },
@@ -148,6 +156,7 @@ export const mockConfig: Settings = {
           enabled: false,
           hotkey: "F9",
           mode: "combo",
+          execution_style: "automatic",
           build_tag: "general",
           steps: [
             { kind: "spell", target: "invoker_tornado", delay_after_ms: 700, cast_behavior: "normal", completion_mode: "fixed_delay", completion_timeout_ms: 3000, notes: "" },

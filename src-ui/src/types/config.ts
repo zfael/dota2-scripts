@@ -186,6 +186,7 @@ export interface OutworldDestroyerConfig {
 }
 
 export type InvokerProfileMode = "combo" | "prep";
+export type InvokerProfileExecutionStyle = "automatic" | "semi_auto";
 export type InvokerProfileStepKind = "spell" | "item";
 export type InvokerProfileStepCastBehavior =
   | "normal"
@@ -213,6 +214,7 @@ export interface InvokerProfile {
   enabled: boolean;
   hotkey: string;
   mode: InvokerProfileMode;
+  execution_style: InvokerProfileExecutionStyle;
   build_tag: string;
   steps: InvokerProfileStep[];
 }

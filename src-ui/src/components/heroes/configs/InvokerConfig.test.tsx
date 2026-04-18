@@ -38,6 +38,18 @@ describe("InvokerConfig", () => {
     expect(screen.getAllByText(/QW Pickoff/i).length).toBeGreaterThan(1);
   });
 
+  it("creates new combo profiles with automatic execution style", () => {
+    render(<InvokerConfig />);
+
+    fireEvent.click(screen.getByRole("button", { name: /new combo profile/i }));
+
+    const created = useConfigStore
+      .getState()
+      .config.heroes.invoker.profiles.find((profile) => profile.name === "Custom Combo");
+
+    expect(created?.execution_style).toBe("automatic");
+  });
+
   it("renders QE Burst with manual cooldown wait controls", () => {
     render(<InvokerConfig />);
 

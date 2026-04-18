@@ -53,6 +53,7 @@ function createBlankProfile(
     enabled: true,
     hotkey: "",
     mode,
+    execution_style: "automatic",
     build_tag: "general",
     steps: [createInvokerStep("spell")],
   };
