@@ -2,17 +2,20 @@ use crate::actions::common::{find_item_slot_by_name, SurvivabilityActions};
 use crate::actions::executor::ActionExecutor;
 use crate::actions::heroes::traits::HeroScript;
 use crate::config::settings::{
-    InvokerProfile, InvokerProfileMode, InvokerProfileStepCastBehavior,
-    InvokerProfileStepCompletionMode, InvokerProfileStepKind,
+    InvokerProfile, InvokerProfileExecutionStyle, InvokerProfileMode,
+    InvokerProfileStepCastBehavior, InvokerProfileStepCompletionMode, InvokerProfileStepKind,
 };
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Hero};
+use std::collections::VecDeque;
 use std::sync::{mpsc, Arc, LazyLock, Mutex};
 use std::thread;
 use std::time::Duration;
 use tracing::info;
 
 static INVOKER_LAST_EVENT: LazyLock<Mutex<Option<GsiWebhookEvent>>> =
+    LazyLock::new(|| Mutex::new(None));
+static INVOKER_ACTIVE_SEMI_AUTO_SESSION: LazyLock<Mutex<Option<InvokerSemiAutoSession>>> =
     LazyLock::new(|| Mutex::new(None));
 
 #[derive(Debug, Clone)]
@@ -95,6 +98,33 @@ enum SemiAutoPlanStep {
         target: String,
         prepare_keys: Vec<char>,
     },
+}
+
+#[derive(Debug, Clone)]
+struct InvokerSemiAutoSession {
+    profile_id: String,
+    settings: Settings,
+    monitored_slot_key: char,
+    pending_steps: VecDeque<SemiAutoPlanStep>,
+    watched_spell: Option<String>,
+}
+
+impl InvokerSemiAutoSession {
+    fn from_plan(profile_id: &str, settings: &Settings, plan: SemiAutoExecutionPlan) -> Self {
+        Self {
+            profile_id: profile_id.to_string(),
+            settings: settings.clone(),
+            monitored_slot_key: plan.monitored_slot_key,
+            pending_steps: VecDeque::from(plan.steps),
+            watched_spell: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SemiAutoAdvanceResult {
+    prepared_spell: Option<String>,
+    completed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -467,8 +497,9 @@ fn spell_cooldown_in_event(event: &GsiWebhookEvent, spell_name: &str) -> Option<
     [4u8, 5u8]
         .into_iter()
         .filter_map(|index| event.abilities.get_by_index(index))
-        .find(|ability| ability.name == spell_name)
+        .filter(|ability| ability.name == spell_name)
         .map(|ability| ability.cooldown)
+        .max()
 }
 
 fn spell_is_on_cooldown(event: &GsiWebhookEvent, spell_name: &str) -> bool {
@@ -500,6 +531,109 @@ fn wait_for_spell_cooldown_start(
         }
 
         thread::sleep(Duration::from_millis(poll_interval_ms));
+    }
+}
+
+fn replace_semi_auto_session(
+    current: Option<InvokerSemiAutoSession>,
+    new_session: InvokerSemiAutoSession,
+) -> InvokerSemiAutoSession {
+    if let Some(active) = current.as_ref() {
+        info!(
+            "🔮 Replacing Invoker semi-auto session {} with {}",
+            active.profile_id, new_session.profile_id
+        );
+    }
+    new_session
+}
+
+fn advance_semi_auto_session(
+    session: &mut InvokerSemiAutoSession,
+    event: &GsiWebhookEvent,
+) -> SemiAutoAdvanceResult {
+    if let Some(watched_spell) = session.watched_spell.as_deref() {
+        if !spell_is_on_cooldown(event, watched_spell) {
+            return SemiAutoAdvanceResult {
+                prepared_spell: None,
+                completed: false,
+            };
+        }
+
+        info!(
+            "🔮 Semi-auto watched spell {} entered cooldown for {}",
+            watched_spell, session.profile_id
+        );
+        session.watched_spell = None;
+    }
+
+    while let Some(step) = session.pending_steps.pop_front() {
+        match step {
+            SemiAutoPlanStep::Item {
+                target,
+                delay_after_ms,
+            } => {
+                if let Some(key) = find_item_slot_by_name(event, &session.settings, &target) {
+                    info!("🔮 Using semi-auto combo item: {}", target);
+                    crate::input::simulation::press_key(key);
+                } else {
+                    info!("🔮 Semi-auto combo item {} not found, skipping", target);
+                }
+
+                thread::sleep(Duration::from_millis(delay_after_ms));
+            }
+            SemiAutoPlanStep::Spell {
+                target,
+                prepare_keys,
+            } => {
+                for &key in &prepare_keys {
+                    crate::input::simulation::press_key(key);
+                    thread::sleep(Duration::from_millis(10));
+                }
+
+                if !prepare_keys.is_empty() {
+                    thread::sleep(Duration::from_millis(50));
+                }
+
+                info!(
+                    "🔮 Prepared semi-auto spell {} onto slot {} for {}",
+                    target, session.monitored_slot_key, session.profile_id
+                );
+                session.watched_spell = Some(target.clone());
+                return SemiAutoAdvanceResult {
+                    prepared_spell: Some(target),
+                    completed: false,
+                };
+            }
+        }
+    }
+
+    info!("🔮 Invoker semi-auto session complete: {}", session.profile_id);
+    SemiAutoAdvanceResult {
+        prepared_spell: None,
+        completed: true,
+    }
+}
+
+fn advance_active_semi_auto_session(event: &GsiWebhookEvent) {
+    let mut guard = INVOKER_ACTIVE_SEMI_AUTO_SESSION.lock().unwrap();
+    let should_clear = {
+        let Some(session) = guard.as_mut() else {
+            return;
+        };
+
+        if !event.hero.alive || event.hero.stunned || event.hero.hexed || event.hero.silenced {
+            info!(
+                "🔮 Clearing Invoker semi-auto session {}: hero unavailable",
+                session.profile_id
+            );
+            true
+        } else {
+            advance_semi_auto_session(session, event).completed
+        }
+    };
+
+    if should_clear {
+        *guard = None;
     }
 }
 
@@ -565,6 +699,22 @@ fn run_invoker_request(request: InvokerRequest) {
         );
         return;
     };
+
+    if profile.mode == InvokerProfileMode::Combo
+        && profile.execution_style == InvokerProfileExecutionStyle::SemiAuto
+    {
+        let Some(plan) = build_semi_auto_execution_plan(profile, &state, config) else {
+            info!("🔮 Invoker semi-auto profile {} could not be planned", profile.id);
+            return;
+        };
+        let session = InvokerSemiAutoSession::from_plan(&profile.id, &settings, plan);
+        let mut active_session = INVOKER_ACTIVE_SEMI_AUTO_SESSION.lock().unwrap();
+        let next_session = replace_semi_auto_session(active_session.take(), session);
+        *active_session = Some(next_session);
+        drop(active_session);
+        advance_active_semi_auto_session(&event);
+        return;
+    }
 
     run_profile(&event, &settings, &state, config, profile);
 }
@@ -779,6 +929,7 @@ impl HeroScript for InvokerScript {
     fn handle_gsi_event(&self, event: &GsiWebhookEvent) {
         // Store latest event for request worker
         *INVOKER_LAST_EVENT.lock().unwrap() = Some(event.clone());
+        advance_active_semi_auto_session(event);
 
         let survivability = SurvivabilityActions::new(self.settings.clone(), self.executor.clone());
         let settings = self.settings.lock().unwrap();
@@ -1500,6 +1651,56 @@ mod tests {
         updater.join().expect("updater should finish");
 
         assert_eq!(outcome, CooldownWaitOutcome::Started);
+    }
+
+    #[test]
+    fn semi_auto_session_advances_after_watched_spell_enters_cooldown() {
+        let settings = Settings::default();
+        let config = &settings.heroes.invoker;
+        let state = InvokerObservedState::from_event(&invoker_qw_fixture());
+        let profile = find_profile(config, "qw-pickoff").expect("QW profile should exist");
+        let plan = build_semi_auto_execution_plan(profile, &state, config)
+            .expect("semi-auto plan should build");
+        let mut session = InvokerSemiAutoSession::from_plan("qw-pickoff", &settings, plan);
+
+        let first = advance_semi_auto_session(&mut session, &invoker_qw_fixture());
+        assert_eq!(first.prepared_spell.as_deref(), Some("invoker_tornado"));
+
+        let mut cooling = invoker_qw_fixture();
+        cooling.abilities.ability5.name = "invoker_tornado".to_string();
+        cooling.abilities.ability5.cooldown = 12;
+        cooling.abilities.ability5.can_cast = false;
+
+        let second = advance_semi_auto_session(&mut session, &cooling);
+        assert_eq!(second.prepared_spell.as_deref(), Some("invoker_emp"));
+    }
+
+    #[test]
+    fn replace_semi_auto_session_swaps_in_the_latest_profile() {
+        let settings = Settings::default();
+        let config = &settings.heroes.invoker;
+        let state = InvokerObservedState::from_event(&invoker_qw_fixture());
+
+        let old_plan = build_semi_auto_execution_plan(
+            find_profile(config, "qw-pickoff").unwrap(),
+            &state,
+            config,
+        )
+        .unwrap();
+        let new_plan = build_semi_auto_execution_plan(
+            find_profile(config, "ghost-walk-panic").unwrap(),
+            &state,
+            config,
+        )
+        .unwrap();
+
+        let old_session = InvokerSemiAutoSession::from_plan("qw-pickoff", &settings, old_plan);
+        let new_session =
+            InvokerSemiAutoSession::from_plan("ghost-walk-panic", &settings, new_plan);
+
+        let replaced = replace_semi_auto_session(Some(old_session), new_session);
+
+        assert_eq!(replaced.profile_id, "ghost-walk-panic");
     }
 
     #[test]
