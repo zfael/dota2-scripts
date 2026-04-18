@@ -404,6 +404,17 @@ impl InvokerProfileMode {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+pub enum InvokerProfileExecutionStyle {
+    Automatic,
+    SemiAuto,
+}
+
+fn default_invoker_profile_execution_style() -> InvokerProfileExecutionStyle {
+    InvokerProfileExecutionStyle::Automatic
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum InvokerProfileStepKind {
     Spell,
     Item,
@@ -462,6 +473,8 @@ pub struct InvokerProfile {
     pub enabled: bool,
     pub hotkey: String,
     pub mode: InvokerProfileMode,
+    #[serde(default = "default_invoker_profile_execution_style")]
+    pub execution_style: InvokerProfileExecutionStyle,
     #[serde(default)]
     pub build_tag: String,
     #[serde(default)]
@@ -1182,6 +1195,7 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
             enabled: true,
             hotkey: "Home".to_string(),
             mode: InvokerProfileMode::Combo,
+            execution_style: InvokerProfileExecutionStyle::Automatic,
             build_tag: "qw".to_string(),
             steps: vec![
                 InvokerProfileStep {
@@ -1228,6 +1242,7 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
             enabled: false,
             hotkey: "PageDown".to_string(),
             mode: InvokerProfileMode::Combo,
+            execution_style: InvokerProfileExecutionStyle::Automatic,
             build_tag: "qe".to_string(),
             steps: vec![
                 InvokerProfileStep {
@@ -1265,6 +1280,7 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
             enabled: true,
             hotkey: "End".to_string(),
             mode: InvokerProfileMode::Combo,
+            execution_style: InvokerProfileExecutionStyle::Automatic,
             build_tag: "general".to_string(),
             steps: vec![InvokerProfileStep {
                 kind: InvokerProfileStepKind::Spell,
@@ -1282,6 +1298,7 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
             enabled: true,
             hotkey: "PageUp".to_string(),
             mode: InvokerProfileMode::Prep,
+            execution_style: InvokerProfileExecutionStyle::Automatic,
             build_tag: "qe".to_string(),
             steps: vec![
                 InvokerProfileStep {
@@ -1310,6 +1327,7 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
             enabled: false,
             hotkey: "F5".to_string(),
             mode: InvokerProfileMode::Combo,
+            execution_style: InvokerProfileExecutionStyle::Automatic,
             build_tag: "qe".to_string(),
             steps: vec![InvokerProfileStep {
                 kind: InvokerProfileStepKind::Spell,
@@ -1327,6 +1345,7 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
             enabled: false,
             hotkey: "F6".to_string(),
             mode: InvokerProfileMode::Combo,
+            execution_style: InvokerProfileExecutionStyle::Automatic,
             build_tag: "qw".to_string(),
             steps: vec![
                 InvokerProfileStep {
@@ -1364,6 +1383,7 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
             enabled: false,
             hotkey: "F7".to_string(),
             mode: InvokerProfileMode::Combo,
+            execution_style: InvokerProfileExecutionStyle::Automatic,
             build_tag: "qe".to_string(),
             steps: vec![
                 InvokerProfileStep {
@@ -1410,6 +1430,7 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
             enabled: false,
             hotkey: "F8".to_string(),
             mode: InvokerProfileMode::Combo,
+            execution_style: InvokerProfileExecutionStyle::Automatic,
             build_tag: "qe".to_string(),
             steps: vec![
                 InvokerProfileStep {
@@ -1438,6 +1459,7 @@ fn default_invoker_profiles() -> Vec<InvokerProfile> {
             enabled: false,
             hotkey: "F9".to_string(),
             mode: InvokerProfileMode::Combo,
+            execution_style: InvokerProfileExecutionStyle::Automatic,
             build_tag: "general".to_string(),
             steps: vec![
                 InvokerProfileStep {
@@ -2356,6 +2378,49 @@ mod tests {
                 ("ice-floe-lockdown", "F8", false),
                 ("refresher-sequence", "F9", false),
             ]
+        );
+    }
+
+    #[test]
+    fn invoker_profiles_default_to_automatic_execution_style() {
+        let settings = Settings::default();
+
+        let qw = settings
+            .heroes
+            .invoker
+            .profiles
+            .iter()
+            .find(|profile| profile.id == "qw-pickoff")
+            .expect("QW Pickoff should exist");
+        let prep = settings
+            .heroes
+            .invoker
+            .profiles
+            .iter()
+            .find(|profile| profile.id == "meteor-blast-prep")
+            .expect("Meteor + Blast Prep should exist");
+
+        assert_eq!(qw.execution_style, InvokerProfileExecutionStyle::Automatic);
+        assert_eq!(prep.execution_style, InvokerProfileExecutionStyle::Automatic);
+    }
+
+    #[test]
+    fn invoker_profile_execution_style_defaults_when_field_is_missing() {
+        let profile: InvokerProfile = toml::from_str(
+            r#"
+id = "semi-auto-check"
+name = "Semi Auto Check"
+enabled = true
+hotkey = "F10"
+mode = "combo"
+build_tag = "qw"
+"#,
+        )
+        .expect("profile should deserialize");
+
+        assert_eq!(
+            profile.execution_style,
+            InvokerProfileExecutionStyle::Automatic
         );
     }
 

@@ -249,6 +249,7 @@ name = "QW Pickoff"
 enabled = true
 hotkey = "Home"
 mode = "combo"
+execution_style = "automatic"
 build_tag = "qw"
 
 [[heroes.invoker.profiles.steps]]
@@ -289,6 +290,7 @@ name = "QE Burst"
 enabled = false
 hotkey = "PageDown"
 mode = "combo"
+execution_style = "automatic"
 build_tag = "qe"
 
 [[heroes.invoker.profiles.steps]]
@@ -321,6 +323,7 @@ name = "Ghost Walk Panic"
 enabled = true
 hotkey = "End"
 mode = "combo"
+execution_style = "automatic"
 build_tag = "general"
 
 [[heroes.invoker.profiles.steps]]
@@ -337,6 +340,7 @@ name = "Meteor + Blast Prep"
 enabled = true
 hotkey = "PageUp"
 mode = "prep"
+execution_style = "automatic"
 build_tag = "qe"
 
 [[heroes.invoker.profiles.steps]]
@@ -361,6 +365,7 @@ name = "Lane Pressure"
 enabled = false
 hotkey = "F5"
 mode = "combo"
+execution_style = "automatic"
 build_tag = "qe"
 
 [[heroes.invoker.profiles.steps]]
@@ -377,6 +382,7 @@ name = "Meta Catch"
 enabled = false
 hotkey = "F6"
 mode = "combo"
+execution_style = "automatic"
 build_tag = "qw"
 
 [[heroes.invoker.profiles.steps]]
@@ -409,6 +415,7 @@ name = "Shotgun Burst"
 enabled = false
 hotkey = "F7"
 mode = "combo"
+execution_style = "automatic"
 build_tag = "qe"
 
 [[heroes.invoker.profiles.steps]]
@@ -449,6 +456,7 @@ name = "Ice Floe Lockdown"
 enabled = false
 hotkey = "F8"
 mode = "combo"
+execution_style = "automatic"
 build_tag = "qe"
 
 [[heroes.invoker.profiles.steps]]
@@ -473,6 +481,7 @@ name = "Refresher Sequence"
 enabled = false
 hotkey = "F9"
 mode = "combo"
+execution_style = "automatic"
 build_tag = "general"
 
 [[heroes.invoker.profiles.steps]]
