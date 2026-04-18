@@ -96,6 +96,7 @@ completion_timeout_ms = 3000
 | `profiles[].enabled` | bool | `true` | Whether the hotkey is active |
 | `profiles[].hotkey` | string | preset-specific | Trigger key for this profile |
 | `profiles[].mode` | string | preset-specific | `combo` casts steps, `prep` only invokes spell steps |
+| `profiles[].execution_style` | string | `automatic` | Combo-only spell execution style: `automatic` preserves the current auto-cast planner, while `semi_auto` auto-runs item steps and prepares one spell at a time onto `spell_slot_secondary_key`. |
 | `profiles[].build_tag` | string | preset-specific | Freeform build hint shown in UI (`general`, `qw`, `qe`) |
 | `profiles[].steps[].kind` | string | n/a | `spell` or `item` |
 | `profiles[].steps[].target` | string | n/a | Stable spell/item target id such as `invoker_emp` or `item_rod_of_atos` |
@@ -141,6 +142,14 @@ Combo profiles execute their steps in order:
    invoking first when needed.
 5. The step either waits on `delay_after_ms` or, for manual spell steps, waits
    for cooldown confirmation first and then applies `delay_after_ms`.
+
+### Semi-auto combo profiles
+
+Semi-auto combo profiles still execute item steps automatically, but spell
+steps are no longer auto-cast. The runtime prepares one authored spell at a
+time onto the configured secondary invoked slot, waits for that spell to enter
+cooldown from the player's real cast, then immediately prepares the next spell
+onto that same slot.
 
 ### Active combo selection
 

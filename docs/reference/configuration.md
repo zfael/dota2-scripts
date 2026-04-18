@@ -410,6 +410,7 @@ See `docs/heroes/broodmother.md` and `docs/reference/gsi-schema-and-usage.md`.
 | `profiles[].enabled` | preset-specific | `true` | Whether the profile hotkey is active. |
 | `profiles[].hotkey` | preset-specific | preset-specific | Trigger key for this profile. |
 | `profiles[].mode` | preset-specific | preset-specific | `combo` casts steps; `prep` only invokes spell steps. |
+| `profiles[].execution_style` | `automatic` | `automatic` | Combo spell execution style. `automatic` keeps the current pair-aware auto-cast runner. `semi_auto` keeps item steps automatic and prepares one spell at a time onto `spell_slot_secondary_key`, advancing when that spell enters cooldown. |
 | `profiles[].build_tag` | preset-specific | `""` | UI-facing build hint such as `general`, `qw`, or `qe`. |
 | `profiles[].steps[].kind` | preset-specific | n/a | `spell` or `item`. |
 | `profiles[].steps[].target` | preset-specific | n/a | Stable spell/item id such as `invoker_tornado` or `item_spirit_vessel`. |
