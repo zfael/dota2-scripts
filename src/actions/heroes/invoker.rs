@@ -8,6 +8,8 @@ use crate::config::settings::{
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Hero};
 use std::collections::VecDeque;
+#[cfg(test)]
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, LazyLock, Mutex};
 use std::thread;
@@ -19,6 +21,69 @@ static INVOKER_LAST_EVENT: LazyLock<Mutex<Option<GsiWebhookEvent>>> =
 static INVOKER_ACTIVE_SEMI_AUTO_SESSION: LazyLock<Mutex<Option<InvokerSemiAutoSession>>> =
     LazyLock::new(|| Mutex::new(None));
 static INVOKER_SEMI_AUTO_ADVANCE_QUEUED: AtomicBool = AtomicBool::new(false);
+
+#[cfg(test)]
+static INVOKER_SEMI_AUTO_ADVANCE_AFTER_RELEASE_HOOK: LazyLock<
+    Mutex<Option<Box<dyn FnMut() + Send>>>,
+> = LazyLock::new(|| Mutex::new(None));
+#[cfg(test)]
+static INVOKER_SEMI_AUTO_ADVANCE_CALL_DEPTH: AtomicUsize = AtomicUsize::new(0);
+#[cfg(test)]
+static INVOKER_SEMI_AUTO_ADVANCE_MAX_DEPTH: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(test)]
+struct SemiAutoAdvanceCallDepthGuard;
+
+#[cfg(test)]
+impl SemiAutoAdvanceCallDepthGuard {
+    fn enter() -> Self {
+        let depth = INVOKER_SEMI_AUTO_ADVANCE_CALL_DEPTH.fetch_add(1, Ordering::AcqRel) + 1;
+        INVOKER_SEMI_AUTO_ADVANCE_MAX_DEPTH.fetch_max(depth, Ordering::AcqRel);
+        Self
+    }
+}
+
+#[cfg(test)]
+impl Drop for SemiAutoAdvanceCallDepthGuard {
+    fn drop(&mut self) {
+        INVOKER_SEMI_AUTO_ADVANCE_CALL_DEPTH.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+#[cfg(test)]
+fn run_semi_auto_advance_after_release_hook() {
+    if let Some(hook) = INVOKER_SEMI_AUTO_ADVANCE_AFTER_RELEASE_HOOK
+        .lock()
+        .unwrap()
+        .as_mut()
+    {
+        hook();
+    }
+}
+
+#[cfg(test)]
+fn install_semi_auto_advance_after_release_hook<F>(hook: F)
+where
+    F: FnMut() + Send + 'static,
+{
+    *INVOKER_SEMI_AUTO_ADVANCE_AFTER_RELEASE_HOOK.lock().unwrap() = Some(Box::new(hook));
+}
+
+#[cfg(test)]
+fn clear_semi_auto_advance_after_release_hook() {
+    *INVOKER_SEMI_AUTO_ADVANCE_AFTER_RELEASE_HOOK.lock().unwrap() = None;
+}
+
+#[cfg(test)]
+fn reset_semi_auto_advance_call_depth_tracking() {
+    INVOKER_SEMI_AUTO_ADVANCE_CALL_DEPTH.store(0, Ordering::Release);
+    INVOKER_SEMI_AUTO_ADVANCE_MAX_DEPTH.store(0, Ordering::Release);
+}
+
+#[cfg(test)]
+fn semi_auto_advance_max_call_depth() -> usize {
+    INVOKER_SEMI_AUTO_ADVANCE_MAX_DEPTH.load(Ordering::Acquire)
+}
 
 #[derive(Debug, Clone)]
 struct InvokerObservedState {
@@ -609,7 +674,10 @@ fn advance_semi_auto_session(
         }
     }
 
-    info!("🔮 Invoker semi-auto session complete: {}", session.profile_id);
+    info!(
+        "🔮 Invoker semi-auto session complete: {}",
+        session.profile_id
+    );
     SemiAutoAdvanceResult {
         prepared_spell: None,
         completed: true,
@@ -688,33 +756,52 @@ fn schedule_active_semi_auto_session_advance(event: &GsiWebhookEvent) {
     enqueue_request(InvokerRequest::AdvanceSemiAuto);
 }
 
-fn run_queued_semi_auto_advance() {
-    loop {
-        let event = match INVOKER_LAST_EVENT.lock().unwrap().clone() {
-            Some(event) => event,
-            None => break,
-        };
-
-        if !active_semi_auto_session_needs_worker_pass(&event) {
-            break;
-        }
-
-        advance_active_semi_auto_session(&event);
-    }
-
-    INVOKER_SEMI_AUTO_ADVANCE_QUEUED.store(false, Ordering::Release);
-
-    let should_continue = INVOKER_LAST_EVENT
+fn latest_event_needs_worker_pass() -> bool {
+    INVOKER_LAST_EVENT
         .lock()
         .unwrap()
         .clone()
-        .is_some_and(|event| active_semi_auto_session_needs_worker_pass(&event));
-    if should_continue
-        && INVOKER_SEMI_AUTO_ADVANCE_QUEUED
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-            .is_ok()
-    {
-        run_queued_semi_auto_advance();
+        .is_some_and(|event| active_semi_auto_session_needs_worker_pass(&event))
+}
+
+fn run_queued_semi_auto_advance() {
+    #[cfg(test)]
+    let _depth_guard = SemiAutoAdvanceCallDepthGuard::enter();
+
+    loop {
+        loop {
+            let event = match INVOKER_LAST_EVENT.lock().unwrap().clone() {
+                Some(event) => event,
+                None => break,
+            };
+
+            if !active_semi_auto_session_needs_worker_pass(&event) {
+                break;
+            }
+
+            advance_active_semi_auto_session(&event);
+        }
+
+        INVOKER_SEMI_AUTO_ADVANCE_QUEUED.store(false, Ordering::Release);
+
+        #[cfg(test)]
+        run_semi_auto_advance_after_release_hook();
+
+        if INVOKER_SEMI_AUTO_ADVANCE_QUEUED.load(Ordering::Acquire) {
+            continue;
+        }
+
+        if latest_event_needs_worker_pass()
+            && INVOKER_SEMI_AUTO_ADVANCE_QUEUED
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+        {
+            continue;
+        }
+
+        if !INVOKER_SEMI_AUTO_ADVANCE_QUEUED.load(Ordering::Acquire) {
+            break;
+        }
     }
 }
 
@@ -793,7 +880,10 @@ fn run_invoker_request(request: InvokerRequest) {
                 && profile.execution_style == InvokerProfileExecutionStyle::SemiAuto
             {
                 let Some(plan) = build_semi_auto_execution_plan(profile, &state, config) else {
-                    info!("🔮 Invoker semi-auto profile {} could not be planned", profile.id);
+                    info!(
+                        "🔮 Invoker semi-auto profile {} could not be planned",
+                        profile.id
+                    );
                     return;
                 };
                 let session = InvokerSemiAutoSession::from_plan(&profile.id, &settings, plan);
@@ -890,7 +980,8 @@ fn run_profile(
                         .unwrap()
                         .clone()
                         .unwrap_or_else(|| event.clone());
-                    if effective_completion_mode == InvokerProfileStepCompletionMode::WaitForCooldown
+                    if effective_completion_mode
+                        == InvokerProfileStepCompletionMode::WaitForCooldown
                         && spell_is_on_cooldown(&current_event, &target)
                     {
                         info!("🔮 Manual step {} already on cooldown, skipping", target);
@@ -904,11 +995,15 @@ fn run_profile(
                             target
                         );
                     } else {
-                        info!("🔮 Casting {} from {} via {:?}", target, cast_key, cast_behavior);
+                        info!(
+                            "🔮 Casting {} from {} via {:?}",
+                            target, cast_key, cast_behavior
+                        );
                         execute_cast_sequence(&cast_sequence);
                     }
 
-                    if effective_completion_mode == InvokerProfileStepCompletionMode::WaitForCooldown
+                    if effective_completion_mode
+                        == InvokerProfileStepCompletionMode::WaitForCooldown
                     {
                         info!("🔮 Waiting for {} cooldown to start", target);
                         match wait_for_spell_cooldown_start(&target, completion_timeout_ms, 25) {
@@ -1045,10 +1140,9 @@ impl HeroScript for InvokerScript {
             .invoker_active_combo_profile_id
             .as_deref()
             .map(|s| s.to_string());
-        if let Some(profile_id) = resolve_active_combo_profile_id(
-            &settings.heroes.invoker,
-            active_profile_id.as_deref(),
-        ) {
+        if let Some(profile_id) =
+            resolve_active_combo_profile_id(&settings.heroes.invoker, active_profile_id.as_deref())
+        {
             enqueue_request(build_run_profile_request(&profile_id, &settings));
         } else {
             info!("🔮 Invoker standalone trigger skipped: no enabled combo profile");
@@ -1317,7 +1411,7 @@ mod tests {
 
         // Create observer channel to watch what the real worker processes
         let (observe_tx, observe_rx) = mpsc::channel::<InvokerRequest>();
-        
+
         let observed = Arc::new(Mutex::new(Vec::new()));
         let observed_clone = Arc::clone(&observed);
 
@@ -1350,7 +1444,7 @@ mod tests {
         });
 
         collector.join().expect("collector should complete");
-        
+
         // Clear observer now that we've collected all messages
         clear_test_observer();
 
@@ -2003,6 +2097,62 @@ mod tests {
         assert!(
             !INVOKER_SEMI_AUTO_ADVANCE_QUEUED.load(Ordering::Acquire),
             "worker should clear the queued advance flag after draining ready work"
+        );
+    }
+
+    #[test]
+    fn queued_semi_auto_advance_rechecks_new_work_without_recursive_reentry() {
+        let _guard = QUEUE_TEST_GUARD.lock().unwrap();
+        clear_semi_auto_advance_after_release_hook();
+        reset_semi_auto_advance_call_depth_tracking();
+
+        let settings = Settings::default();
+        let config = &settings.heroes.invoker;
+        let state = InvokerObservedState::from_event(&invoker_qw_fixture());
+        let profile = find_profile(config, "qw-pickoff").expect("QW profile should exist");
+        let plan = build_semi_auto_execution_plan(profile, &state, config)
+            .expect("semi-auto plan should build");
+        let mut session = InvokerSemiAutoSession::from_plan("qw-pickoff", &settings, plan);
+
+        let first = advance_semi_auto_session(&mut session, &invoker_qw_fixture());
+        assert_eq!(first.prepared_spell.as_deref(), Some("invoker_tornado"));
+
+        let mut cooling = invoker_qw_fixture();
+        cooling.abilities.ability4.name = "empty".to_string();
+        cooling.abilities.ability4.cooldown = 0;
+        cooling.abilities.ability4.can_cast = false;
+        cooling.abilities.ability5.name = "invoker_tornado".to_string();
+        cooling.abilities.ability5.cooldown = 12;
+        cooling.abilities.ability5.can_cast = false;
+
+        *INVOKER_LAST_EVENT.lock().unwrap() = Some(invoker_qw_fixture());
+        *INVOKER_ACTIVE_SEMI_AUTO_SESSION.lock().unwrap() = Some(session);
+        INVOKER_SEMI_AUTO_ADVANCE_QUEUED.store(true, Ordering::Release);
+
+        let mut next_event = Some(cooling);
+        install_semi_auto_advance_after_release_hook(move || {
+            if let Some(event) = next_event.take() {
+                *INVOKER_LAST_EVENT.lock().unwrap() = Some(event);
+            }
+        });
+
+        run_queued_semi_auto_advance();
+
+        clear_semi_auto_advance_after_release_hook();
+        let session = INVOKER_ACTIVE_SEMI_AUTO_SESSION
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("session should continue waiting on the next spell");
+        assert_eq!(session.watched_spell.as_deref(), Some("invoker_emp"));
+        assert_eq!(
+            semi_auto_advance_max_call_depth(),
+            1,
+            "worker should continue draining newly visible work without recursive reentry"
+        );
+        assert!(
+            !INVOKER_SEMI_AUTO_ADVANCE_QUEUED.load(Ordering::Acquire),
+            "worker should leave the queued flag cleared after the catch-up drain"
         );
     }
 }
