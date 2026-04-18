@@ -50,6 +50,51 @@ describe("InvokerConfig", () => {
     expect(created?.execution_style).toBe("automatic");
   });
 
+  it("persists combo execution style edits into the config store", () => {
+    render(<InvokerConfig />);
+
+    fireEvent.change(screen.getByDisplayValue("Automatic"), {
+      target: { value: "semi_auto" },
+    });
+
+    const qw = useConfigStore
+      .getState()
+      .config.heroes.invoker.profiles.find((profile) => profile.id === "qw-pickoff");
+
+    expect(qw?.execution_style).toBe("semi_auto");
+  });
+
+  it("does not show the execution-style control for prep profiles", () => {
+    render(<InvokerConfig />);
+
+    fireEvent.click(screen.getByText(/PageUp/).closest("button")!);
+
+    expect(screen.queryByLabelText("Execution Style")).not.toBeInTheDocument();
+  });
+
+  it("shows a semi-auto indicator on combo profile cards", () => {
+    useConfigStore.setState((state) => ({
+      config: {
+        ...state.config,
+        heroes: {
+          ...state.config.heroes,
+          invoker: {
+            ...state.config.heroes.invoker,
+            profiles: state.config.heroes.invoker.profiles.map((profile) =>
+              profile.id === "qw-pickoff"
+                ? { ...profile, execution_style: "semi_auto" }
+                : profile,
+            ),
+          },
+        },
+      },
+    }));
+
+    render(<InvokerConfig />);
+
+    expect(screen.getAllByText(/semi-auto/i).length).toBeGreaterThan(0);
+  });
+
   it("renders QE Burst with manual cooldown wait controls", () => {
     render(<InvokerConfig />);
 

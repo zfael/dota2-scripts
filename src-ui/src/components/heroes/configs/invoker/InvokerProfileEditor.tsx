@@ -28,6 +28,11 @@ const MODE_OPTIONS = [
   { value: "prep", label: "Prep" },
 ];
 
+const EXECUTION_STYLE_OPTIONS = [
+  { value: "automatic", label: "Automatic" },
+  { value: "semi_auto", label: "Semi-auto" },
+];
+
 const BUILD_TAG_OPTIONS = [
   { value: "general", label: "General" },
   { value: "qw", label: "QW" },
@@ -144,6 +149,25 @@ export function InvokerProfileEditor({
           options={BUILD_TAG_OPTIONS}
           onChange={(build_tag) => onChange({ ...profile, build_tag })}
         />
+        {profile.mode === "combo" ? (
+          <Dropdown
+            label="Execution Style"
+            value={profile.execution_style}
+            options={EXECUTION_STYLE_OPTIONS}
+            onChange={(execution_style) =>
+              onChange({
+                ...profile,
+                execution_style:
+                  execution_style as InvokerProfile["execution_style"],
+              })
+            }
+          />
+        ) : (
+          <div className="rounded-md border border-border bg-input px-3 py-2 text-xs text-subtle">
+            Prep profiles always invoke without auto-casting, so execution
+            style is fixed.
+          </div>
+        )}
       </div>
 
       <Toggle
