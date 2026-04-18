@@ -8,6 +8,7 @@ use crate::config::settings::{
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Hero};
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, LazyLock, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -17,6 +18,7 @@ static INVOKER_LAST_EVENT: LazyLock<Mutex<Option<GsiWebhookEvent>>> =
     LazyLock::new(|| Mutex::new(None));
 static INVOKER_ACTIVE_SEMI_AUTO_SESSION: LazyLock<Mutex<Option<InvokerSemiAutoSession>>> =
     LazyLock::new(|| Mutex::new(None));
+static INVOKER_SEMI_AUTO_ADVANCE_QUEUED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone)]
 struct InvokerObservedState {
@@ -637,12 +639,92 @@ fn advance_active_semi_auto_session(event: &GsiWebhookEvent) {
     }
 }
 
+fn active_semi_auto_session_needs_worker_pass(event: &GsiWebhookEvent) -> bool {
+    let guard = INVOKER_ACTIVE_SEMI_AUTO_SESSION.lock().unwrap();
+    let Some(session) = guard.as_ref() else {
+        return false;
+    };
+
+    if !event.hero.alive || event.hero.stunned || event.hero.hexed || event.hero.silenced {
+        return true;
+    }
+
+    session
+        .watched_spell
+        .as_deref()
+        .is_none_or(|spell| spell_is_on_cooldown(event, spell))
+}
+
+fn schedule_active_semi_auto_session_advance(event: &GsiWebhookEvent) {
+    let should_enqueue = match INVOKER_ACTIVE_SEMI_AUTO_SESSION.try_lock() {
+        Ok(guard) => {
+            let Some(session) = guard.as_ref() else {
+                return;
+            };
+
+            if !event.hero.alive || event.hero.stunned || event.hero.hexed || event.hero.silenced {
+                true
+            } else {
+                session
+                    .watched_spell
+                    .as_deref()
+                    .is_none_or(|spell| spell_is_on_cooldown(event, spell))
+            }
+        }
+        Err(_) => true,
+    };
+
+    if !should_enqueue {
+        return;
+    }
+
+    if INVOKER_SEMI_AUTO_ADVANCE_QUEUED
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return;
+    }
+
+    enqueue_request(InvokerRequest::AdvanceSemiAuto);
+}
+
+fn run_queued_semi_auto_advance() {
+    loop {
+        let event = match INVOKER_LAST_EVENT.lock().unwrap().clone() {
+            Some(event) => event,
+            None => break,
+        };
+
+        if !active_semi_auto_session_needs_worker_pass(&event) {
+            break;
+        }
+
+        advance_active_semi_auto_session(&event);
+    }
+
+    INVOKER_SEMI_AUTO_ADVANCE_QUEUED.store(false, Ordering::Release);
+
+    let should_continue = INVOKER_LAST_EVENT
+        .lock()
+        .unwrap()
+        .clone()
+        .is_some_and(|event| active_semi_auto_session_needs_worker_pass(&event));
+    if should_continue
+        && INVOKER_SEMI_AUTO_ADVANCE_QUEUED
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+    {
+        run_queued_semi_auto_advance();
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum InvokerRequest {
     RunProfile {
         profile_id: String,
         settings: Settings,
     },
+    AdvanceSemiAuto,
 }
 
 fn build_run_profile_request(profile_id: &str, settings: &Settings) -> InvokerRequest {
@@ -679,44 +761,58 @@ fn run_invoker_request(request: InvokerRequest) {
 
     let Some(event) = event else {
         info!("🔮 Invoker request skipped: no GSI event available");
+        if matches!(request, InvokerRequest::AdvanceSemiAuto) {
+            INVOKER_SEMI_AUTO_ADVANCE_QUEUED.store(false, Ordering::Release);
+        }
         return;
     };
 
-    let InvokerRequest::RunProfile { profile_id, settings } = request;
+    match request {
+        InvokerRequest::AdvanceSemiAuto => run_queued_semi_auto_advance(),
+        InvokerRequest::RunProfile {
+            profile_id,
+            settings,
+        } => {
+            let state = InvokerObservedState::from_event(&event);
+            let config = &settings.heroes.invoker;
 
-    let state = InvokerObservedState::from_event(&event);
-    let config = &settings.heroes.invoker;
+            if !state.hero_alive || state.hero_disabled {
+                info!("🔮 Invoker request skipped: hero not available");
+                return;
+            }
 
-    if !state.hero_alive || state.hero_disabled {
-        info!("🔮 Invoker request skipped: hero not available");
-        return;
+            let Some(profile) = find_profile(config, &profile_id) else {
+                info!(
+                    "🔮 Invoker request skipped: profile {} not found",
+                    profile_id
+                );
+                return;
+            };
+
+            if profile.mode == InvokerProfileMode::Combo
+                && profile.execution_style == InvokerProfileExecutionStyle::SemiAuto
+            {
+                let Some(plan) = build_semi_auto_execution_plan(profile, &state, config) else {
+                    info!("🔮 Invoker semi-auto profile {} could not be planned", profile.id);
+                    return;
+                };
+                let session = InvokerSemiAutoSession::from_plan(&profile.id, &settings, plan);
+                let mut active_session = INVOKER_ACTIVE_SEMI_AUTO_SESSION.lock().unwrap();
+                let next_session = replace_semi_auto_session(active_session.take(), session);
+                *active_session = Some(next_session);
+                drop(active_session);
+                if INVOKER_SEMI_AUTO_ADVANCE_QUEUED
+                    .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                    .is_ok()
+                {
+                    enqueue_request(InvokerRequest::AdvanceSemiAuto);
+                }
+                return;
+            }
+
+            run_profile(&event, &settings, &state, config, profile);
+        }
     }
-
-    let Some(profile) = find_profile(config, &profile_id) else {
-        info!(
-            "🔮 Invoker request skipped: profile {} not found",
-            profile_id
-        );
-        return;
-    };
-
-    if profile.mode == InvokerProfileMode::Combo
-        && profile.execution_style == InvokerProfileExecutionStyle::SemiAuto
-    {
-        let Some(plan) = build_semi_auto_execution_plan(profile, &state, config) else {
-            info!("🔮 Invoker semi-auto profile {} could not be planned", profile.id);
-            return;
-        };
-        let session = InvokerSemiAutoSession::from_plan(&profile.id, &settings, plan);
-        let mut active_session = INVOKER_ACTIVE_SEMI_AUTO_SESSION.lock().unwrap();
-        let next_session = replace_semi_auto_session(active_session.take(), session);
-        *active_session = Some(next_session);
-        drop(active_session);
-        advance_active_semi_auto_session(&event);
-        return;
-    }
-
-    run_profile(&event, &settings, &state, config, profile);
 }
 
 fn run_profile(
@@ -929,7 +1025,7 @@ impl HeroScript for InvokerScript {
     fn handle_gsi_event(&self, event: &GsiWebhookEvent) {
         // Store latest event for request worker
         *INVOKER_LAST_EVENT.lock().unwrap() = Some(event.clone());
-        advance_active_semi_auto_session(event);
+        schedule_active_semi_auto_session_advance(event);
 
         let survivability = SurvivabilityActions::new(self.settings.clone(), self.executor.clone());
         let settings = self.settings.lock().unwrap();
@@ -1238,11 +1334,14 @@ mod tests {
 
         // Collector thread that records processing order - collect exactly 3 requests
         let collector = thread::spawn(move || {
-            for _ in 0..3 {
+            let mut run_profile_count = 0;
+            while run_profile_count < 3 {
                 match observe_rx.recv_timeout(Duration::from_secs(5)) {
-                    Ok(request) => {
+                    Ok(request @ InvokerRequest::RunProfile { .. }) => {
                         observed_clone.lock().unwrap().push(request);
+                        run_profile_count += 1;
                     }
+                    Ok(InvokerRequest::AdvanceSemiAuto) => {}
                     Err(_) => {
                         break;
                     }
@@ -1266,16 +1365,19 @@ mod tests {
             InvokerRequest::RunProfile { profile_id, .. } => {
                 assert_eq!(profile_id, "meteor-blast-prep");
             }
+            InvokerRequest::AdvanceSemiAuto => unreachable!(),
         }
         match &received[1] {
             InvokerRequest::RunProfile { profile_id, .. } => {
                 assert_eq!(profile_id, "ghost-walk-panic");
             }
+            InvokerRequest::AdvanceSemiAuto => unreachable!(),
         }
         match &received[2] {
             InvokerRequest::RunProfile { profile_id, .. } => {
                 assert_eq!(profile_id, "qw-pickoff");
             }
+            InvokerRequest::AdvanceSemiAuto => unreachable!(),
         }
     }
 
@@ -1753,16 +1855,25 @@ mod tests {
 
         let request = build_run_profile_request("ghost-walk-panic", &settings);
 
-        let InvokerRequest::RunProfile { profile_id, settings: captured_settings } = request;
-        assert_eq!(profile_id, "ghost-walk-panic");
-        assert_eq!(
-            captured_settings.heroes.invoker.profiles[0]
-                .steps
-                .last()
-                .map(|s| s.delay_after_ms),
-            Some(999),
-            "captured settings should preserve custom extra step"
-        );
+        match request {
+            InvokerRequest::RunProfile {
+                profile_id,
+                settings: captured_settings,
+            } => {
+                assert_eq!(profile_id, "ghost-walk-panic");
+                assert_eq!(
+                    captured_settings.heroes.invoker.profiles[0]
+                        .steps
+                        .last()
+                        .map(|s| s.delay_after_ms),
+                    Some(999),
+                    "captured settings should preserve custom extra step"
+                );
+            }
+            InvokerRequest::AdvanceSemiAuto => {
+                panic!("build_run_profile_request should return a profile request");
+            }
+        }
     }
 
     #[test]
@@ -1799,9 +1910,13 @@ mod tests {
         script.handle_standalone_trigger();
 
         // Verify that qe-burst was enqueued (the user-selected profile)
-        let received = observe_rx
-            .recv_timeout(std::time::Duration::from_secs(2))
-            .expect("should receive request");
+        let received = loop {
+            match observe_rx.recv_timeout(std::time::Duration::from_secs(2)) {
+                Ok(request @ InvokerRequest::RunProfile { .. }) => break request,
+                Ok(InvokerRequest::AdvanceSemiAuto) => continue,
+                Err(error) => panic!("should receive request: {error}"),
+            }
+        };
 
         clear_test_observer();
 
@@ -1812,6 +1927,82 @@ mod tests {
                     "standalone trigger should use user-selected active combo profile from app_state"
                 );
             }
+            InvokerRequest::AdvanceSemiAuto => {
+                panic!("standalone trigger should enqueue a profile run request");
+            }
         }
+    }
+
+    #[test]
+    fn handle_gsi_event_does_not_block_on_semi_auto_item_delay() {
+        let _guard = QUEUE_TEST_GUARD.lock().unwrap();
+        use std::time::{Duration, Instant};
+
+        let settings = Arc::new(Mutex::new(Settings::default()));
+        let executor = ActionExecutor::new();
+        let app_state = Arc::new(Mutex::new(crate::state::AppState::default()));
+        let script = InvokerScript::new(settings.clone(), executor, app_state);
+
+        *INVOKER_ACTIVE_SEMI_AUTO_SESSION.lock().unwrap() = Some(InvokerSemiAutoSession {
+            profile_id: "timing-test".to_string(),
+            settings: settings.lock().unwrap().clone(),
+            monitored_slot_key: 'f',
+            pending_steps: VecDeque::from(vec![SemiAutoPlanStep::Item {
+                target: "item_spirit_vessel".to_string(),
+                delay_after_ms: 250,
+            }]),
+            watched_spell: None,
+        });
+
+        let event = invoker_qw_fixture();
+        let started = Instant::now();
+        script.handle_gsi_event(&event);
+
+        assert!(
+            started.elapsed() < Duration::from_millis(100),
+            "handle_gsi_event should stay responsive while semi-auto item delays run elsewhere"
+        );
+
+        std::thread::sleep(Duration::from_millis(300));
+        *INVOKER_ACTIVE_SEMI_AUTO_SESSION.lock().unwrap() = None;
+    }
+
+    #[test]
+    fn queued_semi_auto_advance_drains_already_cooled_spell_without_new_gsi_tick() {
+        let _guard = QUEUE_TEST_GUARD.lock().unwrap();
+        let settings = Settings::default();
+        let config = &settings.heroes.invoker;
+        let state = InvokerObservedState::from_event(&invoker_qw_fixture());
+        let profile = find_profile(config, "qw-pickoff").expect("QW profile should exist");
+        let plan = build_semi_auto_execution_plan(profile, &state, config)
+            .expect("semi-auto plan should build");
+        let mut session = InvokerSemiAutoSession::from_plan("qw-pickoff", &settings, plan);
+
+        let first = advance_semi_auto_session(&mut session, &invoker_qw_fixture());
+        assert_eq!(first.prepared_spell.as_deref(), Some("invoker_tornado"));
+
+        let mut cooling = invoker_qw_fixture();
+        cooling.abilities.ability4.name = "empty".to_string();
+        cooling.abilities.ability4.cooldown = 0;
+        cooling.abilities.ability4.can_cast = false;
+        cooling.abilities.ability5.name = "invoker_tornado".to_string();
+        cooling.abilities.ability5.cooldown = 12;
+        cooling.abilities.ability5.can_cast = false;
+        *INVOKER_LAST_EVENT.lock().unwrap() = Some(cooling);
+        *INVOKER_ACTIVE_SEMI_AUTO_SESSION.lock().unwrap() = Some(session);
+        INVOKER_SEMI_AUTO_ADVANCE_QUEUED.store(true, Ordering::Release);
+
+        run_queued_semi_auto_advance();
+
+        let session = INVOKER_ACTIVE_SEMI_AUTO_SESSION
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("session should continue waiting on the next spell");
+        assert_eq!(session.watched_spell.as_deref(), Some("invoker_emp"));
+        assert!(
+            !INVOKER_SEMI_AUTO_ADVANCE_QUEUED.load(Ordering::Acquire),
+            "worker should clear the queued advance flag after draining ready work"
+        );
     }
 }
