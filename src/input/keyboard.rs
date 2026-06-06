@@ -47,6 +47,7 @@ pub fn parse_key_string(key_str: &str) -> Option<Key> {
 fn parse_key(key_str: &str) -> Option<Key> {
     match key_str.to_lowercase().as_str() {
         "home" => Some(Key::Home),
+        "space" => Some(Key::Space),
         "end" => Some(Key::End),
         "insert" => Some(Key::Insert),
         "delete" => Some(Key::Delete),
@@ -1088,6 +1089,12 @@ mod tests {
         *state.trigger_key.lock().unwrap() = "F5".to_string();
         let snapshot = KeyboardSnapshot::from_runtime(&Settings::default(), &state);
         assert_eq!(snapshot.trigger_key, Some(Key::F5));
+    }
+
+    #[test]
+    fn parse_key_string_parses_space() {
+        assert_eq!(parse_key_string("Space"), Some(Key::Space));
+        assert_eq!(parse_key_string("space"), Some(Key::Space));
     }
 
     #[test]
