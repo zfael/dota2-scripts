@@ -8,6 +8,7 @@ pub mod meepo_macro;
 pub mod meepo_state;
 pub mod outworld_destroyer;
 pub mod shadow_fiend;
+pub mod snapfire;
 pub mod tiny;
 pub mod traits;
 
@@ -19,5 +20,6 @@ pub use legion_commander::LegionCommanderScript;
 pub use meepo::MeepoScript;
 pub use outworld_destroyer::OutworldDestroyerScript;
 pub use shadow_fiend::ShadowFiendScript;
+pub use snapfire::SnapfireScript;
 pub use tiny::TinyScript;
 pub use traits::HeroScript;

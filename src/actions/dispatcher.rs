@@ -1,7 +1,8 @@
 use crate::actions::executor::ActionExecutor;
 use crate::actions::heroes::{
     BroodmotherScript, HeroScript, HuskarScript, InvokerScript, LargoScript,
-    LegionCommanderScript, MeepoScript, OutworldDestroyerScript, ShadowFiendScript, TinyScript,
+    LegionCommanderScript, MeepoScript, OutworldDestroyerScript, ShadowFiendScript,
+    SnapfireScript, TinyScript,
 };
 use crate::actions::{armlet, common::SurvivabilityActions};
 use crate::config::Settings;
@@ -144,6 +145,9 @@ impl ActionDispatcher {
 
         let meepo = Arc::new(MeepoScript::new(settings.clone(), executor.clone()));
         hero_scripts.insert(meepo.hero_name().to_string(), meepo);
+
+        let snapfire = Arc::new(SnapfireScript::new(settings.clone(), executor.clone()));
+        hero_scripts.insert(snapfire.hero_name().to_string(), snapfire);
 
         Self {
             hero_scripts,
