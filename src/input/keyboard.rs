@@ -14,6 +14,7 @@ use crate::actions::heroes::outworld_destroyer::{
     build_keyboard_combo_config, OutworldDestroyerComboConfig, OutworldDestroyerState,
 };
 use crate::actions::heroes::shadow_fiend::ShadowFiendState;
+use crate::actions::heroes::snapfire::SnapfireState;
 use crate::actions::soul_ring::{SoulRingKeyboardConfig, SoulRingState};
 use crate::actions::SOUL_RING_STATE;
 use crate::config::settings::InvokerProfileMode;
@@ -432,6 +433,24 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                     return None;
                 }
 
+                // Handle Snapfire directional Firesnap Cookie combo.
+                // Trigger (default Space): ALT + right-click to face cursor, then
+                // self-cast Cookie so Snapfire leaps toward the cursor. W stays
+                // free for manual ally cookies.
+                if snapshot.snapfire_enabled && snapshot.snapfire.enabled {
+                    if let Some(trigger) = snapshot.snapfire.trigger_key {
+                        if key == trigger {
+                            info!("🍪 Snapfire trigger pressed - directional cookie leap");
+                            SnapfireState::execute_cookie_leap(
+                                snapshot.snapfire.cookie_key,
+                                snapshot.snapfire.turn_delay_ms,
+                            );
+                            // Block original key (combo handles the cookie cast).
+                            return None;
+                        }
+                    }
+                }
+
                 if snapshot.od_enabled {
                     if snapshot.outworld_destroyer.ultimate_intercept_enabled && key == Key::KeyR {
                         if OutworldDestroyerState::can_intercept_ultimate() {
@@ -567,6 +586,16 @@ pub struct ShadowFiendKeyboardSnapshot {
     pub auto_d_on_ultimate: bool,
 }
 
+/// Snapshot of the Snapfire keyboard-relevant config.
+#[derive(Debug, Clone)]
+pub struct SnapfireKeyboardSnapshot {
+    pub enabled: bool,
+    /// Pre-parsed trigger key (default Space).
+    pub trigger_key: Option<Key>,
+    pub cookie_key: char,
+    pub turn_delay_ms: u64,
+}
+
 #[derive(Debug, Clone)]
 pub struct OutworldDestroyerKeyboardSnapshot {
     pub ultimate_intercept_enabled: bool,
@@ -624,6 +653,9 @@ pub struct KeyboardSnapshot {
     pub shadow_fiend: ShadowFiendKeyboardSnapshot,
     pub outworld_destroyer: OutworldDestroyerKeyboardSnapshot,
     pub broodmother: BroodmotherKeyboardSnapshot,
+    /// Whether Snapfire is the active hero (drives the cookie intercept).
+    pub snapfire_enabled: bool,
+    pub snapfire: SnapfireKeyboardSnapshot,
     /// Static Soul Ring keyboard config (thresholds, key sets, delays).
     pub soul_ring: SoulRingKeyboardConfig,
     pub invoker_profiles: Vec<InvokerHotkeyProfileSnapshot>,
@@ -755,6 +787,7 @@ impl KeyboardSnapshot {
         let sf = &settings.heroes.shadow_fiend;
         let od = &settings.heroes.outworld_destroyer;
         let bm = &settings.heroes.broodmother;
+        let sp = &settings.heroes.snapfire;
 
         Self {
             selected_hero: state.selected_hero.clone(),
@@ -804,6 +837,13 @@ impl KeyboardSnapshot {
                     settings.keybindings.slot5,
                 ],
             },
+            snapfire_enabled: state.selected_hero == Some(crate::state::HeroType::Snapfire),
+            snapfire: SnapfireKeyboardSnapshot {
+                enabled: sp.enabled,
+                trigger_key: parse_key_string(&sp.trigger_key),
+                cookie_key: sp.cookie_key,
+                turn_delay_ms: sp.turn_delay_ms,
+            },
             soul_ring: SoulRingKeyboardConfig::from_settings(settings),
             invoker_profiles: settings
                 .heroes
@@ -852,6 +892,13 @@ impl Default for KeyboardSnapshot {
                 auto_abilities: vec![],
                 abilities_first: false,
                 slot_keys: ['a', 's', 'd', 'f', 'g', 'h'],
+            },
+            snapfire_enabled: false,
+            snapfire: SnapfireKeyboardSnapshot {
+                enabled: false,
+                trigger_key: None,
+                cookie_key: 'w',
+                turn_delay_ms: 0,
             },
             soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
             invoker_profiles: vec![],
@@ -1002,6 +1049,13 @@ mod tests {
                 abilities_first: true,
                 slot_keys: ['a', 's', 'd', 'f', 'g', 'h'],
             },
+            snapfire_enabled: false,
+            snapfire: SnapfireKeyboardSnapshot {
+                enabled: false,
+                trigger_key: None,
+                cookie_key: 'w',
+                turn_delay_ms: 0,
+            },
             soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
             invoker_profiles: vec![],
         }
@@ -1095,6 +1149,21 @@ mod tests {
     fn parse_key_string_parses_space() {
         assert_eq!(parse_key_string("Space"), Some(Key::Space));
         assert_eq!(parse_key_string("space"), Some(Key::Space));
+    }
+
+    #[test]
+    fn keyboard_snapshot_populates_snapfire_fields_for_snapfire() {
+        let mut state = AppState::default();
+        state.selected_hero = Some(HeroType::Snapfire);
+        let snapshot = KeyboardSnapshot::from_runtime(&Settings::default(), &state);
+
+        assert!(snapshot.snapfire_enabled);
+        assert!(snapshot.snapfire.enabled);
+        assert_eq!(snapshot.snapfire.trigger_key, Some(Key::Space));
+        assert_eq!(snapshot.snapfire.cookie_key, 'w');
+
+        let other = KeyboardSnapshot::from_runtime(&Settings::default(), &AppState::default());
+        assert!(!other.snapfire_enabled);
     }
 
     #[test]
