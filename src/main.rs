@@ -169,6 +169,7 @@ async fn main() {
                                     models::Hero::Nevermore.to_game_name()
                                 }
                                 state::HeroType::Tiny => models::Hero::Tiny.to_game_name(),
+                                state::HeroType::Snapfire => models::Hero::Snapfire.to_game_name(),
                                 state::HeroType::Invoker => unreachable!(),
                             };
                             info!("Triggering standalone combo for {}", hero_name);

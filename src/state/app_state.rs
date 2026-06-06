@@ -15,6 +15,7 @@ pub enum HeroType {
     Meepo,
     OutworldDestroyer,
     ShadowFiend,
+    Snapfire,
     Tiny,
 }
 
@@ -50,6 +51,7 @@ impl HeroType {
                 Some(HeroType::OutworldDestroyer)
             }
             name if name == Hero::Nevermore.to_game_name() => Some(HeroType::ShadowFiend),
+            name if name == Hero::Snapfire.to_game_name() => Some(HeroType::Snapfire),
             name if name == Hero::Tiny.to_game_name() => Some(HeroType::Tiny),
             _ => None,
         }
@@ -64,6 +66,7 @@ impl HeroType {
             HeroType::Meepo => "Meepo",
             HeroType::OutworldDestroyer => "Outworld Destroyer",
             HeroType::ShadowFiend => "Shadow Fiend",
+            HeroType::Snapfire => "Snapfire",
             HeroType::Tiny => "Tiny",
         }
     }
@@ -193,6 +196,15 @@ mod tests {
         let game_name = Hero::Meepo.to_game_name();
         assert_eq!(HeroType::from_hero_name(game_name), Some(HeroType::Meepo));
         assert_eq!(HeroType::Meepo.to_display_name(), "Meepo");
+    }
+
+    #[test]
+    fn snapfire_hero_type_maps_name_and_display() {
+        assert_eq!(
+            HeroType::from_hero_name(crate::models::Hero::Snapfire.to_game_name()),
+            Some(HeroType::Snapfire)
+        );
+        assert_eq!(HeroType::Snapfire.to_display_name(), "Snapfire");
     }
 
     #[test]
