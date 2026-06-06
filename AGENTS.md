@@ -18,7 +18,7 @@ Start here. Follow links to the source or doc file relevant to your task.
 | Entry point | `src/main.rs` |
 | Tests | `tests/gsi_handler_tests.rs`, `src/actions/soul_ring.rs` unit test, fixtures in `tests/fixtures/` |
 
-Supported heroes: **Broodmother, Huskar, Invoker, Largo, Legion Commander, Meepo, Outworld Destroyer, Shadow Fiend, Tiny**
+Supported heroes: **Broodmother, Huskar, Invoker, Largo, Legion Commander, Meepo, Outworld Destroyer, Shadow Fiend, Snapfire, Tiny**
 
 ---
 
@@ -54,6 +54,7 @@ Supported heroes: **Broodmother, Huskar, Invoker, Largo, Legion Commander, Meepo
 | Meepo | `npc_dota_hero_meepo` | `docs/heroes/meepo.md` | `src/actions/heroes/meepo.rs` |
 | Outworld Destroyer | `npc_dota_hero_obsidian_destroyer` | `docs/heroes/outworld_destroyer.md` | `src/actions/heroes/outworld_destroyer.rs` |
 | Shadow Fiend | `npc_dota_hero_nevermore` | `docs/heroes/shadow_fiend.md` | `src/actions/heroes/shadow_fiend.rs` |
+| Snapfire | `npc_dota_hero_snapfire` | `docs/heroes/snapfire.md` | `src/actions/heroes/snapfire.rs` |
 | Tiny | `npc_dota_hero_tiny` | `docs/heroes/tiny.md` | `src/actions/heroes/tiny.rs` |
 
 ---
@@ -79,6 +80,7 @@ Supported heroes: **Broodmother, Huskar, Invoker, Largo, Legion Commander, Meepo
 | `actions/heroes/meepo.rs` | Meepo dig and Megameepo automation on danger; combo sequences with Blink and items |
 | `actions/heroes/outworld_destroyer.rs` | Outworld Destroyer barrier, ultimate, self-Astral, and combo automation |
 | `actions/heroes/shadow_fiend.rs` | SF raze direction-facing + BKB-on-ultimate |
+| `actions/heroes/snapfire.rs` | Snapfire directional Firesnap Cookie leap (trigger-key intercept + ALT self-cast) |
 | `actions/heroes/tiny.rs` | Tiny standalone combo |
 
 ### `src/gsi/`

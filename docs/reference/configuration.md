@@ -393,6 +393,17 @@ See `docs/heroes/broodmother.md` and `docs/reference/gsi-schema-and-usage.md`.
 | `predictive_offset` | omitted | inherits `[armlet].predictive_offset` | Optional per-hero override for the shared predictive buffer. |
 | `toggle_cooldown_ms` | omitted | inherits `[armlet].toggle_cooldown_ms` | Optional per-hero override for the shared cooldown. |
 
+## `[heroes.snapfire]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `enabled` | `true` | `true` | Master toggle for the directional Firesnap Cookie intercept. |
+| `trigger_key` | `"Space"` | `"Space"` | Key intercepted to start the combo. Intercept is gated on Snapfire being the active hero. |
+| `cookie_key` | `"w"` | `"w"` | Firesnap Cookie ability key, self-cast via ALT during the combo. W itself is not intercepted. |
+| `turn_delay_ms` | `60` | `60` | Delay after the facing right-click before the self-cast leap. Increase if the leap fires before the hero finishes turning. |
+
+See `docs/heroes/snapfire.md` and `docs/features/keyboard-interception.md`.
+
 ## `[heroes.invoker]`
 
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |

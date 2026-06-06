@@ -77,6 +77,7 @@
 | `src/actions/heroes/meepo_state.rs` | Read-only Meepo observed-state derivation and cache | `docs/heroes/meepo.md`, `docs/reference/gsi-schema-and-usage.md` |
 | `src/actions/heroes/outworld_destroyer.rs` | Outworld Destroyer barrier, combo worker, ultimate interception support, and self-Astral helper | `docs/heroes/outworld_destroyer.md`, `docs/features/keyboard-interception.md` |
 | `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend raze / ultimate / standalone combo logic | `docs/heroes/shadow_fiend.md`, `docs/features/keyboard-interception.md` |
+| `src/actions/heroes/snapfire.rs` | Snapfire directional Firesnap Cookie automation (trigger-key intercept + ALT self-cast leap) | `docs/heroes/snapfire.md`, `docs/features/keyboard-interception.md` |
 | `src/actions/heroes/tiny.rs` | Tiny standalone combo | `docs/heroes/tiny.md` |
 
 ## `src/gsi/`

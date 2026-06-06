@@ -89,22 +89,26 @@ Current callback order on key/button input:
     - if `snapshot.sf_enabled` and `snapshot.shadow_fiend.auto_bkb_on_ultimate`
     - block `R`
     - enqueue the ultimate sequence onto the same dedicated worker
-9. **Outworld Destroyer intercepts**
+9. **Snapfire directional cookie intercept**
+    - if `snapshot.snapfire_enabled` and `snapshot.snapfire.enabled`
+    - block the configured trigger key (default `Space`)
+    - enqueue the `ALT down -> right-click (face cursor) -> wait -> self-cast W -> ALT up` sequence onto the dedicated Snapfire worker
+10. **Outworld Destroyer intercepts**
     - if `snapshot.od_enabled` and `heroes.outworld_destroyer.ultimate_intercept_enabled`
     - block `R` only when `Sanity's Eclipse` is ready
     - enqueue `BKB -> Objurgation -> R` onto the dedicated OD worker
     - optionally block the configured self-Astral panic hotkey and double-tap Astral on self
-10. **Armlet Roshan toggle**
+11. **Armlet Roshan toggle**
     - if `[armlet.roshan].enabled = true` and the configured hotkey matches
     - emit `HotkeyEvent::ArmletRoshanToggle`
     - block the original key so it does not also reach Dota 2
-11. **Largo / generic ability-key path**
+12. **Largo / generic ability-key path**
     - emit `HotkeyEvent::LargoQ/W/E/R`
     - if Soul Ring should trigger, block and replay
     - otherwise pass through
-12. **Item-slot Soul Ring interception**
+13. **Item-slot Soul Ring interception**
      - blocks configured item keys when the item is mana-using and Soul Ring should fire first
-13. **Standalone combo key**
+14. **Standalone combo key**
      - sends `HotkeyEvent::ComboTrigger`
      - does not block the original key
 
@@ -316,6 +320,14 @@ These are still part of the interception surface even though this page centers o
 - `Q/W/E/R` emit `HotkeyEvent::LargoQ/W/E/R`
 - the original key is only blocked when Soul Ring also needs to fire first
 - `main.rs` downcasts to `LargoScript` for manual song selection / beat-loop stop
+
+### Snapfire
+
+- activation is gated on `snapshot.snapfire_enabled`, derived from `selected_hero == Some(HeroType::Snapfire)`
+- the configured trigger key (default `Space`) is blocked and enqueues one `CookieLeap` request onto the dedicated Snapfire worker
+- the worker holds `ALT`, right-clicks to face the cursor, waits `turn_delay_ms`, self-casts the cookie key (`W`), then releases `ALT`
+- `W` itself is never intercepted, so manual ally cookies still work
+- because the trigger defaults to `Space`, it shares the `MODIFIER_KEY_HELD` Space tracking, but only fires while Snapfire is the active hero (Broodmother's Space handling is gated separately on `BROODMOTHER_ACTIVE`)
 
 ### Broodmother
 
