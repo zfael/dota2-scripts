@@ -251,6 +251,22 @@ pub struct OutworldDestroyerConfig {
     pub armlet: HeroArmletOverrideConfig,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SnapfireConfig {
+    /// Master toggle for the directional cookie intercept.
+    #[serde(default = "default_snapfire_enabled")]
+    pub enabled: bool,
+    /// Key intercepted to start the combo (default Space).
+    #[serde(default = "default_snapfire_trigger_key")]
+    pub trigger_key: String,
+    /// Firesnap Cookie ability key, self-cast via ALT.
+    #[serde(default = "default_snapfire_cookie_key")]
+    pub cookie_key: char,
+    /// Delay between the facing right-click and the self-cast press (ms).
+    #[serde(default = "default_snapfire_turn_delay_ms")]
+    pub turn_delay_ms: u64,
+}
+
 /// Configuration for auto-casting an ability during Space+Right-click combo
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutoAbilityConfig {
@@ -523,6 +539,8 @@ pub struct HeroesConfig {
     pub broodmother: BroodmotherConfig,
     #[serde(default)]
     pub meepo: MeepoConfig,
+    #[serde(default)]
+    pub snapfire: SnapfireConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -953,6 +971,18 @@ fn default_sf_raze_enabled() -> bool {
 }
 fn default_raze_delay() -> u64 {
     100
+}
+fn default_snapfire_enabled() -> bool {
+    true
+}
+fn default_snapfire_trigger_key() -> String {
+    "Space".to_string()
+}
+fn default_snapfire_cookie_key() -> char {
+    'w'
+}
+fn default_snapfire_turn_delay_ms() -> u64 {
+    60
 }
 fn default_sf_auto_bkb_on_ultimate() -> bool {
     false
@@ -1821,6 +1851,17 @@ impl Default for ShadowFiendConfig {
     }
 }
 
+impl Default for SnapfireConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_snapfire_enabled(),
+            trigger_key: default_snapfire_trigger_key(),
+            cookie_key: default_snapfire_cookie_key(),
+            turn_delay_ms: default_snapfire_turn_delay_ms(),
+        }
+    }
+}
+
 impl Default for OutworldDestroyerConfig {
     fn default() -> Self {
         Self {
@@ -1968,6 +2009,7 @@ impl Default for HeroesConfig {
             largo: LargoConfig::default(),
             broodmother: BroodmotherConfig::default(),
             meepo: MeepoConfig::default(),
+            snapfire: SnapfireConfig::default(),
         }
     }
 }
@@ -2250,6 +2292,15 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn snapfire_config_defaults_are_directional_cookie() {
+        let cfg = SnapfireConfig::default();
+        assert!(cfg.enabled);
+        assert_eq!(cfg.trigger_key, "Space");
+        assert_eq!(cfg.cookie_key, 'w');
+        assert_eq!(cfg.turn_delay_ms, 60);
+    }
 
     #[test]
     fn huskar_roshan_spears_defaults_are_exposed_through_settings() {

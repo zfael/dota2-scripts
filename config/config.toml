@@ -234,6 +234,17 @@ suspend_after_manual_combo_ms = 2500
 poof_press_count = 1
 poof_press_interval_ms = 35
 
+[heroes.snapfire]
+# Press the trigger key to face the cursor and self-cast Firesnap Cookie (leap toward cursor).
+# W stays free for manually cookie-ing allies.
+enabled = true
+# Key intercepted to start the combo.
+trigger_key = "Space"
+# Firesnap Cookie ability key (self-cast via ALT).
+cookie_key = "w"
+# Delay after the facing right-click before the self-cast leap (ms). Increase if the leap fires before the hero finishes turning.
+turn_delay_ms = 60
+
 [heroes.invoker]
 quas_key = "q"
 wex_key = "w"
