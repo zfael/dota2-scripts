@@ -62,7 +62,6 @@ describe("StatusHeader", () => {
         hpPercent={100}
         manaPercent={100}
         connected={true}
-        // @ts-expect-error TDD: prop added in implementation step
         invokerProfileLabel="Profile: QW Pickoff"
         {...defaultProps}
       />,
