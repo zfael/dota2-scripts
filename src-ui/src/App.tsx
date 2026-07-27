@@ -20,6 +20,7 @@ import ActivityLog from "./pages/ActivityLog";
 import Diagnostics from "./pages/Diagnostics";
 import Settings from "./pages/Settings";
 import MinimapIntelligence from "./pages/MinimapIntelligence";
+import WaveTracker from "./pages/WaveTracker";
 
 export default function App() {
   useEffect(() => {
@@ -100,6 +101,7 @@ export default function App() {
               <Route path="/armlet" element={<Armlet />} />
               <Route path="/activity" element={<ActivityLog />} />
               <Route path="/minimap" element={<MinimapIntelligence />} />
+              <Route path="/waves" element={<WaveTracker />} />
               <Route path="/diagnostics" element={<Diagnostics />} />
               <Route path="/settings" element={<Settings />} />
             </Routes>

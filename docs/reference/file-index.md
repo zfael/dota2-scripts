@@ -124,6 +124,10 @@
 | File | Purpose | Linked Doc |
 |---|---|---|
 | `src-ui/src/App.tsx` | React shell that wires stores, routing, and global hooks | `docs/superpowers/specs/2026-03-31-react-ui-design.md` |
+| `src-ui/src/types/waves.ts` | Wave tracker DTO types, lane role labels, and game-clock formatting | `docs/features/wave-tracker.md` |
+| `src-ui/src/stores/waveStore.ts` | Wave snapshot polling and the interpolated, pause-freezing game clock | `docs/features/wave-tracker.md` |
+| `src-ui/src/components/waves/WaveMap.tsx` | Presentational SVG map rendering lane paths, wave dots, and clash markers | `docs/features/wave-tracker.md` |
+| `src-ui/src/pages/WaveTracker.tsx` | Wave tracker page: map, per-lane clash countdowns, and calibration controls | `docs/features/wave-tracker.md` |
 | `src-ui/src/components/heroes/configs/InvokerConfig.tsx` | Invoker profile-builder shell that wires preset library, profile list, and editor state | `docs/heroes/invoker.md` |
 | `src-ui/src/components/heroes/configs/InvokerConfig.test.tsx` | Vitest coverage for Invoker profile rendering and duplication | `docs/heroes/invoker.md` |
 | `src-ui/src/components/heroes/configs/invoker/invokerCatalog.tsx` | Local Invoker spell/item metadata, preset definitions, and chip visuals | `docs/heroes/invoker.md` |
@@ -159,6 +163,8 @@
 | `src/observability/minimap_analysis.rs` | HSV color segmentation, BFS clustering, hero detection pipeline | `docs/superpowers/specs/2026-03-31-minimap-hero-detection-design.md` |
 | `src/observability/minimap_baseline.rs` | Static baseline mask accumulator for filtering map fixtures | `docs/superpowers/specs/2026-03-31-minimap-hero-detection-design.md` |
 | `src/observability/lane_heat.rs` | Zone activity classifier, rolling lane heat tracker, and event detection | `docs/superpowers/specs/2026-03-31-lane-heat-analysis-design.md` |
+| `src/observability/wave_tracker.rs` | Clock-driven creep wave spawn cadence, lane path interpolation, and clash prediction | `docs/features/wave-tracker.md` |
+| `src-tauri/src/commands/waves.rs` | Tauri commands exposing lane geometry and wave snapshots to the UI | `docs/features/wave-tracker.md` |
 
 ## `tests/`
 

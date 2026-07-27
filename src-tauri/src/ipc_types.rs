@@ -31,6 +31,62 @@ pub struct AppStateDto {
     pub app_version: String,
 }
 
+/// A point in normalised map space. Origin is bottom-left (Radiant corner).
+///
+/// Matches frontend `MapPoint` in src-ui/src/types/waves.ts
+#[derive(Debug, Clone, Copy, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MapPointDto {
+    pub x: f32,
+    pub y: f32,
+}
+
+/// Static lane geometry, sent once so the renderer draws the same polyline the
+/// model interpolates along.
+///
+/// Matches frontend `LanePath` in src-ui/src/types/waves.ts
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LanePathDto {
+    pub lane: String,
+    pub points: Vec<MapPointDto>,
+}
+
+/// Matches frontend `WavePosition` in src-ui/src/types/waves.ts
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WavePositionDto {
+    pub lane: String,
+    pub team: String,
+    pub progress: f32,
+    pub point: MapPointDto,
+    pub has_clashed: bool,
+}
+
+/// Matches frontend `LaneClash` in src-ui/src/types/waves.ts
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LaneClashDto {
+    pub lane: String,
+    pub progress: f32,
+    pub point: MapPointDto,
+    pub seconds_until_clash: i32,
+}
+
+/// Matches frontend `WaveSnapshot` in src-ui/src/types/waves.ts
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WaveSnapshotDto {
+    pub enabled: bool,
+    pub clock_time_seconds: f32,
+    pub next_spawn_time_seconds: i32,
+    pub seconds_until_next_spawn: i32,
+    pub current_wave_age_seconds: Option<f32>,
+    pub confidence: String,
+    pub waves: Vec<WavePositionDto>,
+    pub clashes: Vec<LaneClashDto>,
+}
+
 /// Matches frontend QueueMetrics in src-ui/src/types/game.ts
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

@@ -715,6 +715,80 @@ impl Default for RuneAlertConfig {
     }
 }
 
+/// Calibration for clock-driven creep wave prediction.
+///
+/// The meet values are empirical approximations, not derived constants — they are
+/// exposed so they can be retuned against observed play without a rebuild. See
+/// `src/observability/wave_tracker.rs` for the model they feed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WaveTrackerConfig {
+    #[serde(default = "default_wave_tracker_enabled")]
+    pub enabled: bool,
+    /// Seconds after spawn at which the mid waves meet.
+    #[serde(default = "default_mid_meet_seconds")]
+    pub mid_meet_seconds: f32,
+    /// Normalised lane position of the mid clash. 0.5 is the exact midpoint.
+    #[serde(default = "default_mid_meet_progress")]
+    pub mid_meet_progress: f32,
+    /// Seconds after spawn at which the side-lane waves meet.
+    #[serde(default = "default_side_meet_seconds")]
+    pub side_meet_seconds: f32,
+    /// Normalised position of the top-lane clash; below 0.5, biased toward the
+    /// Radiant offlane tower.
+    #[serde(default = "default_top_meet_progress")]
+    pub top_meet_progress: f32,
+    /// Normalised position of the bottom-lane clash; above 0.5, mirroring top.
+    #[serde(default = "default_bottom_meet_progress")]
+    pub bottom_meet_progress: f32,
+    /// Game time below which predictions are reported as high confidence.
+    #[serde(default = "default_confidence_high_seconds")]
+    pub confidence_high_seconds: i32,
+    /// Game time below which predictions are reported as degrading, and at or
+    /// above which they are reported as low confidence.
+    #[serde(default = "default_confidence_degrading_seconds")]
+    pub confidence_degrading_seconds: i32,
+}
+
+impl Default for WaveTrackerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_wave_tracker_enabled(),
+            mid_meet_seconds: default_mid_meet_seconds(),
+            mid_meet_progress: default_mid_meet_progress(),
+            side_meet_seconds: default_side_meet_seconds(),
+            top_meet_progress: default_top_meet_progress(),
+            bottom_meet_progress: default_bottom_meet_progress(),
+            confidence_high_seconds: default_confidence_high_seconds(),
+            confidence_degrading_seconds: default_confidence_degrading_seconds(),
+        }
+    }
+}
+
+fn default_wave_tracker_enabled() -> bool {
+    true
+}
+fn default_mid_meet_seconds() -> f32 {
+    17.0
+}
+fn default_mid_meet_progress() -> f32 {
+    0.5
+}
+fn default_side_meet_seconds() -> f32 {
+    28.0
+}
+fn default_top_meet_progress() -> f32 {
+    0.42
+}
+fn default_bottom_meet_progress() -> f32 {
+    0.58
+}
+fn default_confidence_high_seconds() -> i32 {
+    600
+}
+fn default_confidence_degrading_seconds() -> i32 {
+    900
+}
+
 impl Default for GsiLoggingConfig {
     fn default() -> Self {
         Self {
@@ -866,6 +940,8 @@ pub struct Settings {
     pub minimap_capture: MinimapCaptureConfig,
     #[serde(default)]
     pub minimap_analysis: MinimapAnalysisConfig,
+    #[serde(default)]
+    pub wave_tracker: WaveTrackerConfig,
 }
 
 // Default functions
@@ -2090,6 +2166,7 @@ impl Default for Settings {
             rune_alerts: RuneAlertConfig::default(),
             minimap_capture: MinimapCaptureConfig::default(),
             minimap_analysis: MinimapAnalysisConfig::default(),
+            wave_tracker: WaveTrackerConfig::default(),
         }
     }
 }

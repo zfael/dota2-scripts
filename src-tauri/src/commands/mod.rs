@@ -5,3 +5,4 @@ pub mod meepo;
 pub mod minimap;
 pub mod state;
 pub mod updates;
+pub mod waves;

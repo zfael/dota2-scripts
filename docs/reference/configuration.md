@@ -191,6 +191,35 @@ See `docs/features/soul-ring.md` and `docs/features/keyboard-interception.md`.
 
 See `src/observability/rune_alerts.rs`, `src-ui/src/hooks/useRuneAlert.ts`, and `src-ui/src/pages/Settings.tsx`.
 
+## `[wave_tracker]`
+
+Calibration for clock-driven creep wave prediction. The `meet_*` values are empirical
+approximations rather than derived constants, exposed so they can be retuned against
+observed play without a rebuild.
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `enabled` | `true` | `true` | Enables wave prediction. Consumers check this before rendering. |
+| `mid_meet_seconds` | `17.0` | `17.0` | Seconds after spawn at which the mid waves meet. |
+| `mid_meet_progress` | `0.5` | `0.5` | Normalised lane position of the mid clash; `0.5` is the exact midpoint. |
+| `side_meet_seconds` | `28.0` | `28.0` | Seconds after spawn at which the side-lane waves meet. |
+| `top_meet_progress` | `0.42` | `0.42` | Normalised position of the top-lane clash. Below `0.5`, biased toward the Radiant offlane tower. |
+| `bottom_meet_progress` | `0.58` | `0.58` | Normalised position of the bottom-lane clash, mirroring `top_meet_progress`. |
+| `confidence_high_seconds` | `600` | `600` | Game time below which predictions report `High` confidence. |
+| `confidence_degrading_seconds` | `900` | `900` | Game time below which predictions report `Degrading`, and at or above which they report `Low`. |
+
+Lane progress is normalised so that `0.0` is the Radiant barracks end of a lane and
+`1.0` the Dire barracks end, for both teams' waves.
+
+**UI exposure:** `enabled`, `mid_meet_seconds`, and `side_meet_seconds` are exposed in
+the Wave Tracker page's Calibration card — these are the values worth retuning by feel.
+The `*_meet_progress` and `confidence_*` values stay config-only: they are geometry and
+presentation thresholds that should rarely change, and surfacing them would clutter the
+page without helping.
+
+See `src/observability/wave_tracker.rs`, `src-tauri/src/commands/waves.rs`,
+`src-ui/src/pages/WaveTracker.tsx`, and `docs/features/wave-tracker.md`.
+
 ## `[minimap_capture]`
 
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |

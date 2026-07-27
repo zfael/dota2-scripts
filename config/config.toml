@@ -27,6 +27,18 @@ alert_lead_seconds = 10
 interval_seconds = 120
 audio_enabled = true
 
+# Creep wave prediction calibration. The meet_* values are empirical
+# approximations — retune them here rather than in code.
+[wave_tracker]
+enabled = true
+mid_meet_seconds = 17.0
+mid_meet_progress = 0.5
+side_meet_seconds = 28.0
+top_meet_progress = 0.42
+bottom_meet_progress = 0.58
+confidence_high_seconds = 600
+confidence_degrading_seconds = 900
+
 [minimap_capture]
 enabled = false
 minimap_x = 2

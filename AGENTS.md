@@ -37,6 +37,7 @@ Supported heroes: **Broodmother, Huskar, Invoker, Largo, Legion Commander, Meepo
 | Tune danger heuristics, healing thresholds, or defensive items | `docs/features/danger-detection.md` |
 | Trace blocked keys, Soul Ring replay, or SF interception | `docs/features/keyboard-interception.md` |
 | Understand Soul Ring automation | `docs/features/soul-ring.md` |
+| Work on creep wave prediction | `docs/features/wave-tracker.md` |
 | Understand shared survivability / dispel / neutral-item behavior | `docs/features/survivability.md` |
 | Understand startup checks, update UI, and restart flow | `docs/features/updates.md` |
 | Find a specific source file | `docs/reference/file-index.md` |
@@ -166,6 +167,7 @@ Supported heroes: **Broodmother, Huskar, Invoker, Largo, Legion Commander, Meepo
 | `docs/heroes/tiny.md` | Tiny hero doc |
 | `docs/heroes/hero-template.md` | Template for new hero docs |
 | `docs/features/soul-ring.md` | Soul Ring feature doc |
+| `docs/features/wave-tracker.md` | Creep wave prediction model, coordinate space, and accuracy limits |
 | `docs/reference/file-index.md` | Full file → purpose → doc cross-reference |
 | `docs/reference/configuration.md` | Config sections, checked-in values, Rust fallback defaults |
 | `docs/reference/gsi-schema-and-usage.md` | Consumed GSI fields, event flow, fixture references |

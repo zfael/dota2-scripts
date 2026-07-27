@@ -294,6 +294,17 @@ export interface RuneAlertConfig {
   audio_enabled: boolean;
 }
 
+export interface WaveTrackerConfig {
+  enabled: boolean;
+  mid_meet_seconds: number;
+  mid_meet_progress: number;
+  side_meet_seconds: number;
+  top_meet_progress: number;
+  bottom_meet_progress: number;
+  confidence_high_seconds: number;
+  confidence_degrading_seconds: number;
+}
+
 export interface MinimapCaptureConfig {
   enabled: boolean;
   minimap_x: number;
@@ -336,4 +347,5 @@ export interface Settings {
   rune_alerts: RuneAlertConfig;
   minimap_capture: MinimapCaptureConfig;
   minimap_analysis: MinimapAnalysisConfig;
+  wave_tracker: WaveTrackerConfig;
 }

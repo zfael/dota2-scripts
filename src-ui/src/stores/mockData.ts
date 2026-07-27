@@ -259,6 +259,13 @@ export const mockConfig: Settings = {
     enabled: true, alert_lead_seconds: 10,
     interval_seconds: 120, audio_enabled: true,
   },
+  wave_tracker: {
+    enabled: true,
+    mid_meet_seconds: 17, mid_meet_progress: 0.5,
+    side_meet_seconds: 28,
+    top_meet_progress: 0.42, bottom_meet_progress: 0.58,
+    confidence_high_seconds: 600, confidence_degrading_seconds: 900,
+  },
   minimap_capture: {
     enabled: false, minimap_x: 0, minimap_y: 0,
     minimap_width: 256, minimap_height: 256,

@@ -4,5 +4,5 @@ pub mod storage;
 
 pub use settings::{
     AutoAbilityConfig, DangerDetectionConfig, MinimapAnalysisConfig, MinimapCaptureConfig,
-    OutworldDestroyerConfig, RuneAlertConfig, Settings,
+    OutworldDestroyerConfig, RuneAlertConfig, Settings, WaveTrackerConfig,
 };

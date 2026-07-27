@@ -11,3 +11,5 @@ pub mod minimap_capture_state;
 pub mod minimap_zones;
 pub mod rune_alerts;
 pub mod lane_heat;
+#[allow(dead_code)]
+pub mod wave_tracker;
