@@ -411,7 +411,9 @@ mod tests {
     use super::{
         resolve_tauri_invoker_combo_trigger_profile_id, sync_tauri_invoker_profile_hotkey,
     };
-    use dota2_scripts::config::settings::{InvokerProfile, InvokerProfileMode, Settings};
+    use dota2_scripts::config::settings::{
+        InvokerProfile, InvokerProfileExecutionStyle, InvokerProfileMode, Settings,
+    };
     use dota2_scripts::state::AppState;
 
     fn profile(id: &str, enabled: bool, mode: InvokerProfileMode) -> InvokerProfile {
@@ -421,6 +423,7 @@ mod tests {
             enabled,
             hotkey: "F1".to_string(),
             mode,
+            execution_style: InvokerProfileExecutionStyle::Automatic,
             build_tag: String::new(),
             steps: Vec::new(),
         }

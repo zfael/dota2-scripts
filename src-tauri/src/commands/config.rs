@@ -210,7 +210,9 @@ pub fn update_hero_config(
 mod tests {
     use super::*;
     use dota2_scripts::actions::executor::ExecutorMetrics;
-    use dota2_scripts::config::settings::{InvokerProfile, InvokerProfileMode};
+    use dota2_scripts::config::settings::{
+        InvokerProfile, InvokerProfileExecutionStyle, InvokerProfileMode,
+    };
     use dota2_scripts::state::app_state::AppState;
     use std::sync::{Arc, Mutex, RwLock};
 
@@ -221,6 +223,7 @@ mod tests {
             enabled,
             hotkey: "F1".to_string(),
             mode,
+            execution_style: InvokerProfileExecutionStyle::Automatic,
             build_tag: String::new(),
             steps: vec![],
         }
