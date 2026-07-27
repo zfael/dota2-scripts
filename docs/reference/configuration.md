@@ -202,6 +202,7 @@ Scheduled objective audio alerts. Cues are generated in-app, so no sound files s
 |---|---:|---:|---|
 | `enabled` | `true` | `true` | Master switch. When false nothing sounds, whatever the per-event values. |
 | `master_volume` | `0.8` | `0.8` | `0.0`-`1.0`, multiplied into every per-event volume. |
+| `voice_pack` | `""` | `""` | Directory name under `assets/voice/`. Empty uses the generated cues. Create one with `scripts/generate-voice-pack.ps1`. Packs are gitignored. |
 
 ### `[alerts.<event>]`
 

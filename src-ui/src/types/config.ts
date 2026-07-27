@@ -315,6 +315,7 @@ export interface AlertEventConfig {
 export interface AlertsConfig {
   enabled: boolean;
   master_volume: number;
+  voice_pack: string;
   power_rune: AlertEventConfig;
   wisdom_rune: AlertEventConfig;
   water_rune: AlertEventConfig;

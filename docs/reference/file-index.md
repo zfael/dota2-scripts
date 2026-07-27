@@ -170,6 +170,8 @@
 | `src/observability/alerts.rs` | Objective alert schedules, cue assignments, and fire-once scheduling | `docs/features/objective-alerts.md` |
 | `src/audio/motif.rs` | Procedural synthesis of alert cues (pure DSP, no device needed) | `docs/features/objective-alerts.md` |
 | `src/audio/player.rs` | rodio output: PCM and file playback for alert cues | `docs/features/objective-alerts.md` |
+| `src/audio/voice_pack.rs` | Voice pack discovery and per-event sound resolution order | `docs/features/objective-alerts.md` |
+| `scripts/generate-voice-pack.ps1` | Generates a spoken voice pack using the Windows speech synthesiser | `docs/features/objective-alerts.md` |
 | `src-tauri/src/commands/alerts.rs` | Tauri commands for alert countdowns and test playback | `docs/features/objective-alerts.md` |
 | `src-ui/src/types/alerts.ts` | Alert event keys, catalogue metadata, and countdown formatting | `docs/features/objective-alerts.md` |
 | `src-ui/src/stores/alertStore.ts` | Alert countdown polling and test playback | `docs/features/objective-alerts.md` |

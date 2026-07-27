@@ -94,11 +94,44 @@ property of a cue a value that can be retuned without regenerating anything.
 
 ---
 
-## Custom sounds
+## Custom sounds and voice packs
 
-Set `sound_file` on any event to a `.wav` / `.mp3` path. If the file cannot be opened or
-decoded the built-in cue plays instead — a mistyped path should not silently disable an
-alert. This is also the hook for a TTS voice pack (D7).
+Sound resolution runs most-specific first:
+
+1. The event's `sound_file`, if set — an explicit override is never silently replaced.
+2. `assets/voice/<voice_pack>/<event_key>.wav` (or `.mp3`), if a pack is selected.
+3. The built-in synthesised cue.
+
+Anything that cannot be opened or decoded falls through to the next step, so a mistyped
+path or an incomplete pack degrades to a working cue rather than silence.
+
+### Voice packs
+
+A spoken callout needs no learning at all — this is the one place where TTS clearly beats
+a synthesised motif. A pack is just a directory of files named after event keys:
+
+```
+assets/voice/en-sapi/
+  power_rune.wav  wisdom_rune.wav  water_rune.wav  bounty_rune.wav
+  tormentor.wav   neutral_item.wav stack.wav
+```
+
+Generate one with the Windows speech synthesiser — no API key, no network:
+
+```powershell
+./scripts/generate-voice-pack.ps1                       # assets/voice/en-sapi
+./scripts/generate-voice-pack.ps1 -PackName zira -Voice "Microsoft Zira Desktop"
+```
+
+SAPI voices are serviceable rather than good. For a better pack, generate the same
+filenames with a hosted TTS service and drop them in a directory of their own; the app
+only cares about the filenames. Generate offline and commit nothing — a game tool should
+not carry an API key or make network calls on the alert path.
+
+**Packs are gitignored.** They are generated output, and binary audio ages badly in git.
+
+Callouts are kept to one or two words deliberately: the cue has to finish *before* the
+objective it announces.
 
 ---
 
@@ -130,6 +163,8 @@ power-rune schedule is a sensible future cleanup.
 - `cargo test --lib alerts` — 22 tests: every schedule, exhausted fixed schedules, the
   power/bounty coincidence, fire-once, re-firing on the next occurrence, per-event and
   master switches, new-game reset, lead-time widening, cue pulse counts, volume maths.
+- `cargo test --lib voice_pack` — 9 tests: resolution precedence, wav preferred over mp3,
+  missing events and missing packs falling back, pack listing.
 - `cargo test -p dota2-scripts-tauri` — event key round-tripping.
 - `npx vitest run` in `src-ui/` — countdown formatting and catalogue completeness.
 

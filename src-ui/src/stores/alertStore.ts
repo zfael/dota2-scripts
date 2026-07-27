@@ -6,13 +6,27 @@ const POLL_INTERVAL_MS = 1000;
 
 interface AlertStore {
   countdowns: AlertCountdown[];
+  voicePacks: string[];
   fetchCountdowns: () => Promise<void>;
+  fetchVoicePacks: () => Promise<void>;
   testPlay: (event: AlertEventKey) => Promise<void>;
   startPolling: () => () => void;
 }
 
 export const useAlertStore = create<AlertStore>((set, get) => ({
   countdowns: [],
+  voicePacks: [],
+
+  fetchVoicePacks: async () => {
+    if (!isTauri()) return;
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const voicePacks = await invoke<string[]>("list_voice_packs");
+      set({ voicePacks });
+    } catch (e) {
+      console.error("Failed to list voice packs:", e);
+    }
+  },
 
   fetchCountdowns: async () => {
     if (!isTauri()) return;
@@ -37,6 +51,7 @@ export const useAlertStore = create<AlertStore>((set, get) => ({
 
   startPolling: () => {
     void get().fetchCountdowns();
+    void get().fetchVoicePacks();
     const interval = setInterval(() => void get().fetchCountdowns(), POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   },

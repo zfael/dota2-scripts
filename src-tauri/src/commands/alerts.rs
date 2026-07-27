@@ -21,6 +21,13 @@ pub fn get_alert_countdowns() -> Vec<AlertCountdownDto> {
         .collect()
 }
 
+/// Voice packs available under `assets/voice/`.
+#[tauri::command]
+pub fn list_voice_packs() -> Vec<String> {
+    use dota2_scripts::audio::voice_pack::{list_packs, VOICE_PACK_DIR};
+    list_packs(std::path::Path::new(VOICE_PACK_DIR))
+}
+
 /// Play one event's cue immediately, so the operator can hear what they are
 /// configuring without waiting for the objective to come round.
 #[tauri::command]

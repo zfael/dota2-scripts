@@ -213,11 +213,34 @@ test — an initial test that counted fired alerts caught it.
 downgraded to a documented no-op. Folding that countdown onto the power-rune schedule
 is a sensible future cleanup, deliberately not bundled here.
 
-### D7 — Voice Pack
+### D7 — Voice Pack ✅ *shipped*
 
-Offline-generated TTS callouts, committed as assets, selectable per event alongside the
-procedural motifs. The `sound_file` override shipped in D5 is the hook this needs, so
-D7 is now purely asset generation plus a pack selector.
+Voice pack infrastructure plus a generator. A pack is a directory of files named after
+event keys; selecting one points every event at spoken callouts in a single action.
+Resolution runs `sound_file` → pack file → generated cue, falling through on anything
+missing or undecodable.
+
+Changed from the plan in one respect: assets are **not committed**. Packs are generated
+output, and binary audio ages badly in git — so `scripts/generate-voice-pack.ps1` builds
+one locally with the Windows speech synthesiser (no API key, no network) and
+`assets/voice/` is gitignored. Better packs can be generated with a hosted TTS service
+using the same filenames.
+
+---
+
+## Status
+
+All deliverables are shipped. What remains is **manual verification against a running
+game**, which no test can substitute for:
+
+- Overlay click-through actually passing clicks to Dota, and transparency against the
+  live minimap.
+- Overlay placement accuracy at your resolution, and on a DPI-scaled or secondary
+  monitor.
+- Whether the cues are genuinely distinguishable mid-fight — the thing the whole cue
+  design is for.
+- Wave prediction against observed creep positions during laning, to calibrate
+  `mid_meet_seconds` / `side_meet_seconds`.
 
 ---
 

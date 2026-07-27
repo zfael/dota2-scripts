@@ -42,3 +42,8 @@ src-tauri/gen/
 # Node.js
 node_modules/
 src-ui/dist/
+
+# Generated voice packs for objective alerts.
+# Produced by scripts/generate-voice-pack.ps1, or supplied by the user; binary
+# audio assets age badly in git and are trivially regenerated.
+assets/voice/

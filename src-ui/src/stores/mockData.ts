@@ -273,6 +273,7 @@ export const mockConfig: Settings = {
   alerts: {
     enabled: true,
     master_volume: 0.8,
+    voice_pack: "",
     power_rune: { enabled: true, lead_seconds: 15, volume: 1.0, sound_file: "" },
     wisdom_rune: { enabled: true, lead_seconds: 20, volume: 1.0, sound_file: "" },
     water_rune: { enabled: true, lead_seconds: 15, volume: 1.0, sound_file: "" },

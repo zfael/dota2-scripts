@@ -311,17 +311,25 @@ pub fn effective_volume(config: &AlertsConfig, event_config: &AlertEventConfig) 
 
 /// Sound one event's cue.
 ///
-/// A configured `sound_file` wins, but a file that cannot be opened or decoded
-/// falls back to the built-in cue rather than going silent — a mistyped path
-/// should not quietly disable an alert.
+/// Resolution order is per-event `sound_file`, then the selected voice pack,
+/// then the built-in synthesised cue. A file that cannot be opened or decoded
+/// falls back to the cue rather than going silent — a mistyped path or an
+/// incomplete pack should not quietly disable an alert.
 pub fn play_alert(event: AlertEvent, config: &AlertsConfig) -> bool {
     let event_config = config.for_event(event);
     let volume = effective_volume(config, event_config);
 
-    if !event_config.sound_file.is_empty()
-        && crate::audio::player::play_file(&event_config.sound_file, volume)
-    {
-        return true;
+    let resolved = crate::audio::voice_pack::resolve_sound_path(
+        event.key(),
+        &event_config.sound_file,
+        &config.voice_pack,
+        std::path::Path::new(crate::audio::voice_pack::VOICE_PACK_DIR),
+    );
+
+    if let Some(path) = resolved {
+        if crate::audio::player::play_file(&path.to_string_lossy(), volume) {
+            return true;
+        }
     }
 
     crate::audio::player::play_motif(&event.cue(), volume)

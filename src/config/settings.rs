@@ -834,6 +834,10 @@ pub struct AlertsConfig {
     /// Master volume, `0.0`-`1.0`, multiplied into every per-event volume.
     #[serde(default = "default_alert_master_volume")]
     pub master_volume: f32,
+    /// Voice pack directory name under `assets/voice/`. Empty uses the
+    /// built-in synthesised cues.
+    #[serde(default)]
+    pub voice_pack: String,
     #[serde(default = "default_power_rune_alert")]
     pub power_rune: AlertEventConfig,
     #[serde(default = "default_wisdom_rune_alert")]
@@ -874,6 +878,7 @@ impl Default for AlertsConfig {
         Self {
             enabled: true,
             master_volume: default_alert_master_volume(),
+            voice_pack: String::new(),
             power_rune: default_power_rune_alert(),
             wisdom_rune: default_wisdom_rune_alert(),
             water_rune: default_water_rune_alert(),

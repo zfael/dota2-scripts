@@ -163,6 +163,7 @@ pub fn run() {
             commands::overlay::get_wave_overlay_status,
             commands::alerts::get_alert_countdowns,
             commands::alerts::test_play_alert,
+            commands::alerts::list_voice_packs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

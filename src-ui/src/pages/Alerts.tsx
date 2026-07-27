@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Button } from "../components/common/Button";
 import { Card } from "../components/common/Card";
+import { Dropdown } from "../components/common/Dropdown";
 import { Toggle } from "../components/common/Toggle";
 import { NumberInput } from "../components/common/NumberInput";
 import { Slider } from "../components/common/Slider";
@@ -77,6 +78,7 @@ function EventRow({
 
 export default function Alerts() {
   const alerts = useConfigStore((s) => s.config.alerts);
+  const voicePacks = useAlertStore((s) => s.voicePacks);
   const startPolling = useAlertStore((s) => s.startPolling);
 
   const updateAlerts = (updates: Partial<typeof alerts>) =>
@@ -115,6 +117,26 @@ export default function Alerts() {
           minimised. Each event has a distinct rhythm — the pulse count matches how
           often it happens, so two blips is the 2-minute power rune and three notes
           is the 7-minute wisdom rune.
+        </p>
+
+        <Dropdown
+          label="Voice Pack"
+          value={alerts.voice_pack}
+          options={[
+            { value: "", label: "Generated cues (no voice)" },
+            ...voicePacks.map((pack) => ({ value: pack, label: pack })),
+          ]}
+          onChange={(v) => updateAlerts({ voice_pack: v })}
+        />
+        <p className="text-xs text-muted">
+          A voice pack replaces the cues with spoken callouts, which need no learning
+          at all. Packs are not shipped — generate one with{" "}
+          <span className="font-mono text-subtle">
+            scripts/generate-voice-pack.ps1
+          </span>
+          , or drop your own files in{" "}
+          <span className="font-mono text-subtle">assets/voice/&lt;name&gt;/</span>.
+          Any event the pack is missing falls back to its generated cue.
         </p>
       </Card>
 

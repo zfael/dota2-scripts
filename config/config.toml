@@ -44,6 +44,9 @@ confidence_degrading_seconds = 900
 [alerts]
 enabled = true
 master_volume = 0.8
+# Voice pack directory under assets/voice/. Empty uses the generated cues.
+# Create one with scripts/generate-voice-pack.ps1.
+voice_pack = ""
 
 [alerts.power_rune]
 enabled = true
