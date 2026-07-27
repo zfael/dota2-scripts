@@ -6,16 +6,18 @@ Clock-driven prediction of creep wave spawn, travel, and clash points.
 **Config:** `[wave_tracker]` — see `docs/reference/configuration.md`
 **Design:** `docs/superpowers/specs/2026-07-27-wave-tracker-and-audio-alerts-design.md`
 
-**Status:** model and in-app panel shipped. The click-through minimap overlay is a
-separate deliverable; `WaveMap` already accepts a `compact` prop for it.
+**Status:** model, in-app panel, and click-through minimap overlay all shipped.
 
 | Layer | File |
 |---|---|
 | Model | `src/observability/wave_tracker.rs` |
-| IPC | `src-tauri/src/commands/waves.rs` — `get_wave_lane_paths`, `get_wave_snapshot` |
+| Overlay geometry | `src/observability/wave_overlay.rs` |
+| Window discovery | `src/observability/minimap_capture_backend.rs` |
+| IPC | `src-tauri/src/commands/waves.rs`, `src-tauri/src/commands/overlay.rs` |
 | Clock + polling | `src-ui/src/stores/waveStore.ts` |
 | Renderer | `src-ui/src/components/waves/WaveMap.tsx` |
 | Page | `src-ui/src/pages/WaveTracker.tsx` (route `/waves`) |
+| Overlay view | `src-ui/src/pages/WaveOverlay.tsx` |
 
 ---
 
@@ -126,12 +128,78 @@ as a measurement.
 
 ---
 
+## Minimap overlay
+
+A second Tauri window (`wave-overlay`) — borderless, transparent, always-on-top,
+click-through — positioned over Dota's in-game minimap.
+
+**It never touches the Dota process.** No injection, no hooking, no memory reads. It is
+an ordinary OS window placed on top, architecturally the same as the Discord, Steam, or
+GeForce overlays. Rendering *into* Dota's own minimap would require D3D hooking and is
+deliberately not done.
+
+### Placement
+
+`find_dota2_client_screen_rect()` resolves the Dota client area in **screen**
+coordinates — note that `find_dota2_window_rect()` cannot be used here, as it returns a
+client rect whose origin is always `(0, 0)`, fine for BitBlt but useless for positioning.
+`overlay_bounds()` then translates the `[minimap_capture]` region by that origin and
+applies the manual offsets.
+
+All geometry is in physical pixels, matching Tauri's `PhysicalPosition` / `PhysicalSize`.
+This is what keeps the overlay correct on scaled displays with no DPI maths of our own.
+
+Dota can be moved, resized, or dragged to another monitor at any time and there is no
+notification for it from outside the process, so a background task re-reads the position
+once a second while the overlay is visible and only touches the window when the bounds
+actually change. If Dota disappears, the overlay hides itself rather than leaving a stale
+rectangle floating over the desktop.
+
+### Click-through
+
+`set_ignore_cursor_events(true)` is the single most important property of this window.
+Without it the overlay swallows minimap clicks and breaks click-to-move. Verify this by
+hand after any change to window creation.
+
+### Transparency
+
+The overlay shares the main bundle, selected by an `?overlay=1` query parameter (a
+parameter rather than a route because the app uses `BrowserRouter`). `main.tsx` applies
+`body.overlay-mode` **before first paint**, which drops the global stylesheet's opaque
+background and its 900×650 minimum — either one would hide the minimap underneath.
+
+### Exclusive fullscreen
+
+No overlay can draw over exclusive fullscreen; Dota must be in Borderless or Windowed.
+This cannot be reliably detected from outside the game, so `detect_dota2_window_mode()`
+reports the window *style* only (`Windowed` when it has a caption, otherwise
+`Borderless`, which means "borderless or fullscreen"). The UI states the limitation
+rather than promising detection.
+
+### Hotkey
+
+`[wave_overlay] toggle_key` (default `F8`) is intercepted by the existing rdev hook as
+`HotkeyEvent::WaveOverlayToggle` and **blocked** from reaching Dota, so pick a key Dota
+does not need. The keyboard listener starts before the Tauri builder runs, so the handler
+reaches the app through an `AppHandle` published during setup.
+
+---
+
 ## Tests
 
 - `cargo test --lib wave_tracker` — 18 unit tests: spawn cadence and boundaries, pre-horn
   behaviour, wave convergence and clamping, side-lane mirror symmetry, cycle repetition,
   monotonic progress, fractional-clock interpolation, path endpoints and clamping,
   normalised-space containment, confidence decay, degenerate zero-duration config.
+- `cargo test --lib wave_overlay` — placement translation, following a moved window,
+  manual offsets, negative multi-monitor coordinates, zero-sized regions.
+- `cargo test --lib keyboard` — the overlay hotkey plans its event and is only parsed
+  when the overlay is enabled.
 - `cargo test -p dota2-scripts-tauri` — lane path geometry is complete and in range.
 - `npx vitest run` in `src-ui/` — renderer output, y-axis flip, confidence fade, compact
-  mode, and the clock interpolation and freeze behaviour.
+  mode, overlay-window detection, and the clock interpolation and freeze behaviour.
+
+**Not covered by automated tests** (they need a running Dota 2 and a real compositor):
+click-through actually passing clicks to the game, transparency against the live
+minimap, placement accuracy at various resolutions, and behaviour on a DPI-scaled or
+secondary monitor. These need manual verification.

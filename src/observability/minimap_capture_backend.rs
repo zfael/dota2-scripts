@@ -66,6 +66,105 @@ fn find_dota2_window_rect_win32() -> CaptureBackendResult {
     }
 }
 
+/// How Dota 2 is currently presenting, as far as we can tell from its window.
+///
+/// Used to warn about overlay visibility. Note the honest limitation: true
+/// exclusive-fullscreen presentation cannot be reliably distinguished from
+/// borderless from outside the process, so `Borderless` means "borderless or
+/// fullscreen" and the UI must say so rather than promise detection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Dota2WindowMode {
+    NotFound,
+    Windowed,
+    Borderless,
+}
+
+/// Dota 2's client area in **screen** coordinates.
+///
+/// [`find_dota2_window_rect`] returns a client rect whose origin is always
+/// `(0, 0)`, which is fine for capture (BitBlt takes client-relative offsets) but
+/// useless for positioning a window on top of it. This resolves the true screen
+/// origin so an overlay can be placed over a sub-region of the client area.
+///
+/// Coordinates are physical pixels, matching what Tauri's `PhysicalPosition` and
+/// `PhysicalSize` expect — which is what keeps the overlay correct on scaled
+/// displays without any DPI maths of our own.
+pub fn find_dota2_client_screen_rect() -> Option<WindowRect> {
+    #[cfg(windows)]
+    {
+        find_dota2_client_screen_rect_win32()
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
+#[cfg(windows)]
+fn find_dota2_client_screen_rect_win32() -> Option<WindowRect> {
+    use windows::core::w;
+    use windows::Win32::Foundation::{POINT, RECT};
+    use windows::Win32::Graphics::Gdi::ClientToScreen;
+    use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, GetClientRect, IsWindow};
+
+    let hwnd = unsafe { FindWindowW(None, w!("Dota 2")) }.ok()?;
+    if !unsafe { IsWindow(hwnd) }.as_bool() {
+        return None;
+    }
+
+    let mut rect = RECT::default();
+    unsafe { GetClientRect(hwnd, &mut rect) }.ok()?;
+
+    // The client rect is origin-relative; translate (0,0) to find where the
+    // client area actually sits on screen.
+    let mut origin = POINT { x: 0, y: 0 };
+    if !unsafe { ClientToScreen(hwnd, &mut origin) }.as_bool() {
+        return None;
+    }
+
+    Some(WindowRect {
+        x: origin.x,
+        y: origin.y,
+        width: (rect.right - rect.left) as u32,
+        height: (rect.bottom - rect.top) as u32,
+    })
+}
+
+/// Best-effort read of how Dota 2 is presenting. See [`Dota2WindowMode`].
+pub fn detect_dota2_window_mode() -> Dota2WindowMode {
+    #[cfg(windows)]
+    {
+        detect_dota2_window_mode_win32()
+    }
+    #[cfg(not(windows))]
+    {
+        Dota2WindowMode::NotFound
+    }
+}
+
+#[cfg(windows)]
+fn detect_dota2_window_mode_win32() -> Dota2WindowMode {
+    use windows::core::w;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        FindWindowW, GetWindowLongW, IsWindow, GWL_STYLE, WS_CAPTION,
+    };
+
+    let hwnd = match unsafe { FindWindowW(None, w!("Dota 2")) } {
+        Ok(h) => h,
+        Err(_) => return Dota2WindowMode::NotFound,
+    };
+    if !unsafe { IsWindow(hwnd) }.as_bool() {
+        return Dota2WindowMode::NotFound;
+    }
+
+    let style = unsafe { GetWindowLongW(hwnd, GWL_STYLE) } as u32;
+    if style & WS_CAPTION.0 == WS_CAPTION.0 {
+        Dota2WindowMode::Windowed
+    } else {
+        Dota2WindowMode::Borderless
+    }
+}
+
 /// Capture a sub-region of the Dota 2 window using BitBlt.
 ///
 /// `region_x`, `region_y`, `region_width`, `region_height` are relative to the

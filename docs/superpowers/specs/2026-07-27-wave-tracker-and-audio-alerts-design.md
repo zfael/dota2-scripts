@@ -165,11 +165,24 @@ animated wave dots, clash markers, per-lane clash countdowns, and calibration co
 Positions come from `get_wave_snapshot` at ~15Hz, driven by a locally interpolated clock
 anchored to GSI's `gameTime`. Confidence decay is rendered as opacity from the start.
 
-### D3 — Minimap Overlay Window
+### D3 — Minimap Overlay Window ✅ *shipped*
 
-A second Tauri window: transparent, borderless, always-on-top, click-through, positioned over the Dota minimap using `find_dota2_window_rect()` plus the existing `[minimap_capture]` rect. Global hotkey toggle. Reuses D2's renderer.
+Second Tauri window (`wave-overlay`): transparent, borderless, always-on-top,
+click-through, positioned over the Dota minimap and following it once a second. Global
+hotkey (`F8`, blocked from Dota) plus a UI button. Reuses D2's renderer via `compact`.
 
-Includes exclusive-fullscreen detection with a UI warning, DPI-scaling handling, and an explicit manual test that minimap clicks still pass through to the game.
+Two things landed differently than planned. `find_dota2_window_rect()` could **not** be
+reused — it returns a client rect whose origin is always `(0, 0)`, so a new
+`find_dota2_client_screen_rect()` resolves the true screen origin via `ClientToScreen`.
+And DPI needed no maths: using physical units throughout makes scaled displays correct
+by construction.
+
+Exclusive-fullscreen detection was **scoped down deliberately** — it cannot be done
+reliably from outside the game process, so the UI reports the window style and states
+the limitation instead of promising detection.
+
+Click-through, live transparency, placement accuracy, and DPI-scaled monitors remain
+manual-test-only; see the feature doc.
 
 ### D4 — Prediction Correction *(parked)*
 

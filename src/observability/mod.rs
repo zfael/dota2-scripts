@@ -13,3 +13,5 @@ pub mod rune_alerts;
 pub mod lane_heat;
 #[allow(dead_code)]
 pub mod wave_tracker;
+#[allow(dead_code)]
+pub mod wave_overlay;

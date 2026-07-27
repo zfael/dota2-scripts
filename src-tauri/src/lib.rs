@@ -133,6 +133,7 @@ pub fn run() {
         })
         .setup(|app| {
             let handle = app.handle().clone();
+            commands::overlay::register_app_handle(handle.clone());
             events::start_game_state_emitter(handle);
             Ok(())
         })
@@ -156,6 +157,10 @@ pub fn run() {
             commands::minimap::get_minimap_status,
             commands::waves::get_wave_lane_paths,
             commands::waves::get_wave_snapshot,
+            commands::overlay::show_wave_overlay,
+            commands::overlay::hide_wave_overlay,
+            commands::overlay::toggle_wave_overlay,
+            commands::overlay::get_wave_overlay_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -295,6 +300,9 @@ fn handle_hotkey_events(
                     "Armlet Roshan mode {} via hotkey",
                     if armed { "armed" } else { "disarmed" }
                 );
+            }
+            HotkeyEvent::WaveOverlayToggle => {
+                commands::overlay::toggle_from_hotkey();
             }
             HotkeyEvent::InvokerCycleComboProfile => {
                 let settings = settings.lock().unwrap();

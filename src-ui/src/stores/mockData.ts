@@ -266,6 +266,10 @@ export const mockConfig: Settings = {
     top_meet_progress: 0.42, bottom_meet_progress: 0.58,
     confidence_high_seconds: 600, confidence_degrading_seconds: 900,
   },
+  wave_overlay: {
+    enabled: false, toggle_key: "F8",
+    offset_x: 0, offset_y: 0, opacity: 0.85,
+  },
   minimap_capture: {
     enabled: false, minimap_x: 0, minimap_y: 0,
     minimap_width: 256, minimap_height: 256,

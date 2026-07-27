@@ -3,6 +3,7 @@ pub mod diagnostics;
 pub mod game;
 pub mod meepo;
 pub mod minimap;
+pub mod overlay;
 pub mod state;
 pub mod updates;
 pub mod waves;

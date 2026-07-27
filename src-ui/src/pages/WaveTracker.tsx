@@ -1,7 +1,9 @@
 import { useEffect } from "react";
+import { Button } from "../components/common/Button";
 import { Card } from "../components/common/Card";
 import { Toggle } from "../components/common/Toggle";
 import { NumberInput } from "../components/common/NumberInput";
+import { Slider } from "../components/common/Slider";
 import { WaveMap } from "../components/waves/WaveMap";
 import { useConfigStore } from "../stores/configStore";
 import { useGameStore } from "../stores/gameStore";
@@ -86,6 +88,94 @@ function LaneRow({ lane }: { lane: Lane }) {
   );
 }
 
+function OverlayControls() {
+  const status = useWaveStore((s) => s.overlayStatus);
+  const toggleOverlay = useWaveStore((s) => s.toggleOverlay);
+
+  const overlay = useConfigStore((s) => s.config.wave_overlay);
+  const updateOverlay = (updates: Partial<typeof overlay>) =>
+    useConfigStore.getState().updateConfig("wave_overlay", updates);
+
+  const dotaFound = status != null && status.dotaWindowMode !== "NotFound";
+
+  return (
+    <>
+      <Toggle
+        label="Enable Overlay Hotkey"
+        checked={overlay.enabled}
+        onChange={(v) => updateOverlay({ enabled: v })}
+      />
+      <p className="text-xs text-muted">
+        Draws wave dots on a transparent, click-through window placed over Dota's
+        minimap. Clicks pass through, so minimap click-to-move still works.
+      </p>
+
+      <div className="flex items-center gap-3">
+        <Button onClick={() => void toggleOverlay()} disabled={!dotaFound}>
+          {status?.visible ? "Hide Overlay" : "Show Overlay"}
+        </Button>
+        <span className="font-mono text-xs text-subtle">
+          Hotkey: {status?.toggleKey ?? overlay.toggle_key}
+        </span>
+      </div>
+
+      <div className="space-y-1 text-xs">
+        <div className="text-subtle">
+          Dota window:{" "}
+          <span className="font-mono text-content">
+            {status?.dotaWindowMode ?? "unknown"}
+          </span>
+        </div>
+        {status?.bounds ? (
+          <div className="text-subtle">
+            Placement:{" "}
+            <span className="font-mono text-content">
+              {status.bounds.width}×{status.bounds.height} at {status.bounds.x},
+              {status.bounds.y}
+            </span>
+          </div>
+        ) : (
+          <div className="text-muted">
+            Placement unavailable — start Dota 2, and check the minimap region on the
+            Minimap page.
+          </div>
+        )}
+      </div>
+
+      <p className="rounded bg-elevated px-3 py-2 text-xs text-subtle">
+        Overlays cannot draw over exclusive fullscreen. If the overlay does not
+        appear, set Dota to <span className="text-content">Borderless</span> or{" "}
+        <span className="text-content">Windowed</span>. This cannot be detected
+        reliably from outside the game, so the mode above reports the window style
+        only.
+      </p>
+
+      <div className="grid grid-cols-2 gap-3">
+        <NumberInput
+          label="Offset X"
+          value={overlay.offset_x}
+          onChange={(v) => updateOverlay({ offset_x: v })}
+          suffix="px"
+        />
+        <NumberInput
+          label="Offset Y"
+          value={overlay.offset_y}
+          onChange={(v) => updateOverlay({ offset_y: v })}
+          suffix="px"
+        />
+      </div>
+      <Slider
+        label="Opacity"
+        value={overlay.opacity}
+        min={0.1}
+        max={1}
+        step={0.05}
+        onChange={(v) => updateOverlay({ opacity: v })}
+      />
+    </>
+  );
+}
+
 export default function WaveTracker() {
   const lanePaths = useWaveStore((s) => s.lanePaths);
   const snapshot = useWaveStore((s) => s.snapshot);
@@ -132,6 +222,10 @@ export default function WaveTracker() {
                 <LaneRow key={lane} lane={lane} />
               ))}
             </div>
+          </Card>
+
+          <Card title="Minimap Overlay">
+            <OverlayControls />
           </Card>
 
           <Card title="Calibration" collapsible>

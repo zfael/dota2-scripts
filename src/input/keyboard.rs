@@ -27,6 +27,7 @@ pub enum HotkeyEvent {
     ComboTrigger,
     MeepoFarmToggle,
     ArmletRoshanToggle,
+    WaveOverlayToggle,
     InvokerCycleComboProfile,
     LargoQ,
     LargoW,
@@ -541,6 +542,16 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                             let _ = event_tx.send(hotkey_event);
                             return None;
                         }
+                        HotkeyEvent::WaveOverlayToggle => {
+                            info!(
+                                "{:?} key pressed - toggling wave overlay",
+                                snapshot.wave_overlay_toggle_key
+                            );
+                            // Blocked: the overlay hotkey is ours, and letting it
+                            // through would also fire whatever Dota binds to it.
+                            let _ = event_tx.send(hotkey_event);
+                            return None;
+                        }
                         HotkeyEvent::ComboTrigger => {
                             info!("{:?} key pressed - triggering combo", snapshot.trigger_key);
                         }
@@ -645,6 +656,8 @@ pub struct KeyboardSnapshot {
     pub meepo_farm_toggle_key: Option<Key>,
     /// Parsed Armlet Roshan mode toggle key, if enabled.
     pub armlet_roshan_toggle_key: Option<Key>,
+    /// Parsed wave-overlay toggle key, if the overlay is enabled.
+    pub wave_overlay_toggle_key: Option<Key>,
     /// Hardcoded Invoker combo-cycle key for v1.
     pub invoker_cycle_hotkey: Option<Key>,
     /// Whether Shadow Fiend raze interception is active.
@@ -805,6 +818,11 @@ impl KeyboardSnapshot {
             } else {
                 None
             },
+            wave_overlay_toggle_key: if settings.wave_overlay.enabled {
+                parse_key_string(&settings.wave_overlay.toggle_key)
+            } else {
+                None
+            },
             invoker_cycle_hotkey: parse_key_string(&settings.heroes.invoker.cycle_combo_profiles_hotkey),
             sf_enabled,
             od_enabled,
@@ -868,6 +886,7 @@ impl Default for KeyboardSnapshot {
             trigger_key: None,
             meepo_farm_toggle_key: None,
             armlet_roshan_toggle_key: None,
+            wave_overlay_toggle_key: None,
             invoker_cycle_hotkey: None,
             sf_enabled: false,
             od_enabled: false,
@@ -950,6 +969,13 @@ fn plan_global_hotkey_event(key: Key, snapshot: &KeyboardSnapshot) -> Option<Hot
         return Some(HotkeyEvent::ArmletRoshanToggle);
     }
 
+    if snapshot
+        .wave_overlay_toggle_key
+        .is_some_and(|toggle_key| key == toggle_key)
+    {
+        return Some(HotkeyEvent::WaveOverlayToggle);
+    }
+
     if snapshot.selected_hero == Some(crate::state::HeroType::Invoker) {
         if snapshot
             .invoker_cycle_hotkey
@@ -1024,6 +1050,7 @@ mod tests {
             trigger_key: None,
             meepo_farm_toggle_key: None,
             armlet_roshan_toggle_key: None,
+            wave_overlay_toggle_key: None,
             invoker_cycle_hotkey: None,
             sf_enabled: false,
             od_enabled: false,
@@ -1210,6 +1237,31 @@ mod tests {
             plan_global_hotkey_event(Key::Insert, &snapshot),
             Some(HotkeyEvent::ArmletRoshanToggle)
         ));
+    }
+
+    #[test]
+    fn wave_overlay_toggle_key_plans_hotkey_event() {
+        let mut snapshot = broodmother_test_snapshot();
+        snapshot.wave_overlay_toggle_key = Some(Key::F8);
+
+        assert!(matches!(
+            plan_global_hotkey_event(Key::F8, &snapshot),
+            Some(HotkeyEvent::WaveOverlayToggle)
+        ));
+    }
+
+    #[test]
+    fn wave_overlay_toggle_key_is_only_parsed_when_the_overlay_is_enabled() {
+        let mut settings = Settings::default();
+        settings.wave_overlay.toggle_key = "F8".to_string();
+
+        settings.wave_overlay.enabled = false;
+        let disabled = KeyboardSnapshot::from_runtime(&settings, &AppState::default());
+        assert_eq!(disabled.wave_overlay_toggle_key, None);
+
+        settings.wave_overlay.enabled = true;
+        let enabled = KeyboardSnapshot::from_runtime(&settings, &AppState::default());
+        assert_eq!(enabled.wave_overlay_toggle_key, Some(Key::F8));
     }
 
     #[test]

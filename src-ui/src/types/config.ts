@@ -305,6 +305,14 @@ export interface WaveTrackerConfig {
   confidence_degrading_seconds: number;
 }
 
+export interface WaveOverlayConfig {
+  enabled: boolean;
+  toggle_key: string;
+  offset_x: number;
+  offset_y: number;
+  opacity: number;
+}
+
 export interface MinimapCaptureConfig {
   enabled: boolean;
   minimap_x: number;
@@ -348,4 +356,5 @@ export interface Settings {
   minimap_capture: MinimapCaptureConfig;
   minimap_analysis: MinimapAnalysisConfig;
   wave_tracker: WaveTrackerConfig;
+  wave_overlay: WaveOverlayConfig;
 }

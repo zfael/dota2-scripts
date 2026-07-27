@@ -87,6 +87,30 @@ pub struct WaveSnapshotDto {
     pub clashes: Vec<LaneClashDto>,
 }
 
+/// Matches frontend `OverlayBounds` in src-ui/src/types/waves.ts
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct OverlayBoundsDto {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+}
+
+/// Matches frontend `WaveOverlayStatus` in src-ui/src/types/waves.ts
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WaveOverlayStatusDto {
+    pub enabled: bool,
+    pub visible: bool,
+    pub toggle_key: String,
+    /// "NotFound" | "Windowed" | "Borderless".
+    pub dota_window_mode: String,
+    /// Where the overlay is (or would be) placed; `None` if Dota is not running
+    /// or the configured minimap region has no area.
+    pub bounds: Option<OverlayBoundsDto>,
+}
+
 /// Matches frontend QueueMetrics in src-ui/src/types/game.ts
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

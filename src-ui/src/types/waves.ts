@@ -49,6 +49,28 @@ export interface WaveSnapshot {
   clashes: LaneClash[];
 }
 
+export interface OverlayBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * `dotaWindowMode` is best-effort. True exclusive fullscreen cannot be reliably
+ * told apart from borderless from outside the game process, so "Borderless" means
+ * "borderless or fullscreen" and the UI must say so rather than promise detection.
+ */
+export type DotaWindowMode = "NotFound" | "Windowed" | "Borderless";
+
+export interface WaveOverlayStatus {
+  enabled: boolean;
+  visible: boolean;
+  toggleKey: string;
+  dotaWindowMode: DotaWindowMode;
+  bounds: OverlayBounds | null;
+}
+
 export const LANE_DISPLAY_NAMES: Record<Lane, string> = {
   Top: "Top",
   Mid: "Mid",

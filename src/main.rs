@@ -206,6 +206,11 @@ async fn main() {
                         if armed { "armed" } else { "disarmed" }
                     );
                 }
+                input::keyboard::HotkeyEvent::WaveOverlayToggle => {
+                    // The overlay is a Tauri window; this legacy egui binary has
+                    // no way to show it.
+                    info!("Wave overlay toggle ignored - not supported in the egui build");
+                }
                 input::keyboard::HotkeyEvent::InvokerCycleComboProfile => {
                     let enabled_combo_profile_ids = hotkey_settings
                         .lock()

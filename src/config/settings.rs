@@ -789,6 +789,51 @@ fn default_confidence_degrading_seconds() -> i32 {
     900
 }
 
+/// Click-through overlay drawn on top of Dota 2's in-game minimap.
+///
+/// The overlay is positioned from the Dota client rect plus the `[minimap_capture]`
+/// region, so those offsets are the single source of truth for where the minimap is;
+/// `offset_x` / `offset_y` here are only a nudge for fine alignment.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WaveOverlayConfig {
+    #[serde(default = "default_wave_overlay_enabled")]
+    pub enabled: bool,
+    /// Global hotkey that shows/hides the overlay. Blocked from reaching Dota.
+    #[serde(default = "default_wave_overlay_toggle_key")]
+    pub toggle_key: String,
+    /// Horizontal nudge in physical pixels, applied on top of the minimap region.
+    #[serde(default)]
+    pub offset_x: i32,
+    /// Vertical nudge in physical pixels, applied on top of the minimap region.
+    #[serde(default)]
+    pub offset_y: i32,
+    /// Overall overlay opacity, 0.0-1.0.
+    #[serde(default = "default_wave_overlay_opacity")]
+    pub opacity: f32,
+}
+
+impl Default for WaveOverlayConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_wave_overlay_enabled(),
+            toggle_key: default_wave_overlay_toggle_key(),
+            offset_x: 0,
+            offset_y: 0,
+            opacity: default_wave_overlay_opacity(),
+        }
+    }
+}
+
+fn default_wave_overlay_enabled() -> bool {
+    false
+}
+fn default_wave_overlay_toggle_key() -> String {
+    "F8".to_string()
+}
+fn default_wave_overlay_opacity() -> f32 {
+    0.85
+}
+
 impl Default for GsiLoggingConfig {
     fn default() -> Self {
         Self {
@@ -942,6 +987,8 @@ pub struct Settings {
     pub minimap_analysis: MinimapAnalysisConfig,
     #[serde(default)]
     pub wave_tracker: WaveTrackerConfig,
+    #[serde(default)]
+    pub wave_overlay: WaveOverlayConfig,
 }
 
 // Default functions
@@ -2167,6 +2214,7 @@ impl Default for Settings {
             minimap_capture: MinimapCaptureConfig::default(),
             minimap_analysis: MinimapAnalysisConfig::default(),
             wave_tracker: WaveTrackerConfig::default(),
+            wave_overlay: WaveOverlayConfig::default(),
         }
     }
 }

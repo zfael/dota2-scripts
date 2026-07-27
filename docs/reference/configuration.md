@@ -220,6 +220,30 @@ page without helping.
 See `src/observability/wave_tracker.rs`, `src-tauri/src/commands/waves.rs`,
 `src-ui/src/pages/WaveTracker.tsx`, and `docs/features/wave-tracker.md`.
 
+## `[wave_overlay]`
+
+Click-through overlay drawn on top of Dota 2's in-game minimap. Placement is derived
+from the Dota client rect plus the `[minimap_capture]` region, so those offsets are the
+single source of truth for where the minimap is.
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `enabled` | `false` | `false` | Enables the overlay's global hotkey. The overlay can still be shown from the UI button when this is off. |
+| `toggle_key` | `"F8"` | `"F8"` | Global hotkey that shows/hides the overlay. Blocked from reaching Dota, so pick a key Dota does not need. Must parse via `src/input/keyboard.rs::parse_key_string()`. |
+| `offset_x` | `0` | `0` | Horizontal nudge in physical pixels on top of the minimap region. |
+| `offset_y` | `0` | `0` | Vertical nudge in physical pixels on top of the minimap region. |
+| `opacity` | `0.85` | `0.85` | Overlay opacity, `0.0`-`1.0`. |
+
+**Requires Dota in Borderless or Windowed mode.** No overlay can draw over exclusive
+fullscreen, and that state cannot be reliably detected from outside the game process —
+`get_wave_overlay_status` reports the window *style* only.
+
+**UI exposure:** fully exposed in the Wave Tracker page's Minimap Overlay card, alongside
+a show/hide button and the resolved placement.
+
+See `src/observability/wave_overlay.rs`, `src-tauri/src/commands/overlay.rs`, and
+`docs/features/wave-tracker.md`.
+
 ## `[minimap_capture]`
 
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |

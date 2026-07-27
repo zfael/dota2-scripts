@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { LanePath, WaveSnapshot } from "../types/waves";
+import type { LanePath, WaveOverlayStatus, WaveSnapshot } from "../types/waves";
 import { isTauri } from "../lib/tauri";
 import { useGameStore } from "./gameStore";
 
@@ -35,13 +35,39 @@ export function interpolatedClock(
 interface WaveStore {
   lanePaths: LanePath[];
   snapshot: WaveSnapshot | null;
+  overlayStatus: WaveOverlayStatus | null;
   fetchLanePaths: () => Promise<void>;
+  fetchOverlayStatus: () => Promise<void>;
+  toggleOverlay: () => Promise<void>;
   startTracking: () => () => void;
 }
 
 export const useWaveStore = create<WaveStore>((set, get) => ({
   lanePaths: [],
   snapshot: null,
+  overlayStatus: null,
+
+  fetchOverlayStatus: async () => {
+    if (!isTauri()) return;
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const overlayStatus = await invoke<WaveOverlayStatus>("get_wave_overlay_status");
+      set({ overlayStatus });
+    } catch (e) {
+      console.error("Failed to fetch wave overlay status:", e);
+    }
+  },
+
+  toggleOverlay: async () => {
+    if (!isTauri()) return;
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke<boolean>("toggle_wave_overlay");
+    } catch (e) {
+      console.error("Failed to toggle wave overlay:", e);
+    }
+    await get().fetchOverlayStatus();
+  },
 
   fetchLanePaths: async () => {
     if (!isTauri()) return;
@@ -56,6 +82,7 @@ export const useWaveStore = create<WaveStore>((set, get) => ({
 
   startTracking: () => {
     void get().fetchLanePaths();
+    void get().fetchOverlayStatus();
 
     if (!isTauri()) return () => {};
 

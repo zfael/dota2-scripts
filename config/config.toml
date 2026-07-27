@@ -39,6 +39,16 @@ bottom_meet_progress = 0.58
 confidence_high_seconds = 600
 confidence_degrading_seconds = 900
 
+# Click-through overlay drawn over Dota's in-game minimap.
+# Placement comes from [minimap_capture] minimap_x/y/width/height plus the
+# offsets below. Requires Dota in Borderless or Windowed mode.
+[wave_overlay]
+enabled = false
+toggle_key = "F8"
+offset_x = 0
+offset_y = 0
+opacity = 0.85
+
 [minimap_capture]
 enabled = false
 minimap_x = 2
