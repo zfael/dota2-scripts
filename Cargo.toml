@@ -44,6 +44,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Global hotkeys with grab support for key interception
 rdev = { version = "0.5", features = ["unstable_grab"] }
 
+# Audio alerts
+rodio = "0.20"
+
 # Utilities
 lazy_static = "1.4"
 image = "0.25"

@@ -167,6 +167,13 @@
 | `src/observability/lane_heat.rs` | Zone activity classifier, rolling lane heat tracker, and event detection | `docs/superpowers/specs/2026-03-31-lane-heat-analysis-design.md` |
 | `src/observability/wave_tracker.rs` | Clock-driven creep wave spawn cadence, lane path interpolation, and clash prediction | `docs/features/wave-tracker.md` |
 | `src/observability/wave_overlay.rs` | Screen-space placement maths for the click-through minimap overlay | `docs/features/wave-tracker.md` |
+| `src/observability/alerts.rs` | Objective alert schedules, cue assignments, and fire-once scheduling | `docs/features/objective-alerts.md` |
+| `src/audio/motif.rs` | Procedural synthesis of alert cues (pure DSP, no device needed) | `docs/features/objective-alerts.md` |
+| `src/audio/player.rs` | rodio output: PCM and file playback for alert cues | `docs/features/objective-alerts.md` |
+| `src-tauri/src/commands/alerts.rs` | Tauri commands for alert countdowns and test playback | `docs/features/objective-alerts.md` |
+| `src-ui/src/types/alerts.ts` | Alert event keys, catalogue metadata, and countdown formatting | `docs/features/objective-alerts.md` |
+| `src-ui/src/stores/alertStore.ts` | Alert countdown polling and test playback | `docs/features/objective-alerts.md` |
+| `src-ui/src/pages/Alerts.tsx` | Alerts page: master controls and per-event settings with test buttons | `docs/features/objective-alerts.md` |
 | `src-tauri/src/commands/waves.rs` | Tauri commands exposing lane geometry and wave snapshots to the UI | `docs/features/wave-tracker.md` |
 | `src-tauri/src/commands/overlay.rs` | Overlay window lifecycle, click-through setup, and the follow-Dota reposition loop | `docs/features/wave-tracker.md` |
 

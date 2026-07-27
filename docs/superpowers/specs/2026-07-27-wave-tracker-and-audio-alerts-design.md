@@ -188,19 +188,36 @@ manual-test-only; see the feature doc.
 
 Reconcile D1's predictions against creep clusters detected by the existing minimap analysis, using a second cluster-size band below the hero band. Parked, not scheduled: positional accuracy is a non-goal, and D1–D3 stand without it.
 
-### D5 — Audio Engine
+### D5 — Audio Engine ✅ *shipped*
 
-Add `rodio`. Build an alert bus in Rust with per-event configuration (enabled, lead time, volume, sound source), master mute, procedural motif synthesis, and `.wav`/`.mp3` override support. Migrate the existing rune alert off the WebView oscillator. Add a test-play button per event in Settings.
+`rodio` playback in Rust with procedural motif synthesis, per-event configuration,
+master volume, and `.wav`/`.mp3` override that falls back to the built-in cue on
+failure. The WebView oscillator hook was **removed**, not left in place — running both
+would double-fire every cue. Per-event Test buttons live on the new Alerts page.
 
-Per the repo's documentation contract, every new `*Config` field needs a doc-table entry and an explicit decision on React UI exposure.
+Synthesis (`src/audio/motif.rs`) is pure DSP and fully unit-tested without an audio
+device. Two details turned out to matter: inharmonic partials are what make the bell
+timbre read as metallic, and a 3ms attack/release ramp is required or every cue starts
+and ends on a waveform discontinuity — an audible click.
 
-### D6 — Event Catalogue
+### D6 — Event Catalogue ✅ *shipped*
 
-Expand from the single generic rune to the full table above: power, wisdom, water, bounty, Tormentor, neutral tiers, stack timing. Each event gets independent enable/lead/volume/sound configuration.
+All seven events with independent enable/lead/volume/sound config. Tormentor and Stack
+ship **off** by default (role-specific, and once-a-minute respectively).
+
+One finding worth recording: power and bounty runes **coincide** every six minutes, so
+both cues fire together at 6:00, 12:00, 18:00. Correct behaviour, now locked in by a
+test — an initial test that counted fired alerts caught it.
+
+`[rune_alerts]` was left in place driving the header countdown, with `audio_enabled`
+downgraded to a documented no-op. Folding that countdown onto the power-rune schedule
+is a sensible future cleanup, deliberately not bundled here.
 
 ### D7 — Voice Pack
 
-Offline-generated TTS callouts, committed as assets, selectable per event alongside the procedural motifs.
+Offline-generated TTS callouts, committed as assets, selectable per event alongside the
+procedural motifs. The `sound_file` override shipped in D5 is the hook this needs, so
+D7 is now purely asset generation plus a pack selector.
 
 ---
 

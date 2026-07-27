@@ -67,6 +67,11 @@ fn refresh_observability_state(
         event.map.clock_time,
         &settings.rune_alerts,
     );
+
+    // Scheduled objective alerts. Playback happens in Rust rather than the
+    // WebView so alerts still sound while the app window is minimised.
+    crate::observability::alerts::process_clock_time(event.map.clock_time, &settings.alerts);
+
     if let Ok(mut state) = app_state.lock() {
         state.rune_alerts = Some(snapshot);
     }

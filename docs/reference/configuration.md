@@ -187,9 +187,40 @@ See `docs/features/soul-ring.md` and `docs/features/keyboard-interception.md`.
 | `enabled` | `true` | `true` | Enables backend rune-alert window tracking. The Tauri UI may still show the countdown even when alerts are disabled. |
 | `alert_lead_seconds` | `10` | `10` | Number of seconds before a rune spawn when the alert window opens. |
 | `interval_seconds` | `120` | `120` | Rune cadence used by `src/observability/rune_alerts.rs`. |
-| `audio_enabled` | `true` | `true` | In the Tauri app, gates the frontend Web Audio tone. Setting this to `false` silences audio without removing the timer. |
+| `audio_enabled` | `true` | `true` | **No-op.** Previously gated a WebView tone that has been removed; audio is owned by `[alerts]`. Retained so existing config files keep parsing. |
 
-See `src/observability/rune_alerts.rs`, `src-ui/src/hooks/useRuneAlert.ts`, and `src-ui/src/pages/Settings.tsx`.
+This section is the older generic "next rune every N seconds" timer. It still drives the
+`runeTimer` countdown in the status header, but no longer produces sound — see `[alerts]`.
+
+See `src/observability/rune_alerts.rs` and `src-ui/src/pages/Settings.tsx`.
+
+## `[alerts]`
+
+Scheduled objective audio alerts. Cues are generated in-app, so no sound files ship.
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `enabled` | `true` | `true` | Master switch. When false nothing sounds, whatever the per-event values. |
+| `master_volume` | `0.8` | `0.8` | `0.0`-`1.0`, multiplied into every per-event volume. |
+
+### `[alerts.<event>]`
+
+One sub-table per event: `power_rune`, `wisdom_rune`, `water_rune`, `bounty_rune`,
+`tormentor`, `neutral_item`, `stack`.
+
+| Field | Rust fallback | Notes |
+|---|---:|---|
+| `enabled` | varies | On for runes and neutrals; **off** for `tormentor` (role-specific) and `stack` (fires every minute). |
+| `lead_seconds` | varies | Seconds before the event that the cue plays. Defaults: power 15, wisdom 20, water 15, bounty 15, tormentor 30, neutral 10, stack 5. |
+| `volume` | `1.0` | `0.0`-`1.0`, scaled by `master_volume`. |
+| `sound_file` | `""` | Path to a custom `.wav` / `.mp3`. Empty uses the built-in cue. A file that cannot be opened or decoded falls back to the built-in cue rather than going silent. |
+
+Schedules are compiled in, not configurable — they are game constants. See
+`docs/features/objective-alerts.md` for the schedule table and the cue design.
+
+**UI exposure:** fully exposed on the Alerts page, including a per-event Test button.
+
+See `src/observability/alerts.rs`, `src/audio/`, and `docs/features/objective-alerts.md`.
 
 ## `[wave_tracker]`
 

@@ -270,6 +270,17 @@ export const mockConfig: Settings = {
     enabled: false, toggle_key: "F8",
     offset_x: 0, offset_y: 0, opacity: 0.85,
   },
+  alerts: {
+    enabled: true,
+    master_volume: 0.8,
+    power_rune: { enabled: true, lead_seconds: 15, volume: 1.0, sound_file: "" },
+    wisdom_rune: { enabled: true, lead_seconds: 20, volume: 1.0, sound_file: "" },
+    water_rune: { enabled: true, lead_seconds: 15, volume: 1.0, sound_file: "" },
+    bounty_rune: { enabled: true, lead_seconds: 15, volume: 1.0, sound_file: "" },
+    tormentor: { enabled: false, lead_seconds: 30, volume: 1.0, sound_file: "" },
+    neutral_item: { enabled: true, lead_seconds: 10, volume: 1.0, sound_file: "" },
+    stack: { enabled: false, lead_seconds: 5, volume: 1.0, sound_file: "" },
+  },
   minimap_capture: {
     enabled: false, minimap_x: 0, minimap_y: 0,
     minimap_width: 256, minimap_height: 256,

@@ -4,7 +4,6 @@ import { Sidebar } from "./components/layout/Sidebar";
 import { StatusHeader } from "./components/layout/StatusHeader";
 import { UpdateBanner } from "./components/layout/UpdateBanner";
 import { ActivityTicker } from "./components/layout/ActivityTicker";
-import { useRuneAlert } from "./hooks/useRuneAlert";
 import { useConfigStore } from "./stores/configStore";
 import { useGameStore } from "./stores/gameStore";
 import { useUIStore } from "./stores/uiStore";
@@ -21,6 +20,7 @@ import Diagnostics from "./pages/Diagnostics";
 import Settings from "./pages/Settings";
 import MinimapIntelligence from "./pages/MinimapIntelligence";
 import WaveTracker from "./pages/WaveTracker";
+import Alerts from "./pages/Alerts";
 
 export default function App() {
   useEffect(() => {
@@ -44,10 +44,9 @@ export default function App() {
     (s) => s.invokerActiveComboProfileId,
   );
   const invokerProfiles = useConfigStore((s) => s.config.heroes.invoker.profiles);
-  const runeAlertsEnabled = useConfigStore((s) => s.config.rune_alerts.enabled);
-  const runeAlertAudioEnabled = useConfigStore((s) => s.config.rune_alerts.audio_enabled);
-
-  useRuneAlert(game.runeTimer, runeAlertsEnabled, runeAlertAudioEnabled);
+  // Alert audio is played by the Rust engine (see src/observability/alerts.rs),
+  // not here: this window is normally minimised while playing, and the OS may
+  // throttle a backgrounded WebView's timers and suspend its AudioContext.
   const entries = useActivityStore((s) => s.entries);
   const tickerEntries = entries.slice(-3).map((e) => ({
     id: e.id,
@@ -102,6 +101,7 @@ export default function App() {
               <Route path="/activity" element={<ActivityLog />} />
               <Route path="/minimap" element={<MinimapIntelligence />} />
               <Route path="/waves" element={<WaveTracker />} />
+              <Route path="/alerts" element={<Alerts />} />
               <Route path="/diagnostics" element={<Diagnostics />} />
               <Route path="/settings" element={<Settings />} />
             </Routes>

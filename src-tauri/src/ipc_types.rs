@@ -87,6 +87,18 @@ pub struct WaveSnapshotDto {
     pub clashes: Vec<LaneClashDto>,
 }
 
+/// Matches frontend `AlertCountdown` in src-ui/src/types/alerts.ts
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AlertCountdownDto {
+    /// Stable key, e.g. "power_rune".
+    pub event: String,
+    pub display_name: String,
+    pub enabled: bool,
+    pub next_occurrence_seconds: Option<i32>,
+    pub seconds_until: Option<i32>,
+}
+
 /// Matches frontend `OverlayBounds` in src-ui/src/types/waves.ts
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

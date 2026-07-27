@@ -1,4 +1,5 @@
 pub mod actions;
+pub mod audio;
 pub mod config;
 pub mod gsi;
 pub mod input;

@@ -789,6 +789,139 @@ fn default_confidence_degrading_seconds() -> i32 {
     900
 }
 
+/// Per-event alert settings.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AlertEventConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// How many seconds before the event the cue plays.
+    #[serde(default = "default_alert_lead_seconds")]
+    pub lead_seconds: i32,
+    /// Per-event volume, `0.0`-`1.0`, scaled by `[alerts] master_volume`.
+    #[serde(default = "default_alert_volume")]
+    pub volume: f32,
+    /// Path to a custom `.wav` / `.mp3`. Empty means use the built-in cue.
+    #[serde(default)]
+    pub sound_file: String,
+}
+
+impl AlertEventConfig {
+    fn new(enabled: bool, lead_seconds: i32) -> Self {
+        Self {
+            enabled,
+            lead_seconds,
+            volume: default_alert_volume(),
+            sound_file: String::new(),
+        }
+    }
+}
+
+impl Default for AlertEventConfig {
+    fn default() -> Self {
+        Self::new(true, default_alert_lead_seconds())
+    }
+}
+
+/// Scheduled map-objective audio alerts.
+///
+/// Each event is configured independently so lead times can match how much
+/// warning that objective actually needs.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AlertsConfig {
+    /// Master switch. When false nothing sounds, whatever the per-event values.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Master volume, `0.0`-`1.0`, multiplied into every per-event volume.
+    #[serde(default = "default_alert_master_volume")]
+    pub master_volume: f32,
+    #[serde(default = "default_power_rune_alert")]
+    pub power_rune: AlertEventConfig,
+    #[serde(default = "default_wisdom_rune_alert")]
+    pub wisdom_rune: AlertEventConfig,
+    #[serde(default = "default_water_rune_alert")]
+    pub water_rune: AlertEventConfig,
+    #[serde(default = "default_bounty_rune_alert")]
+    pub bounty_rune: AlertEventConfig,
+    #[serde(default = "default_tormentor_alert")]
+    pub tormentor: AlertEventConfig,
+    #[serde(default = "default_neutral_item_alert")]
+    pub neutral_item: AlertEventConfig,
+    #[serde(default = "default_stack_alert")]
+    pub stack: AlertEventConfig,
+}
+
+impl AlertsConfig {
+    /// Settings for one event.
+    pub fn for_event(
+        &self,
+        event: crate::observability::alerts::AlertEvent,
+    ) -> &AlertEventConfig {
+        use crate::observability::alerts::AlertEvent;
+        match event {
+            AlertEvent::PowerRune => &self.power_rune,
+            AlertEvent::WisdomRune => &self.wisdom_rune,
+            AlertEvent::WaterRune => &self.water_rune,
+            AlertEvent::BountyRune => &self.bounty_rune,
+            AlertEvent::Tormentor => &self.tormentor,
+            AlertEvent::NeutralItem => &self.neutral_item,
+            AlertEvent::Stack => &self.stack,
+        }
+    }
+}
+
+impl Default for AlertsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            master_volume: default_alert_master_volume(),
+            power_rune: default_power_rune_alert(),
+            wisdom_rune: default_wisdom_rune_alert(),
+            water_rune: default_water_rune_alert(),
+            bounty_rune: default_bounty_rune_alert(),
+            tormentor: default_tormentor_alert(),
+            neutral_item: default_neutral_item_alert(),
+            stack: default_stack_alert(),
+        }
+    }
+}
+
+fn default_true() -> bool {
+    true
+}
+fn default_alert_lead_seconds() -> i32 {
+    15
+}
+fn default_alert_volume() -> f32 {
+    1.0
+}
+fn default_alert_master_volume() -> f32 {
+    0.8
+}
+fn default_power_rune_alert() -> AlertEventConfig {
+    AlertEventConfig::new(true, 15)
+}
+fn default_wisdom_rune_alert() -> AlertEventConfig {
+    AlertEventConfig::new(true, 20)
+}
+fn default_water_rune_alert() -> AlertEventConfig {
+    AlertEventConfig::new(true, 15)
+}
+fn default_bounty_rune_alert() -> AlertEventConfig {
+    AlertEventConfig::new(true, 15)
+}
+/// Off by default: Tormentor matters only to some roles, and a 20-minute-in
+/// alert is noise for everyone else.
+fn default_tormentor_alert() -> AlertEventConfig {
+    AlertEventConfig::new(false, 30)
+}
+fn default_neutral_item_alert() -> AlertEventConfig {
+    AlertEventConfig::new(true, 10)
+}
+/// Off by default: this one fires every single minute.
+fn default_stack_alert() -> AlertEventConfig {
+    AlertEventConfig::new(false, 5)
+}
+
 /// Click-through overlay drawn on top of Dota 2's in-game minimap.
 ///
 /// The overlay is positioned from the Dota client rect plus the `[minimap_capture]`
@@ -989,6 +1122,8 @@ pub struct Settings {
     pub wave_tracker: WaveTrackerConfig,
     #[serde(default)]
     pub wave_overlay: WaveOverlayConfig,
+    #[serde(default)]
+    pub alerts: AlertsConfig,
 }
 
 // Default functions
@@ -2215,6 +2350,7 @@ impl Default for Settings {
             minimap_analysis: MinimapAnalysisConfig::default(),
             wave_tracker: WaveTrackerConfig::default(),
             wave_overlay: WaveOverlayConfig::default(),
+            alerts: AlertsConfig::default(),
         }
     }
 }

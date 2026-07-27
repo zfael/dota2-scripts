@@ -1,0 +1,43 @@
+import { create } from "zustand";
+import type { AlertCountdown, AlertEventKey } from "../types/alerts";
+import { isTauri } from "../lib/tauri";
+
+const POLL_INTERVAL_MS = 1000;
+
+interface AlertStore {
+  countdowns: AlertCountdown[];
+  fetchCountdowns: () => Promise<void>;
+  testPlay: (event: AlertEventKey) => Promise<void>;
+  startPolling: () => () => void;
+}
+
+export const useAlertStore = create<AlertStore>((set, get) => ({
+  countdowns: [],
+
+  fetchCountdowns: async () => {
+    if (!isTauri()) return;
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const countdowns = await invoke<AlertCountdown[]>("get_alert_countdowns");
+      set({ countdowns });
+    } catch (e) {
+      console.error("Failed to fetch alert countdowns:", e);
+    }
+  },
+
+  testPlay: async (event) => {
+    if (!isTauri()) return;
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("test_play_alert", { event });
+    } catch (e) {
+      console.error("Failed to play test alert:", e);
+    }
+  },
+
+  startPolling: () => {
+    void get().fetchCountdowns();
+    const interval = setInterval(() => void get().fetchCountdowns(), POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  },
+}));

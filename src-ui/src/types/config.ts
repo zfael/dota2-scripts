@@ -305,6 +305,25 @@ export interface WaveTrackerConfig {
   confidence_degrading_seconds: number;
 }
 
+export interface AlertEventConfig {
+  enabled: boolean;
+  lead_seconds: number;
+  volume: number;
+  sound_file: string;
+}
+
+export interface AlertsConfig {
+  enabled: boolean;
+  master_volume: number;
+  power_rune: AlertEventConfig;
+  wisdom_rune: AlertEventConfig;
+  water_rune: AlertEventConfig;
+  bounty_rune: AlertEventConfig;
+  tormentor: AlertEventConfig;
+  neutral_item: AlertEventConfig;
+  stack: AlertEventConfig;
+}
+
 export interface WaveOverlayConfig {
   enabled: boolean;
   toggle_key: string;
@@ -357,4 +376,5 @@ export interface Settings {
   minimap_analysis: MinimapAnalysisConfig;
   wave_tracker: WaveTrackerConfig;
   wave_overlay: WaveOverlayConfig;
+  alerts: AlertsConfig;
 }

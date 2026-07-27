@@ -161,6 +161,8 @@ pub fn run() {
             commands::overlay::hide_wave_overlay,
             commands::overlay::toggle_wave_overlay,
             commands::overlay::get_wave_overlay_status,
+            commands::alerts::get_alert_countdowns,
+            commands::alerts::test_play_alert,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

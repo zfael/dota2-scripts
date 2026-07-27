@@ -39,6 +39,56 @@ bottom_meet_progress = 0.58
 confidence_high_seconds = 600
 confidence_degrading_seconds = 900
 
+# Scheduled objective audio alerts. Cues are generated in-app, so no sound
+# files are needed; set sound_file on an event to override it with your own.
+[alerts]
+enabled = true
+master_volume = 0.8
+
+[alerts.power_rune]
+enabled = true
+lead_seconds = 15
+volume = 1.0
+sound_file = ""
+
+[alerts.wisdom_rune]
+enabled = true
+lead_seconds = 20
+volume = 1.0
+sound_file = ""
+
+[alerts.water_rune]
+enabled = true
+lead_seconds = 15
+volume = 1.0
+sound_file = ""
+
+[alerts.bounty_rune]
+enabled = true
+lead_seconds = 15
+volume = 1.0
+sound_file = ""
+
+# Off by default: only relevant to some roles.
+[alerts.tormentor]
+enabled = false
+lead_seconds = 30
+volume = 1.0
+sound_file = ""
+
+[alerts.neutral_item]
+enabled = true
+lead_seconds = 10
+volume = 1.0
+sound_file = ""
+
+# Off by default: this one fires every single minute.
+[alerts.stack]
+enabled = false
+lead_seconds = 5
+volume = 1.0
+sound_file = ""
+
 # Click-through overlay drawn over Dota's in-game minimap.
 # Placement comes from [minimap_capture] minimap_x/y/width/height plus the
 # offsets below. Requires Dota in Borderless or Windowed mode.
