@@ -332,6 +332,16 @@ export interface WaveOverlayConfig {
   offset_y: number;
   opacity: number;
   show_lane_lines: boolean;
+  /**
+   * Where map space sits inside the overlay window. The window covers Dota's
+   * whole minimap panel; the map texture is inset inside its bezel, so these
+   * correct for the difference. Fractions of the window, y positive downward.
+   */
+  map_offset_x: number;
+  map_offset_y: number;
+  map_scale_x: number;
+  map_scale_y: number;
+  calibrating: boolean;
 }
 
 export interface MinimapCaptureConfig {

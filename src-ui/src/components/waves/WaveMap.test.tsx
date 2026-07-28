@@ -140,6 +140,63 @@ describe("WaveMap", () => {
     expect(container.querySelector("line")).not.toBeNull();
   });
 
+  it("maps map space onto the whole box when uncalibrated", () => {
+    const { container } = render(
+      <WaveMap lanePaths={lanePaths} snapshot={snapshot()} showBounds />,
+    );
+    const rect = container.querySelector('[data-testid="map-bounds"] rect');
+
+    expect(Number(rect?.getAttribute("x"))).toBeCloseTo(0, 1);
+    expect(Number(rect?.getAttribute("y"))).toBeCloseTo(0, 1);
+    expect(Number(rect?.getAttribute("width"))).toBeCloseTo(100, 1);
+    expect(Number(rect?.getAttribute("height"))).toBeCloseTo(100, 1);
+  });
+
+  it("shifts and scales the drawing about the centre when calibrated", () => {
+    const { container } = render(
+      <WaveMap
+        lanePaths={lanePaths}
+        snapshot={snapshot()}
+        showBounds
+        calibration={{ offsetX: -0.02, offsetY: 0.015, scaleX: 0.99, scaleY: 0.93 }}
+      />,
+    );
+
+    // Centred scaling: half the shrink comes off each edge, then the offset moves
+    // the whole thing. Y offset is positive downward, matching screen space.
+    const rect = container.querySelector('[data-testid="map-bounds"] rect');
+    expect(Number(rect?.getAttribute("x"))).toBeCloseTo(-2 + 0.5, 1);
+    expect(Number(rect?.getAttribute("y"))).toBeCloseTo(1.5 + 3.5, 1);
+    expect(Number(rect?.getAttribute("width"))).toBeCloseTo(99, 1);
+    expect(Number(rect?.getAttribute("height"))).toBeCloseTo(93, 1);
+
+    // Dots ride the same transform — the whole point, since they are what the
+    // overlay is for.
+    // Map (0.36, 0.36) -> 50 - 2 + (0.36 - 0.5) * 99 across,
+    //                     50 + 1.5 + (0.5 - 0.36) * 93 down.
+    const radiant = container.querySelector('[data-testid="wave-Mid-Radiant"]');
+    expect(Number(radiant?.getAttribute("cx"))).toBeCloseTo(34.14, 1);
+    expect(Number(radiant?.getAttribute("cy"))).toBeCloseTo(64.52, 1);
+  });
+
+  it("draws no calibration guides unless asked", () => {
+    const { container } = render(
+      <WaveMap lanePaths={lanePaths} snapshot={snapshot()} compact showLanes={false} />,
+    );
+
+    expect(container.querySelector('[data-testid="map-bounds"]')).toBeNull();
+  });
+
+  it("does not letterbox, so a non-square overlay keeps its calibration", () => {
+    const { container } = render(<WaveMap lanePaths={lanePaths} snapshot={null} />);
+
+    // The default, "xMidYMid meet", would fit the square viewBox inside the
+    // overlay's taller window and silently undo any vertical calibration.
+    expect(container.querySelector("svg")?.getAttribute("preserveAspectRatio")).toBe(
+      "none",
+    );
+  });
+
   it("omits base markers in compact mode for the overlay", () => {
     const full = render(<WaveMap lanePaths={lanePaths} snapshot={null} />);
     const compact = render(<WaveMap lanePaths={lanePaths} snapshot={null} compact />);

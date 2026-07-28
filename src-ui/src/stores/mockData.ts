@@ -270,6 +270,9 @@ export const mockConfig: Settings = {
     enabled: false, toggle_key: "F8",
     offset_x: 0, offset_y: 0, opacity: 0.85,
     show_lane_lines: false,
+    map_offset_x: -0.02, map_offset_y: 0.015,
+    map_scale_x: 0.993, map_scale_y: 0.929,
+    calibrating: false,
   },
   alerts: {
     enabled: true,

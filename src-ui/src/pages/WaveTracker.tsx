@@ -221,7 +221,88 @@ function OverlayControls() {
         so the dots alone read more cleanly. Affects the overlay only — the panel on
         this page always shows its lines, having no map behind them.
       </p>
+
+      <Alignment />
     </>
+  );
+}
+
+/**
+ * Live alignment controls for the overlay.
+ *
+ * The overlay window covers Dota's whole minimap panel, but the map texture is
+ * inset inside its bezel — and by how much depends on resolution and Dota's UI
+ * scale, so it cannot be a constant. The shipped defaults were measured on one
+ * setup; these controls are how anyone else lands on theirs.
+ */
+function Alignment() {
+  const overlay = useConfigStore((s) => s.config.wave_overlay);
+  const updateOverlay = (updates: Partial<typeof overlay>) =>
+    useConfigStore.getState().updateConfig("wave_overlay", updates);
+
+  // Percent in the UI, fractions in the config: whole-number nudges are far
+  // easier to step through than 0.005 increments.
+  const asPercent = (value: number) => Math.round(value * 1000) / 10;
+  const fromPercent = (value: number) => value / 100;
+
+  return (
+    <div className="space-y-3 rounded border border-border p-3">
+      <Toggle
+        label="Calibration Mode"
+        checked={overlay.calibrating}
+        onChange={(v) => updateOverlay({ calibrating: v })}
+      />
+      <p className="text-xs text-muted">
+        Shows the overlay's lane lines plus a dashed box around the area it treats
+        as the map, with a centre crosshair. Show the overlay, then adjust below
+        until the box frames Dota's map and the lines sit on Dota's lanes. Changes
+        apply live — no restart.
+      </p>
+
+      <div className="grid grid-cols-2 gap-3">
+        <NumberInput
+          label="Map Offset X"
+          value={asPercent(overlay.map_offset_x)}
+          min={-25}
+          max={25}
+          step={0.5}
+          onChange={(v) => updateOverlay({ map_offset_x: fromPercent(v) })}
+          suffix="%"
+        />
+        <NumberInput
+          label="Map Offset Y"
+          value={asPercent(overlay.map_offset_y)}
+          min={-25}
+          max={25}
+          step={0.5}
+          onChange={(v) => updateOverlay({ map_offset_y: fromPercent(v) })}
+          suffix="%"
+        />
+        <NumberInput
+          label="Map Width"
+          value={asPercent(overlay.map_scale_x)}
+          min={50}
+          max={150}
+          step={0.5}
+          onChange={(v) => updateOverlay({ map_scale_x: fromPercent(v) })}
+          suffix="%"
+        />
+        <NumberInput
+          label="Map Height"
+          value={asPercent(overlay.map_scale_y)}
+          min={50}
+          max={150}
+          step={0.5}
+          onChange={(v) => updateOverlay({ map_scale_y: fromPercent(v) })}
+          suffix="%"
+        />
+      </div>
+      <p className="text-xs text-muted">
+        Offsets move map space within the window (Y is positive downward); widths
+        and heights scale it about its centre. Distinct from Offset X/Y above,
+        which move the whole window instead.
+      </p>
+    </div>
   );
 }
 

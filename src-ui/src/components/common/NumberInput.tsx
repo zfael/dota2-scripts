@@ -4,6 +4,9 @@ interface NumberInputProps {
   onChange: (value: number) => void;
   min?: number;
   max?: number;
+  /** Arrow-key increment. Also what the browser validates against, so fractional
+   * values need this set or they read as invalid. */
+  step?: number;
   suffix?: string;
   disabled?: boolean;
 }
@@ -14,6 +17,7 @@ export function NumberInput({
   onChange,
   min,
   max,
+  step,
   suffix,
   disabled = false,
 }: NumberInputProps) {
@@ -27,6 +31,7 @@ export function NumberInput({
           onChange={(e) => onChange(Number(e.target.value))}
           min={min}
           max={max}
+          step={step}
           disabled={disabled}
           className="h-8 w-full rounded-md border border-border bg-input px-3 font-mono text-sm
                      text-content focus:border-border-accent focus:outline-none

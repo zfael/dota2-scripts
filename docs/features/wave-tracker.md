@@ -50,10 +50,23 @@ Lane progress is separately normalised: `0.0` is the Radiant barracks end of the
 `1.0` the Dire barracks end — for both teams' waves. A Dire wave therefore starts at
 progress `1.0` and counts down.
 
-Lane paths are hand-calibrated polylines (`TOP_LANE_PATH`, `MID_LANE_PATH`,
-`BOTTOM_LANE_PATH`). `point_at(lane, progress)` walks the polyline by cumulative segment
-length. These waypoints are approximations expected to be refined against whatever map
-asset the renderer ends up using.
+Lane paths are polylines (`TOP_LANE_PATH`, `MID_LANE_PATH`, `BOTTOM_LANE_PATH`) fitted to
+in-game tower positions — towers sit on the lane, so their centres are the only landmarks
+precise enough to calibrate against. `point_at(lane, progress)` walks the polyline by
+cumulative segment length. All three paths run corner to corner between the two bases at
+`(0.15, 0.15)` and `(0.85, 0.85)`, and the ring the side lanes trace runs at `0.12`/`0.88`
+on each axis.
+
+The map is symmetric under a 180° rotation about its centre, which swaps the teams and
+carries the top lane onto the bottom lane. `BOTTOM_LANE_PATH` is therefore the reverse
+complement of `TOP_LANE_PATH` rather than an independent fit, and mid is its own mirror.
+Three tests assert this, which is what keeps a retune of one lane from silently skewing
+the map.
+
+These waypoints remain approximations and retuning them is expected — but retune them in
+*map* space. Where map space lands on Dota's minimap panel is a separate, per-resolution
+concern owned by `[wave_overlay]`'s `map_offset_*`/`map_scale_*`; see
+[Overlay alignment](#overlay-alignment).
 
 ---
 
@@ -154,6 +167,36 @@ notification for it from outside the process, so a background task re-reads the 
 once a second while the overlay is visible and only touches the window when the bounds
 actually change. If Dota disappears, the overlay hides itself rather than leaving a stale
 rectangle floating over the desktop.
+
+### Overlay alignment
+
+Placing the window correctly is only half of being aligned. The window is sized to Dota's
+whole minimap **panel** — the region `[minimap_capture]` describes — but the playable map
+texture is inset inside that panel's bezel and corner buttons, and is not centred within
+it. Stretching normalised map space across the window therefore lands the lanes a few
+percent out: small in absolute terms, but a wave dot only has to miss by a couple of
+pixels to sit in the trees instead of the lane.
+
+`WaveMap` takes a `MapCalibration` (`map_offset_x/y`, `map_scale_x/y` under
+`[wave_overlay]`) describing where map space sits inside the box, applied about the
+centre. The in-app panel is a bare square and uses the identity; only the overlay passes
+anything else.
+
+The SVG sets `preserveAspectRatio="none"` deliberately. The default, `xMidYMid meet`,
+fits the square `viewBox` inside the overlay's taller window and letterboxes the
+remainder — which would silently override the vertical half of any calibration.
+
+How large the inset is depends on resolution and Dota's UI scale, so it cannot be a
+constant. The shipped defaults were fitted to tower positions measured off a 2560x1440
+borderless capture at the stock `[minimap_capture]` region. To re-derive them for another
+setup, enable **Calibration Mode** in the Wave Tracker page's Minimap Overlay card: the
+overlay then draws its lane lines plus a dashed box around the area it treats as the map,
+with a centre crosshair. Adjust until the box frames Dota's map and the lines sit on
+Dota's lanes. Config changes apply live, so no restart is needed.
+
+Do not correct a placement error by editing the lane waypoints in `wave_tracker.rs` — that
+makes the in-app panel wrong in order to make the overlay right, since the panel renders
+the same geometry with no calibration applied.
 
 ### Window lifetime
 

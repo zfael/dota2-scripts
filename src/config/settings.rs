@@ -932,6 +932,16 @@ fn default_stack_alert() -> AlertEventConfig {
 /// The overlay is positioned from the Dota client rect plus the `[minimap_capture]`
 /// region, so those offsets are the single source of truth for where the minimap is;
 /// `offset_x` / `offset_y` here are only a nudge for fine alignment.
+///
+/// # Window space vs map space
+///
+/// The overlay window covers Dota's whole minimap *panel*, but the playable map
+/// texture is inset inside that panel's bezel and corner buttons. Painting
+/// normalised map space straight onto the window therefore lands everything a few
+/// percent off — the error that `map_offset_*` / `map_scale_*` correct. They
+/// describe where map space sits inside the window, so they are a property of
+/// Dota's UI layout rather than of the map, and need re-checking after a UI patch
+/// or a resolution change. See `WaveMap` on the UI side.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WaveOverlayConfig {
     #[serde(default = "default_wave_overlay_enabled")]
@@ -951,6 +961,24 @@ pub struct WaveOverlayConfig {
     /// Draw the lane polylines and river behind the wave dots.
     #[serde(default = "default_wave_overlay_show_lane_lines")]
     pub show_lane_lines: bool,
+    /// Horizontal shift of map space within the window, as a fraction of window
+    /// width. Positive moves the drawing right.
+    #[serde(default = "default_wave_overlay_map_offset_x")]
+    pub map_offset_x: f32,
+    /// Vertical shift of map space, as a fraction of window height. Positive
+    /// moves the drawing *down*, matching screen coordinates.
+    #[serde(default = "default_wave_overlay_map_offset_y")]
+    pub map_offset_y: f32,
+    /// Width of map space as a fraction of the window, scaled about its centre.
+    #[serde(default = "default_wave_overlay_map_scale_x")]
+    pub map_scale_x: f32,
+    /// Height of map space as a fraction of the window, scaled about its centre.
+    #[serde(default = "default_wave_overlay_map_scale_y")]
+    pub map_scale_y: f32,
+    /// Draw the map-space bounding box and centre crosshair, and force the lane
+    /// lines on, so the alignment controls have something to align *to*.
+    #[serde(default)]
+    pub calibrating: bool,
 }
 
 impl Default for WaveOverlayConfig {
@@ -962,6 +990,11 @@ impl Default for WaveOverlayConfig {
             offset_y: 0,
             opacity: default_wave_overlay_opacity(),
             show_lane_lines: default_wave_overlay_show_lane_lines(),
+            map_offset_x: default_wave_overlay_map_offset_x(),
+            map_offset_y: default_wave_overlay_map_offset_y(),
+            map_scale_x: default_wave_overlay_map_scale_x(),
+            map_scale_y: default_wave_overlay_map_scale_y(),
+            calibrating: false,
         }
     }
 }
@@ -980,6 +1013,24 @@ fn default_wave_overlay_opacity() -> f32 {
 /// duplicate. The in-app panel has no map underneath it, so it keeps its lines.
 fn default_wave_overlay_show_lane_lines() -> bool {
     false
+}
+
+// Alignment defaults, fitted to tower positions measured off a 2560x1440
+// borderless screenshot at the stock `[minimap_capture]` region. The panel is
+// taller than the map texture it frames, which is why the vertical scale is
+// further from 1.0 than the horizontal one. These are a starting point, not a
+// constant of nature: re-run the in-app calibration if the overlay looks off.
+fn default_wave_overlay_map_offset_x() -> f32 {
+    -0.020
+}
+fn default_wave_overlay_map_offset_y() -> f32 {
+    0.015
+}
+fn default_wave_overlay_map_scale_x() -> f32 {
+    0.993
+}
+fn default_wave_overlay_map_scale_y() -> f32 {
+    0.929
 }
 
 impl Default for GsiLoggingConfig {

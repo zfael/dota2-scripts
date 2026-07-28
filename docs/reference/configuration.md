@@ -262,16 +262,41 @@ single source of truth for where the minimap is.
 |---|---:|---:|---|
 | `enabled` | `false` | `false` | Enables the overlay's global hotkey. The overlay can still be shown from the UI button when this is off. |
 | `toggle_key` | `"F8"` | `"F8"` | Global hotkey that shows/hides the overlay. Blocked from reaching Dota, so pick a key Dota does not need. Must parse via `src/input/keyboard.rs::parse_key_string()`. |
-| `offset_x` | `0` | `0` | Horizontal nudge in physical pixels on top of the minimap region. |
-| `offset_y` | `0` | `0` | Vertical nudge in physical pixels on top of the minimap region. |
+| `offset_x` | `0` | `0` | Horizontal nudge in physical pixels on top of the minimap region. Moves the whole window. |
+| `offset_y` | `0` | `0` | Vertical nudge in physical pixels on top of the minimap region. Moves the whole window. |
 | `opacity` | `0.85` | `0.85` | Overlay opacity, `0.0`-`1.0`. |
+| `show_lane_lines` | `false` | `false` | Draw the lane polylines and river behind the dots. Off by default because Dota's minimap already draws both. Affects the overlay only; the in-app panel always shows its lines. |
+| `map_offset_x` | `-0.020` | `-0.020` | Horizontal shift of map space *within* the window, as a fraction of window width. Positive moves right. |
+| `map_offset_y` | `0.015` | `0.015` | Vertical shift of map space within the window, as a fraction of window height. Positive moves **down** (screen convention). |
+| `map_scale_x` | `0.993` | `0.993` | Width of map space as a fraction of the window, scaled about its centre. |
+| `map_scale_y` | `0.929` | `0.929` | Height of map space as a fraction of the window, scaled about its centre. |
+| `calibrating` | `false` | `false` | Draws the map-space box and centre crosshair and forces the lane lines on, so alignment has something to align to. |
 
 **Requires Dota in Borderless or Windowed mode.** No overlay can draw over exclusive
 fullscreen, and that state cannot be reliably detected from outside the game process —
 `get_wave_overlay_status` reports the window *style* only.
 
+### Window space vs map space
+
+`offset_x`/`offset_y` place the overlay *window*; `map_offset_*`/`map_scale_*` place
+map space *inside* it. The two are separate because the window is sized to Dota's whole
+minimap panel — the region `[minimap_capture]` describes — while the playable map texture
+is inset inside that panel's bezel and corner buttons, and is not centred within it.
+Painting normalised map space straight onto the window therefore lands the lanes a few
+percent out.
+
+How large that inset is depends on resolution and Dota's UI scale, so it is configuration
+rather than a constant. The shipped defaults were fitted to tower positions measured off a
+2560x1440 borderless capture at the stock `[minimap_capture]` region; anything else needs
+re-checking. Turn on `calibrating`, show the overlay, and adjust until the dashed box
+frames Dota's map and the lane lines sit on Dota's lanes.
+
+Correcting a placement error by editing the lane waypoints in `wave_tracker.rs` instead
+would make the in-app Wave Tracker panel wrong in order to make the overlay right — the
+panel renders the same geometry with no calibration applied.
+
 **UI exposure:** fully exposed in the Wave Tracker page's Minimap Overlay card, alongside
-a show/hide button and the resolved placement.
+a show/hide button, the resolved placement, and the calibration controls.
 
 See `src/observability/wave_overlay.rs`, `src-tauri/src/commands/overlay.rs`, and
 `docs/features/wave-tracker.md`.

@@ -49,8 +49,12 @@ impl Lane {
 
     /// Waypoints running from the Radiant barracks end to the Dire barracks end.
     ///
-    /// These are hand-calibrated approximations, refined against the rendered map
-    /// asset rather than derived from game geometry. Tuning them is expected.
+    /// Approximations fitted to in-game tower positions rather than derived from
+    /// game geometry. Tuning them is expected — but tune them in *map* space. How
+    /// map space lands on Dota's minimap panel is a separate, per-resolution
+    /// concern that belongs in `WaveOverlayConfig::map_offset_*` / `map_scale_*`;
+    /// bending these to compensate for a placement error would make the in-app
+    /// panel wrong to make the overlay right.
     ///
     /// Public so renderers can draw the lanes from the same geometry the model
     /// interpolates along, keeping the two from drifting apart.
@@ -156,33 +160,45 @@ pub struct WaveSnapshot {
 }
 
 // Lane paths, Radiant end first. See module docs for the coordinate space.
+//
+// Fitted to tower positions measured off an in-game minimap: towers sit on the
+// lane, so their centres are the only landmarks precise enough to calibrate
+// against. The ring they trace runs at 0.12 / 0.88 on each axis.
+//
+// The map is symmetric under a 180° rotation, which swaps the two teams and maps
+// the top lane onto the bottom lane. `BOTTOM_LANE_PATH` is therefore the reverse
+// complement of `TOP_LANE_PATH` rather than an independent fit — see
+// `side_lanes_are_rotations_of_one_another`, which is what stops the two drifting
+// apart the next time these are retuned.
 
-const TOP_LANE_PATH: [MapPoint; 7] = [
-    MapPoint { x: 0.13, y: 0.16 },
-    MapPoint { x: 0.09, y: 0.42 },
-    MapPoint { x: 0.10, y: 0.68 },
-    MapPoint { x: 0.17, y: 0.82 },
-    MapPoint { x: 0.38, y: 0.87 },
-    MapPoint { x: 0.62, y: 0.88 },
-    MapPoint { x: 0.84, y: 0.86 },
+const TOP_LANE_PATH: [MapPoint; 8] = [
+    MapPoint { x: 0.150, y: 0.150 },
+    MapPoint { x: 0.120, y: 0.300 },
+    MapPoint { x: 0.120, y: 0.560 },
+    MapPoint { x: 0.150, y: 0.720 },
+    MapPoint { x: 0.230, y: 0.830 },
+    MapPoint { x: 0.400, y: 0.877 },
+    MapPoint { x: 0.640, y: 0.880 },
+    MapPoint { x: 0.850, y: 0.850 },
 ];
 
 const MID_LANE_PATH: [MapPoint; 5] = [
-    MapPoint { x: 0.17, y: 0.17 },
-    MapPoint { x: 0.33, y: 0.32 },
-    MapPoint { x: 0.48, y: 0.47 },
-    MapPoint { x: 0.63, y: 0.63 },
-    MapPoint { x: 0.83, y: 0.83 },
+    MapPoint { x: 0.150, y: 0.150 },
+    MapPoint { x: 0.325, y: 0.325 },
+    MapPoint { x: 0.500, y: 0.500 },
+    MapPoint { x: 0.675, y: 0.675 },
+    MapPoint { x: 0.850, y: 0.850 },
 ];
 
-const BOTTOM_LANE_PATH: [MapPoint; 7] = [
-    MapPoint { x: 0.16, y: 0.13 },
-    MapPoint { x: 0.38, y: 0.09 },
-    MapPoint { x: 0.62, y: 0.09 },
-    MapPoint { x: 0.82, y: 0.14 },
-    MapPoint { x: 0.89, y: 0.35 },
-    MapPoint { x: 0.90, y: 0.62 },
-    MapPoint { x: 0.86, y: 0.83 },
+const BOTTOM_LANE_PATH: [MapPoint; 8] = [
+    MapPoint { x: 0.150, y: 0.150 },
+    MapPoint { x: 0.360, y: 0.120 },
+    MapPoint { x: 0.600, y: 0.123 },
+    MapPoint { x: 0.770, y: 0.170 },
+    MapPoint { x: 0.850, y: 0.280 },
+    MapPoint { x: 0.880, y: 0.440 },
+    MapPoint { x: 0.880, y: 0.700 },
+    MapPoint { x: 0.850, y: 0.850 },
 ];
 
 /// Game-clock time of the next creep spawn.
@@ -576,6 +592,49 @@ mod tests {
 
         assert_close(below.x, MID_LANE_PATH[0].x, "clamped below");
         assert_close(above.x, MID_LANE_PATH[MID_LANE_PATH.len() - 1].x, "clamped above");
+    }
+
+    /// A 180° rotation about the map centre swaps the teams and carries the top
+    /// lane onto the bottom lane, so one path determines the other. Asserting it
+    /// keeps a retune of one side from silently skewing the map.
+    #[test]
+    fn side_lanes_are_rotations_of_one_another() {
+        let top = Lane::Top.waypoints();
+        let bottom = Lane::Bottom.waypoints();
+        assert_eq!(top.len(), bottom.len());
+
+        for (index, point) in top.iter().enumerate() {
+            let mirror = bottom[bottom.len() - 1 - index];
+            assert_close(mirror.x, 1.0 - point.x, "bottom lane mirror x");
+            assert_close(mirror.y, 1.0 - point.y, "bottom lane mirror y");
+        }
+    }
+
+    /// Mid runs corner to corner through the centre, so it is its own rotation.
+    #[test]
+    fn mid_lane_is_symmetric_about_the_map_centre() {
+        let mid = Lane::Mid.waypoints();
+
+        for (index, point) in mid.iter().enumerate() {
+            let mirror = mid[mid.len() - 1 - index];
+            assert_close(mirror.x, 1.0 - point.x, "mid mirror x");
+            assert_close(mirror.y, 1.0 - point.y, "mid mirror y");
+        }
+    }
+
+    /// All three lanes start and end at the two bases, so the wave dots converge
+    /// on the same points rather than fanning out at the corners.
+    #[test]
+    fn every_lane_spans_the_same_two_bases() {
+        for lane in Lane::ALL {
+            let start = point_at(lane, 0.0);
+            let end = point_at(lane, 1.0);
+
+            assert_close(start.x, 0.150, &format!("{lane} radiant end x"));
+            assert_close(start.y, 0.150, &format!("{lane} radiant end y"));
+            assert_close(end.x, 0.850, &format!("{lane} dire end x"));
+            assert_close(end.y, 0.850, &format!("{lane} dire end y"));
+        }
     }
 
     #[test]

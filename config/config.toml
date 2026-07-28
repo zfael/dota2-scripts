@@ -104,6 +104,17 @@ opacity = 0.85
 # Dota's minimap already draws the lanes and river underneath, so the dots alone
 # read more cleanly. The in-app panel keeps its lines regardless.
 show_lane_lines = false
+# Where map space sits inside the overlay window. The window covers the whole
+# minimap panel, but the map texture is inset inside its bezel — offsets are
+# fractions of the window (Y positive downward), scales are applied about the
+# centre. Measured on 2560x1440 borderless; retune via Wave Tracker >
+# Minimap Overlay > Calibration Mode if the lanes look off on your setup.
+map_offset_x = -0.020
+map_offset_y = 0.015
+map_scale_x = 0.993
+map_scale_y = 0.929
+# Draws the map-space box and forces the lane lines on while aligning.
+calibrating = false
 
 [minimap_capture]
 enabled = false
