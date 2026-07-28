@@ -132,9 +132,29 @@ pub fn run() {
             executor_metrics,
         })
         .setup(|app| {
+            use tauri::Manager;
+
             let handle = app.handle().clone();
             commands::overlay::register_app_handle(handle.clone());
-            events::start_game_state_emitter(handle);
+            events::start_game_state_emitter(handle.clone());
+
+            // Closing the main window must also close the overlay. Tauri exits
+            // when its last window closes, and the overlay is transparent,
+            // click-through, and hidden from the taskbar — so on its own it
+            // would keep the process alive as a ghost with no way to close it
+            // except Task Manager.
+            if let Some(main_window) = app.get_webview_window("main") {
+                main_window.on_window_event(move |event| {
+                    if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+                        if let Some(overlay) =
+                            handle.get_webview_window(commands::overlay::OVERLAY_LABEL)
+                        {
+                            let _ = overlay.close();
+                        }
+                    }
+                });
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

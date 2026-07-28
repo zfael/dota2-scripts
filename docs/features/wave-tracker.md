@@ -155,6 +155,13 @@ once a second while the overlay is visible and only touches the window when the 
 actually change. If Dota disappears, the overlay hides itself rather than leaving a stale
 rectangle floating over the desktop.
 
+### Window lifetime
+
+Closing the main window also closes the overlay, wired up in the Tauri `setup` hook.
+Tauri exits when its last window closes, and the overlay is transparent,
+click-through, and hidden from the taskbar — left open on its own it would keep the
+process alive as an invisible ghost that can only be killed from Task Manager.
+
 ### Click-through
 
 `set_ignore_cursor_events(true)` is the single most important property of this window.
