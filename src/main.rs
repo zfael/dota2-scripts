@@ -208,9 +208,9 @@ async fn main() {
                     );
                 }
                 input::keyboard::HotkeyEvent::WaveOverlayToggle => {
-                    // The overlay is a Tauri window; this legacy egui binary has
-                    // no way to show it.
-                    info!("Wave overlay toggle ignored - not supported in the egui build");
+                    // The overlay is a Tauri window; this binary is headless and
+                    // has no way to show it.
+                    info!("Wave overlay toggle ignored - this binary is headless");
                 }
                 input::keyboard::HotkeyEvent::InvokerCycleComboProfile => {
                     let enabled_combo_profile_ids = hotkey_settings
