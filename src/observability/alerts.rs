@@ -302,6 +302,27 @@ impl AlertScheduler {
             })
             .collect()
     }
+
+    /// Countdowns for the clock last seen, against whatever config is passed now.
+    ///
+    /// Lets a reader off the GSI path pick up a config change immediately instead
+    /// of waiting for the next packet to republish.
+    pub fn countdowns_now(&self, config: &AlertsConfig) -> Vec<AlertCountdown> {
+        match self.last_clock {
+            Some(clock) => self.countdowns(clock, config),
+            // No clock seen yet: whether an event is enabled is knowable, when it
+            // next happens is not.
+            None => AlertEvent::ALL
+                .iter()
+                .map(|&event| AlertCountdown {
+                    event,
+                    enabled: config.enabled && config.for_event(event).enabled,
+                    next_occurrence_seconds: None,
+                    seconds_until: None,
+                })
+                .collect(),
+        }
+    }
 }
 
 /// Effective playback volume for an event: per-event volume scaled by master.
@@ -377,6 +398,22 @@ pub fn process_clock_time(
     countdowns
 }
 
+/// Countdowns recomputed against the *current* config rather than whatever was in
+/// force when the last GSI packet arrived.
+///
+/// The UI polls this once a second, so without it a toggle would appear to do
+/// nothing until the next packet — and nothing at all outside a match, which is
+/// exactly when alerts get configured.
+pub fn countdowns_for(config: &AlertsConfig) -> Vec<AlertCountdown> {
+    match ALERT_SCHEDULER.lock() {
+        Ok(scheduler) => scheduler.countdowns_now(config),
+        Err(e) => {
+            warn!("alerts: scheduler lock poisoned ({e}), using the last published countdowns");
+            latest_countdowns()
+        }
+    }
+}
+
 /// Most recent countdowns, for readers that are not on the GSI path.
 pub fn latest_countdowns() -> Vec<AlertCountdown> {
     LATEST_COUNTDOWNS
@@ -401,6 +438,48 @@ mod tests {
 
     fn config() -> AlertsConfig {
         AlertsConfig::default()
+    }
+
+    #[test]
+    fn countdowns_before_any_clock_report_enablement_but_no_timings() {
+        let config = config();
+        let countdowns = AlertScheduler::new().countdowns_now(&config);
+
+        assert_eq!(countdowns.len(), AlertEvent::ALL.len());
+        for countdown in &countdowns {
+            assert_eq!(
+                countdown.enabled,
+                config.for_event(countdown.event).enabled,
+                "{} enablement should be readable with no game running",
+                countdown.event.display_name()
+            );
+            assert_eq!(countdown.next_occurrence_seconds, None);
+            assert_eq!(countdown.seconds_until, None);
+        }
+    }
+
+    #[test]
+    fn countdowns_pick_up_a_config_change_without_a_new_clock() {
+        let mut scheduler = AlertScheduler::new();
+        scheduler.update(300, &config());
+
+        let mut edited = config();
+        edited.power_rune.enabled = false;
+        edited.tormentor.enabled = true;
+        let countdowns = scheduler.countdowns_now(&edited);
+
+        let find = |event: AlertEvent| {
+            countdowns
+                .iter()
+                .find(|c| c.event == event)
+                .unwrap_or_else(|| panic!("no countdown for {}", event.display_name()))
+        };
+
+        assert!(!find(AlertEvent::PowerRune).enabled, "just turned off");
+        assert!(find(AlertEvent::Tormentor).enabled, "just turned on");
+        // Timings still come from the last clock the scheduler saw.
+        assert_eq!(find(AlertEvent::Tormentor).next_occurrence_seconds, Some(1200));
+        assert_eq!(find(AlertEvent::Tormentor).seconds_until, Some(900));
     }
 
     #[test]

@@ -228,6 +228,34 @@ using the same filenames.
 
 ---
 
+## Config Reload
+
+Settings apply without a restart. Three separate mechanisms, because the config has
+three different kinds of consumer:
+
+1. **Rust readers on the GSI path** (`alerts::process_clock_time`) and **per-call
+   readers** (`get_wave_snapshot`, the overlay follow loop) lock the shared
+   `Arc<Mutex<Settings>>` each time, so they were always live.
+2. **Countdowns** are recomputed against current config by
+   `AlertScheduler::countdowns_now`, rather than replayed from whatever the last GSI
+   packet published. Without this an enable/disable is invisible until the next
+   packet — and invisible entirely outside a match, which is when alerts get set up.
+3. **Other windows** get a `config_updated` broadcast carrying the full `Settings`
+   after every successful write. This is what the overlay needs: it is a separate
+   webview whose store loaded config once, the first time the overlay was opened.
+
+The broadcast goes to *every* window, including the editor, because the JS `listen()`
+helper registers as `EventTarget::Any` and a label-based `emit_filter` would therefore
+match nothing. The editing window drops its own echo while it still has debounced
+writes queued — see `pendingWrites` in `src-ui/src/stores/configStore.ts`. Without
+that guard, editing two sections inside the 300ms debounce window would briefly roll
+the second one back.
+
+Note that `[wave_tracker] enabled` suppresses predictions only. The spawn countdown is
+clock arithmetic with nothing to disbelieve, so it keeps reporting either way.
+
+---
+
 ## Status
 
 All deliverables are shipped. What remains is **manual verification against a running

@@ -8,10 +8,23 @@ fn event_from_key(key: &str) -> Option<AlertEvent> {
 
 /// Countdowns for every alert event, for the alerts page.
 ///
+/// Recomputed against live config so an enable/disable shows up on the next poll
+/// rather than on the next GSI packet.
+///
 /// `async` so it runs off the main thread; see `get_wave_snapshot`.
 #[tauri::command]
-pub async fn get_alert_countdowns() -> Vec<AlertCountdownDto> {
-    alerts::latest_countdowns()
+pub async fn get_alert_countdowns(
+    state: tauri::State<'_, TauriAppState>,
+) -> Result<Vec<AlertCountdownDto>, String> {
+    let config = {
+        let settings = state
+            .settings
+            .lock()
+            .map_err(|e| format!("Failed to lock settings: {}", e))?;
+        settings.alerts.clone()
+    };
+
+    Ok(alerts::countdowns_for(&config)
         .into_iter()
         .map(|countdown| AlertCountdownDto {
             event: countdown.event.key().to_string(),
@@ -20,7 +33,7 @@ pub async fn get_alert_countdowns() -> Vec<AlertCountdownDto> {
             next_occurrence_seconds: countdown.next_occurrence_seconds,
             seconds_until: countdown.seconds_until,
         })
-        .collect()
+        .collect())
 }
 
 /// Voice packs available under `assets/voice/`.

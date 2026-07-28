@@ -1,7 +1,24 @@
 use crate::TauriAppState;
 use dota2_scripts::config::Settings;
 use dota2_scripts::input::keyboard::KeyboardSnapshot;
-use tracing::info;
+use tauri::{AppHandle, Emitter};
+use tracing::{info, warn};
+
+/// Emitted after a successful config write so open windows re-render against the
+/// new settings instead of the copy they loaded at startup.
+pub const CONFIG_UPDATED_EVENT: &str = "config_updated";
+
+/// Push the persisted settings to every window.
+///
+/// Broadcast rather than addressed to the non-editing windows: the JS `listen()`
+/// helper registers as `EventTarget::Any`, so a label-based filter would match no
+/// one. The window that made the edit already holds the same values and drops its
+/// own echo while it still has debounced writes outstanding — see `configStore.ts`.
+fn broadcast_config(app: &AppHandle, settings: &Settings) {
+    if let Err(e) = app.emit(CONFIG_UPDATED_EVENT, settings) {
+        warn!("Failed to broadcast config update: {}", e);
+    }
+}
 
 fn validate_settings(settings: &Settings) -> Result<(), String> {
     if settings.server.port == 0 {
@@ -54,6 +71,7 @@ pub fn get_config(state: tauri::State<'_, TauriAppState>) -> Result<Settings, St
 pub fn update_config(
     section: String,
     updates: serde_json::Value,
+    app_handle: AppHandle,
     state: tauri::State<'_, TauriAppState>,
 ) -> Result<(), String> {
     let mut settings = state
@@ -96,6 +114,9 @@ pub fn update_config(
         .write()
         .map_err(|e| format!("Failed to lock keyboard snapshot: {}", e))?;
     *keyboard_snapshot = snapshot;
+    drop(keyboard_snapshot);
+
+    broadcast_config(&app_handle, &settings);
     info!("Config section '{}' updated and persisted", section);
 
     Ok(())
@@ -145,6 +166,7 @@ fn repair_invoker_active_combo_after_hero_edit(
 pub fn update_hero_config(
     hero: String,
     updates: serde_json::Value,
+    app_handle: AppHandle,
     state: tauri::State<'_, TauriAppState>,
 ) -> Result<(), String> {
     let mut settings = state
@@ -194,6 +216,7 @@ pub fn update_hero_config(
         .lock()
         .map_err(|e| format!("Failed to lock app state: {}", e))?;
     let snapshot = KeyboardSnapshot::from_runtime(&settings, &app);
+    let broadcast = settings.clone();
     drop(settings);
     drop(app);
     let mut keyboard_snapshot = state
@@ -201,6 +224,9 @@ pub fn update_hero_config(
         .write()
         .map_err(|e| format!("Failed to lock keyboard snapshot: {}", e))?;
     *keyboard_snapshot = snapshot;
+    drop(keyboard_snapshot);
+
+    broadcast_config(&app_handle, &broadcast);
     info!("Hero config '{}' updated and persisted", hero);
 
     Ok(())

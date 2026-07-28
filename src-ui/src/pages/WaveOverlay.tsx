@@ -20,11 +20,16 @@ export default function WaveOverlay() {
   useEffect(() => {
     useConfigStore.getState().loadConfig();
     const gameUnlisten = useGameStore.getState().startListening();
+    // This window is built once and then only hidden and re-shown, so without a
+    // live subscription it would render the config as it stood the first time the
+    // overlay was opened.
+    const configUnlisten = useConfigStore.getState().startListening();
     const stopTracking = startTracking();
 
     return () => {
       stopTracking();
       gameUnlisten.then((unlisten) => unlisten());
+      configUnlisten.then((unlisten) => unlisten());
     };
   }, [startTracking]);
 
