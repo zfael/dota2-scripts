@@ -320,6 +320,10 @@ fn confidence_at(clock_time_seconds: f32, config: &WaveTrackerConfig) -> Confide
 /// `clock_time_seconds` may be fractional: pass an interpolated clock for smooth
 /// animation, or the raw GSI value for exact readouts. Countdown fields are always
 /// whole seconds, derived from the floored clock.
+///
+/// `config.enabled` suppresses the *predictions* — positions and clashes — because
+/// those are the part that can be wrong. The spawn countdown is plain clock
+/// arithmetic with nothing to disbelieve, so it keeps reporting either way.
 pub fn wave_snapshot(clock_time_seconds: f32, config: &WaveTrackerConfig) -> WaveSnapshot {
     let whole_clock = clock_time_seconds.floor() as i32;
     let age = current_wave_age_seconds(clock_time_seconds);
@@ -328,7 +332,7 @@ pub fn wave_snapshot(clock_time_seconds: f32, config: &WaveTrackerConfig) -> Wav
     let mut waves = Vec::new();
     let mut clashes = Vec::new();
 
-    if let Some(age_seconds) = age {
+    if let Some(age_seconds) = age.filter(|_| config.enabled) {
         for lane in Lane::ALL {
             let timing = lane_timing(lane, config);
 
@@ -388,6 +392,21 @@ mod tests {
             .find(|w| w.lane == lane && w.team == team)
             .unwrap_or_else(|| panic!("no wave for {lane}/{team}"))
             .clone()
+    }
+
+    #[test]
+    fn disabling_tracking_drops_predictions_but_keeps_the_spawn_countdown() {
+        let disabled = WaveTrackerConfig {
+            enabled: false,
+            ..config()
+        };
+        let snapshot = wave_snapshot(100.0, &disabled);
+
+        assert!(snapshot.waves.is_empty(), "predicted positions are opinions");
+        assert!(snapshot.clashes.is_empty());
+        // The cadence is arithmetic, not prediction — it stays useful either way.
+        assert_eq!(snapshot.next_spawn_time_seconds, 120);
+        assert_eq!(snapshot.seconds_until_next_spawn, 20);
     }
 
     #[test]

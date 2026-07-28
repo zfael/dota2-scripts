@@ -100,6 +100,7 @@ function MapState() {
   const lanePaths = useWaveStore((s) => s.lanePaths);
   const error = useWaveStore((s) => s.error);
   const connected = useGameStore((s) => s.game.connected);
+  const trackingEnabled = useConfigStore((s) => s.config.wave_tracker.enabled);
 
   let message: string | null = null;
   let tone = "text-muted";
@@ -107,6 +108,8 @@ function MapState() {
   if (error) {
     message = `Wave data unavailable: ${error}`;
     tone = "text-red-400";
+  } else if (!trackingEnabled) {
+    message = "Wave tracking is off — enable it under Calibration.";
   } else if (!connected) {
     message = "Waiting for GSI — start a match to see waves.";
   } else if (lanePaths.length === 0) {
