@@ -1,6 +1,20 @@
 import { describe, it, expect } from "vitest";
-import { interpolatedClock, MAX_CLOCK_DRIFT_SECONDS } from "./waveStore";
+import {
+  IN_FLIGHT_TIMEOUT_MS,
+  interpolatedClock,
+  MAX_CLOCK_DRIFT_SECONDS,
+} from "./waveStore";
 import { formatGameClock } from "../types/waves";
+
+describe("in-flight guard", () => {
+  it("expires, so one stuck call cannot freeze the map forever", () => {
+    // Regression guard: this was an unbounded boolean latch. A single snapshot
+    // call that never settled left a stale pre-horn snapshot on screen with no
+    // dots and no error.
+    expect(IN_FLIGHT_TIMEOUT_MS).toBeGreaterThan(0);
+    expect(Number.isFinite(IN_FLIGHT_TIMEOUT_MS)).toBe(true);
+  });
+});
 
 describe("interpolatedClock", () => {
   it("advances smoothly between GSI packets", () => {

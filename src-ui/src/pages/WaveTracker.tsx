@@ -88,6 +88,41 @@ function LaneRow({ lane }: { lane: Lane }) {
   );
 }
 
+/**
+ * Explains an empty map.
+ *
+ * Without this, "no dots" looks identical whether the game has not started, the
+ * fetch is failing, or lane geometry never loaded — which is exactly the
+ * ambiguity that made the frozen-snapshot bug hard to spot.
+ */
+function MapState() {
+  const snapshot = useWaveStore((s) => s.snapshot);
+  const lanePaths = useWaveStore((s) => s.lanePaths);
+  const error = useWaveStore((s) => s.error);
+  const connected = useGameStore((s) => s.game.connected);
+
+  let message: string | null = null;
+  let tone = "text-muted";
+
+  if (error) {
+    message = `Wave data unavailable: ${error}`;
+    tone = "text-red-400";
+  } else if (!connected) {
+    message = "Waiting for GSI — start a match to see waves.";
+  } else if (lanePaths.length === 0) {
+    message = "Lane geometry did not load. Restart the app.";
+    tone = "text-red-400";
+  } else if (snapshot && snapshot.currentWaveAgeSeconds === null) {
+    message = "Before the horn — the first wave spawns at 0:00.";
+  } else if (!snapshot) {
+    message = "Waiting for the first wave snapshot…";
+  }
+
+  if (!message) return null;
+
+  return <p className={`text-xs ${tone}`}>{message}</p>;
+}
+
 function OverlayControls() {
   const status = useWaveStore((s) => s.overlayStatus);
   const toggleOverlay = useWaveStore((s) => s.toggleOverlay);
@@ -207,6 +242,7 @@ export default function WaveTracker() {
             <div className="aspect-square w-full">
               <WaveMap lanePaths={lanePaths} snapshot={snapshot} />
             </div>
+            <MapState />
             <p className="text-xs text-muted">
               Positions are predictions, not observations. They hold during laning and
               drift once waves are killed or lanes push — which is what the confidence

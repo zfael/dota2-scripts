@@ -7,8 +7,10 @@ fn event_from_key(key: &str) -> Option<AlertEvent> {
 }
 
 /// Countdowns for every alert event, for the alerts page.
+///
+/// `async` so it runs off the main thread; see `get_wave_snapshot`.
 #[tauri::command]
-pub fn get_alert_countdowns() -> Vec<AlertCountdownDto> {
+pub async fn get_alert_countdowns() -> Vec<AlertCountdownDto> {
     alerts::latest_countdowns()
         .into_iter()
         .map(|countdown| AlertCountdownDto {
@@ -22,8 +24,11 @@ pub fn get_alert_countdowns() -> Vec<AlertCountdownDto> {
 }
 
 /// Voice packs available under `assets/voice/`.
+///
+/// `async` because this touches the filesystem, which must never happen on the
+/// main thread.
 #[tauri::command]
-pub fn list_voice_packs() -> Vec<String> {
+pub async fn list_voice_packs() -> Vec<String> {
     use dota2_scripts::audio::voice_pack::{list_packs, VOICE_PACK_DIR};
     list_packs(std::path::Path::new(VOICE_PACK_DIR))
 }
@@ -31,7 +36,7 @@ pub fn list_voice_packs() -> Vec<String> {
 /// Play one event's cue immediately, so the operator can hear what they are
 /// configuring without waiting for the objective to come round.
 #[tauri::command]
-pub fn test_play_alert(
+pub async fn test_play_alert(
     event: String,
     state: tauri::State<'_, TauriAppState>,
 ) -> Result<(), String> {

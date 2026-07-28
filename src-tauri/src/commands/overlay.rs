@@ -150,6 +150,10 @@ fn start_follow_loop(app: AppHandle, settings: Arc<std::sync::Mutex<Settings>>) 
 }
 
 /// Show the overlay. No-op if Dota is not running.
+///
+/// Deliberately **not** `async`: this builds a window, and window creation has to
+/// happen on the main thread. Unlike the polled read commands it runs once per
+/// user action, so it costs the message pump nothing.
 #[tauri::command]
 pub fn show_wave_overlay(
     app: AppHandle,
@@ -202,8 +206,9 @@ pub fn toggle_wave_overlay(
     }
 }
 
+/// Read-only, so it runs off the main thread. See `get_wave_snapshot`.
 #[tauri::command]
-pub fn get_wave_overlay_status(
+pub async fn get_wave_overlay_status(
     app: AppHandle,
     state: tauri::State<'_, TauriAppState>,
 ) -> Result<WaveOverlayStatusDto, String> {
@@ -231,18 +236,28 @@ pub fn get_wave_overlay_status(
 /// Toggle driven by the global hotkey rather than the UI.
 ///
 /// Silently does nothing until Tauri setup has published the app handle.
+///
+/// The keyboard hook runs on its own thread, and this can create a window, so the
+/// work is marshalled onto the main thread rather than done inline.
 pub fn toggle_from_hotkey() {
     let Some(app) = APP_HANDLE.get() else {
         warn!("wave overlay hotkey fired before the app was ready");
         return;
     };
 
-    let state = app.state::<TauriAppState>();
-    match toggle_wave_overlay(app.clone(), state) {
-        Ok(visible) => info!(
-            "wave overlay {} via hotkey",
-            if visible { "shown" } else { "hidden" }
-        ),
-        Err(e) => warn!("wave overlay hotkey toggle failed: {}", e),
+    let handle = app.clone();
+    let result = app.run_on_main_thread(move || {
+        let state = handle.state::<TauriAppState>();
+        match toggle_wave_overlay(handle.clone(), state) {
+            Ok(visible) => info!(
+                "wave overlay {} via hotkey",
+                if visible { "shown" } else { "hidden" }
+            ),
+            Err(e) => warn!("wave overlay hotkey toggle failed: {}", e),
+        }
+    });
+
+    if let Err(e) = result {
+        warn!("wave overlay hotkey could not reach the main thread: {}", e);
     }
 }

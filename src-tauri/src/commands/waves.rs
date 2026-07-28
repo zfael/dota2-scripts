@@ -11,11 +11,10 @@ fn to_point_dto(point: MapPoint) -> MapPointDto {
     }
 }
 
-/// Returns the static lane polylines in normalised map space.
+/// The static lane polylines in normalised map space.
 ///
-/// Called once by the renderer; the geometry does not change at runtime.
-#[tauri::command]
-pub fn get_wave_lane_paths() -> Vec<LanePathDto> {
+/// Split out from the command so tests can call it without an async runtime.
+fn lane_paths() -> Vec<LanePathDto> {
     Lane::ALL
         .iter()
         .map(|&lane| LanePathDto {
@@ -25,12 +24,27 @@ pub fn get_wave_lane_paths() -> Vec<LanePathDto> {
         .collect()
 }
 
+/// Returns the static lane polylines in normalised map space.
+///
+/// Called once by the renderer; the geometry does not change at runtime.
+///
+/// `async` so Tauri runs it on the async runtime. Commands declared without it
+/// execute on the **main thread**, where they block the window's message pump.
+#[tauri::command]
+pub async fn get_wave_lane_paths() -> Vec<LanePathDto> {
+    lane_paths()
+}
+
 /// Returns predicted wave positions for a game-clock instant.
 ///
 /// `clock_time_seconds` may be fractional — callers pass an interpolated clock so
 /// dots animate smoothly between GSI packets.
+///
+/// **Must stay `async`.** The renderer polls this ~15 times a second; as a sync
+/// command Tauri would run every one of those on the main thread, starving the
+/// window's message pump until the app stops responding entirely.
 #[tauri::command]
-pub fn get_wave_snapshot(
+pub async fn get_wave_snapshot(
     clock_time_seconds: f32,
     state: tauri::State<'_, TauriAppState>,
 ) -> Result<WaveSnapshotDto, String> {
@@ -81,7 +95,7 @@ mod tests {
 
     #[test]
     fn lane_paths_cover_every_lane_with_usable_geometry() {
-        let paths = get_wave_lane_paths();
+        let paths = lane_paths();
 
         assert_eq!(paths.len(), 3);
         let lanes: Vec<&str> = paths.iter().map(|p| p.lane.as_str()).collect();
