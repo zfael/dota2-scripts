@@ -38,6 +38,18 @@ impl ConfigPaths {
             .join("config.toml")
     }
 
+    /// Where user-installed voice packs live, alongside the live config.
+    ///
+    /// This is the location that works regardless of how the app is launched;
+    /// a working-directory-relative path does not, since launching the exe
+    /// directly makes the working directory the exe's own folder.
+    pub fn voice_pack_dir(&self) -> PathBuf {
+        self.local_app_data_dir
+            .join("dota2-scripts")
+            .join("assets")
+            .join("voice")
+    }
+
     pub fn legacy_install_config_path(&self) -> PathBuf {
         self.exe_dir.join("config").join("config.toml")
     }

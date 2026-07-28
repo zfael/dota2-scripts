@@ -28,9 +28,19 @@
     Speaking rate, -10 (slowest) to 10 (fastest). Callouts want to be brisk:
     the point is to hear them before the objective, not during it.
 
+.PARAMETER Location
+    Where to write the pack.
+
+    'localappdata' (default) writes to %LOCALAPPDATA%\dota2-scripts\assets\voice\,
+    which the app finds however it was launched. 'repo' writes to the checkout's
+    assets/voice/, which only resolves when the app's working directory is the
+    repository root.
+
+    The app searches both, LocalAppData first.
+
 .EXAMPLE
     ./scripts/generate-voice-pack.ps1
-    Generates assets/voice/en-sapi/ with the default voice.
+    Generates a pack the app can find regardless of how it is started.
 
 .EXAMPLE
     ./scripts/generate-voice-pack.ps1 -PackName zira -Voice "Microsoft Zira Desktop"
@@ -40,7 +50,9 @@ param(
     [string]$PackName = "en-sapi",
     [string]$Voice = "",
     [ValidateRange(-10, 10)]
-    [int]$Rate = 2
+    [int]$Rate = 2,
+    [ValidateSet("localappdata", "repo")]
+    [string]$Location = "localappdata"
 )
 
 $ErrorActionPreference = "Stop"
@@ -58,8 +70,18 @@ $Callouts = [ordered]@{
     stack        = "Stack"
 }
 
-$repoRoot = Split-Path -Parent $PSScriptRoot
-$outputDir = Join-Path $repoRoot "assets/voice/$PackName"
+if ($Location -eq "repo") {
+    $repoRoot = Split-Path -Parent $PSScriptRoot
+    $packsRoot = Join-Path $repoRoot "assets/voice"
+}
+else {
+    if (-not $env:LOCALAPPDATA) {
+        throw "LOCALAPPDATA is not set; re-run with -Location repo."
+    }
+    $packsRoot = Join-Path $env:LOCALAPPDATA "dota2-scripts/assets/voice"
+}
+
+$outputDir = Join-Path $packsRoot $PackName
 
 if (-not (Test-Path $outputDir)) {
     New-Item -ItemType Directory -Path $outputDir -Force | Out-Null

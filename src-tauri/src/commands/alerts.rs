@@ -29,8 +29,8 @@ pub async fn get_alert_countdowns() -> Vec<AlertCountdownDto> {
 /// main thread.
 #[tauri::command]
 pub async fn list_voice_packs() -> Vec<String> {
-    use dota2_scripts::audio::voice_pack::{list_packs, VOICE_PACK_DIR};
-    list_packs(std::path::Path::new(VOICE_PACK_DIR))
+    use dota2_scripts::audio::voice_pack::{list_packs, pack_roots};
+    list_packs(&pack_roots())
 }
 
 /// Play one event's cue immediately, so the operator can hear what they are

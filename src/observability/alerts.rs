@@ -323,7 +323,7 @@ pub fn play_alert(event: AlertEvent, config: &AlertsConfig) -> bool {
         event.key(),
         &event_config.sound_file,
         &config.voice_pack,
-        std::path::Path::new(crate::audio::voice_pack::VOICE_PACK_DIR),
+        &crate::audio::voice_pack::pack_roots(),
     );
 
     if let Some(path) = resolved {

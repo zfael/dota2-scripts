@@ -111,15 +111,33 @@ A spoken callout needs no learning at all — this is the one place where TTS cl
 a synthesised motif. A pack is just a directory of files named after event keys:
 
 ```
-assets/voice/en-sapi/
+<pack>/
   power_rune.wav  wisdom_rune.wav  water_rune.wav  bounty_rune.wav
   tormentor.wav   neutral_item.wav stack.wav
 ```
 
+### Where packs are searched
+
+Two roots, in this order:
+
+| Root | Notes |
+|---|---|
+| `%LOCALAPPDATA%\dota2-scripts\assets\voice\` | Resolves however the app was launched. Alongside the live config. |
+| `assets/voice/` (working directory) | Convenient in a checkout only |
+
+The relative path alone is not enough: launching the exe directly makes the working
+directory the exe's own folder, so a pack in the repository would not be found. Both
+roots are searched and their pack lists merged, so either location works and a pack in
+both is listed once.
+
+Resolution is per-event, so an event missing from the first root can still be satisfied
+by the second.
+
 Generate one with the Windows speech synthesiser — no API key, no network:
 
 ```powershell
-./scripts/generate-voice-pack.ps1                       # assets/voice/en-sapi
+./scripts/generate-voice-pack.ps1                       # LocalAppData (default)
+./scripts/generate-voice-pack.ps1 -Location repo        # into the checkout
 ./scripts/generate-voice-pack.ps1 -PackName zira -Voice "Microsoft Zira Desktop"
 ```
 
@@ -163,8 +181,10 @@ power-rune schedule is a sensible future cleanup.
 - `cargo test --lib alerts` — 22 tests: every schedule, exhausted fixed schedules, the
   power/bounty coincidence, fire-once, re-firing on the next occurrence, per-event and
   master switches, new-game reset, lead-time widening, cue pulse counts, volume maths.
-- `cargo test --lib voice_pack` — 9 tests: resolution precedence, wav preferred over mp3,
-  missing events and missing packs falling back, pack listing.
+- `cargo test --lib voice_pack` — 16 tests: resolution precedence, wav preferred over
+  mp3, missing events and missing packs falling back, multi-root precedence and
+  per-event fallthrough, merged and de-duplicated listing, missing roots not hiding
+  packs in the others.
 - `cargo test -p dota2-scripts-tauri` — event key round-tripping.
 - `npx vitest run` in `src-ui/` — countdown formatting and catalogue completeness.
 
