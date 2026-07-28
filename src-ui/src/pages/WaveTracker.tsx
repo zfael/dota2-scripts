@@ -210,6 +210,17 @@ function OverlayControls() {
         step={0.05}
         onChange={(v) => updateOverlay({ opacity: v })}
       />
+
+      <Toggle
+        label="Draw Lane Lines"
+        checked={overlay.show_lane_lines}
+        onChange={(v) => updateOverlay({ show_lane_lines: v })}
+      />
+      <p className="text-xs text-muted">
+        Off by default: Dota's minimap already draws the lanes and river underneath,
+        so the dots alone read more cleanly. Affects the overlay only — the panel on
+        this page always shows its lines, having no map behind them.
+      </p>
     </>
   );
 }

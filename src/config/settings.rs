@@ -948,6 +948,9 @@ pub struct WaveOverlayConfig {
     /// Overall overlay opacity, 0.0-1.0.
     #[serde(default = "default_wave_overlay_opacity")]
     pub opacity: f32,
+    /// Draw the lane polylines and river behind the wave dots.
+    #[serde(default = "default_wave_overlay_show_lane_lines")]
+    pub show_lane_lines: bool,
 }
 
 impl Default for WaveOverlayConfig {
@@ -958,6 +961,7 @@ impl Default for WaveOverlayConfig {
             offset_x: 0,
             offset_y: 0,
             opacity: default_wave_overlay_opacity(),
+            show_lane_lines: default_wave_overlay_show_lane_lines(),
         }
     }
 }
@@ -970,6 +974,12 @@ fn default_wave_overlay_toggle_key() -> String {
 }
 fn default_wave_overlay_opacity() -> f32 {
     0.85
+}
+/// Off by default: the overlay sits on top of Dota's own minimap, which already
+/// draws the lanes and river. Repeating them adds clutter over the thing they
+/// duplicate. The in-app panel has no map underneath it, so it keeps its lines.
+fn default_wave_overlay_show_lane_lines() -> bool {
+    false
 }
 
 impl Default for GsiLoggingConfig {

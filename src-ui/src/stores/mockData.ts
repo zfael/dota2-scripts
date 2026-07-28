@@ -269,6 +269,7 @@ export const mockConfig: Settings = {
   wave_overlay: {
     enabled: false, toggle_key: "F8",
     offset_x: 0, offset_y: 0, opacity: 0.85,
+    show_lane_lines: false,
   },
   alerts: {
     enabled: true,

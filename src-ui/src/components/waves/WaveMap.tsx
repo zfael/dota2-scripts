@@ -9,6 +9,12 @@ interface WaveMapProps {
   snapshot: WaveSnapshot | null;
   /** Hides the base markers and legend for the small overlay rendering. */
   compact?: boolean;
+  /**
+   * Draw the lane polylines and river. Worth turning off over Dota's minimap,
+   * which draws both already; the in-app panel has nothing underneath it, so the
+   * dots would float in empty space without them.
+   */
+  showLanes?: boolean;
 }
 
 const VIEWBOX = 100;
@@ -43,7 +49,12 @@ const CONFIDENCE_OPACITY: Record<WaveConfidence, number> = {
 const RADIANT_COLOR = "#2ECC71";
 const DIRE_COLOR = "#E74C3C";
 
-export function WaveMap({ lanePaths, snapshot, compact = false }: WaveMapProps) {
+export function WaveMap({
+  lanePaths,
+  snapshot,
+  compact = false,
+  showLanes = true,
+}: WaveMapProps) {
   const opacity = snapshot ? CONFIDENCE_OPACITY[snapshot.confidence] : 0;
 
   return (
@@ -66,29 +77,34 @@ export function WaveMap({ lanePaths, snapshot, compact = false }: WaveMapProps) 
         />
       )}
 
-      {/* River, drawn as the anti-diagonal between the two bases. */}
-      <line
-        x1={0}
-        y1={0}
-        x2={VIEWBOX}
-        y2={VIEWBOX}
-        stroke="#3498DB"
-        strokeWidth={0.8}
-        strokeOpacity={0.18}
-      />
+      {showLanes && (
+        <>
+          {/* River, drawn as the anti-diagonal between the two bases. */}
+          <line
+            x1={0}
+            y1={0}
+            x2={VIEWBOX}
+            y2={VIEWBOX}
+            stroke="#3498DB"
+            strokeWidth={0.8}
+            strokeOpacity={0.18}
+          />
 
-      {/* Lane paths — the same polylines the model interpolates along. */}
-      {lanePaths.map((path) => (
-        <polyline
-          key={path.lane}
-          points={toPolyline(path.points)}
-          fill="none"
-          stroke="#2A3040"
-          strokeWidth={1.6}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      ))}
+          {/* Lane paths — the same polylines the model interpolates along. */}
+          {lanePaths.map((path) => (
+            <polyline
+              key={path.lane}
+              points={toPolyline(path.points)}
+              fill="none"
+              stroke="#2A3040"
+              strokeWidth={1.6}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              data-testid={`lane-path-${path.lane}`}
+            />
+          ))}
+        </>
+      )}
 
       {!compact && (
         <>

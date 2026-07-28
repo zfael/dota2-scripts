@@ -16,6 +16,7 @@ export default function WaveOverlay() {
   const snapshot = useWaveStore((s) => s.snapshot);
   const startTracking = useWaveStore((s) => s.startTracking);
   const opacity = useConfigStore((s) => s.config.wave_overlay.opacity);
+  const showLanes = useConfigStore((s) => s.config.wave_overlay.show_lane_lines);
 
   useEffect(() => {
     useConfigStore.getState().loadConfig();
@@ -38,7 +39,12 @@ export default function WaveOverlay() {
       className="h-screen w-screen"
       style={{ background: "transparent", opacity }}
     >
-      <WaveMap lanePaths={lanePaths} snapshot={snapshot} compact />
+      <WaveMap
+        lanePaths={lanePaths}
+        snapshot={snapshot}
+        compact
+        showLanes={showLanes}
+      />
     </div>
   );
 }

@@ -101,6 +101,9 @@ toggle_key = "F8"
 offset_x = 0
 offset_y = 0
 opacity = 0.85
+# Dota's minimap already draws the lanes and river underneath, so the dots alone
+# read more cleanly. The in-app panel keeps its lines regardless.
+show_lane_lines = false
 
 [minimap_capture]
 enabled = false

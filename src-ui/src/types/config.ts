@@ -331,6 +331,7 @@ export interface WaveOverlayConfig {
   offset_x: number;
   offset_y: number;
   opacity: number;
+  show_lane_lines: boolean;
 }
 
 export interface MinimapCaptureConfig {

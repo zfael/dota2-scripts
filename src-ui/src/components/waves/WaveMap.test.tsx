@@ -117,6 +117,29 @@ describe("WaveMap", () => {
     expect(dot?.getAttribute("stroke")).toBe("#C8AA6E");
   });
 
+  it("drops the lanes and river but keeps the dots when lines are off", () => {
+    const { container } = render(
+      <WaveMap lanePaths={lanePaths} snapshot={snapshot()} compact showLanes={false} />,
+    );
+
+    expect(container.querySelector('[data-testid="lane-path-Mid"]')).toBeNull();
+    expect(container.querySelector("line")).toBeNull();
+
+    // The whole point of hiding the lines: the predictions stay.
+    expect(container.querySelector('[data-testid="wave-Mid-Radiant"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="wave-Mid-Dire"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="clash-Mid"]')).not.toBeNull();
+  });
+
+  it("draws lanes by default, so the in-app panel is unaffected", () => {
+    const { container } = render(
+      <WaveMap lanePaths={lanePaths} snapshot={snapshot()} />,
+    );
+
+    expect(container.querySelector('[data-testid="lane-path-Mid"]')).not.toBeNull();
+    expect(container.querySelector("line")).not.toBeNull();
+  });
+
   it("omits base markers in compact mode for the overlay", () => {
     const full = render(<WaveMap lanePaths={lanePaths} snapshot={null} />);
     const compact = render(<WaveMap lanePaths={lanePaths} snapshot={null} compact />);
