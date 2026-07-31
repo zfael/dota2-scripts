@@ -1,6 +1,15 @@
 use serde::{Deserialize, Serialize};
 
+// Every block below is `#[serde(default)]` on purpose. Dota does not send a
+// fixed payload: the ability list is as long as the hero's ability panel, and
+// Valve adds and removes hero fields between patches. Without container-level
+// defaults, one hero whose payload is a field short makes axum reject *every*
+// event with 422 before the handler runs, which reads in the UI as "GSI
+// Disconnected" with nothing in the logs. Missing data should degrade a single
+// field, never the whole pipeline.
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(default)]
 pub struct Item {
     pub name: String,
     pub can_cast: Option<bool>,
@@ -27,7 +36,8 @@ impl Default for Item {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(default)]
 pub struct Items {
     pub neutral0: Item,
     pub slot0: Item,
@@ -63,7 +73,8 @@ impl Items {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(default)]
 pub struct Ability {
     pub ability_active: bool,
     pub can_cast: bool,
@@ -74,7 +85,8 @@ pub struct Ability {
     pub ultimate: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(default)]
 pub struct Abilities {
     pub ability0: Ability,
     pub ability1: Ability,
@@ -99,7 +111,8 @@ impl Abilities {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(default)]
 pub struct Hero {
     pub aghanims_scepter: bool,
     pub aghanims_shard: bool,
@@ -115,7 +128,8 @@ pub struct Hero {
     pub health: u32,
     pub health_percent: u32,
     pub hexed: bool,
-    pub id: u32,
+    /// Signed: Dota reports `-1` while no hero is picked yet.
+    pub id: i32,
     pub level: u32,
     pub magicimmune: bool,
     pub mana: u32,
@@ -151,22 +165,33 @@ impl Hero {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(default)]
 pub struct Map {
     pub clock_time: i32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(default)]
 pub struct Player {
     pub team_name: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(default)]
 pub struct GsiWebhookEvent {
     pub hero: Hero,
     pub abilities: Abilities,
     pub items: Items,
     pub map: Map,
-    #[serde(default)]
     pub player: Option<Player>,
+}
+
+impl GsiWebhookEvent {
+    /// True when the payload carries no hero at all — the menu, the draft, or a
+    /// spectator feed. Those events keep the connection alive but have nothing
+    /// for automation to act on.
+    pub fn has_hero(&self) -> bool {
+        !self.hero.name.is_empty() && self.hero.name != "empty"
+    }
 }

@@ -1,6 +1,6 @@
+use crate::events::build_game_state_dto;
 use crate::ipc_types::GameStateDto;
 use crate::TauriAppState;
-use dota2_scripts::actions::danger_detector;
 #[cfg(test)]
 use dota2_scripts::models::GsiWebhookEvent;
 #[cfg(test)]
@@ -9,53 +9,6 @@ use dota2_scripts::state::AppState;
 use std::fs;
 #[cfg(test)]
 use std::time::{Duration, SystemTime};
-
-fn build_game_state_dto(app: &dota2_scripts::state::AppState) -> GameStateDto {
-    if app.has_recent_gsi_activity() {
-        let event = app
-            .last_event
-            .as_ref()
-            .expect("recent GSI activity should always have a last event");
-        let rune_timer = app
-            .rune_alerts
-            .as_ref()
-            .and_then(|ra| ra.seconds_until_next_rune);
-
-        GameStateDto {
-            hero_name: app.selected_hero.map(|h| h.to_display_name().to_string()),
-            hero_level: event.hero.level,
-            hp_percent: event.hero.health_percent,
-            mana_percent: event.hero.mana_percent,
-            in_danger: danger_detector::is_in_danger(),
-            connected: true,
-            alive: event.hero.alive,
-            stunned: event.hero.stunned,
-            silenced: event.hero.silenced,
-            respawn_timer: if event.hero.respawn_seconds > 0 {
-                Some(event.hero.respawn_seconds)
-            } else {
-                None
-            },
-            rune_timer,
-            game_time: event.map.clock_time,
-        }
-    } else {
-        GameStateDto {
-            hero_name: None,
-            hero_level: 0,
-            hp_percent: 100,
-            mana_percent: 100,
-            in_danger: false,
-            connected: false,
-            alive: true,
-            stunned: false,
-            silenced: false,
-            respawn_timer: None,
-            rune_timer: None,
-            game_time: 0,
-        }
-    }
-}
 
 /// Returns current game state from the latest GSI event
 #[tauri::command]
@@ -87,7 +40,8 @@ mod tests {
     fn game_state_is_disconnected_when_no_recent_gsi_activity() {
         let mut app = AppState::default();
         app.update_from_gsi(load_huskar_event());
-        app.last_gsi_activity_at = Some(SystemTime::now() - Duration::from_secs(10));
+        // Past the 35s liveness window, which tracks Dota's 30s GSI heartbeat.
+        app.last_gsi_activity_at = Some(SystemTime::now() - Duration::from_secs(60));
 
         let dto = build_game_state_dto(&app);
 

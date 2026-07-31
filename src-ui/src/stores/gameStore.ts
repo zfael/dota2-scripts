@@ -31,6 +31,7 @@ export const useGameStore = create<GameStore>((set) => ({
     queueMetrics: {
       eventsProcessed: 0,
       eventsDropped: 0,
+      eventsRejected: 0,
       currentQueueDepth: 0,
       maxQueueDepth: 10,
     },

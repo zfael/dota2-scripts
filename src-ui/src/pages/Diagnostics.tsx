@@ -42,7 +42,14 @@ export default function Diagnostics() {
           <Card title="GSI Pipeline">
             <MetricRow label="Events Processed" value={diag.queueMetrics.eventsProcessed} />
             <MetricRow label="Events Dropped" value={diag.queueMetrics.eventsDropped} />
+            <MetricRow label="Events Rejected" value={diag.queueMetrics.eventsRejected} />
             <MetricRow label="Queue Depth" value={`${diag.queueMetrics.currentQueueDepth} / ${diag.queueMetrics.maxQueueDepth}`} />
+            {diag.queueMetrics.eventsRejected > 0 && (
+              <p className="pt-2 text-xs text-warning">
+                Dota sent payloads this build could not parse. The offending JSON is in
+                <span className="font-mono"> logs/gsi_rejected/</span>.
+              </p>
+            )}
           </Card>
 
           <Card title="Keyboard Hook">

@@ -21,7 +21,7 @@
 
 1. Dota 2 POSTs JSON to `http://127.0.0.1:<port>/`
 2. `src/gsi/server.rs` binds the listener and creates a queue with capacity `10`
-3. `src/gsi/handler.rs::gsi_webhook_handler()` deserializes `Json<GsiWebhookEvent>` and `try_send`s it
+3. `src/gsi/handler.rs::gsi_webhook_handler()` takes the raw body, deserializes it into `GsiWebhookEvent`, and `try_send`s it
 4. `src/gsi/handler.rs::process_gsi_events()`:
    - optionally writes JSONL when `[gsi_logging].enabled = true`
    - updates `AppState.last_event`
@@ -40,8 +40,29 @@
 | Status | Meaning |
 |---|---|
 | `200 OK` | Event accepted into the queue |
+| `400 Bad Request` | Payload did not deserialize; `metrics.events_rejected` incremented and the JSON dumped to `logs/gsi_rejected/` |
 | `503 Service Unavailable` | Queue full; the event was dropped |
 | `500 Internal Server Error` | Queue channel closed unexpectedly |
+
+> **Why the handler parses by hand:** with axum's `Json<T>` extractor, a payload
+> that does not match the schema is rejected *before* the handler runs. The app
+> then sees zero events with nothing in the logs, which is indistinguishable
+> from Dota not sending anything at all. Parsing inside the handler makes a
+> schema mismatch loud instead of silent.
+
+---
+
+## Schema tolerance
+
+Every block in `src/models/gsi_event.rs` is `#[serde(default)]`. Dota's payload
+is not fixed: the `abilities` block is only as long as the hero's ability panel,
+`hero.id` is `-1` before a pick, and Valve adds and removes hero fields between
+patches. Container-level defaults mean a missing field degrades that one field
+instead of rejecting the event — which previously took the entire pipeline down
+for any hero whose payload did not match exactly.
+
+When adding a field, keep it defaultable. Prefer widening a type (for example
+`hero.id` is `i32`, not `u32`) over assuming Dota's range.
 
 ---
 
@@ -181,6 +202,7 @@ See `docs/workflows/testing-and-debugging.md` for the test command flow.
 
 | Symptom | First places to look |
 |---|---|
+| UI says "Disconnected" but Dota is running | Diagnostics > GSI Pipeline > Events Rejected. If non-zero, read the dumps in `logs/gsi_rejected/` and reconcile `src/models/gsi_event.rs` with the payload |
 | Event counter stays at `0` | `src/gsi/server.rs`, Dota GSI target URL/port, `AppState.last_event` in UI |
 | Hero is wrong or `None` | `hero.name`, `src/state/app_state.rs`, `src/actions/dispatcher.rs` |
 | Shared healing / defensive item logic never fires | `item.name`, `item.can_cast`, `src/actions/common.rs`, `src/actions/danger_detector.rs` |

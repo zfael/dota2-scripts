@@ -129,6 +129,7 @@ pub struct WaveOverlayStatusDto {
 pub struct QueueMetricsDto {
     pub events_processed: u64,
     pub events_dropped: u64,
+    pub events_rejected: u64,
     pub current_queue_depth: usize,
     pub max_queue_depth: usize,
 }
@@ -296,6 +297,7 @@ mod tests {
             queue_metrics: QueueMetricsDto {
                 events_processed: 100,
                 events_dropped: 2,
+                events_rejected: 1,
                 current_queue_depth: 3,
                 max_queue_depth: 10,
             },

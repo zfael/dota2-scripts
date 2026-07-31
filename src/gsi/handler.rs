@@ -2,21 +2,27 @@ use crate::actions::activity::{push_activity, ActivityCategory};
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Hero};
 use crate::state::AppState;
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{body::Bytes, extract::State, http::StatusCode};
 use chrono::Local;
 use lazy_static::lazy_static;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
+
+/// Cap on rejected-payload dumps per run, so a permanently incompatible schema
+/// cannot fill the disk while we are not looking.
+const MAX_REJECTED_PAYLOAD_DUMPS: usize = 5;
 
 lazy_static! {
     /// Track if hero was alive in the previous GSI event (to detect death transitions)
     static ref WAS_ALIVE: Mutex<bool> = Mutex::new(true);
 }
+
+static REJECTED_PAYLOAD_DUMPS: AtomicUsize = AtomicUsize::new(0);
 
 pub type GsiEventSender = mpsc::Sender<GsiWebhookEvent>;
 
@@ -77,10 +83,53 @@ fn refresh_observability_state(
     }
 }
 
+/// Write a payload we could not parse to disk so the exact shape can be diffed
+/// against `GsiWebhookEvent`. Best-effort: a failure here must not affect the
+/// response.
+fn dump_rejected_payload(body: &Bytes, error: &serde_json::Error) {
+    let dump_index = REJECTED_PAYLOAD_DUMPS.fetch_add(1, Ordering::Relaxed);
+    if dump_index >= MAX_REJECTED_PAYLOAD_DUMPS {
+        return;
+    }
+
+    let dir = PathBuf::from("logs/gsi_rejected");
+    if fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+
+    let path = dir.join(format!(
+        "rejected_{}_{}.json",
+        Local::now().format("%Y-%m-%d_%H-%M-%S"),
+        dump_index
+    ));
+    let Ok(mut file) = fs::File::create(&path) else {
+        return;
+    };
+
+    let _ = writeln!(file, "// {}", error);
+    let _ = file.write_all(body);
+    info!("Wrote rejected GSI payload to {:?}", path);
+}
+
 pub async fn gsi_webhook_handler(
     State(server_state): State<GsiServerState>,
-    Json(event): Json<GsiWebhookEvent>,
+    body: Bytes,
 ) -> StatusCode {
+    // Deserialize by hand rather than through the `Json` extractor: an extractor
+    // rejection answers 422 before this function runs, so a schema mismatch used
+    // to look exactly like "Dota is not sending anything".
+    let event: GsiWebhookEvent = match serde_json::from_slice(&body) {
+        Ok(event) => event,
+        Err(error) => {
+            if let Ok(mut state) = server_state.app_state.lock() {
+                state.metrics.events_rejected += 1;
+            }
+            warn!("Could not parse GSI payload: {}", error);
+            dump_rejected_payload(&body, &error);
+            return StatusCode::BAD_REQUEST;
+        }
+    };
+
     debug!("Received GSI event for hero: {}", event.hero.name);
 
     match server_state.tx.try_send(event) {
@@ -199,10 +248,14 @@ mod tests {
         latest_rune_alert_snapshot, reset_rune_alert_state_for_tests,
     };
     use crate::state::AppState;
-    use axum::{extract::State, http::StatusCode, Json};
+    use axum::{body::Bytes, extract::State, http::StatusCode};
     use std::fs;
     use std::sync::{Mutex, OnceLock};
     use tokio::sync::mpsc;
+
+    fn encode(event: &GsiWebhookEvent) -> Bytes {
+        Bytes::from(serde_json::to_vec(event).expect("event should serialize"))
+    }
 
     fn shared_test_lock() -> &'static Mutex<()> {
         static TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -238,12 +291,93 @@ mod tests {
                 tx,
                 app_state: app_state.clone(),
             }),
-            Json(event),
+            encode(&event),
         )
         .await;
 
         assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
         assert_eq!(app_state.lock().unwrap().metrics.events_dropped, 1);
+    }
+
+    #[tokio::test]
+    async fn webhook_handler_accepts_a_payload_with_a_short_ability_list() {
+        // Heroes with fewer entries in their ability panel than the six the
+        // schema models must not take the whole pipeline down.
+        let payload = Bytes::from(
+            r#"{
+                "hero": { "name": "npc_dota_hero_spirit_breaker", "alive": true, "health_percent": 80 },
+                "abilities": {
+                    "ability0": { "name": "spirit_breaker_charge_of_darkness", "level": 4 },
+                    "ability1": { "name": "spirit_breaker_bulldoze", "level": 1 }
+                },
+                "items": { "slot0": { "name": "item_phase_boots" } },
+                "map": { "clock_time": 300 }
+            }"#,
+        );
+        let app_state = AppState::new();
+        let (tx, mut rx) = mpsc::channel(1);
+
+        let status = gsi_webhook_handler(
+            State(GsiServerState {
+                tx,
+                app_state: app_state.clone(),
+            }),
+            payload,
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(app_state.lock().unwrap().metrics.events_rejected, 0);
+
+        let event = rx.try_recv().expect("event should be queued");
+        assert_eq!(event.hero.name, "npc_dota_hero_spirit_breaker");
+        assert_eq!(event.abilities.ability1.name, "spirit_breaker_bulldoze");
+        // Slots the payload omitted fall back to the "empty" placeholder the
+        // rest of the codebase already expects.
+        assert_eq!(event.abilities.ability5.level, 0);
+        assert_eq!(event.items.slot1.name, "empty");
+    }
+
+    #[tokio::test]
+    async fn webhook_handler_accepts_the_unpicked_hero_placeholder() {
+        // Dota reports id -1 with no hero name during the draft.
+        let payload = Bytes::from(
+            r#"{"hero":{"id":-1,"name":""},"abilities":{},"items":{},"map":{"clock_time":-75}}"#,
+        );
+        let app_state = AppState::new();
+        let (tx, mut rx) = mpsc::channel(1);
+
+        let status = gsi_webhook_handler(
+            State(GsiServerState {
+                tx,
+                app_state: app_state.clone(),
+            }),
+            payload,
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::OK);
+        let event = rx.try_recv().expect("event should be queued");
+        assert_eq!(event.hero.id, -1);
+        assert!(!event.has_hero());
+    }
+
+    #[tokio::test]
+    async fn webhook_handler_counts_payloads_it_cannot_parse() {
+        let app_state = AppState::new();
+        let (tx, _rx) = mpsc::channel(1);
+
+        let status = gsi_webhook_handler(
+            State(GsiServerState {
+                tx,
+                app_state: app_state.clone(),
+            }),
+            Bytes::from("{ not json"),
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(app_state.lock().unwrap().metrics.events_rejected, 1);
     }
 
     #[tokio::test]

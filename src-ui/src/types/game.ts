@@ -55,6 +55,8 @@ export interface GameState {
 export interface QueueMetrics {
   eventsProcessed: number;
   eventsDropped: number;
+  /** Payloads Dota sent that the Rust schema could not parse. */
+  eventsRejected: number;
   currentQueueDepth: number;
   maxQueueDepth: number;
 }

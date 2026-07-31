@@ -4,7 +4,11 @@ use crate::observability::rune_alerts::RuneAlertSnapshot;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
-const GSI_ACTIVITY_TIMEOUT: Duration = Duration::from_secs(5);
+/// Dota only POSTs when game state changes, plus a keepalive on the `heartbeat`
+/// interval in the GSI `.cfg` (30s in the config this app ships). A window
+/// shorter than that heartbeat reports "Disconnected" whenever the game sits
+/// still — the menu, the draft, or a dead hero — even though GSI is fine.
+const GSI_ACTIVITY_TIMEOUT: Duration = Duration::from_secs(35);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HeroType {
@@ -72,21 +76,14 @@ impl HeroType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct QueueMetrics {
     pub events_processed: u64,
     pub events_dropped: u64,
+    /// Payloads Dota sent that did not deserialize. Non-zero here means the
+    /// schema in `src/models/gsi_event.rs` has drifted from what the game sends.
+    pub events_rejected: u64,
     pub current_queue_depth: usize,
-}
-
-impl Default for QueueMetrics {
-    fn default() -> Self {
-        Self {
-            events_processed: 0,
-            events_dropped: 0,
-            current_queue_depth: 0,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]

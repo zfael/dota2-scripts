@@ -117,7 +117,9 @@ fn drain_and_emit_activities(app: &AppHandle) {
     }
 }
 
-fn build_game_state_dto(state: &dota2_scripts::state::AppState) -> GameStateDto {
+/// Single source of truth for the UI's game state, shared by the 5Hz emitter
+/// and the `get_game_state` command.
+pub(crate) fn build_game_state_dto(state: &dota2_scripts::state::AppState) -> GameStateDto {
     if state.has_recent_gsi_activity() {
         let event = state
             .last_event
@@ -129,9 +131,13 @@ fn build_game_state_dto(state: &dota2_scripts::state::AppState) -> GameStateDto 
             .and_then(|ra| ra.seconds_until_next_rune);
 
         GameStateDto {
+            // Fall back to the name Dota sent. `selected_hero` only covers the
+            // heroes that have automation, so keying the header off it made
+            // every other hero render as "Waiting for game...".
             hero_name: state
                 .selected_hero
-                .map(|h| h.to_display_name().to_string()),
+                .map(|h| h.to_display_name().to_string())
+                .or_else(|| dota2_scripts::models::display_name_for_game_name(&event.hero.name)),
             hero_level: event.hero.level,
             hp_percent: event.hero.health_percent,
             mana_percent: event.hero.mana_percent,
@@ -163,5 +169,61 @@ fn build_game_state_dto(state: &dota2_scripts::state::AppState) -> GameStateDto 
             rune_timer: None,
             game_time: 0,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_game_state_dto;
+    use dota2_scripts::models::GsiWebhookEvent;
+    use dota2_scripts::state::AppState;
+
+    fn state_playing(hero_name: &str) -> dota2_scripts::state::AppState {
+        let mut event = GsiWebhookEvent::default();
+        event.hero.name = hero_name.to_string();
+        event.hero.level = 7;
+
+        let state = AppState::new();
+        let mut state = state.lock().unwrap();
+        state.update_from_gsi(event);
+        state.clone()
+    }
+
+    #[test]
+    fn a_hero_with_automation_uses_its_configured_display_name() {
+        let dto = build_game_state_dto(&state_playing("npc_dota_hero_nevermore"));
+
+        assert_eq!(dto.hero_name.as_deref(), Some("Shadow Fiend"));
+        assert!(dto.connected);
+    }
+
+    #[test]
+    fn a_hero_without_automation_still_reports_as_in_game() {
+        // Regression: hero_name came from the nine-hero HeroType enum, so every
+        // other hero rendered as "Waiting for game..." despite live GSI.
+        let dto = build_game_state_dto(&state_playing("npc_dota_hero_spirit_breaker"));
+
+        assert_eq!(dto.hero_name.as_deref(), Some("Spirit Breaker"));
+        assert_eq!(dto.hero_level, 7);
+        assert!(dto.connected);
+    }
+
+    #[test]
+    fn the_draft_placeholder_hero_reports_connected_with_no_hero() {
+        let dto = build_game_state_dto(&state_playing(""));
+
+        assert_eq!(dto.hero_name, None);
+        assert!(dto.connected);
+    }
+
+    #[test]
+    fn no_gsi_activity_reports_disconnected() {
+        let state = AppState::new();
+        let state = state.lock().unwrap().clone();
+
+        let dto = build_game_state_dto(&state);
+
+        assert!(!dto.connected);
+        assert_eq!(dto.hero_name, None);
     }
 }

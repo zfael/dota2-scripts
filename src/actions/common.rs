@@ -586,6 +586,11 @@ impl SurvivabilityActions {
 
             // Satanic has its own HP threshold check
             if item_name == "item_satanic" {
+                // max_health is 0 in menu/draft payloads; dividing by it panics
+                // the whole GSI processing task.
+                if event.hero.max_health == 0 {
+                    continue;
+                }
                 let hp_percent = (event.hero.health * 100) / event.hero.max_health;
                 if hp_percent > satanic_threshold {
                     debug!(

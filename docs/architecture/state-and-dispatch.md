@@ -14,7 +14,7 @@
 | `gsi_enabled` | `bool` | Master gate for async dispatch from `process_gsi_events()` |
 | `standalone_enabled` | `bool` | Master gate for hotkey-triggered standalone combos |
 | `last_event` | `Option<GsiWebhookEvent>` | Latest GSI payload for UI/status rendering |
-| `metrics` | `QueueMetrics` | `events_processed`, `events_dropped`, `current_queue_depth` |
+| `metrics` | `QueueMetrics` | `events_processed`, `events_dropped`, `events_rejected`, `current_queue_depth` |
 | `trigger_key` | `Arc<Mutex<String>>` | Current standalone hotkey string, updated when the active hero changes |
 | `sf_enabled` | `Arc<Mutex<bool>>` | Fast flag for Shadow Fiend keyboard interception |
 | `od_enabled` | `Arc<Mutex<bool>>` | Fast flag for Outworld Destroyer keyboard interception |
@@ -27,6 +27,8 @@
 - `metrics.events_processed` is updated in `AppState::update_from_gsi(...)`.
 - `metrics.current_queue_depth` is updated in `process_gsi_events(...)`.
 - `metrics.events_dropped` is incremented in `gsi_webhook_handler()` when `try_send` fails because the bounded queue is full.
+- `metrics.events_rejected` is incremented in `gsi_webhook_handler()` when a payload does not deserialize into `GsiWebhookEvent`. A non-zero value means the schema has drifted from what Dota sends; the offending JSON is dumped to `logs/gsi_rejected/`.
+- `has_recent_gsi_activity()` uses a 35s window, chosen to exceed the 30s `heartbeat` in the GSI `.cfg`. Dota only POSTs on state change plus that heartbeat, so a shorter window reports "Disconnected" whenever the game is idle.
 - `AppState::ui_snapshot()` clones the UI-facing hot fields once so `src/ui/app.rs` can render read-only status and metrics sections without repeatedly locking `AppState`.
 
 ---

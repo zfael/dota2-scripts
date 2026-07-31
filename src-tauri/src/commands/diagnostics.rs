@@ -16,6 +16,7 @@ pub fn get_diagnostics(state: tauri::State<'_, TauriAppState>) -> Result<Diagnos
         queue_metrics: QueueMetricsDto {
             events_processed: app.metrics.events_processed,
             events_dropped: app.metrics.events_dropped,
+            events_rejected: app.metrics.events_rejected,
             current_queue_depth: app.metrics.current_queue_depth,
             max_queue_depth: 10,
         },

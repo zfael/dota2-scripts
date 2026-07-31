@@ -394,3 +394,105 @@ impl Hero {
         }
     }
 }
+
+/// Internal names whose display name is not simply the name title-cased.
+/// Everything absent from this table humanises correctly, including heroes
+/// released after this list was written.
+#[allow(dead_code)]
+const IRREGULAR_DISPLAY_NAMES: &[(&str, &str)] = &[
+    ("npc_dota_hero_abyssal_underlord", "Underlord"),
+    ("npc_dota_hero_antimage", "Anti-Mage"),
+    ("npc_dota_hero_centaur", "Centaur Warrunner"),
+    ("npc_dota_hero_doom_bringer", "Doom"),
+    ("npc_dota_hero_furion", "Nature's Prophet"),
+    ("npc_dota_hero_keeper_of_the_light", "Keeper of the Light"),
+    ("npc_dota_hero_life_stealer", "Lifestealer"),
+    ("npc_dota_hero_magnataur", "Magnus"),
+    ("npc_dota_hero_necrolyte", "Necrophos"),
+    ("npc_dota_hero_nevermore", "Shadow Fiend"),
+    ("npc_dota_hero_obsidian_destroyer", "Outworld Destroyer"),
+    ("npc_dota_hero_queenofpain", "Queen of Pain"),
+    ("npc_dota_hero_rattletrap", "Clockwerk"),
+    ("npc_dota_hero_shredder", "Timbersaw"),
+    ("npc_dota_hero_skeleton_king", "Wraith King"),
+    ("npc_dota_hero_treant", "Treant Protector"),
+    ("npc_dota_hero_vengefulspirit", "Vengeful Spirit"),
+    ("npc_dota_hero_windrunner", "Windranger"),
+    ("npc_dota_hero_wisp", "Io"),
+    ("npc_dota_hero_zuus", "Zeus"),
+];
+
+/// Human-readable name for any `npc_dota_hero_*` string, whether or not the
+/// hero has automation in this app. Returns `None` for the empty/placeholder
+/// hero Dota sends before a pick.
+#[allow(dead_code)]
+pub fn display_name_for_game_name(name: &str) -> Option<String> {
+    if name.is_empty() || name == "empty" {
+        return None;
+    }
+
+    if let Some((_, display)) = IRREGULAR_DISPLAY_NAMES
+        .iter()
+        .find(|(internal, _)| *internal == name)
+    {
+        return Some((*display).to_string());
+    }
+
+    let stripped = name.strip_prefix("npc_dota_hero_").unwrap_or(name);
+    if stripped.is_empty() {
+        return None;
+    }
+
+    let humanised = stripped
+        .split('_')
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    Some(humanised)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::display_name_for_game_name;
+
+    #[test]
+    fn humanises_a_regular_internal_name() {
+        assert_eq!(
+            display_name_for_game_name("npc_dota_hero_spirit_breaker").as_deref(),
+            Some("Spirit Breaker")
+        );
+    }
+
+    #[test]
+    fn uses_the_override_for_irregular_internal_names() {
+        assert_eq!(
+            display_name_for_game_name("npc_dota_hero_nevermore").as_deref(),
+            Some("Shadow Fiend")
+        );
+        assert_eq!(
+            display_name_for_game_name("npc_dota_hero_keeper_of_the_light").as_deref(),
+            Some("Keeper of the Light")
+        );
+    }
+
+    #[test]
+    fn humanises_heroes_that_postdate_the_enum() {
+        assert_eq!(
+            display_name_for_game_name("npc_dota_hero_brand_new_hero").as_deref(),
+            Some("Brand New Hero")
+        );
+    }
+
+    #[test]
+    fn has_no_display_name_before_a_hero_is_picked() {
+        assert_eq!(display_name_for_game_name(""), None);
+        assert_eq!(display_name_for_game_name("empty"), None);
+    }
+}
