@@ -43,7 +43,11 @@ fn mode_label(mode: Dota2WindowMode) -> &'static str {
 
 fn current_bounds(settings: &Settings) -> Option<OverlayBounds> {
     let client_rect = find_dota2_client_screen_rect()?;
-    overlay_bounds(&client_rect, &settings.minimap_capture, &settings.wave_overlay)
+    overlay_bounds(
+        &client_rect,
+        &settings.minimap_capture,
+        &settings.wave_overlay,
+    )
 }
 
 fn snapshot_settings(state: &tauri::State<'_, TauriAppState>) -> Result<Settings, String> {
@@ -58,8 +62,19 @@ fn snapshot_settings(state: &tauri::State<'_, TauriAppState>) -> Result<Settings
 ///
 /// The window is deliberately built hidden: it is shown only once it has been
 /// positioned, so it never flashes at the wrong place on screen.
+///
+/// **Must not run on the main thread.** On Windows `build()` needs the event loop
+/// to pump messages while WebView2 initialises, so calling it from the main thread
+/// blocks the very loop it is waiting on. The deadlock is not recoverable and not
+/// silent: it strands a half-built native window — unpositioned, never shown, no
+/// click-through — and freezes the app, taking the exit path with it, so the
+/// process lingers holding the GSI port. Every caller is therefore `async`; see
+/// [`show_wave_overlay`].
 fn ensure_overlay_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
     if let Some(window) = app.get_webview_window(OVERLAY_LABEL) {
+        // Reapplied rather than assumed: a window that missed this on creation
+        // would otherwise swallow minimap clicks for the rest of the session.
+        apply_click_through(&window);
         return Ok(window);
     }
 
@@ -82,13 +97,24 @@ fn ensure_overlay_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String
     .build()
     .map_err(|e| format!("Failed to create overlay window: {}", e))?;
 
-    // Click-through. Without this the overlay swallows minimap clicks and breaks
-    // click-to-move, which is the single most important property of the window.
-    window
-        .set_ignore_cursor_events(true)
-        .map_err(|e| format!("Failed to make overlay click-through: {}", e))?;
+    apply_click_through(&window);
 
     Ok(window)
+}
+
+/// Make the overlay ignore the mouse, so minimap click-to-move still works.
+///
+/// Warns instead of failing the show. Click-through is the single most important
+/// property of the window, but an overlay that eats clicks is still a better
+/// outcome than the previous behaviour, where this error aborted the show and left
+/// a created-but-invisible window that every later toggle then tried to re-show.
+fn apply_click_through(window: &tauri::WebviewWindow) {
+    if let Err(e) = window.set_ignore_cursor_events(true) {
+        warn!(
+            "wave overlay: failed to make the overlay click-through: {}",
+            e
+        );
+    }
 }
 
 fn apply_bounds(window: &tauri::WebviewWindow, bounds: OverlayBounds) -> Result<(), String> {
@@ -149,32 +175,66 @@ fn start_follow_loop(app: AppHandle, settings: Arc<std::sync::Mutex<Settings>>) 
     });
 }
 
-/// Show the overlay. No-op if Dota is not running.
+/// Show the overlay, from a thread that is not the main one.
 ///
-/// Deliberately **not** `async`: this builds a window, and window creation has to
-/// happen on the main thread. Unlike the polled read commands it runs once per
-/// user action, so it costs the message pump nothing.
-#[tauri::command]
-pub fn show_wave_overlay(
-    app: AppHandle,
-    state: tauri::State<'_, TauriAppState>,
+/// Shared by the command and the hotkey so both reach the window through the same
+/// path; see [`ensure_overlay_window`] for why that path must stay off the main
+/// thread.
+fn show_overlay_now(
+    app: &AppHandle,
+    settings: &Arc<std::sync::Mutex<Settings>>,
 ) -> Result<bool, String> {
-    let settings = snapshot_settings(&state)?;
+    let snapshot = settings
+        .lock()
+        .map(|settings| settings.clone())
+        .map_err(|e| format!("Failed to lock settings: {}", e))?;
 
-    let Some(bounds) = current_bounds(&settings) else {
+    let Some(bounds) = current_bounds(&snapshot) else {
         warn!("wave overlay: Dota 2 window not found or minimap region is empty");
         return Ok(false);
     };
 
-    let window = ensure_overlay_window(&app)?;
+    let window = ensure_overlay_window(app)?;
     apply_bounds(&window, bounds)?;
     window
         .show()
         .map_err(|e| format!("Failed to show overlay: {}", e))?;
 
-    start_follow_loop(app.clone(), state.settings.clone());
+    start_follow_loop(app.clone(), settings.clone());
     info!("wave overlay shown at {:?}", bounds);
     Ok(true)
+}
+
+/// Flip overlay visibility off the main thread. Returns the new visible state.
+fn toggle_overlay_now(
+    app: &AppHandle,
+    settings: &Arc<std::sync::Mutex<Settings>>,
+) -> Result<bool, String> {
+    let visible = app
+        .get_webview_window(OVERLAY_LABEL)
+        .and_then(|w| w.is_visible().ok())
+        .unwrap_or(false);
+
+    if visible {
+        hide_wave_overlay(app.clone())
+    } else {
+        show_overlay_now(app, settings)
+    }
+}
+
+/// Show the overlay. No-op if Dota is not running.
+///
+/// **Must stay `async`.** A synchronous command runs on the main thread, and this
+/// one can build a window — which deadlocks there. That is not theoretical: it is
+/// the bug where clicking "Show Overlay" froze the whole app and leaked an
+/// unpositioned 800x600 window per click. See [`ensure_overlay_window`].
+#[tauri::command]
+pub async fn show_wave_overlay(
+    app: AppHandle,
+    state: tauri::State<'_, TauriAppState>,
+) -> Result<bool, String> {
+    let settings = state.settings.clone();
+    show_overlay_now(&app, &settings)
 }
 
 /// Hide the overlay, leaving the window built so re-showing is instant.
@@ -189,21 +249,15 @@ pub fn hide_wave_overlay(app: AppHandle) -> Result<bool, String> {
 }
 
 /// Flip overlay visibility. Returns the new visible state.
+///
+/// `async` for the same reason as [`show_wave_overlay`].
 #[tauri::command]
-pub fn toggle_wave_overlay(
+pub async fn toggle_wave_overlay(
     app: AppHandle,
     state: tauri::State<'_, TauriAppState>,
 ) -> Result<bool, String> {
-    let visible = app
-        .get_webview_window(OVERLAY_LABEL)
-        .and_then(|w| w.is_visible().ok())
-        .unwrap_or(false);
-
-    if visible {
-        hide_wave_overlay(app)
-    } else {
-        show_wave_overlay(app, state)
-    }
+    let settings = state.settings.clone();
+    toggle_overlay_now(&app, &settings)
 }
 
 /// Read-only, so it runs off the main thread. See `get_wave_snapshot`.
@@ -237,8 +291,9 @@ pub async fn get_wave_overlay_status(
 ///
 /// Silently does nothing until Tauri setup has published the app handle.
 ///
-/// The keyboard hook runs on its own thread, and this can create a window, so the
-/// work is marshalled onto the main thread rather than done inline.
+/// Handed to a worker rather than run inline or marshalled to the main thread: the
+/// caller is the keyboard hook, which sits in the input path and must not block,
+/// and the main thread is exactly where window creation deadlocks.
 pub fn toggle_from_hotkey() {
     let Some(app) = APP_HANDLE.get() else {
         warn!("wave overlay hotkey fired before the app was ready");
@@ -246,18 +301,13 @@ pub fn toggle_from_hotkey() {
     };
 
     let handle = app.clone();
-    let result = app.run_on_main_thread(move || {
-        let state = handle.state::<TauriAppState>();
-        match toggle_wave_overlay(handle.clone(), state) {
-            Ok(visible) => info!(
-                "wave overlay {} via hotkey",
-                if visible { "shown" } else { "hidden" }
-            ),
-            Err(e) => warn!("wave overlay hotkey toggle failed: {}", e),
-        }
-    });
+    let settings = app.state::<TauriAppState>().settings.clone();
 
-    if let Err(e) = result {
-        warn!("wave overlay hotkey could not reach the main thread: {}", e);
-    }
+    tauri::async_runtime::spawn_blocking(move || match toggle_overlay_now(&handle, &settings) {
+        Ok(visible) => info!(
+            "wave overlay {} via hotkey",
+            if visible { "shown" } else { "hidden" }
+        ),
+        Err(e) => warn!("wave overlay hotkey toggle failed: {}", e),
+    });
 }
