@@ -29,6 +29,7 @@ describe("Settings page phase boots automation controls", () => {
           enabled: true,
           minimum_distance_units: 100,
           excluded_heroes: [],
+          suppress_while_invisible: true,
         },
       },
       loaded: true,
@@ -50,6 +51,7 @@ describe("Settings page phase boots automation controls", () => {
     expect(screen.getByText("Phase Boots Automation")).toBeInTheDocument();
     expect(screen.getByText("Enable Phase Boots Automation")).toBeInTheDocument();
     expect(screen.getByText("Minimum Movement Distance")).toBeInTheDocument();
+    expect(screen.getByText("Hold While Invisible")).toBeInTheDocument();
   });
 
   it("persists phase boots toggle changes through the shared config store", async () => {
@@ -71,6 +73,30 @@ describe("Settings page phase boots automation controls", () => {
         section: "phase_boots_automation",
         updates: {
           enabled: false,
+        },
+      });
+    });
+  });
+
+  it("persists the invisibility hold toggle through the shared config store", async () => {
+    invokeMock.mockResolvedValue(undefined);
+
+    render(
+      <MemoryRouter>
+        <Settings />
+      </MemoryRouter>,
+    );
+
+    await fireEvent.click(
+      screen.getByRole("switch", { name: "Hold While Invisible" }),
+    );
+
+    await vi.advanceTimersByTimeAsync(300);
+    await vi.waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("update_config", {
+        section: "phase_boots_automation",
+        updates: {
+          suppress_while_invisible: false,
         },
       });
     });

@@ -247,6 +247,7 @@ export const mockConfig: Settings = {
     enabled: true,
     minimum_distance_units: 100,
     excluded_heroes: [],
+    suppress_while_invisible: true,
   },
   soul_ring: {
     enabled: true, min_mana_percent: 100, min_health_percent: 20,

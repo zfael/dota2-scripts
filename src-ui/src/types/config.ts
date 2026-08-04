@@ -275,6 +275,7 @@ export interface PhaseBootsAutomationConfig {
   enabled: boolean;
   minimum_distance_units: number;
   excluded_heroes: string[];
+  suppress_while_invisible: boolean;
 }
 
 export interface SoulRingConfig {

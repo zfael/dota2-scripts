@@ -63,6 +63,17 @@ export default function Settings() {
               Only triggers once the hero has actually walked at least this far
               during the current movement segment.
             </p>
+            <Toggle
+              label="Hold While Invisible"
+              checked={config.phase_boots_automation.suppress_while_invisible}
+              onChange={(v) =>
+                updateConfig("phase_boots_automation", { suppress_while_invisible: v })
+              }
+            />
+            <p className="text-xs text-subtle">
+              Activating Phase Boots breaks Shadow Blade and Silver Edge
+              invisibility, so automation waits it out instead.
+            </p>
           </Card>
         </div>
 

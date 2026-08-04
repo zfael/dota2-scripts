@@ -255,6 +255,7 @@ allowed_items = [
 enabled = true
 minimum_distance_units = 100
 excluded_heroes = []
+suppress_while_invisible = true  # Don't pop Shadow Blade / Silver Edge invisibility
 
 [heroes.largo]
 amphibian_rhapsody_enabled = true

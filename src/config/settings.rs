@@ -615,6 +615,10 @@ pub struct PhaseBootsAutomationConfig {
     pub minimum_distance_units: u32,
     #[serde(default = "default_phase_boots_excluded_heroes")]
     pub excluded_heroes: Vec<String>,
+    /// Hold Phase Boots while Shadow Blade / Silver Edge invisibility is running,
+    /// since activating it would break the invisibility.
+    #[serde(default = "default_phase_boots_suppress_while_invisible")]
+    pub suppress_while_invisible: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1984,6 +1988,9 @@ fn default_phase_boots_minimum_distance_units() -> u32 {
 fn default_phase_boots_excluded_heroes() -> Vec<String> {
     Vec::new()
 }
+fn default_phase_boots_suppress_while_invisible() -> bool {
+    true
+}
 fn default_gsi_logging_enabled() -> bool {
     false
 }
@@ -2391,6 +2398,7 @@ impl Default for PhaseBootsAutomationConfig {
             enabled: default_phase_boots_automation_enabled(),
             minimum_distance_units: default_phase_boots_minimum_distance_units(),
             excluded_heroes: default_phase_boots_excluded_heroes(),
+            suppress_while_invisible: default_phase_boots_suppress_while_invisible(),
         }
     }
 }
@@ -2712,6 +2720,7 @@ mod tests {
         assert!(settings.phase_boots_automation.enabled);
         assert_eq!(settings.phase_boots_automation.minimum_distance_units, 100);
         assert!(settings.phase_boots_automation.excluded_heroes.is_empty());
+        assert!(settings.phase_boots_automation.suppress_while_invisible);
     }
 
     #[test]

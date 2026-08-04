@@ -157,6 +157,10 @@ impl ActionDispatcher {
     }
 
     pub fn dispatch_gsi_event(&self, event: &GsiWebhookEvent) {
+        // Invisibility is inferred from cooldown edges between consecutive payloads,
+        // so this has to run on every event before anything can act on it.
+        crate::actions::invisibility::observe_event(event);
+
         // Shared keyboard/runtime caches are refreshed upstream in process_gsi_events().
         // Dispatcher only runs dispatch-local hooks and routes automation work.
         let settings = self.survivability.settings.lock().unwrap();

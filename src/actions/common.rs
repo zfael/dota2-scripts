@@ -1,5 +1,6 @@
 use crate::actions::activity::{push_activity, ActivityCategory};
 use crate::actions::executor::ActionExecutor;
+use crate::actions::invisibility;
 use crate::actions::item_automation::{
     clear_movement_snapshot, hero_is_excluded, lookup_item_automation, read_movement_snapshot,
     try_acquire_global_lockout, write_movement_snapshot, CastMode, ItemAutomationSpec,
@@ -373,6 +374,11 @@ fn eligible_movement_item(
         &event.hero.name,
         &settings.phase_boots_automation.excluded_heroes,
     ) {
+        return None;
+    }
+    // Activating Phase Boots is an item use, which drops Shadow Blade / Silver Edge
+    // invisibility. Hold off rather than popping the player's own escape.
+    if settings.phase_boots_automation.suppress_while_invisible && invisibility::is_invisible() {
         return None;
     }
 
@@ -757,6 +763,7 @@ impl SurvivabilityActions {
 
         if !event.hero.is_alive() {
             clear_movement_snapshot();
+            invisibility::clear_snapshot();
             return;
         }
 
@@ -1023,6 +1030,7 @@ mod snapshot_tests {
     use std::sync::{Arc, Mutex, OnceLock};
 
     use crate::actions::executor::ActionExecutor;
+    use crate::actions::invisibility;
     use crate::actions::item_automation::{
         read_movement_snapshot, replace_movement_snapshot_for_tests,
         reset_global_lockouts_for_tests, MovementSnapshot,
@@ -1458,6 +1466,80 @@ mod snapshot_tests {
 
         assert_eq!(spec.item_name, "item_phase_boots");
         assert_eq!(slot_key, settings.keybindings.slot0);
+    }
+
+    /// A hero walking far enough to arm the trigger, with Phase Boots ready.
+    fn walking_phase_boots_event() -> GsiWebhookEvent {
+        let mut items = empty_items();
+        items.slot0 = Item {
+            name: "item_phase_boots".to_string(),
+            can_cast: Some(true),
+            ..Default::default()
+        };
+
+        replace_movement_snapshot_for_tests(Some(MovementSnapshot {
+            hero_name: "npc_dota_hero_axe".to_string(),
+            alive: true,
+            anchor_xpos: 1000,
+            anchor_ypos: 1000,
+            last_xpos: 1000,
+            last_ypos: 1000,
+            idle_samples: 0,
+        }));
+
+        let mut hero = hero_with_health(100, 100);
+        hero.name = "npc_dota_hero_axe".to_string();
+        hero.xpos = 1120;
+        hero.ypos = 1000;
+        base_event(hero, items)
+    }
+
+    #[test]
+    fn movement_gate_holds_phase_boots_while_invisible() {
+        let _guard = shared_state_test_lock().lock().unwrap();
+        reset_global_lockouts_for_tests();
+
+        let mut settings = Settings::default();
+        settings.phase_boots_automation.enabled = true;
+        settings.phase_boots_automation.minimum_distance_units = 100;
+
+        let event = walking_phase_boots_event();
+        invisibility::replace_snapshot_for_tests(Some(invisibility::active_snapshot_for_tests(
+            "npc_dota_hero_axe",
+        )));
+        let while_invisible = eligible_movement_item(&event, &settings);
+
+        // The same event fires the moment the window closes: suppressed, then
+        // resumed, with nothing queued in between.
+        invisibility::replace_snapshot_for_tests(None);
+        let after_invisible = eligible_movement_item(&event, &settings);
+
+        assert!(while_invisible.is_none());
+        assert!(after_invisible.is_some());
+    }
+
+    #[test]
+    fn movement_gate_ignores_invisibility_when_suppression_is_disabled() {
+        let _guard = shared_state_test_lock().lock().unwrap();
+        reset_global_lockouts_for_tests();
+
+        let mut settings = Settings::default();
+        settings.phase_boots_automation.enabled = true;
+        settings.phase_boots_automation.minimum_distance_units = 100;
+        settings.phase_boots_automation.suppress_while_invisible = false;
+
+        let event = walking_phase_boots_event();
+        invisibility::replace_snapshot_for_tests(Some(invisibility::active_snapshot_for_tests(
+            "npc_dota_hero_axe",
+        )));
+
+        let eligible = eligible_movement_item(&event, &settings);
+        invisibility::replace_snapshot_for_tests(None);
+
+        assert_eq!(
+            eligible.map(|(spec, _)| spec.item_name),
+            Some("item_phase_boots")
+        );
     }
 
     #[test]

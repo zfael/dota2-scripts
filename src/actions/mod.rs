@@ -7,6 +7,7 @@ pub mod dispel;
 pub mod dispatcher;
 pub mod executor;
 pub mod heroes;
+pub mod invisibility;
 pub mod item_automation;
 pub mod soul_ring;
 
