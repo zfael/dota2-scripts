@@ -174,6 +174,13 @@ The helper API keeps its prior blocking timing semantics, but each call now subm
 
 The Enigo-backed worker now tracks queue depth, queued total, peak depth, drops, and completions. Those metrics are for the synthetic-input lane only and are exposed via `synthetic_input_metrics()` in the debug UI. Soul Ring replay remains a separate path with its own dedicated worker.
 
+**Key chars are lowercased before they reach enigo.** `Key::Unicode('W')` makes
+enigo synthesize `Shift+W`, which Dota reads as "queue the ability" rather than
+"cast it". Hand-written config is lowercase, but the UI's `KeyInput` uppercases
+single characters, so any `char` key rebound through a hero config panel would
+otherwise arrive shifted. `normalize_key_char` in `src/input/simulation.rs`
+applies to `press_key`, `key_down`, `key_up`, and the armlet chord.
+
 `SIMULATING_KEYS` is still managed by this path:
 
 - `press_key`, `mouse_click`, `left_click`, and `alt_up` keep the brief post-action guard window before the worker restores the flag

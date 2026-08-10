@@ -153,9 +153,19 @@ pub fn armlet_chord(slot_key: char, modifier: ModifierKey) {
     );
 }
 
+/// Normalise a configured key char before it reaches enigo.
+///
+/// `Key::Unicode('W')` makes enigo synthesize **Shift+W**, and in Dota
+/// Shift+ability queues the ability instead of casting it. Config written by
+/// hand is lowercase, but the UI's `KeyInput` uppercases single characters, so
+/// any key rebound through a hero config panel would arrive shifted.
+fn normalize_key_char(key_char: char) -> char {
+    key_char.to_ascii_lowercase()
+}
+
 fn press_key_command(key_char: char) -> SyntheticInputCommand {
     SyntheticInputCommand {
-        action: SyntheticAction::KeyClick(key_char),
+        action: SyntheticAction::KeyClick(normalize_key_char(key_char)),
         guard_behavior: GuardBehavior::Pulse {
             delay_ms: POST_ACTION_GUARD_DELAY_MS,
         },
@@ -164,14 +174,14 @@ fn press_key_command(key_char: char) -> SyntheticInputCommand {
 
 fn key_down_command(key_char: char) -> SyntheticInputCommand {
     SyntheticInputCommand {
-        action: SyntheticAction::KeyDown(key_char),
+        action: SyntheticAction::KeyDown(normalize_key_char(key_char)),
         guard_behavior: GuardBehavior::None,
     }
 }
 
 fn key_up_command(key_char: char) -> SyntheticInputCommand {
     SyntheticInputCommand {
-        action: SyntheticAction::KeyUp(key_char),
+        action: SyntheticAction::KeyUp(normalize_key_char(key_char)),
         guard_behavior: GuardBehavior::None,
     }
 }
@@ -557,6 +567,7 @@ fn perform_single_action(enigo: &mut Enigo, action: SyntheticAction) {
 }
 
 fn armlet_chord_steps(slot_key: char, modifier: ModifierKey) -> [SyntheticAction; 4] {
+    let slot_key = normalize_key_char(slot_key);
     [
         SyntheticAction::KeyClick(slot_key),
         SyntheticAction::ModifierDown(modifier),
@@ -666,6 +677,31 @@ mod tests {
             GuardBehavior::Pulse {
                 delay_ms: POST_ACTION_GUARD_DELAY_MS,
             }
+        );
+    }
+
+    #[test]
+    fn key_commands_lowercase_configured_chars() {
+        // The UI's KeyInput uppercases single characters. Passing 'W' through
+        // to enigo would synthesize Shift+W, which Dota reads as "queue the
+        // ability" rather than "cast it".
+        assert_eq!(
+            press_key_command('W').action,
+            SyntheticAction::KeyClick('w')
+        );
+        assert_eq!(key_down_command('R').action, SyntheticAction::KeyDown('r'));
+        assert_eq!(key_up_command('R').action, SyntheticAction::KeyUp('r'));
+        assert_eq!(
+            armlet_chord_steps('X', ModifierKey::Alt)[0],
+            SyntheticAction::KeyClick('x')
+        );
+    }
+
+    #[test]
+    fn key_commands_leave_non_alphabetic_chars_alone() {
+        assert_eq!(
+            press_key_command('1').action,
+            SyntheticAction::KeyClick('1')
         );
     }
 
