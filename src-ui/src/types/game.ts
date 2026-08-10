@@ -4,6 +4,7 @@ export type HeroType =
   | "invoker"
   | "largo"
   | "legion_commander"
+  | "magnus"
   | "meepo"
   | "outworld_destroyer"
   | "shadow_fiend"
@@ -23,6 +24,7 @@ export const HEROES: HeroInfo[] = [
   { id: "invoker", displayName: "Invoker", internalName: "npc_dota_hero_invoker", icon: "🔮", role: "Carry / Nuker" },
   { id: "largo", displayName: "Largo", internalName: "npc_dota_hero_largo", icon: "🎵", role: "Support / Healer" },
   { id: "legion_commander", displayName: "Legion Commander", internalName: "npc_dota_hero_legion_commander", icon: "⚔️", role: "Initiator / Durable" },
+  { id: "magnus", displayName: "Magnus", internalName: "npc_dota_hero_magnataur", icon: "🦏", role: "Initiator / Disabler" },
   { id: "meepo", displayName: "Meepo", internalName: "npc_dota_hero_meepo", icon: "🐾", role: "Carry / Escape" },
   { id: "outworld_destroyer", displayName: "Outworld Destroyer", internalName: "npc_dota_hero_obsidian_destroyer", icon: "🌀", role: "Carry / Nuker" },
   { id: "shadow_fiend", displayName: "Shadow Fiend", internalName: "npc_dota_hero_nevermore", icon: "👻", role: "Carry / Nuker" },

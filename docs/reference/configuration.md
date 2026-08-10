@@ -514,6 +514,19 @@ See `docs/heroes/broodmother.md` and `docs/reference/gsi-schema-and-usage.md`.
 
 See `docs/heroes/snapfire.md` and `docs/features/keyboard-interception.md`.
 
+## `[heroes.magnus]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `enabled` | `true` | `true` | Master toggle for the directional Reverse Polarity intercept. |
+| `ultimate_key` | `"r"` | `"r"` | Reverse Polarity ability key. This is also the key intercepted. Intercept is gated on Magnus being the active hero. |
+| `turn_delay_ms` | `60` | `60` | Delay after the facing right-click before the ultimate cast. Increase if Reverse Polarity fires before Magnus finishes turning. |
+| `require_ability_ready` | `true` | `true` | Only intercept when `magnataur_reverse_polarity` is levelled and castable. Prevents a cooldown press from issuing the facing right-click. |
+
+All four fields are exposed in the React UI under **Heroes → Magnus**.
+
+See `docs/heroes/magnus.md` and `docs/features/keyboard-interception.md`.
+
 ## `[heroes.invoker]`
 
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |

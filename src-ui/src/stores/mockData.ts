@@ -173,6 +173,10 @@ export const mockConfig: Settings = {
       armlet: {},
     },
     legion_commander: { standalone_key: "Home", armlet: {} },
+    magnus: {
+      enabled: true, ultimate_key: "r",
+      turn_delay_ms: 60, require_ability_ready: true,
+    },
     shadow_fiend: {
       raze_intercept_enabled: true, raze_delay_ms: 10,
       auto_bkb_on_ultimate: true, auto_d_on_ultimate: true,

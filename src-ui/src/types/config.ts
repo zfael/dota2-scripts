@@ -231,10 +231,18 @@ export interface InvokerConfig {
   armlet: HeroArmletOverride;
 }
 
+export interface MagnusConfig {
+  enabled: boolean;
+  ultimate_key: string;
+  turn_delay_ms: number;
+  require_ability_ready: boolean;
+}
+
 export interface HeroesConfig {
   huskar: HuskarConfig;
   invoker: InvokerConfig;
   legion_commander: LegionCommanderConfig;
+  magnus: MagnusConfig;
   shadow_fiend: ShadowFiendConfig;
   tiny: TinyConfig;
   outworld_destroyer: OutworldDestroyerConfig;

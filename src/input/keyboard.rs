@@ -14,6 +14,7 @@ use crate::actions::heroes::outworld_destroyer::{
     build_keyboard_combo_config, OutworldDestroyerComboConfig, OutworldDestroyerState,
 };
 use crate::actions::heroes::shadow_fiend::ShadowFiendState;
+use crate::actions::heroes::magnus::MagnusState;
 use crate::actions::heroes::snapfire::SnapfireState;
 use crate::actions::soul_ring::{SoulRingKeyboardConfig, SoulRingState};
 use crate::actions::SOUL_RING_STATE;
@@ -452,6 +453,31 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                     }
                 }
 
+                // Handle Magnus directional Reverse Polarity.
+                // Reverse Polarity drags enemies to the arc in front of Magnus,
+                // so face the cursor first and the pull lands where the Skewer
+                // that follows is aimed.
+                if snapshot.magnus_enabled && snapshot.magnus.enabled {
+                    if let Some(ultimate_key) = snapshot.magnus.ultimate_key {
+                        if key == ultimate_key {
+                            // Falling through leaves the key unblocked, so a
+                            // cooldown press never issues the facing right-click
+                            // and never walks Magnus toward the cursor.
+                            if !snapshot.magnus.require_ability_ready
+                                || MagnusState::can_intercept_ultimate()
+                            {
+                                info!("🦏 Magnus ultimate pressed - directional Reverse Polarity");
+                                MagnusState::execute_directional_ultimate(
+                                    snapshot.magnus.ultimate_char,
+                                    snapshot.magnus.turn_delay_ms,
+                                );
+                                // Block original key (combo re-presses it).
+                                return None;
+                            }
+                        }
+                    }
+                }
+
                 if snapshot.od_enabled {
                     if snapshot.outworld_destroyer.ultimate_intercept_enabled && key == Key::KeyR {
                         if OutworldDestroyerState::can_intercept_ultimate() {
@@ -607,6 +633,18 @@ pub struct SnapfireKeyboardSnapshot {
     pub turn_delay_ms: u64,
 }
 
+/// Snapshot of the Magnus keyboard-relevant config.
+#[derive(Debug, Clone)]
+pub struct MagnusKeyboardSnapshot {
+    pub enabled: bool,
+    /// Pre-parsed Reverse Polarity key, used to match the intercepted press.
+    pub ultimate_key: Option<Key>,
+    /// The same key as a char, used to re-press it after the turn.
+    pub ultimate_char: char,
+    pub turn_delay_ms: u64,
+    pub require_ability_ready: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct OutworldDestroyerKeyboardSnapshot {
     pub ultimate_intercept_enabled: bool,
@@ -669,6 +707,9 @@ pub struct KeyboardSnapshot {
     /// Whether Snapfire is the active hero (drives the cookie intercept).
     pub snapfire_enabled: bool,
     pub snapfire: SnapfireKeyboardSnapshot,
+    /// Whether Magnus is the active hero (drives the ultimate intercept).
+    pub magnus_enabled: bool,
+    pub magnus: MagnusKeyboardSnapshot,
     /// Static Soul Ring keyboard config (thresholds, key sets, delays).
     pub soul_ring: SoulRingKeyboardConfig,
     pub invoker_profiles: Vec<InvokerHotkeyProfileSnapshot>,
@@ -801,6 +842,7 @@ impl KeyboardSnapshot {
         let od = &settings.heroes.outworld_destroyer;
         let bm = &settings.heroes.broodmother;
         let sp = &settings.heroes.snapfire;
+        let mg = &settings.heroes.magnus;
 
         Self {
             selected_hero: state.selected_hero.clone(),
@@ -862,6 +904,14 @@ impl KeyboardSnapshot {
                 cookie_key: sp.cookie_key,
                 turn_delay_ms: sp.turn_delay_ms,
             },
+            magnus_enabled: state.selected_hero == Some(crate::state::HeroType::Magnus),
+            magnus: MagnusKeyboardSnapshot {
+                enabled: mg.enabled,
+                ultimate_key: char_to_key(mg.ultimate_key),
+                ultimate_char: mg.ultimate_key,
+                turn_delay_ms: mg.turn_delay_ms,
+                require_ability_ready: mg.require_ability_ready,
+            },
             soul_ring: SoulRingKeyboardConfig::from_settings(settings),
             invoker_profiles: settings
                 .heroes
@@ -918,6 +968,14 @@ impl Default for KeyboardSnapshot {
                 trigger_key: None,
                 cookie_key: 'w',
                 turn_delay_ms: 0,
+            },
+            magnus_enabled: false,
+            magnus: MagnusKeyboardSnapshot {
+                enabled: false,
+                ultimate_key: None,
+                ultimate_char: 'r',
+                turn_delay_ms: 0,
+                require_ability_ready: true,
             },
             soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
             invoker_profiles: vec![],
@@ -1083,6 +1141,14 @@ mod tests {
                 cookie_key: 'w',
                 turn_delay_ms: 0,
             },
+            magnus_enabled: false,
+            magnus: MagnusKeyboardSnapshot {
+                enabled: false,
+                ultimate_key: None,
+                ultimate_char: 'r',
+                turn_delay_ms: 0,
+                require_ability_ready: true,
+            },
             soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
             invoker_profiles: vec![],
         }
@@ -1191,6 +1257,22 @@ mod tests {
 
         let other = KeyboardSnapshot::from_runtime(&Settings::default(), &AppState::default());
         assert!(!other.snapfire_enabled);
+    }
+
+    #[test]
+    fn keyboard_snapshot_populates_magnus_fields_for_magnus() {
+        let mut state = AppState::default();
+        state.selected_hero = Some(HeroType::Magnus);
+        let snapshot = KeyboardSnapshot::from_runtime(&Settings::default(), &state);
+
+        assert!(snapshot.magnus_enabled);
+        assert!(snapshot.magnus.enabled);
+        assert_eq!(snapshot.magnus.ultimate_key, Some(Key::KeyR));
+        assert_eq!(snapshot.magnus.ultimate_char, 'r');
+        assert!(snapshot.magnus.require_ability_ready);
+
+        let other = KeyboardSnapshot::from_runtime(&Settings::default(), &AppState::default());
+        assert!(!other.magnus_enabled);
     }
 
     #[test]

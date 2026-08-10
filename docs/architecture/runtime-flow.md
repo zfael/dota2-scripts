@@ -21,6 +21,7 @@ Boot starts in `src/main.rs::main()`:
    - returns `Receiver<HotkeyEvent>` to `main.rs`
 7. **Spawn GSI server task**
    - `main.rs` calls `tokio::spawn(start_gsi_server(...))`
+   - the shared `KeyboardSnapshot` handle is passed in so hero detection can rebuild it
 8. **Optionally spawn update check**
    - guarded by `settings.updates.check_on_startup`
    - uses `tokio::task::spawn_blocking` and writes into `AppState.update_state`
@@ -121,16 +122,21 @@ The action executor is intentionally narrow in this rollout item:
 
 `src/input/keyboard.rs::start_keyboard_listener()` spawns a dedicated OS thread and installs `rdev::grab(callback)`.
 
-`main.rs` and `ui/app.rs` share one `Arc<RwLock<KeyboardSnapshot>>` with that listener:
+Each binary shares one `Arc<RwLock<KeyboardSnapshot>>` with that listener:
 
-- `main.rs` creates the initial snapshot before the hook starts
-- `Dota2ScriptApp::update(...)` refreshes it on a short timer instead of every repaint
+- the binary entry point (`main.rs` or `src-tauri/src/lib.rs`) creates the initial snapshot before the hook starts, when no hero is known yet
+- `process_gsi_events` rebuilds it whenever GSI detection changes the active hero — this is what makes per-hero intercepts go live in the desktop app
+- Tauri state and config commands rebuild it on manual selection, toggles, and config writes
+- `Dota2ScriptApp::update(...)` refreshes it on a short timer in the legacy egui binary
 - the callback clones it only on the button/key paths that need static config
+
+See the rebuild-trigger table in `docs/features/keyboard-interception.md`.
 
 The snapshot only carries static keyboard-relevant config:
 
 - parsed combo-trigger key
 - Shadow Fiend interception flags and delays
+- Magnus interception flags, ultimate key, and turn delay
 - Broodmother callback-facing config and pre-parsed keys
 - Soul Ring thresholds, ability keys, and item-slot keys
 

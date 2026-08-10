@@ -1,5 +1,6 @@
 use crate::actions::activity::{push_activity, ActivityCategory};
 use crate::config::Settings;
+use crate::input::keyboard::KeyboardSnapshot;
 use crate::models::{GsiWebhookEvent, Hero};
 use crate::state::AppState;
 use axum::{body::Bytes, extract::State, http::StatusCode};
@@ -9,7 +10,7 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 
@@ -148,11 +149,44 @@ pub async fn gsi_webhook_handler(
     }
 }
 
+/// Rebuild the shared `KeyboardSnapshot` from current settings and app state.
+///
+/// The keyboard hook reads a cached snapshot, so every per-hero intercept flag
+/// on it (`sf_enabled`, `magnus_enabled`, `snapfire_enabled`, …) is frozen at
+/// the moment the snapshot was last built. GSI hero detection changes
+/// `AppState.selected_hero` without touching that cache, so without this call
+/// the intercepts stay dead until an unrelated UI action rebuilds it.
+///
+/// Locks settings before app state, matching `refresh_observability_state`.
+fn refresh_keyboard_snapshot_for_hero_change(
+    app_state: &Arc<Mutex<AppState>>,
+    settings: &Arc<Mutex<Settings>>,
+    keyboard_snapshot: &Arc<RwLock<KeyboardSnapshot>>,
+) {
+    let rebuilt = {
+        let settings = settings.lock().unwrap();
+        let state = app_state.lock().unwrap();
+        KeyboardSnapshot::from_runtime(&settings, &state)
+    };
+
+    match keyboard_snapshot.write() {
+        Ok(mut cached) => {
+            debug!(
+                "⌨️ Keyboard snapshot rebuilt for hero change: {:?}",
+                rebuilt.selected_hero
+            );
+            *cached = rebuilt;
+        }
+        Err(e) => warn!("Failed to lock keyboard snapshot for refresh: {}", e),
+    }
+}
+
 pub async fn process_gsi_events(
     mut rx: mpsc::Receiver<GsiWebhookEvent>,
     app_state: Arc<Mutex<AppState>>,
     dispatcher: Arc<crate::actions::ActionDispatcher>,
     settings: Arc<Mutex<Settings>>,
+    keyboard_snapshot: Option<Arc<RwLock<KeyboardSnapshot>>>,
 ) {
     // Generate session filename once at startup
     let session_file: Option<PathBuf> = {
@@ -186,13 +220,26 @@ pub async fn process_gsi_events(
         }
 
         // Update app state
-        {
+        let hero_changed = {
             let mut state = app_state.lock().unwrap();
             let first_event = state.last_event.is_none();
-            state.update_from_gsi(event.clone());
+            let hero_changed = state.update_from_gsi(event.clone());
             state.metrics.current_queue_depth = rx.len();
             if first_event {
                 push_activity(ActivityCategory::System, "GSI connected");
+            }
+            hero_changed
+        };
+
+        // The keyboard hook's per-hero intercepts read a cached snapshot, so it
+        // has to be rebuilt whenever GSI detection swaps the active hero.
+        if hero_changed {
+            if let Some(keyboard_snapshot) = keyboard_snapshot.as_ref() {
+                refresh_keyboard_snapshot_for_hero_change(
+                    &app_state,
+                    &settings,
+                    keyboard_snapshot,
+                );
             }
         }
 
@@ -422,7 +469,7 @@ mod tests {
             .expect("test event should send");
         drop(tx);
 
-        process_gsi_events(rx, app_state, dispatcher, settings).await;
+        process_gsi_events(rx, app_state, dispatcher, settings, None).await;
 
         // Contract assertion: handler owns shared cache refresh
         // When gsi_enabled = true, handler should refresh caches once per event.
@@ -475,7 +522,7 @@ mod tests {
             .expect("test event should send");
         drop(tx);
 
-        process_gsi_events(rx, app_state.clone(), dispatcher, settings).await;
+        process_gsi_events(rx, app_state.clone(), dispatcher, settings, None).await;
 
         assert_eq!(
             app_state
@@ -506,6 +553,68 @@ mod tests {
         assert_eq!(soul_ring_state.hero_mana_percent, 10);
     }
 
+    /// Regression: the keyboard hook reads a cached snapshot whose per-hero
+    /// intercept flags are built before any GSI event arrives. If GSI hero
+    /// detection does not rebuild it, Shadow Fiend / Magnus / Snapfire
+    /// intercepts stay dead until an unrelated UI toggle happens to refresh it.
+    #[tokio::test]
+    async fn process_gsi_events_rebuilds_the_keyboard_snapshot_on_hero_detection() {
+        let _guard = shared_test_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        reset_keyboard_runtime_state();
+
+        let mut event = load_fixture_event("tests/fixtures/magnus_event.json");
+        event.hero.name = crate::models::Hero::Magnataur.to_game_name().to_string();
+
+        let app_state = AppState::new();
+        app_state.lock().unwrap().gsi_enabled = false;
+        let settings = std::sync::Arc::new(std::sync::Mutex::new(Settings::default()));
+        let dispatcher = std::sync::Arc::new(ActionDispatcher::new(
+            settings.clone(),
+            ActionExecutor::new(),
+            app_state.clone(),
+        ));
+
+        // Built before the hero is known, exactly like app startup does.
+        let keyboard_snapshot = {
+            let settings = settings.lock().unwrap();
+            let state = app_state.lock().unwrap();
+            std::sync::Arc::new(std::sync::RwLock::new(
+                crate::input::keyboard::KeyboardSnapshot::from_runtime(&settings, &state),
+            ))
+        };
+        assert!(
+            !keyboard_snapshot.read().unwrap().magnus_enabled,
+            "precondition: no hero detected yet"
+        );
+
+        let (tx, rx) = mpsc::channel(1);
+        tx.send(event.clone())
+            .await
+            .expect("test event should send");
+        drop(tx);
+
+        process_gsi_events(
+            rx,
+            app_state,
+            dispatcher,
+            settings,
+            Some(keyboard_snapshot.clone()),
+        )
+        .await;
+
+        let refreshed = keyboard_snapshot.read().unwrap();
+        assert!(
+            refreshed.magnus_enabled,
+            "GSI hero detection must rebuild the cached keyboard snapshot"
+        );
+        assert_eq!(
+            refreshed.selected_hero,
+            Some(crate::state::HeroType::Magnus)
+        );
+    }
+
     #[tokio::test]
     async fn process_gsi_events_refreshes_sf_last_event_when_gsi_automation_is_disabled() {
         let _guard = shared_test_lock()
@@ -531,7 +640,7 @@ mod tests {
             .expect("test event should send");
         drop(tx);
 
-        process_gsi_events(rx, app_state, dispatcher, settings).await;
+        process_gsi_events(rx, app_state, dispatcher, settings, None).await;
 
         assert_eq!(
             SF_LAST_EVENT
@@ -567,7 +676,7 @@ mod tests {
         tx.send(event).await.expect("test event should send");
         drop(tx);
 
-        process_gsi_events(rx, app_state, dispatcher, settings).await;
+        process_gsi_events(rx, app_state, dispatcher, settings, None).await;
 
         let snapshot = latest_rune_alert_snapshot().expect("rune snapshot should exist");
         assert_eq!(snapshot.next_rune_time_seconds, Some(120));
@@ -604,7 +713,7 @@ mod tests {
         tx.send(huskar_event).await.expect("huskar event should send");
         drop(tx);
 
-        process_gsi_events(rx, app_state, dispatcher, settings).await;
+        process_gsi_events(rx, app_state, dispatcher, settings, None).await;
 
         assert!(
             latest_meepo_observed_state().is_none(),

@@ -1,9 +1,10 @@
 use crate::config::Settings;
 use crate::gsi::handler::{gsi_webhook_handler, process_gsi_events, GsiServerState};
+use crate::input::keyboard::KeyboardSnapshot;
 use crate::models::GsiWebhookEvent;
 use crate::state::AppState;
 use axum::{routing::post, Router};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use tokio::sync::mpsc;
 use tracing::info;
 
@@ -14,6 +15,8 @@ pub async fn start_gsi_server(
     app_state: Arc<Mutex<AppState>>,
     dispatcher: Arc<crate::actions::ActionDispatcher>,
     settings: Arc<Mutex<Settings>>,
+    // Shared keyboard snapshot, rebuilt when GSI detection changes the hero.
+    keyboard_snapshot: Option<Arc<RwLock<KeyboardSnapshot>>>,
 ) {
     let (tx, rx) = mpsc::channel::<GsiWebhookEvent>(EVENT_QUEUE_CAPACITY);
 
@@ -22,7 +25,14 @@ pub async fn start_gsi_server(
     let dispatcher_clone = dispatcher.clone();
     let settings_clone = settings.clone();
     tokio::spawn(async move {
-        process_gsi_events(rx, app_state_clone, dispatcher_clone, settings_clone).await;
+        process_gsi_events(
+            rx,
+            app_state_clone,
+            dispatcher_clone,
+            settings_clone,
+            keyboard_snapshot,
+        )
+        .await;
     });
 
     // Build router

@@ -335,6 +335,20 @@ cookie_key = "w"
 # Delay after the facing right-click before the self-cast leap (ms). Increase if the leap fires before the hero finishes turning.
 turn_delay_ms = 60
 
+[heroes.magnus]
+# Press R to face the cursor and then cast Reverse Polarity, so enemies are
+# dragged to the arc you are pointing at and Skewer lines up behind them.
+enabled = true
+# Reverse Polarity ability key. This is also the key that gets intercepted.
+ultimate_key = "r"
+# Delay after the facing right-click before the ultimate cast (ms). Increase if
+# Reverse Polarity fires before Magnus finishes turning.
+turn_delay_ms = 60
+# Only intercept when Reverse Polarity is levelled and off cooldown. Leave true:
+# it stops a cooldown press from issuing the facing right-click and walking
+# Magnus toward the cursor for nothing.
+require_ability_ready = true
+
 [heroes.invoker]
 quas_key = "q"
 wex_key = "w"

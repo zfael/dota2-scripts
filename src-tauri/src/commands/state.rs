@@ -101,11 +101,14 @@ pub fn select_hero(
             let game_name = match name.as_str() {
                 "Broodmother" => "npc_dota_hero_broodmother",
                 "Huskar" => "npc_dota_hero_huskar",
+                "Invoker" => "npc_dota_hero_invoker",
                 "Largo" => "npc_dota_hero_largo",
                 "Legion Commander" => "npc_dota_hero_legion_commander",
+                "Magnus" => "npc_dota_hero_magnataur",
                 "Meepo" => "npc_dota_hero_meepo",
                 "Outworld Destroyer" => "npc_dota_hero_obsidian_destroyer",
                 "Shadow Fiend" => "npc_dota_hero_nevermore",
+                "Snapfire" => "npc_dota_hero_snapfire",
                 "Tiny" => "npc_dota_hero_tiny",
                 _ => return Err(format!("Unknown hero: {}", name)),
             };

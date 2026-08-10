@@ -12,9 +12,12 @@
 | `src/actions/heroes/outworld_destroyer.rs` | Outworld Destroyer intercepted-sequence planning and dedicated request worker (`R` combo, self-Astral, standalone combo) |
 | `src/actions/soul_ring.rs` | Soul Ring shared state, key eligibility rules, health/mana/cooldown gates |
 | `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend intercepted-sequence planning and dedicated request worker (`Q/W/E` razes, `R` ultimate combo, standalone combo) |
+| `src/actions/heroes/magnus.rs` | Magnus directional ultimate planning, GSI readiness gate, and dedicated request worker |
 | `src/actions/heroes/invoker.rs` | Invoker combo profiles, invoke planning, dedicated request worker (panic Ghost Walk, prep pairs, primary combo) |
 | `src/input/simulation.rs` | High-level synthetic keys/mouse emission + `SIMULATING_KEYS` guard |
-| `src/ui/app.rs` | Per-frame refresh of the shared `KeyboardSnapshot` |
+| `src/gsi/handler.rs` | Rebuilds the shared `KeyboardSnapshot` when GSI detection changes the hero |
+| `src-tauri/src/commands/state.rs` | Rebuilds it on manual hero selection and runtime toggles |
+| `src/ui/app.rs` | Per-frame refresh of the shared `KeyboardSnapshot` (legacy egui binary only) |
 
 Related but not primary owners:
 
@@ -39,10 +42,28 @@ If the app blocks a key, it must replay the desired behavior itself.
 
 The hot callback no longer locks and clones full runtime config on every event.
 
-- `main.rs` creates one `Arc<RwLock<KeyboardSnapshot>>`
+- `main.rs` (headless) and `src-tauri/src/lib.rs` (desktop app) each create one `Arc<RwLock<KeyboardSnapshot>>`
 - `start_keyboard_listener(...)` receives that shared snapshot
-- `Dota2ScriptApp::update(...)` refreshes it every frame from current `Settings` + `AppState`
 - the callback clones it only on the button/key paths that need static config
+
+**Every per-hero intercept flag on the snapshot is frozen until something
+rebuilds it.** The snapshot is built once at startup, before any hero is known,
+so these are the rebuild triggers:
+
+| Trigger | Where |
+|---|---|
+| GSI detection changes the active hero | `src/gsi/handler.rs::process_gsi_events` |
+| Manual hero selection | `src-tauri/src/commands/state.rs::select_hero` |
+| GSI / standalone / Invoker-profile toggles | `src-tauri/src/commands/state.rs` |
+| Any config write | `src-tauri/src/commands/config.rs` |
+| Per-frame throttled refresh (**legacy egui binary only**) | `src/ui/app.rs` |
+
+The GSI rebuild is what makes hero intercepts go live without any UI
+interaction. It is gated on `AppState::update_from_gsi` reporting a hero change,
+so it costs nothing on the steady-state event stream. Without it, picking a hero
+in-game leaves Shadow Fiend / Magnus / Snapfire intercepts inert until an
+unrelated UI toggle happens to refresh the cache — the failure mode covered by
+`process_gsi_events_rebuilds_the_keyboard_snapshot_on_hero_detection`.
 
 The snapshot holds only static keyboard-facing facts:
 
@@ -50,6 +71,7 @@ The snapshot holds only static keyboard-facing facts:
 - Shadow Fiend interception flags and delays
 - Outworld Destroyer interception flags, keys, and combo config
 - Broodmother callback-facing config and pre-parsed keys
+- Magnus intercept flags, pre-parsed ultimate key, and turn delay
 - Soul Ring thresholds, ability keys, and item-slot keys
 - Armlet Roshan toggle key when `[armlet.roshan].enabled = true`
 
@@ -93,22 +115,30 @@ Current callback order on key/button input:
     - if `snapshot.snapfire_enabled` and `snapshot.snapfire.enabled`
     - block the configured trigger key (default `Space`)
     - enqueue the `ALT down -> right-click (face cursor) -> wait -> self-cast W -> ALT up` sequence onto the dedicated Snapfire worker
-10. **Outworld Destroyer intercepts**
+10. **Magnus directional ultimate intercept**
+    - if `snapshot.magnus_enabled` and `snapshot.magnus.enabled`
+    - block the configured ultimate key (default `R`) **only** when
+      `MagnusState::can_intercept_ultimate()` passes, or when
+      `require_ability_ready = false`
+    - enqueue the `ALT down -> right-click (face cursor) -> ALT up -> wait -> press R`
+      sequence onto the dedicated Magnus worker
+    - on a failed readiness check the branch falls through and `R` reaches Dota
+11. **Outworld Destroyer intercepts**
     - if `snapshot.od_enabled` and `heroes.outworld_destroyer.ultimate_intercept_enabled`
     - block `R` only when `Sanity's Eclipse` is ready
     - enqueue `BKB -> Objurgation -> R` onto the dedicated OD worker
     - optionally block the configured self-Astral panic hotkey and double-tap Astral on self
-11. **Armlet Roshan toggle**
+12. **Armlet Roshan toggle**
     - if `[armlet.roshan].enabled = true` and the configured hotkey matches
     - emit `HotkeyEvent::ArmletRoshanToggle`
     - block the original key so it does not also reach Dota 2
-12. **Largo / generic ability-key path**
+13. **Largo / generic ability-key path**
     - emit `HotkeyEvent::LargoQ/W/E/R`
     - if Soul Ring should trigger, block and replay
     - otherwise pass through
-13. **Item-slot Soul Ring interception**
+14. **Item-slot Soul Ring interception**
      - blocks configured item keys when the item is mana-using and Soul Ring should fire first
-14. **Standalone combo key**
+15. **Standalone combo key**
      - sends `HotkeyEvent::ComboTrigger`
      - does not block the original key
 
@@ -329,6 +359,15 @@ These are still part of the interception surface even though this page centers o
 - `W` itself is never intercepted, so manual ally cookies still work
 - because the trigger defaults to `Space`, it shares the `MODIFIER_KEY_HELD` Space tracking, but only fires while Snapfire is the active hero (Broodmother's Space handling is gated separately on `BROODMOTHER_ACTIVE`)
 
+### Magnus
+
+- activation is gated on `snapshot.magnus_enabled`, derived from `selected_hero == Some(HeroType::Magnus)`
+- the configured ultimate key (default `R`) is blocked and enqueues one `DirectionalUltimate` request onto the dedicated Magnus worker
+- the worker holds `ALT`, right-clicks to face the cursor, releases `ALT`, waits `turn_delay_ms`, then presses the ultimate key
+- ALT is held only across the right-click — Reverse Polarity takes no target, so the cast does not need the modifier (this is the one difference from the Snapfire sequence)
+- unlike Snapfire, the intercept is **gated on GSI**: `MagnusState::can_intercept_ultimate()` reads `MAGNUS_LAST_EVENT` and requires `magnataur_reverse_polarity` to have `level > 0 && can_cast`. A failed check leaves the key unblocked
+- Skewer is never intercepted
+
 ### Broodmother
 
 - Broodmother callback actions now queue to one dedicated worker instead of spawning raw threads from the callback
@@ -356,6 +395,7 @@ These are still part of the interception surface even though this page centers o
 | Soul Ring | `config/config.toml` -> `[soul_ring]` | `enabled`, `min_mana_percent`, `min_health_percent`, `delay_before_ability_ms`, `trigger_cooldown_ms`, `ability_keys`, `intercept_item_keys` |
 | Armlet Roshan | `config/config.toml` -> `[armlet.roshan]` | `enabled`, `toggle_key` |
 | Shadow Fiend | `config/config.toml` -> `[heroes.shadow_fiend]` | `raze_intercept_enabled`, `raze_delay_ms`, `auto_bkb_on_ultimate`, `auto_d_on_ultimate` |
+| Magnus | `config/config.toml` -> `[heroes.magnus]` | `enabled`, `ultimate_key`, `turn_delay_ms`, `require_ability_ready` |
 | Global hotkey | `config/config.toml` -> `[keybindings]` | slot key mappings; the live standalone trigger is read from `AppState.trigger_key` and cached as a parsed `snapshot.trigger_key` |
 
 ---
@@ -374,4 +414,5 @@ Related docs:
 
 - `docs/features/soul-ring.md`
 - `docs/heroes/shadow_fiend.md`
+- `docs/heroes/magnus.md`
 - `docs/architecture/runtime-flow.md`

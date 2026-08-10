@@ -267,6 +267,23 @@ pub struct SnapfireConfig {
     pub turn_delay_ms: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MagnusConfig {
+    /// Master toggle for the directional Reverse Polarity intercept.
+    #[serde(default = "default_magnus_enabled")]
+    pub enabled: bool,
+    /// Reverse Polarity ability key. This is also the key the hook intercepts.
+    #[serde(default = "default_magnus_ultimate_key")]
+    pub ultimate_key: char,
+    /// Delay between the facing right-click and the ultimate cast (ms).
+    #[serde(default = "default_magnus_turn_delay_ms")]
+    pub turn_delay_ms: u64,
+    /// Pass the key through untouched when Reverse Polarity is not castable,
+    /// so a cooldown press never issues the facing right-click.
+    #[serde(default = "default_magnus_require_ability_ready")]
+    pub require_ability_ready: bool,
+}
+
 /// Configuration for auto-casting an ability during Space+Right-click combo
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutoAbilityConfig {
@@ -541,6 +558,8 @@ pub struct HeroesConfig {
     pub meepo: MeepoConfig,
     #[serde(default)]
     pub snapfire: SnapfireConfig,
+    #[serde(default)]
+    pub magnus: MagnusConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1311,6 +1330,18 @@ fn default_snapfire_cookie_key() -> char {
 }
 fn default_snapfire_turn_delay_ms() -> u64 {
     60
+}
+fn default_magnus_enabled() -> bool {
+    true
+}
+fn default_magnus_ultimate_key() -> char {
+    'r'
+}
+fn default_magnus_turn_delay_ms() -> u64 {
+    60
+}
+fn default_magnus_require_ability_ready() -> bool {
+    true
 }
 fn default_sf_auto_bkb_on_ultimate() -> bool {
     false
@@ -2193,6 +2224,17 @@ impl Default for SnapfireConfig {
     }
 }
 
+impl Default for MagnusConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_magnus_enabled(),
+            ultimate_key: default_magnus_ultimate_key(),
+            turn_delay_ms: default_magnus_turn_delay_ms(),
+            require_ability_ready: default_magnus_require_ability_ready(),
+        }
+    }
+}
+
 impl Default for OutworldDestroyerConfig {
     fn default() -> Self {
         Self {
@@ -2341,6 +2383,7 @@ impl Default for HeroesConfig {
             broodmother: BroodmotherConfig::default(),
             meepo: MeepoConfig::default(),
             snapfire: SnapfireConfig::default(),
+            magnus: MagnusConfig::default(),
         }
     }
 }
@@ -2635,6 +2678,15 @@ mod tests {
         assert_eq!(cfg.trigger_key, "Space");
         assert_eq!(cfg.cookie_key, 'w');
         assert_eq!(cfg.turn_delay_ms, 60);
+    }
+
+    #[test]
+    fn magnus_config_defaults_gate_the_ultimate_on_readiness() {
+        let cfg = MagnusConfig::default();
+        assert!(cfg.enabled);
+        assert_eq!(cfg.ultimate_key, 'r');
+        assert_eq!(cfg.turn_delay_ms, 60);
+        assert!(cfg.require_ability_ready);
     }
 
     #[test]

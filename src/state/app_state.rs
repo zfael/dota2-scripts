@@ -16,6 +16,7 @@ pub enum HeroType {
     Invoker,
     Largo,
     LegionCommander,
+    Magnus,
     Meepo,
     OutworldDestroyer,
     ShadowFiend,
@@ -50,6 +51,7 @@ impl HeroType {
             name if name == Hero::Invoker.to_game_name() => Some(HeroType::Invoker),
             name if name == Hero::Largo.to_game_name() => Some(HeroType::Largo),
             name if name == Hero::LegionCommander.to_game_name() => Some(HeroType::LegionCommander),
+            name if name == Hero::Magnataur.to_game_name() => Some(HeroType::Magnus),
             name if name == Hero::Meepo.to_game_name() => Some(HeroType::Meepo),
             name if name == Hero::ObsidianDestroyer.to_game_name() => {
                 Some(HeroType::OutworldDestroyer)
@@ -67,6 +69,7 @@ impl HeroType {
             HeroType::Invoker => "Invoker",
             HeroType::Largo => "Largo",
             HeroType::LegionCommander => "Legion Commander",
+            HeroType::Magnus => "Magnus",
             HeroType::Meepo => "Meepo",
             HeroType::OutworldDestroyer => "Outworld Destroyer",
             HeroType::ShadowFiend => "Shadow Fiend",
@@ -135,11 +138,17 @@ impl AppState {
         Arc::new(Mutex::new(Self::default()))
     }
 
-    pub fn update_from_gsi(&mut self, event: GsiWebhookEvent) {
+    /// Returns `true` when this event changed the active hero.
+    ///
+    /// Callers use that to rebuild caches keyed on the hero — notably the
+    /// `KeyboardSnapshot`, whose per-hero intercept flags stay stale until
+    /// something rebuilds it.
+    pub fn update_from_gsi(&mut self, event: GsiWebhookEvent) -> bool {
         // Update hero selection based on the GSI event if it changed
         let hero_type = HeroType::from_hero_name(&event.hero.name);
+        let hero_changed = self.selected_hero != hero_type;
 
-        if self.selected_hero != hero_type {
+        if hero_changed {
             self.selected_hero = hero_type;
             *self.sf_enabled.lock().unwrap() = hero_type == Some(HeroType::ShadowFiend);
             *self.od_enabled.lock().unwrap() = hero_type == Some(HeroType::OutworldDestroyer);
@@ -148,6 +157,8 @@ impl AppState {
         self.last_event = Some(event);
         self.last_gsi_activity_at = Some(SystemTime::now());
         self.metrics.events_processed += 1;
+
+        hero_changed
     }
 
     pub fn has_recent_gsi_activity(&self) -> bool {
@@ -186,7 +197,41 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::{AppState, HeroType, InvokerComboProfileState};
-    use crate::models::Hero;
+    use crate::models::{Hero, GsiWebhookEvent};
+
+    fn event_for(hero_name: &str) -> GsiWebhookEvent {
+        let mut event = GsiWebhookEvent::default();
+        event.hero.name = hero_name.to_string();
+        event
+    }
+
+    #[test]
+    fn update_from_gsi_reports_the_first_hero_detection_as_a_change() {
+        let mut state = AppState::default();
+
+        // The keyboard snapshot is built before any GSI event arrives, so this
+        // first transition is what makes per-hero intercepts go live.
+        assert!(state.update_from_gsi(event_for(Hero::Magnataur.to_game_name())));
+        assert_eq!(state.selected_hero, Some(HeroType::Magnus));
+    }
+
+    #[test]
+    fn update_from_gsi_reports_no_change_while_the_hero_stays_the_same() {
+        let mut state = AppState::default();
+        state.update_from_gsi(event_for(Hero::Magnataur.to_game_name()));
+
+        assert!(!state.update_from_gsi(event_for(Hero::Magnataur.to_game_name())));
+    }
+
+    #[test]
+    fn update_from_gsi_reports_a_change_when_the_hero_swaps() {
+        let mut state = AppState::default();
+        state.update_from_gsi(event_for(Hero::Magnataur.to_game_name()));
+
+        assert!(state.update_from_gsi(event_for(Hero::Nevermore.to_game_name())));
+        assert_eq!(state.selected_hero, Some(HeroType::ShadowFiend));
+        assert!(*state.sf_enabled.lock().unwrap());
+    }
 
     #[test]
     fn meepo_maps_into_hero_type() {
@@ -202,6 +247,15 @@ mod tests {
             Some(HeroType::Snapfire)
         );
         assert_eq!(HeroType::Snapfire.to_display_name(), "Snapfire");
+    }
+
+    #[test]
+    fn magnus_hero_type_maps_name_and_display() {
+        assert_eq!(
+            HeroType::from_hero_name(crate::models::Hero::Magnataur.to_game_name()),
+            Some(HeroType::Magnus)
+        );
+        assert_eq!(HeroType::Magnus.to_display_name(), "Magnus");
     }
 
     #[test]

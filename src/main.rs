@@ -71,8 +71,16 @@ async fn main() {
     let app_state_clone = app_state.clone();
     let dispatcher_clone = dispatcher.clone();
     let settings_clone = settings.clone();
+    let gsi_keyboard_snapshot = initial_snapshot.clone();
     tokio::spawn(async move {
-        start_gsi_server(port, app_state_clone, dispatcher_clone, settings_clone).await;
+        start_gsi_server(
+            port,
+            app_state_clone,
+            dispatcher_clone,
+            settings_clone,
+            Some(gsi_keyboard_snapshot),
+        )
+        .await;
     });
 
     // Start update check in background (if enabled)
@@ -162,6 +170,7 @@ async fn main() {
                                 state::HeroType::LegionCommander => {
                                     models::Hero::LegionCommander.to_game_name()
                                 }
+                                state::HeroType::Magnus => models::Hero::Magnataur.to_game_name(),
                                 state::HeroType::Meepo => models::Hero::Meepo.to_game_name(),
                                 state::HeroType::OutworldDestroyer => {
                                     models::Hero::ObsidianDestroyer.to_game_name()

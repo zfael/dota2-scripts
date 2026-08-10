@@ -72,6 +72,7 @@
 | `src/actions/heroes/invoker.rs` | Invoker combo profiles, invoke planning, panic Ghost Walk, and prep sequences | `docs/heroes/invoker.md` |
 | `src/actions/heroes/largo.rs` | Largo ultimate state, beat timing, manual song hooks | `docs/heroes/largo.md` |
 | `src/actions/heroes/legion_commander.rs` | Legion Commander combo automation | `docs/heroes/legion_commander.md` |
+| `src/actions/heroes/magnus.rs` | Magnus directional Reverse Polarity automation (ultimate-key intercept + GSI readiness gate) | `docs/heroes/magnus.md`, `docs/features/keyboard-interception.md` |
 | `src/actions/heroes/meepo_macro.rs` | Meepo farm-assist macro state, gating, and pulse decisions | `docs/heroes/meepo.md` |
 | `src/actions/heroes/meepo.rs` | Meepo standalone combo, GSI-driven Dig / MegaMeepo, and survivability wiring | `docs/heroes/meepo.md` |
 | `src/actions/heroes/meepo_state.rs` | Read-only Meepo observed-state derivation and cache | `docs/heroes/meepo.md`, `docs/reference/gsi-schema-and-usage.md` |
@@ -130,6 +131,7 @@
 | `src-ui/src/pages/WaveTracker.tsx` | Wave tracker page: map, per-lane clash countdowns, and overlay/calibration controls | `docs/features/wave-tracker.md` |
 | `src-ui/src/pages/WaveOverlay.tsx` | Chrome-free overlay view rendered in the click-through overlay window | `docs/features/wave-tracker.md` |
 | `src-ui/src/lib/overlay.ts` | Overlay-window detection and pre-paint body style stripping | `docs/features/wave-tracker.md` |
+| `src-ui/src/components/heroes/configs/MagnusConfig.tsx` | Magnus directional-ultimate config panel: intercept toggle, ultimate key, turn delay, readiness gate | `docs/heroes/magnus.md` |
 | `src-ui/src/components/heroes/configs/InvokerConfig.tsx` | Invoker profile-builder shell that wires preset library, profile list, and editor state | `docs/heroes/invoker.md` |
 | `src-ui/src/components/heroes/configs/InvokerConfig.test.tsx` | Vitest coverage for Invoker profile rendering and duplication | `docs/heroes/invoker.md` |
 | `src-ui/src/components/heroes/configs/invoker/invokerCatalog.tsx` | Local Invoker spell/item metadata, preset definitions, and chip visuals | `docs/heroes/invoker.md` |
@@ -184,7 +186,7 @@
 | File | Purpose | Linked Doc |
 |---|---|---|
 | `tests/gsi_handler_tests.rs` | Fixture-backed GSI deserialization smoke tests | `docs/workflows/testing-and-debugging.md`, `docs/reference/gsi-schema-and-usage.md` |
-| `tests/fixtures/` | Sample JSON payloads for Huskar, Tiny, Meepo, and Outworld Destroyer | `docs/workflows/testing-and-debugging.md`, `docs/reference/gsi-schema-and-usage.md` |
+| `tests/fixtures/` | Sample JSON payloads for Huskar, Invoker, Magnus, Meepo, Outworld Destroyer, and Tiny | `docs/workflows/testing-and-debugging.md`, `docs/reference/gsi-schema-and-usage.md` |
 | `tests/minimap_capture_tests.rs` | Minimap capture integration tests | `docs/reference/configuration.md` |
 | `tests/minimap_analysis_tests.rs` | Tests for zone mapping, color analysis, clustering, baseline, detection | `docs/superpowers/specs/2026-03-31-minimap-hero-detection-design.md` |
 
@@ -218,6 +220,7 @@
 | `docs/heroes/invoker.md` | Invoker automation doc: named profiles, invoke planning, and profile-builder UI |
 | `docs/heroes/largo.md` | Largo automation doc |
 | `docs/heroes/legion_commander.md` | Legion Commander automation doc |
+| `docs/heroes/magnus.md` | Magnus automation doc: directional Reverse Polarity |
 | `docs/heroes/meepo.md` | Meepo automation doc |
 | `docs/heroes/outworld_destroyer.md` | Outworld Destroyer automation doc |
 | `docs/heroes/shadow_fiend.md` | Shadow Fiend automation doc |

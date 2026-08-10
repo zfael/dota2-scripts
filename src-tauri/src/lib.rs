@@ -67,8 +67,16 @@ pub fn run() {
     let gsi_app_state = app_state.clone();
     let gsi_dispatcher = dispatcher.clone();
     let gsi_settings = settings.clone();
+    let gsi_keyboard_snapshot = initial_snapshot.clone();
     tauri::async_runtime::spawn(async move {
-        start_gsi_server(port, gsi_app_state, gsi_dispatcher, gsi_settings).await;
+        start_gsi_server(
+            port,
+            gsi_app_state,
+            gsi_dispatcher,
+            gsi_settings,
+            Some(gsi_keyboard_snapshot),
+        )
+        .await;
     });
 
     // Start update check in background (if enabled)
@@ -283,6 +291,7 @@ fn handle_hotkey_events(
                             HeroType::Huskar => Hero::Huskar.to_game_name(),
                             HeroType::Largo => Hero::Largo.to_game_name(),
                             HeroType::LegionCommander => Hero::LegionCommander.to_game_name(),
+                            HeroType::Magnus => Hero::Magnataur.to_game_name(),
                             HeroType::Meepo => Hero::Meepo.to_game_name(),
                             HeroType::OutworldDestroyer => {
                                 Hero::ObsidianDestroyer.to_game_name()
