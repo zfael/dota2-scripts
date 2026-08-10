@@ -364,6 +364,7 @@ These are still part of the interception surface even though this page centers o
 - activation is gated on `snapshot.magnus_enabled`, derived from `selected_hero == Some(HeroType::Magnus)`
 - the configured ultimate key (default `R`) is blocked and enqueues one `DirectionalUltimate` request onto the dedicated Magnus worker
 - the worker holds `ALT`, right-clicks to face the cursor, releases `ALT`, waits `turn_delay_ms`, then presses the ultimate key
+- when `center_camera_on_ultimate = true` it then double-taps the configured hero-select key to recentre the camera. This runs **after** the cast, via `simulate_key` rather than the enigo helpers so named keys like `F1` work
 - ALT is held only across the right-click — Reverse Polarity takes no target, so the cast does not need the modifier (this is the one difference from the Snapfire sequence)
 - unlike Snapfire, the intercept is **gated on GSI**: `MagnusState::can_intercept_ultimate()` reads `MAGNUS_LAST_EVENT` and requires `magnataur_reverse_polarity` to have `level > 0 && can_cast`. A failed check leaves the key unblocked
 - Skewer is never intercepted
@@ -395,7 +396,7 @@ These are still part of the interception surface even though this page centers o
 | Soul Ring | `config/config.toml` -> `[soul_ring]` | `enabled`, `min_mana_percent`, `min_health_percent`, `delay_before_ability_ms`, `trigger_cooldown_ms`, `ability_keys`, `intercept_item_keys` |
 | Armlet Roshan | `config/config.toml` -> `[armlet.roshan]` | `enabled`, `toggle_key` |
 | Shadow Fiend | `config/config.toml` -> `[heroes.shadow_fiend]` | `raze_intercept_enabled`, `raze_delay_ms`, `auto_bkb_on_ultimate`, `auto_d_on_ultimate` |
-| Magnus | `config/config.toml` -> `[heroes.magnus]` | `enabled`, `ultimate_key`, `turn_delay_ms`, `require_ability_ready` |
+| Magnus | `config/config.toml` -> `[heroes.magnus]` | `enabled`, `ultimate_key`, `turn_delay_ms`, `require_ability_ready`, `center_camera_on_ultimate`, `camera_center_key`, `camera_center_delay_ms` |
 | Global hotkey | `config/config.toml` -> `[keybindings]` | slot key mappings; the live standalone trigger is read from `AppState.trigger_key` and cached as a parsed `snapshot.trigger_key` |
 
 ---

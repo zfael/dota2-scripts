@@ -176,6 +176,8 @@ export const mockConfig: Settings = {
     magnus: {
       enabled: true, ultimate_key: "r",
       turn_delay_ms: 60, require_ability_ready: true,
+      center_camera_on_ultimate: true, camera_center_key: "1",
+      camera_center_delay_ms: 60,
     },
     shadow_fiend: {
       raze_intercept_enabled: true, raze_delay_ms: 10,

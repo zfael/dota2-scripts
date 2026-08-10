@@ -470,6 +470,11 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                                 MagnusState::execute_directional_ultimate(
                                     snapshot.magnus.ultimate_char,
                                     snapshot.magnus.turn_delay_ms,
+                                    crate::actions::heroes::magnus::plan_camera_center(
+                                        snapshot.magnus.center_camera_on_ultimate,
+                                        snapshot.magnus.camera_center_key,
+                                        snapshot.magnus.camera_center_delay_ms,
+                                    ),
                                 );
                                 // Block original key (combo re-presses it).
                                 return None;
@@ -643,6 +648,10 @@ pub struct MagnusKeyboardSnapshot {
     pub ultimate_char: char,
     pub turn_delay_ms: u64,
     pub require_ability_ready: bool,
+    pub center_camera_on_ultimate: bool,
+    /// Pre-parsed hero-select key double-tapped to recentre the camera.
+    pub camera_center_key: Option<Key>,
+    pub camera_center_delay_ms: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -911,6 +920,9 @@ impl KeyboardSnapshot {
                 ultimate_char: mg.ultimate_key,
                 turn_delay_ms: mg.turn_delay_ms,
                 require_ability_ready: mg.require_ability_ready,
+                center_camera_on_ultimate: mg.center_camera_on_ultimate,
+                camera_center_key: parse_key_string(&mg.camera_center_key),
+                camera_center_delay_ms: mg.camera_center_delay_ms,
             },
             soul_ring: SoulRingKeyboardConfig::from_settings(settings),
             invoker_profiles: settings
@@ -976,6 +988,9 @@ impl Default for KeyboardSnapshot {
                 ultimate_char: 'r',
                 turn_delay_ms: 0,
                 require_ability_ready: true,
+                center_camera_on_ultimate: false,
+                camera_center_key: None,
+                camera_center_delay_ms: 0,
             },
             soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
             invoker_profiles: vec![],
@@ -1148,6 +1163,9 @@ mod tests {
                 ultimate_char: 'r',
                 turn_delay_ms: 0,
                 require_ability_ready: true,
+                center_camera_on_ultimate: false,
+                camera_center_key: None,
+                camera_center_delay_ms: 0,
             },
             soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
             invoker_profiles: vec![],
@@ -1270,6 +1288,9 @@ mod tests {
         assert_eq!(snapshot.magnus.ultimate_key, Some(Key::KeyR));
         assert_eq!(snapshot.magnus.ultimate_char, 'r');
         assert!(snapshot.magnus.require_ability_ready);
+        assert!(snapshot.magnus.center_camera_on_ultimate);
+        assert_eq!(snapshot.magnus.camera_center_key, Some(Key::Num1));
+        assert_eq!(snapshot.magnus.camera_center_delay_ms, 60);
 
         let other = KeyboardSnapshot::from_runtime(&Settings::default(), &AppState::default());
         assert!(!other.magnus_enabled);

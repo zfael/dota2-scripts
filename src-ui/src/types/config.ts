@@ -236,6 +236,9 @@ export interface MagnusConfig {
   ultimate_key: string;
   turn_delay_ms: number;
   require_ability_ready: boolean;
+  center_camera_on_ultimate: boolean;
+  camera_center_key: string;
+  camera_center_delay_ms: number;
 }
 
 export interface HeroesConfig {

@@ -282,6 +282,17 @@ pub struct MagnusConfig {
     /// so a cooldown press never issues the facing right-click.
     #[serde(default = "default_magnus_require_ability_ready")]
     pub require_ability_ready: bool,
+    /// Double-tap the hero-select key after the cast to recentre the camera on
+    /// Magnus for the Skewer follow-up.
+    #[serde(default = "default_magnus_center_camera_on_ultimate")]
+    pub center_camera_on_ultimate: bool,
+    /// Hero-select key to double-tap. Accepts a character (`"1"`) or a named
+    /// key (`"F1"`).
+    #[serde(default = "default_magnus_camera_center_key")]
+    pub camera_center_key: String,
+    /// Delay between the ultimate cast and the first camera tap (ms).
+    #[serde(default = "default_magnus_camera_center_delay_ms")]
+    pub camera_center_delay_ms: u64,
 }
 
 /// Configuration for auto-casting an ability during Space+Right-click combo
@@ -1343,6 +1354,15 @@ fn default_magnus_turn_delay_ms() -> u64 {
 fn default_magnus_require_ability_ready() -> bool {
     true
 }
+fn default_magnus_center_camera_on_ultimate() -> bool {
+    true
+}
+fn default_magnus_camera_center_key() -> String {
+    "1".to_string()
+}
+fn default_magnus_camera_center_delay_ms() -> u64 {
+    60
+}
 fn default_sf_auto_bkb_on_ultimate() -> bool {
     false
 }
@@ -2231,6 +2251,9 @@ impl Default for MagnusConfig {
             ultimate_key: default_magnus_ultimate_key(),
             turn_delay_ms: default_magnus_turn_delay_ms(),
             require_ability_ready: default_magnus_require_ability_ready(),
+            center_camera_on_ultimate: default_magnus_center_camera_on_ultimate(),
+            camera_center_key: default_magnus_camera_center_key(),
+            camera_center_delay_ms: default_magnus_camera_center_delay_ms(),
         }
     }
 }
@@ -2687,6 +2710,9 @@ mod tests {
         assert_eq!(cfg.ultimate_key, 'r');
         assert_eq!(cfg.turn_delay_ms, 60);
         assert!(cfg.require_ability_ready);
+        assert!(cfg.center_camera_on_ultimate);
+        assert_eq!(cfg.camera_center_key, "1");
+        assert_eq!(cfg.camera_center_delay_ms, 60);
     }
 
     #[test]

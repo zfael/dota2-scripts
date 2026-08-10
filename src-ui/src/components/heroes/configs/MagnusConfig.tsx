@@ -33,6 +33,18 @@ export default function MagnusConfig() {
             cursor.
           </p>
         </Card>
+
+        <Card title="Camera Recentre">
+          <Toggle label="Centre Camera After Ultimate" checked={config.center_camera_on_ultimate} onChange={(v) => set({ center_camera_on_ultimate: v })} />
+          <KeyInput label="Hero Select Key" value={config.camera_center_key} onChange={(v) => set({ camera_center_key: v })} />
+          <NumberInput label="Camera Delay" value={config.camera_center_delay_ms} onChange={(v) => set({ camera_center_delay_ms: v })} suffix="ms" />
+          <p className="text-xs text-muted">
+            Double-taps your hero-select key after the cast so the view snaps
+            back to Magnus and Skewer is easy to aim. Must match your in-game
+            binding — accepts a character like <code>1</code> or a named key
+            like <code>F1</code>.
+          </p>
+        </Card>
       </div>
     </>
   );

@@ -348,6 +348,14 @@ turn_delay_ms = 60
 # it stops a cooldown press from issuing the facing right-click and walking
 # Magnus toward the cursor for nothing.
 require_ability_ready = true
+# After the cast, double-tap the hero-select key so the camera snaps back to
+# Magnus and Skewer is easy to aim. Set false to leave the camera alone.
+center_camera_on_ultimate = true
+# Hero-select key to double-tap. Accepts a character ("1") or a named key ("F1").
+# Must match your in-game hero-select binding.
+camera_center_key = "1"
+# Delay between the ultimate cast and the first camera tap (ms).
+camera_center_delay_ms = 60
 
 [heroes.invoker]
 quas_key = "q"

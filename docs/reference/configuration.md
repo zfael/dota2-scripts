@@ -522,8 +522,11 @@ See `docs/heroes/snapfire.md` and `docs/features/keyboard-interception.md`.
 | `ultimate_key` | `"r"` | `"r"` | Reverse Polarity ability key. This is also the key intercepted. Intercept is gated on Magnus being the active hero. |
 | `turn_delay_ms` | `60` | `60` | Delay after the facing right-click before the ultimate cast. Increase if Reverse Polarity fires before Magnus finishes turning. |
 | `require_ability_ready` | `true` | `true` | Only intercept when `magnataur_reverse_polarity` is levelled and castable. Prevents a cooldown press from issuing the facing right-click. |
+| `center_camera_on_ultimate` | `true` | `true` | Double-tap the hero-select key after the cast so the camera snaps back to Magnus for the Skewer follow-up. |
+| `camera_center_key` | `"1"` | `"1"` | Hero-select key to double-tap. Accepts a character (`"1"`) or a named key (`"F1"`). Must match the in-game binding. |
+| `camera_center_delay_ms` | `60` | `60` | Delay between the ultimate cast and the first camera tap. |
 
-All four fields are exposed in the React UI under **Heroes → Magnus**.
+All seven fields are exposed in the React UI under **Heroes → Magnus**.
 
 See `docs/heroes/magnus.md` and `docs/features/keyboard-interception.md`.
 
