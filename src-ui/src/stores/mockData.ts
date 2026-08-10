@@ -184,6 +184,10 @@ export const mockConfig: Settings = {
       auto_bkb_on_ultimate: true, auto_d_on_ultimate: true,
       standalone_key: "Home", armlet: {},
     },
+    snapfire: {
+      enabled: true, trigger_key: "Space",
+      cookie_key: "w", turn_delay_ms: 60,
+    },
     tiny: { standalone_key: "Home", armlet: {} },
     outworld_destroyer: {
       standalone_key: "Home", objurgation_key: "w", arcane_orb_key: "q",

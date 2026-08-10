@@ -32,6 +32,8 @@ cookie_key = "w"
 turn_delay_ms = 60
 ```
 
+All four fields are exposed in the React UI under **Heroes → Snapfire**.
+
 ## Related Files
 
 | File | Purpose |
@@ -40,6 +42,7 @@ turn_delay_ms = 60
 | `src/input/keyboard.rs` | Trigger-key interception branch + `SnapfireKeyboardSnapshot`. |
 | `src/config/settings.rs` | `SnapfireConfig` + defaults. |
 | `config/config.toml` | `[heroes.snapfire]` block. |
+| `src-ui/src/components/heroes/configs/SnapfireConfig.tsx` | UI config panel. |
 
 ## Activation
 

@@ -241,12 +241,20 @@ export interface MagnusConfig {
   camera_center_delay_ms: number;
 }
 
+export interface SnapfireConfig {
+  enabled: boolean;
+  trigger_key: string;
+  cookie_key: string;
+  turn_delay_ms: number;
+}
+
 export interface HeroesConfig {
   huskar: HuskarConfig;
   invoker: InvokerConfig;
   legion_commander: LegionCommanderConfig;
   magnus: MagnusConfig;
   shadow_fiend: ShadowFiendConfig;
+  snapfire: SnapfireConfig;
   tiny: TinyConfig;
   outworld_destroyer: OutworldDestroyerConfig;
   largo: LargoConfig;

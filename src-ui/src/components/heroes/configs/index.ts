@@ -11,6 +11,7 @@ const configs: Record<HeroType, () => Promise<{ default: ComponentType }>> = {
   magnus: () => import("./MagnusConfig"),
   outworld_destroyer: () => import("./OutworldDestroyerConfig"),
   shadow_fiend: () => import("./ShadowFiendConfig"),
+  snapfire: () => import("./SnapfireConfig"),
   tiny: () => import("./TinyConfig"),
 };
 

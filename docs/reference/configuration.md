@@ -512,6 +512,8 @@ See `docs/heroes/broodmother.md` and `docs/reference/gsi-schema-and-usage.md`.
 | `cookie_key` | `"w"` | `"w"` | Firesnap Cookie ability key, self-cast via ALT during the combo. W itself is not intercepted. |
 | `turn_delay_ms` | `60` | `60` | Delay after the facing right-click before the self-cast leap. Increase if the leap fires before the hero finishes turning. |
 
+All four fields are exposed in the React UI under **Heroes → Snapfire**.
+
 See `docs/heroes/snapfire.md` and `docs/features/keyboard-interception.md`.
 
 ## `[heroes.magnus]`

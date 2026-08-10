@@ -131,7 +131,8 @@
 | `src-ui/src/pages/WaveTracker.tsx` | Wave tracker page: map, per-lane clash countdowns, and overlay/calibration controls | `docs/features/wave-tracker.md` |
 | `src-ui/src/pages/WaveOverlay.tsx` | Chrome-free overlay view rendered in the click-through overlay window | `docs/features/wave-tracker.md` |
 | `src-ui/src/lib/overlay.ts` | Overlay-window detection and pre-paint body style stripping | `docs/features/wave-tracker.md` |
-| `src-ui/src/components/heroes/configs/MagnusConfig.tsx` | Magnus directional-ultimate config panel: intercept toggle, ultimate key, turn delay, readiness gate | `docs/heroes/magnus.md` |
+| `src-ui/src/components/heroes/configs/MagnusConfig.tsx` | Magnus directional-ultimate config panel: intercept toggle, ultimate key, turn delay, readiness gate, camera recentre | `docs/heroes/magnus.md` |
+| `src-ui/src/components/heroes/configs/SnapfireConfig.tsx` | Snapfire directional-cookie config panel: intercept toggle, trigger key, turn delay, cookie key | `docs/heroes/snapfire.md` |
 | `src-ui/src/components/heroes/configs/InvokerConfig.tsx` | Invoker profile-builder shell that wires preset library, profile list, and editor state | `docs/heroes/invoker.md` |
 | `src-ui/src/components/heroes/configs/InvokerConfig.test.tsx` | Vitest coverage for Invoker profile rendering and duplication | `docs/heroes/invoker.md` |
 | `src-ui/src/components/heroes/configs/invoker/invokerCatalog.tsx` | Local Invoker spell/item metadata, preset definitions, and chip visuals | `docs/heroes/invoker.md` |
