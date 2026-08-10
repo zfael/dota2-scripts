@@ -156,6 +156,75 @@ fn healing_threshold_for_event(
     }
 }
 
+/// Decide which healing items to fire, in press order, as `(slot, item_name)`.
+///
+/// Pure so the selection can be asserted in tests: the caller owns the key
+/// presses, which is why the old inline version had no coverage beyond "does
+/// not panic".
+fn plan_healing_items<'a>(
+    event: &'a GsiWebhookEvent,
+    settings: &Settings,
+    in_danger: bool,
+) -> Vec<(&'a str, String)> {
+    if !event.hero.is_alive() {
+        return Vec::new();
+    }
+
+    let threshold = healing_threshold_for_event(event, settings, in_danger);
+    if event.hero.health_percent >= threshold {
+        return Vec::new();
+    }
+
+    debug!(
+        "HP below threshold: {}% < {}% (in_danger: {})",
+        event.hero.health_percent, threshold, in_danger
+    );
+
+    // Priority order - high value first when in danger, low value first otherwise
+    let healing_items = if in_danger {
+        [
+            "item_cheese",
+            "item_greater_faerie_fire",
+            "item_enchanted_mango",
+            "item_magic_wand",
+            "item_magic_stick",
+            "item_faerie_fire",
+        ]
+    } else {
+        [
+            "item_cheese",
+            "item_magic_stick",
+            "item_faerie_fire",
+            "item_magic_wand",
+            "item_enchanted_mango",
+            "item_greater_faerie_fire",
+        ]
+    };
+
+    let max_items = if in_danger && settings.danger_detection.enabled {
+        settings.danger_detection.max_healing_items_per_danger
+    } else {
+        1 // Normal mode: only one item
+    };
+
+    let mut plan = Vec::new();
+
+    for item_name in healing_items {
+        if plan.len() as u32 >= max_items {
+            break;
+        }
+
+        for (slot, item) in event.items.all_slots() {
+            if item.name == item_name && item.can_cast == Some(true) {
+                plan.push((slot, item.name.clone()));
+                break; // Move to next item type
+            }
+        }
+    }
+
+    plan
+}
+
 #[cfg_attr(not(test), allow(dead_code))]
 fn should_consider_defensive_items(
     event: &GsiWebhookEvent,
@@ -464,69 +533,13 @@ impl SurvivabilityActions {
         event: &GsiWebhookEvent,
         in_danger: bool,
     ) {
-        if !event.hero.is_alive() {
-            return;
-        }
+        let plan = {
+            let settings = self.settings.lock().unwrap();
+            plan_healing_items(event, &settings, in_danger)
+        }; // Lock released before any key press
 
-        let settings = self.settings.lock().unwrap();
-        let threshold = healing_threshold_for_event(event, &settings, in_danger);
-
-        // Check if HP is below threshold
-        if event.hero.health_percent >= threshold {
-            return;
-        }
-
-        debug!(
-            "HP below threshold: {}% < {}% (in_danger: {})",
-            event.hero.health_percent, threshold, in_danger
-        );
-
-        // Priority order - high value first when in danger, low value first otherwise
-        let healing_items = if in_danger {
-            vec![
-                ("item_cheese", 2000u32),
-                ("item_greater_faerie_fire", 350u32),
-                ("item_enchanted_mango", 175u32),
-                ("item_magic_wand", 100u32), // Approximate (15 per charge)
-                ("item_faerie_fire", 85u32),
-            ]
-        } else {
-            vec![
-                ("item_cheese", 2000u32),
-                ("item_faerie_fire", 85u32),
-                ("item_magic_wand", 100u32),
-                ("item_enchanted_mango", 175u32),
-                ("item_greater_faerie_fire", 350u32),
-            ]
-        };
-
-        let max_items = if in_danger && settings.danger_detection.enabled {
-            settings.danger_detection.max_healing_items_per_danger
-        } else {
-            1 // Normal mode: only one item
-        };
-        drop(settings); // Release lock
-
-        let mut items_used = 0u32;
-
-        // Search for healing items in inventory
-        for (item_name, _heal_amount) in healing_items {
-            if items_used >= max_items {
-                break;
-            }
-
-            for (slot, item) in event.items.all_slots() {
-                if item.name == item_name {
-                    // Check if item can be cast
-                    if let Some(can_cast) = item.can_cast {
-                        if can_cast {
-                            self.use_item(slot, &item.name);
-                            items_used += 1;
-                            break; // Move to next item type
-                        }
-                    }
-                }
-            }
+        for (slot, item_name) in plan {
+            self.use_item(slot, &item_name);
         }
     }
 
@@ -1040,8 +1053,8 @@ mod snapshot_tests {
 
     use super::{
         acquire_item_trigger_lockout, eligible_danger_neutral_spec, eligible_low_mana_item,
-        eligible_movement_item, healing_threshold_for_event, should_consider_defensive_items,
-        should_consider_neutral_item, SurvivabilityActions,
+        eligible_movement_item, healing_threshold_for_event, plan_healing_items,
+        should_consider_defensive_items, should_consider_neutral_item, SurvivabilityActions,
     };
 
     fn shared_state_test_lock() -> &'static Mutex<()> {
@@ -1771,6 +1784,173 @@ mod snapshot_tests {
         let event = base_event(hero_with_health(40, 40), empty_items());
 
         actions.check_and_use_healing_items_with_danger(&event, true);
+    }
+
+    fn castable(name: &str) -> Item {
+        Item {
+            name: name.to_string(),
+            can_cast: Some(true),
+            ..Default::default()
+        }
+    }
+
+    /// `base_event` starts at `clock_time = 0`, which is inside the lane-phase
+    /// window. Tests about the normal/danger thresholds have to step past it.
+    fn post_lane_event(hero: Hero, items: Items) -> GsiWebhookEvent {
+        let mut event = base_event(hero, items);
+        event.map.clock_time = 600;
+        event
+    }
+
+    /// The reported symptom: a hero at 1% HP holding healing items. Every
+    /// threshold - lane phase, normal, danger - is far above 1%, so the planner
+    /// must fire regardless of when in the game this happens.
+    #[test]
+    fn healing_plan_fires_at_one_percent_hp_in_every_phase() {
+        let settings = Settings::default();
+        let mut items = empty_items();
+        items.slot2 = castable("item_magic_stick");
+
+        for clock_time in [30, 479, 900] {
+            for in_danger in [false, true] {
+                let mut event = base_event(hero_with_health(1, 1), items.clone());
+                event.map.clock_time = clock_time;
+
+                assert_eq!(
+                    plan_healing_items(&event, &settings, in_danger),
+                    vec![("slot2", "item_magic_stick".to_string())],
+                    "clock_time={clock_time} in_danger={in_danger}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn healing_plan_finds_magic_stick_not_just_wand() {
+        let settings = Settings::default();
+        let mut items = empty_items();
+        items.slot0 = castable("item_magic_stick");
+        let event = post_lane_event(hero_with_health(20, 20), items);
+
+        assert_eq!(
+            plan_healing_items(&event, &settings, false),
+            vec![("slot0", "item_magic_stick".to_string())]
+        );
+    }
+
+    #[test]
+    fn healing_plan_takes_cheese_first_and_stops_at_one_item_outside_danger() {
+        let settings = Settings::default();
+        let mut items = empty_items();
+        items.slot0 = castable("item_faerie_fire");
+        items.slot1 = castable("item_cheese");
+        let event = post_lane_event(hero_with_health(20, 20), items);
+
+        assert_eq!(
+            plan_healing_items(&event, &settings, false),
+            vec![("slot1", "item_cheese".to_string())]
+        );
+    }
+
+    #[test]
+    fn healing_plan_stacks_up_to_the_danger_limit_in_value_order() {
+        let settings = Settings::default();
+        let mut items = empty_items();
+        items.slot0 = castable("item_faerie_fire");
+        items.slot1 = castable("item_cheese");
+        items.slot2 = castable("item_enchanted_mango");
+        items.slot3 = castable("item_greater_faerie_fire");
+        let event = post_lane_event(hero_with_health(20, 20), items);
+
+        assert_eq!(settings.danger_detection.max_healing_items_per_danger, 3);
+        assert_eq!(
+            plan_healing_items(&event, &settings, true),
+            vec![
+                ("slot1", "item_cheese".to_string()),
+                ("slot3", "item_greater_faerie_fire".to_string()),
+                ("slot2", "item_enchanted_mango".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn healing_plan_skips_items_that_cannot_be_cast() {
+        let settings = Settings::default();
+        let mut items = empty_items();
+        items.slot0 = Item {
+            name: "item_cheese".to_string(),
+            can_cast: Some(false),
+            ..Default::default()
+        };
+        // Dota omits can_cast entirely on some payloads; that is not "ready".
+        items.slot1 = Item {
+            name: "item_faerie_fire".to_string(),
+            can_cast: None,
+            ..Default::default()
+        };
+        items.slot2 = castable("item_magic_wand");
+        let event = post_lane_event(hero_with_health(20, 20), items);
+
+        assert_eq!(
+            plan_healing_items(&event, &settings, false),
+            vec![("slot2", "item_magic_wand".to_string())]
+        );
+    }
+
+    #[test]
+    fn healing_plan_reads_the_neutral_slot() {
+        let settings = Settings::default();
+        let mut items = empty_items();
+        items.neutral0 = castable("item_faerie_fire");
+        let event = post_lane_event(hero_with_health(20, 20), items);
+
+        assert_eq!(
+            plan_healing_items(&event, &settings, false),
+            vec![("neutral0", "item_faerie_fire".to_string())]
+        );
+    }
+
+    #[test]
+    fn healing_plan_ignores_backpack_and_stash() {
+        let settings = Settings::default();
+        let mut items = empty_items();
+        items.slot6 = castable("item_cheese");
+        items.stash0 = castable("item_faerie_fire");
+        let event = post_lane_event(hero_with_health(20, 20), items);
+
+        assert!(plan_healing_items(&event, &settings, false).is_empty());
+    }
+
+    #[test]
+    fn healing_plan_is_empty_while_dead() {
+        let settings = Settings::default();
+        let mut items = empty_items();
+        items.slot0 = castable("item_cheese");
+        let mut hero = hero_with_health(1, 1);
+        hero.alive = false;
+        let event = base_event(hero, items);
+
+        assert!(plan_healing_items(&event, &settings, false).is_empty());
+    }
+
+    /// The lane-phase override is what suppresses healing early, and it beats
+    /// the danger threshold while it is active.
+    #[test]
+    fn healing_plan_is_suppressed_in_lane_phase_above_the_lane_threshold() {
+        let settings = Settings::default();
+        let mut items = empty_items();
+        items.slot0 = castable("item_magic_wand");
+        let mut event = base_event(hero_with_health(25, 25), items);
+        event.map.clock_time = 300;
+
+        assert!(plan_healing_items(&event, &settings, false).is_empty());
+        assert!(plan_healing_items(&event, &settings, true).is_empty());
+
+        event.map.clock_time = 600;
+        assert_eq!(
+            plan_healing_items(&event, &settings, false),
+            vec![("slot0", "item_magic_wand".to_string())]
+        );
     }
 
     #[test]

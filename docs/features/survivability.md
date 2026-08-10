@@ -64,8 +64,8 @@ Current code checks items in this exact order:
 
 | Mode | Exact order |
 |---|---|
-| Normal | `item_cheese` -> `item_faerie_fire` -> `item_magic_wand` -> `item_enchanted_mango` -> `item_greater_faerie_fire` |
-| Danger | `item_cheese` -> `item_greater_faerie_fire` -> `item_enchanted_mango` -> `item_magic_wand` -> `item_faerie_fire` |
+| Normal | `item_cheese` -> `item_magic_stick` -> `item_faerie_fire` -> `item_magic_wand` -> `item_enchanted_mango` -> `item_greater_faerie_fire` |
+| Danger | `item_cheese` -> `item_greater_faerie_fire` -> `item_enchanted_mango` -> `item_magic_wand` -> `item_magic_stick` -> `item_faerie_fire` |
 
 ### Limits
 

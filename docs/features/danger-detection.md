@@ -94,8 +94,8 @@ Current hardcoded priority:
 
 | Mode | Exact order in code |
 |---|---|
-| Normal | `item_cheese` -> `item_faerie_fire` -> `item_magic_wand` -> `item_enchanted_mango` -> `item_greater_faerie_fire` |
-| Danger | `item_cheese` -> `item_greater_faerie_fire` -> `item_enchanted_mango` -> `item_magic_wand` -> `item_faerie_fire` |
+| Normal | `item_cheese` -> `item_magic_stick` -> `item_faerie_fire` -> `item_magic_wand` -> `item_enchanted_mango` -> `item_greater_faerie_fire` |
+| Danger | `item_cheese` -> `item_greater_faerie_fire` -> `item_enchanted_mango` -> `item_magic_wand` -> `item_magic_stick` -> `item_faerie_fire` |
 
 Hardcoded heal values used in the doc/review context:
 
@@ -106,6 +106,7 @@ Hardcoded heal values used in the doc/review context:
 | `item_enchanted_mango` | `175` |
 | `item_magic_wand` | `100` |
 | `item_faerie_fire` | `85` |
+| `item_magic_stick` | `75` |
 
 ### 3. Defensive items
 
