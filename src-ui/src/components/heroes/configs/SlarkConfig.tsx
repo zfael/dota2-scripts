@@ -6,7 +6,6 @@ import { useConfigStore } from "../../../stores/configStore";
 
 export default function SlarkConfig() {
   const config = useConfigStore((s) => s.config.heroes.slark);
-  const portraitCalibrated = useConfigStore((s) => s.config.hud.portrait_calibrated);
   const update = useConfigStore((s) => s.updateHeroConfig);
   const set = (updates: Partial<typeof config>) => update("slark", updates);
 
@@ -66,18 +65,11 @@ export default function SlarkConfig() {
         <Card title="Shard Fallback">
           <Toggle label="Use Shard When Ultimate Is Down" checked={config.shard_fallback_enabled} onChange={(v) => set({ shard_fallback_enabled: v })} />
           <KeyInput label="Shard Key" value={config.shard_key} onChange={(v) => set({ shard_key: v })} />
-          {!portraitCalibrated && (
-            <p className="text-xs text-warning">
-              ⚠ The HUD portrait anchor is not calibrated, so this cannot fire.
-              Calibrate it under Settings → HUD Anchors.
-            </p>
-          )}
           <p className="text-xs text-muted">
             Only reached when Shadow Dance is on cooldown. Dota will not
-            self-cast this ability, so it is aimed by clicking your hero
-            portrait — which briefly moves the mouse and puts it back. The key
-            is the only thing to set: its slot in Dota's ability order is what
-            the cooldown check reads.
+            self-cast Depth Shroud, so it is cast <em>where your cursor already
+            is</em> — the mouse is never moved. Mid-fight that is normally close
+            enough to be useful; it will not land on your hero exactly.
           </p>
         </Card>
       </div>

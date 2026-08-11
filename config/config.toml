@@ -396,14 +396,14 @@ shadow_dance_hp_threshold_percent = 35
 shadow_dance_require_danger = true
 # Minimum gap between two escape attempts (ms).
 shadow_dance_trigger_cooldown_ms = 3000
-# When Shadow Dance is on cooldown, fall back to the Aghanim's Shard ability.
-# Dota will not self-cast it, so it is aimed by clicking the hero portrait --
-# which requires [hud] portrait_calibrated. Uncalibrated, this never fires.
+# When Shadow Dance is on cooldown, fall back to Depth Shroud (the shard
+# ability). Dota will not self-cast it, so this presses the key and clicks where
+# your cursor already is -- the mouse is never moved. The shroud therefore lands
+# at the cursor, not centred on Slark.
 shard_fallback_enabled = true
-# Key the shard ability sits on. This is its whole identity as far as automation
-# is concerned: it is the key we press, and its position in Dota's fixed
-# Q/W/E/R/D/F order is what the "is it off cooldown" check reads. No ability
-# name to configure or keep current across patches.
+# Key Depth Shroud sits on. Only the key is configurable: readiness is checked by
+# matching slark_depth_shroud by name, because GSI reports abilities in ability
+# order rather than key order (the shard ability sits ahead of the ultimate).
 shard_key = "d"
 
 [heroes.invoker]

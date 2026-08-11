@@ -6,9 +6,19 @@ Calibrated screen positions for points on Dota's own HUD that automation clicks.
 **Config:** `[hud]` — see `docs/reference/configuration.md`
 **Commands:** `src-tauri/src/commands/hud.rs`
 
-**Status:** portrait anchor shipped. It is the only anchor so far; the section is
-named for the category rather than the hero so a second one can be added without
-moving anything.
+**Status:** portrait anchor shipped and calibratable, but **currently has no
+consumer.**
+
+It was built for the Slark shard fallback, on the theory that clicking Dota's hero
+portrait would resolve a point-target ability onto your own hero. Calibration works
+— the anchor resolves to the right pixels — but the synthetic click on the portrait
+does **not** resolve the cast in game, so that fallback now casts at the cursor
+instead and no longer calls in here (`docs/heroes/slark.md`).
+
+What remains is intact and tested: capture, resolve, and the Test button. Keep it if
+a future consumer wants a calibrated HUD position for something other than
+click-to-cast; delete it if not. Do not wire a new ability to it without first
+confirming a synthetic click on that HUD element actually does what you expect.
 
 ---
 
@@ -78,27 +88,19 @@ pick a key Dota does not need.
 
 ---
 
-## Casting through an anchor
+## Why click-to-cast through an anchor did not work
 
-`input::simulation::portrait_cast(key, x, y)` runs one queued synthetic-input job:
+The original consumer pressed an ability key to enter targeting mode, moved the cursor
+to the portrait anchor, clicked, and restored the cursor. With the anchor calibrated
+correctly the cast still did not happen — Dota did not resolve the targeting from that
+synthetic click on the HUD.
 
-1. Save the cursor position.
-2. Press the ability key, putting it into targeting mode.
-3. Move to the anchor, settle briefly so the hover registers, left-click.
-4. Restore the cursor.
+The cause was not diagnosed further; the ability in question is now cast at the
+cursor instead (`input::simulation::cast_at_cursor`), which works. If you revisit
+this, verify the click resolves *before* building on it — a calibrated anchor pointing
+at the right pixels is not evidence that clicking there does anything.
 
-If the cursor move fails it **bails without clicking**, leaving the ability in targeting
-mode rather than resolving it somewhere unintended.
-
-The whole sequence sits inside the existing `SIMULATING_KEYS` guard, so the global hook
-does not re-intercept our own synthetic input.
-
-### The unavoidable cost
-
-This moves the real mouse mid-fight. If the player is aiming or dragging at that exact
-moment, their input and ours interleave, and there is no way around it — the ability
-cannot be cast any other way. Consumers should expose a toggle so the behaviour can be
-switched off without losing the rest of the automation.
+`move_cursor_to` remains, used by the Test button.
 
 ---
 

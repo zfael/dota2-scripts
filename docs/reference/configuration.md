@@ -548,8 +548,8 @@ See `docs/heroes/magnus.md` and `docs/features/keyboard-interception.md`.
 | `shadow_dance_hp_threshold_percent` | `35` | `35` | HP percentage at or below which the escape fires. |
 | `shadow_dance_require_danger` | `true` | `true` | Also require the danger detector. Off, the HP line alone fires it — including while walking home. |
 | `shadow_dance_trigger_cooldown_ms` | `3000` | `3000` | Minimum gap between two escape attempts. |
-| `shard_fallback_enabled` | `true` | `true` | Fall back to the shard ability when Shadow Dance is on cooldown. Requires a calibrated `[hud]` portrait anchor. |
-| `shard_key` | `"d"` | `"d"` | Key the shard ability sits on, and its whole identity: the key is pressed, and its slot in Dota's `Q/W/E/R/D/F` order is what the readiness check reads. No ability name to maintain. |
+| `shard_fallback_enabled` | `true` | `true` | Fall back to Depth Shroud when Shadow Dance is on cooldown. Presses the key and clicks at the cursor — the shroud lands where you are pointing, not on Slark. |
+| `shard_key` | `"d"` | `"d"` | Key Depth Shroud sits on. Only the key is configurable; readiness is checked by matching `slark_depth_shroud` by name, because GSI slot order is ability order, not key order. |
 
 All fifteen fields are exposed in the React UI under **Heroes → Slark**.
 

@@ -53,21 +53,21 @@ enum SyntheticAction {
     ModifierDown(ModifierKey),
     ModifierUp(ModifierKey),
     ArmletChord { slot_key: char, modifier: ModifierKey },
-    /// Aim a point-target ability at your own hero by pressing its key and
-    /// left-clicking the HUD hero portrait, then putting the cursor back where
-    /// the player left it.
+    /// Cast a point-target ability wherever the cursor already is: press the
+    /// key to enter targeting mode, then left-click to resolve it.
     ///
-    /// Coordinates are physical screen pixels, already resolved against Dota's
-    /// live window rect by `observability::hud_anchors`.
-    PortraitCast { key: char, x: i32, y: i32 },
-    /// Park the cursor somewhere and leave it there. Used by the anchor Test
-    /// button, which must never click.
+    /// The mouse is not moved. Clicking Dota's HUD hero portrait would put the
+    /// cast on your own hero, but a synthetic click there does not resolve the
+    /// targeting — so this aims where the player is already pointing, which
+    /// mid-fight is close enough to be useful and never lands on the HUD.
+    CastAtCursor { key: char },
+    /// Park the cursor somewhere and leave it there. Used by the HUD anchor
+    /// Test button, which must never click.
     MoveCursor { x: i32, y: i32 },
 }
 
-/// Settle time between parking the cursor on the portrait and clicking it, so
-/// the game registers the hover before the click resolves.
-const PORTRAIT_HOVER_SETTLE_MS: u64 = 20;
+/// Settle time between entering targeting mode and the click that resolves it.
+const CAST_TARGET_SETTLE_MS: u64 = 20;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum GuardBehavior {
@@ -160,16 +160,12 @@ pub fn modifier_up(modifier: ModifierKey) {
     enqueue_command_and_wait(modifier_up_command(modifier), SyntheticInputPriority::Normal);
 }
 
-/// Cast a point-target ability on your own hero via the HUD portrait.
+/// Cast a point-target ability at the cursor's current position.
 ///
-/// Dota resolves a click on the hero portrait as a click on the hero itself, so
-/// this lands the ability underneath him without the player having to aim. It
-/// is the only option for abilities the game will not self-cast.
-///
-/// Coordinates come from `observability::hud_anchors::resolve_portrait_point`,
-/// which returns nothing until the anchor has been calibrated.
-pub fn portrait_cast(key: char, x: i32, y: i32) {
-    enqueue_command_and_wait(portrait_cast_command(key, x, y), SyntheticInputPriority::Normal);
+/// For abilities Dota will not self-cast: pressing the key alone only arms
+/// them, so the click is what actually resolves the cast.
+pub fn cast_at_cursor(key: char) {
+    enqueue_command_and_wait(cast_at_cursor_command(key), SyntheticInputPriority::Normal);
 }
 
 /// Move the cursor and leave it there, without clicking.
@@ -236,12 +232,10 @@ fn left_click_command() -> SyntheticInputCommand {
     }
 }
 
-fn portrait_cast_command(key: char, x: i32, y: i32) -> SyntheticInputCommand {
+fn cast_at_cursor_command(key: char) -> SyntheticInputCommand {
     SyntheticInputCommand {
-        action: SyntheticAction::PortraitCast {
+        action: SyntheticAction::CastAtCursor {
             key: normalize_key_char(key),
-            x,
-            y,
         },
         guard_behavior: GuardBehavior::Pulse {
             delay_ms: POST_ACTION_GUARD_DELAY_MS,
@@ -552,7 +546,12 @@ fn perform_action(enigo: &mut Enigo, action: SyntheticAction) {
         | action @ SyntheticAction::LeftClick
         | action @ SyntheticAction::ModifierDown(_)
         | action @ SyntheticAction::ModifierUp(_) => perform_single_action(enigo, action),
-        SyntheticAction::PortraitCast { key, x, y } => perform_portrait_cast(enigo, key, x, y),
+        SyntheticAction::CastAtCursor { key } => {
+            perform_single_action(enigo, SyntheticAction::KeyClick(key));
+            thread::sleep(Duration::from_millis(CAST_TARGET_SETTLE_MS));
+            perform_single_action(enigo, SyntheticAction::LeftClick);
+            debug!("Cast '{key}' resolved at the cursor");
+        }
         SyntheticAction::MoveCursor { x, y } => {
             if let Err(e) = enigo.move_mouse(x, y, Coordinate::Abs) {
                 warn!("Failed to move cursor to ({x}, {y}): {e}");
@@ -578,42 +577,6 @@ fn perform_action(enigo: &mut Enigo, action: SyntheticAction) {
                     step_started.elapsed().as_millis()
                 );
             }
-        }
-    }
-}
-
-/// Press an ability key, click the hero portrait to resolve it on yourself,
-/// then restore the cursor.
-///
-/// The cursor is put back because this fires mid-fight — leaving the mouse
-/// parked on the HUD would break whatever the player was aiming at.
-fn perform_portrait_cast(enigo: &mut Enigo, key: char, x: i32, y: i32) {
-    let origin = match enigo.location() {
-        Ok(location) => Some(location),
-        Err(e) => {
-            warn!("Could not read cursor position, portrait cast will not restore it: {e}");
-            None
-        }
-    };
-
-    perform_single_action(enigo, SyntheticAction::KeyClick(key));
-
-    if let Err(e) = enigo.move_mouse(x, y, Coordinate::Abs) {
-        // The ability is now in targeting mode with the cursor still wherever
-        // the player had it. Bail rather than click somewhere unintended — a
-        // stray click in Dota is a move order.
-        warn!("Failed to move cursor to portrait ({x}, {y}), not clicking: {e}");
-        return;
-    }
-
-    thread::sleep(Duration::from_millis(PORTRAIT_HOVER_SETTLE_MS));
-    perform_single_action(enigo, SyntheticAction::LeftClick);
-
-    debug!("Portrait cast '{key}' resolved at ({x}, {y})");
-
-    if let Some((origin_x, origin_y)) = origin {
-        if let Err(e) = enigo.move_mouse(origin_x, origin_y, Coordinate::Abs) {
-            warn!("Failed to restore cursor to ({origin_x}, {origin_y}): {e}");
         }
     }
 }
@@ -658,10 +621,9 @@ fn perform_single_action(enigo: &mut Enigo, action: SyntheticAction) {
         SyntheticAction::ArmletChord { .. } => {
             warn!("Armlet chord should be expanded before single-action execution");
         }
-        SyntheticAction::PortraitCast { .. } | SyntheticAction::MoveCursor { .. } => {
-            // Both need the Enigo cursor APIs rather than a single key or
-            // button event, so they are handled in perform_action.
-            warn!("Cursor actions should be handled before single-action execution");
+        SyntheticAction::CastAtCursor { .. } | SyntheticAction::MoveCursor { .. } => {
+            // Composites and cursor moves are handled in perform_action.
+            warn!("Composite actions should be expanded before single-action execution");
         }
     }
 }

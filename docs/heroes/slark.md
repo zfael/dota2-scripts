@@ -24,7 +24,7 @@ Directional **Pounce** (W) on a single keypress, GSI-driven **Dark Pact** debuff
 
 - GSI-driven. Spends **Shadow Dance** when Slark drops to the HP line while the danger detector is active.
 - Falls back to the **Aghanim's Shard** ability only when Shadow Dance is on cooldown.
-- The shard ability cannot be self-cast, so it is aimed by clicking the hero portrait — which requires a calibrated [HUD anchor](../features/hud-anchors.md). Uncalibrated, the fallback is skipped rather than guessing.
+- Depth Shroud cannot be self-cast, so the fallback presses the key and clicks at the cursor's current position. The mouse is never moved.
 
 ## Configuration
 
@@ -73,7 +73,6 @@ fallback additionally depends on `[hud]` — see [HUD Anchors](../features/hud-a
 | File | Purpose |
 |---|---|
 | `src/actions/heroes/slark.rs` | Hero script, dedicated worker, `SlarkState::execute_directional_pounce`, readiness gate, `plan_dark_pact` cleanse, `plan_low_hp_escape`. |
-| `src/observability/hud_anchors.rs` | Portrait anchor the shard fallback aims through. |
 | `src/input/keyboard.rs` | Pounce-key interception branch + `SlarkKeyboardSnapshot`. |
 | `src/config/settings.rs` | `SlarkConfig` + defaults. |
 | `config/config.toml` | `[heroes.slark]` block. |
@@ -169,16 +168,23 @@ and the HP line alone fires it, including while limping home.
 The order is the point: Shadow Dance is the stronger escape, so the shard is only
 ever reached once the ultimate has been ruled out.
 
-### Shard fallback and the portrait click
+### Shard fallback: cast at the cursor
 
-Dota will not self-cast the shard ability — no double-tap, no ALT modifier. It
-resolves wherever the mouse is. The only way to land it on Slark is to click his
-HUD portrait, so the fallback runs through
-[`hud_anchors::resolve_portrait_point`](../features/hud-anchors.md).
+Dota will not self-cast Depth Shroud — no double-tap, no ALT modifier — so pressing
+the key only *arms* it and a click is what resolves the cast.
 
-If that returns `None` — the anchor was never calibrated, or Dota is not running —
-the branch logs the reason and does nothing. It never guesses a coordinate: a stray
-click in Dota is a move order.
+Clicking the HUD hero portrait would target Slark himself, and that was the original
+approach, driven by a calibrated [HUD anchor](../features/hud-anchors.md). **It does
+not work in practice**: with the anchor calibrated correctly the synthetic click on
+the portrait does not resolve the targeting, so the cast never happened.
+
+So the fallback presses the key and clicks **wherever the cursor already is**,
+without moving the mouse. Mid-fight the cursor is normally pointed somewhere useful,
+which is good enough for a defensive shroud, and it removes the calibration
+dependency entirely.
+
+The trade: the shroud lands at the cursor, not centred on Slark. If the cursor is
+parked on the minimap when it fires, the cast goes there.
 
 `shard_key` is only the key we **press**. Readiness is checked by matching
 `slark_depth_shroud` by name across every ability slot, and that distinction is not
@@ -229,11 +235,10 @@ heroes. Note this path does **not** consult the readiness gate.
   sooner than the ability itself allows.
 - **`dark_pact_key` must match your in-game binding.** The app does not read
   Dota's keybindings; it presses what you configure.
-- **The shard fallback moves your mouse.** It parks the cursor on the portrait,
-  clicks, and puts it back. If you are aiming or dragging at that moment, your input
-  and ours interleave. There is no way around it — the ability cannot be cast any
-  other way. `shard_fallback_enabled` turns just this off and leaves Shadow Dance
-  working.
+- **The shard fallback clicks wherever your cursor is.** It does not move the
+  mouse, but it does issue a left click, so the shroud lands at the cursor rather
+  than on Slark — and a cursor parked on the minimap sends the cast across the map.
+  `shard_fallback_enabled` turns just this off and leaves Shadow Dance working.
 - **The escape cannot see what is killing you.** It reads HP and the danger
   detector, not incoming damage type or whether Shadow Dance would actually save
   you. It will spend the ultimate on a losing fight.

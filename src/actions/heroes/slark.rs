@@ -445,7 +445,6 @@ impl SlarkScript {
     fn low_hp_escape(&self, event: &GsiWebhookEvent, in_danger: bool) {
         let settings = self.settings.lock().unwrap();
         let config = settings.heroes.slark.clone();
-        let hud = settings.hud.clone();
         drop(settings);
 
         let now = Instant::now();
@@ -477,31 +476,17 @@ impl SlarkScript {
                 cooldowns.shadow_dance = Some(now);
             }
             LowHpEscape::Shard => {
-                // Dota will not self-cast this one, so it is aimed by clicking
-                // the hero portrait. No calibrated anchor means no click: a
-                // guessed coordinate would be a move order into the fog.
-                let Some(portrait) =
-                    crate::observability::hud_anchors::resolve_portrait_point(&hud)
-                else {
-                    warn!(
-                        "🐟 Shadow Dance is down and {} is ready, but the HUD portrait anchor \
-                         is not calibrated (or Dota was not found) — skipping. Calibrate it \
-                         with the {} hotkey.",
-                        DEPTH_SHROUD_ABILITY_NAME, hud.capture_portrait_key
-                    );
-                    return;
-                };
-
+                // Cast at the cursor rather than on Slark himself. Dota will
+                // not self-cast this one, and a synthetic click on the HUD hero
+                // portrait — which would target him — does not resolve the
+                // cast. Mid-fight the cursor is already pointed somewhere
+                // useful, so aiming there is the option that actually works.
                 info!(
-                    "🐟 Shadow Dance is down — falling back to {} on '{}' at {}% HP via the \
-                     portrait at ({}, {})",
-                    DEPTH_SHROUD_ABILITY_NAME,
-                    config.shard_key,
-                    event.hero.health_percent,
-                    portrait.x,
-                    portrait.y
+                    "🐟 Shadow Dance is down — falling back to {} on '{}' at {}% HP, cast at \
+                     the cursor",
+                    DEPTH_SHROUD_ABILITY_NAME, config.shard_key, event.hero.health_percent
                 );
-                crate::input::simulation::portrait_cast(config.shard_key, portrait.x, portrait.y);
+                crate::input::simulation::cast_at_cursor(config.shard_key);
                 cooldowns.shard = Some(now);
             }
         }
