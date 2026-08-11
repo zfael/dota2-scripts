@@ -32,8 +32,19 @@ describe("Settings page", () => {
 
     expect(screen.getByText("Server")).toBeInTheDocument();
     expect(screen.getByText("Keybindings")).toBeInTheDocument();
-    expect(screen.getByText("Common")).toBeInTheDocument();
     expect(screen.getByText("Rune Alerts")).toBeInTheDocument();
+  });
+
+  it("leaves survivability configuration to the Survivability page", () => {
+    render(
+      <MemoryRouter>
+        <Settings />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.queryByText("Survivability HP Threshold"),
+    ).not.toBeInTheDocument();
   });
 
   it("leaves phase boots configuration to the Boots page", () => {

@@ -2,6 +2,7 @@ import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard,
   Swords,
+  HeartPulse,
   Shield,
   CircleDot,
   Axe,
@@ -18,6 +19,7 @@ import { useUIStore } from "../../stores/uiStore";
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/heroes", label: "Heroes", icon: Swords },
+  { to: "/survivability", label: "Survivability", icon: HeartPulse },
   { to: "/danger", label: "Danger", icon: Shield },
   { to: "/soul-ring", label: "Soul Ring", icon: CircleDot },
   { to: "/armlet", label: "Armlet", icon: Axe },

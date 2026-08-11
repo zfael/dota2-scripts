@@ -8,7 +8,11 @@ export const mockConfig: Settings = {
     neutral0: "0", combo_trigger: "Home",
   },
   logging: { level: "info" },
-  common: { survivability_hp_threshold: 30 },
+  common: {
+    survivability_hp_threshold: 30,
+    lane_phase_duration_seconds: 480,
+    lane_phase_healing_threshold: 12,
+  },
   armlet: {
     enabled: true, cast_modifier: "Alt", toggle_threshold: 320,
     predictive_offset: 30, toggle_cooldown_ms: 250,

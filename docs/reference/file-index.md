@@ -138,6 +138,9 @@
 | `src-ui/src/components/heroes/configs/invoker/invokerCatalog.tsx` | Local Invoker spell/item metadata, preset definitions, and chip visuals | `docs/heroes/invoker.md` |
 | `src-ui/src/components/heroes/configs/invoker/InvokerProfileList.tsx` | Invoker preset library and configured profile list UI | `docs/heroes/invoker.md` |
 | `src-ui/src/components/heroes/configs/invoker/InvokerProfileEditor.tsx` | Invoker profile step editor with reorder, target, and timing controls | `docs/heroes/invoker.md` |
+| `src-ui/src/pages/Survivability.tsx` | Survivability page: healing thresholds, lane phase override, defensive items, dispels, neutral items | `docs/features/survivability.md` |
+| `src-ui/src/pages/Survivability.test.tsx` | Vitest coverage for the Survivability page and its split from the Danger page | `docs/features/survivability.md` |
+| `src-ui/src/pages/DangerDetection.tsx` | Danger page: detection heuristics only, cross-linked to Survivability for responses | `docs/features/danger-detection.md` |
 | `src-ui/src/hooks/useRuneAlert.ts` | Frontend-owned rune alert gating and Web Audio playback | `docs/superpowers/specs/2026-03-31-react-ui-design.md`, `docs/reference/configuration.md` |
 
 ## `src/models/`

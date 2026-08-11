@@ -43,6 +43,7 @@ export function Slider({
           value={value}
           onChange={(e) => onChange(Number(e.target.value))}
           disabled={disabled}
+          aria-label={label}
           aria-valuemin={min}
           aria-valuemax={max}
           aria-valuenow={value}

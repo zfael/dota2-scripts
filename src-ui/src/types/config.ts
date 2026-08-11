@@ -24,6 +24,9 @@ export interface LoggingConfig {
 
 export interface CommonConfig {
   survivability_hp_threshold: number;
+  /** Length of the early-game window that overrides the normal healing threshold. 0 disables it. */
+  lane_phase_duration_seconds: number;
+  lane_phase_healing_threshold: number;
 }
 
 export interface ArmletConfig {

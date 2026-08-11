@@ -192,23 +192,21 @@ Defaults come from `src/config/settings.rs`; checked-in values live in `config/c
 
 ## UI ownership
 
-`src/ui/app.rs` currently exposes:
+`[danger_detection]` is split across two React pages by role. **Detection** — when
+the runtime decides you are in danger — and **response** — what it does about it —
+are deliberately separate, because they are tuned for different reasons.
 
-- a red `⚠️ IN DANGER` indicator on the **Main** tab
-- a **Danger Detection** tab for:
-  - heuristic sliders
-  - danger healing sliders
-  - defensive item toggles
-  - `satanic_hp_threshold`
-  - saving settings
+| Page | Source | Owns |
+|---|---|---|
+| **Danger** (`/danger`) | `src-ui/src/pages/DangerDetection.tsx` | `enabled`, `hp_threshold_percent`, `rapid_loss_hp`, `time_window_ms`, `clear_delay_seconds` |
+| **Survivability** (`/survivability`) | `src-ui/src/pages/Survivability.tsx` | `healing_threshold_in_danger`, `max_healing_items_per_danger`, every `auto_*` defensive toggle, `satanic_hp_threshold`, `auto_manta_on_silence`, `auto_lotus_on_silence` |
 
-It does **not** currently expose:
+The two pages cross-link, and both write the same `danger_detection` config
+section through `useConfigStore.updateConfig(...)`. See
+`docs/features/survivability.md` for the rest of the Survivability page.
 
-- `auto_manta_on_silence`
-- `auto_lotus_on_silence`
-- neutral-item danger settings
-
-Those remain TOML-only.
+The legacy egui UI in `src/ui/app.rs` belongs to the headless binary and is not
+part of the Tauri app.
 
 ---
 

@@ -8,6 +8,7 @@
 
 | Path | What it owns |
 |---|---|
+| `src-ui/src/pages/Survivability.tsx` | The operator-facing **Survivability** page — the single place to configure healing, defensive items, dispels, and neutral items |
 | `src/actions/armlet.rs` | Shared armlet planning, config resolution, cooldown tracking, critical retry handling, and dual-trigger execution |
 | `src/actions/common.rs` | Shared survivability pipeline: armlet job enqueueing, healing items, defensive items, neutral items |
 | `src/actions/danger_detector.rs` | Global `in_danger` heuristic consumed by common and hero code |
@@ -313,11 +314,39 @@ If you change how shared item availability is read from GSI, check both:
 
 ---
 
+## UI ownership
+
+The **Survivability** page (`/survivability`, `src-ui/src/pages/Survivability.tsx`)
+is the entry point for everything on this page that an operator tunes. It reaches
+across three config sections rather than mirroring one:
+
+| Card | Config section | Keys |
+|---|---|---|
+| Healing Items | `[common]`, `[danger_detection]` | `survivability_hp_threshold`, `healing_threshold_in_danger`, `max_healing_items_per_danger` |
+| Lane Phase | `[common]` | `lane_phase_duration_seconds`, `lane_phase_healing_threshold` |
+| Defensive Items | `[danger_detection]` | `auto_bkb`, `auto_satanic`, `satanic_hp_threshold`, `auto_blade_mail`, `auto_glimmer_cape`, `auto_ghost_scepter`, `auto_shivas_guard` |
+| Dispels | `[danger_detection]` | `auto_manta_on_silence`, `auto_lotus_on_silence` |
+| Neutral Items | `[neutral_items]` | `enabled`, `use_in_danger`, `hp_threshold`, `self_cast_key`, `allowed_items` |
+
+The Lane Phase toggle is derived, not stored: it writes
+`lane_phase_duration_seconds = 0` to disable and `480` to re-enable, matching the
+runtime's "0 disables the override" contract.
+
+Deliberately **not** on that page:
+
+- danger *detection* heuristics — `docs/features/danger-detection.md`, `/danger`
+- `[armlet]` — `/armlet`
+- `[phase_boots_automation]` — `/boots`
+- `[mana_automation]` — TOML-only; the feature is not shaped well enough to expose yet
+- `neutral_items.log_discoveries`, and every `excluded_heroes` list — TOML-only
+
+---
+
 ## Config touchpoints
 
 | Section | Keys currently used by survivability code |
 |---|---|
-| `[common]` | `survivability_hp_threshold` |
+| `[common]` | `survivability_hp_threshold`, `lane_phase_duration_seconds`, `lane_phase_healing_threshold` |
 | `[armlet]` | `enabled`, `cast_modifier`, `toggle_threshold`, `predictive_offset`, `toggle_cooldown_ms` |
 | `[armlet.roshan]` | `enabled`, `toggle_key`, `emergency_margin_hp`, `learning_window_ms`, `min_confidence_hits`, `min_sample_damage`, `stale_reset_ms` |
 | `[danger_detection]` | `enabled`, `healing_threshold_in_danger`, `max_healing_items_per_danger`, `auto_bkb`, `auto_satanic`, `satanic_hp_threshold`, `auto_blade_mail`, `auto_glimmer_cape`, `auto_ghost_scepter`, `auto_shivas_guard`, `auto_manta_on_silence`, `auto_lotus_on_silence` |

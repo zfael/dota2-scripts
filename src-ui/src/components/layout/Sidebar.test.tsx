@@ -17,6 +17,7 @@ describe("Sidebar", () => {
     renderSidebar();
     expect(screen.getByText("Dashboard")).toBeInTheDocument();
     expect(screen.getByText("Heroes")).toBeInTheDocument();
+    expect(screen.getByText("Survivability")).toBeInTheDocument();
     expect(screen.getByText("Danger")).toBeInTheDocument();
     expect(screen.getByText("Soul Ring")).toBeInTheDocument();
     expect(screen.getByText("Armlet")).toBeInTheDocument();

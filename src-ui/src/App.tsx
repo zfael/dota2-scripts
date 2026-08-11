@@ -12,6 +12,7 @@ import { useActivityStore } from "./stores/activityStore";
 import Dashboard from "./pages/Dashboard";
 import Heroes from "./pages/Heroes";
 import HeroDetail from "./pages/HeroDetail";
+import Survivability from "./pages/Survivability";
 import DangerDetection from "./pages/DangerDetection";
 import SoulRing from "./pages/SoulRing";
 import Armlet from "./pages/Armlet";
@@ -98,6 +99,7 @@ export default function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/heroes" element={<Heroes />} />
               <Route path="/heroes/:heroId" element={<HeroDetail />} />
+              <Route path="/survivability" element={<Survivability />} />
               <Route path="/danger" element={<DangerDetection />} />
               <Route path="/soul-ring" element={<SoulRing />} />
               <Route path="/armlet" element={<Armlet />} />

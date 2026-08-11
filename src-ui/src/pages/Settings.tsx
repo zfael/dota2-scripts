@@ -37,15 +37,6 @@ export default function Settings() {
             <KeyInput label="Neutral Slot" value={config.keybindings.neutral0} onChange={(v) => updateConfig("keybindings", { neutral0: v })} />
             <KeyInput label="Combo Trigger" value={config.keybindings.combo_trigger} onChange={(v) => updateConfig("keybindings", { combo_trigger: v })} />
           </Card>
-
-          <Card title="Common">
-            <NumberInput
-              label="Survivability HP Threshold"
-              value={config.common.survivability_hp_threshold}
-              onChange={(v) => updateConfig("common", { survivability_hp_threshold: v })}
-              suffix="%"
-            />
-          </Card>
         </div>
 
         <div className="space-y-4">
