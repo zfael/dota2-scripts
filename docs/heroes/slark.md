@@ -11,7 +11,7 @@ Directional **Pounce** (W) on a single keypress, GSI-driven **Dark Pact** debuff
 - Combo: `ALT down → right-click (face cursor) → ALT up → wait turn_delay_ms → press W`.
 - Pounce leaps along Slark's facing **at cast time**, so facing decides where the leap and the leash land. Turning toward the cursor first aims it.
 - **Gated on GSI**: the key is only swallowed when Pounce is levelled and castable. On cooldown it passes straight through, so Slark never takes the facing right-click for nothing.
-- Dark Pact, Essence Shift, and Shadow Dance are **not** intercepted.
+- Dark Pact, Saltwater Shiv, and Shadow Dance are **not** intercepted.
 
 ### Auto Dark Pact
 
@@ -45,7 +45,7 @@ Directional **Pounce** (W) on a single keypress, GSI-driven **Dark Pact** debuff
 | `shadow_dance_require_danger` | bool | `true` | Also require the danger detector. |
 | `shadow_dance_trigger_cooldown_ms` | u64 | `3000` | Minimum gap between attempts. |
 | `shard_fallback_enabled` | bool | `true` | Use the shard when the ultimate is down. |
-| `shard_key` | char | `"d"` | Key the shard ability sits on — and the whole of its identity. |
+| `shard_key` | char | `"d"` | Key Depth Shroud sits on. Only the key is configurable; the ability is matched by name. |
 
 ```toml
 [heroes.slark]
@@ -153,7 +153,12 @@ more than a salve. `plan_low_hp_escape` picks one of three outcomes:
 |---|---|
 | `None` | toggle off, dead, stunned/hexed/silenced, above the HP line, danger required but absent, inside the trigger cooldown, or nothing castable |
 | `ShadowDance` | `slark_shadow_dance` levelled and castable — **always preferred** |
-| `Shard` | ultimate unavailable, `hero.aghanims_shard` set, and the ability on `shard_key` castable |
+| `Shard` | ultimate unavailable, `hero.aghanims_shard` set, and `slark_depth_shroud` castable |
+
+Each escape carries its **own** retry timer. A single shared one meant spending
+Shadow Dance also locked out the shard for the same window — precisely when the
+fallback is wanted, since the ultimate being down is its entire trigger. A
+debounced ultimate therefore escalates to the shard rather than stalling.
 
 With `shadow_dance_require_danger` on (the default) this needs the danger detector
 *and* the HP line, matching the Outworld Destroyer barrier. `in_danger` already
@@ -175,17 +180,23 @@ If that returns `None` — the anchor was never calibrated, or Dota is not runni
 the branch logs the reason and does nothing. It never guesses a coordinate: a stray
 click in Dota is a move order.
 
-**The ability is identified by its key, not its GSI name.** `shard_key` is the key we
-press, and its position in Dota's fixed `Q/W/E/R/D/F` ability order is the slot the
-readiness check reads — the same `index` ↔ `key` pairing `AutoAbilityConfig`
-documents. Nothing has to know what Valve calls the ability, so nothing breaks when
-the shard changes across patches.
+`shard_key` is only the key we **press**. Readiness is checked by matching
+`slark_depth_shroud` by name across every ability slot, and that distinction is not
+academic:
 
-Readiness matters only to avoid moving your mouse for nothing: if the shard ability
-is on cooldown there is no point parking the cursor on the portrait and clicking. A
-key outside the standard six cannot be placed in a slot, so `ability_on_key_is_ready`
-returns `true` for it — a custom bind still works, at the cost of an occasional
-wasted click.
+> **GSI slot order is ability order, not key order.** On a shard Slark the payload
+> reads `0=slark_dark_pact, 1=slark_pounce, 2=slark_saltwater_shiv,
+> 3=slark_depth_shroud, 4=slark_shadow_dance, 5=plus_high_five`. The shard ability
+> is inserted *ahead of* the ultimate, so Shadow Dance — the R ability — is at
+> index 4, and the `D` ability is at index 3.
+
+An earlier version derived the slot from the key (`d` → index 4) and so read the
+ultimate's cooldown instead of Depth Shroud's. That is false exactly when the
+fallback is wanted, which is why it never fired. `tests/fixtures/slark_event.json`
+is a real captured payload specifically so this layout is pinned by tests.
+
+Readiness matters only to avoid moving the mouse for nothing: if Depth Shroud is on
+cooldown there is no point parking the cursor on the portrait and clicking.
 
 ### Standalone trigger
 

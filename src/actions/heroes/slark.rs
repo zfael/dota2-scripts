@@ -14,6 +14,13 @@ const POUNCE_ABILITY_NAME: &str = "slark_pounce";
 const DARK_PACT_ABILITY_NAME: &str = "slark_dark_pact";
 const SHADOW_DANCE_ABILITY_NAME: &str = "slark_shadow_dance";
 
+/// The ability Aghanim's Shard grants.
+///
+/// A constant rather than config: it is as fixed as the other three ability
+/// names above, and matching by name is the only thing that works — see
+/// [`ability_is_ready`].
+const DEPTH_SHROUD_ABILITY_NAME: &str = "slark_depth_shroud";
+
 /// Settle time before the facing right-click, matching the other facing combos.
 const PRE_TURN_SETTLE_MS: u64 = 50;
 
@@ -25,8 +32,8 @@ lazy_static! {
     /// When the current run of debuffs was first seen, for the Dark Pact
     /// settle window. `None` means Slark is clean.
     static ref SLARK_DEBUFF_DETECTED: Mutex<Option<Instant>> = Mutex::new(None);
-    /// Last time the low-HP escape fired, for its own trigger cooldown.
-    static ref SLARK_LAST_ESCAPE: Mutex<Option<Instant>> = Mutex::new(None);
+    /// Last time each escape fired, for their own retry cooldowns.
+    static ref SLARK_LAST_ESCAPE: Mutex<EscapeCooldowns> = Mutex::new(EscapeCooldowns::default());
     /// Throttle for the "wanted an escape, got none" explanation.
     static ref SLARK_LAST_ESCAPE_DIAGNOSTIC: Mutex<Option<Instant>> = Mutex::new(None);
 }
@@ -106,6 +113,15 @@ fn enqueue_slark_request(request: SlarkRequest) {
     }
 }
 
+/// Whether a named ability is levelled and castable right now.
+///
+/// Scans every slot rather than indexing one, because **GSI slot order is
+/// ability order, not key order**. Shard- and scepter-granted abilities are
+/// inserted before the ultimate, so on a shard Slark `slark_depth_shroud` sits
+/// at index 3 and `slark_shadow_dance` — the R ability — moves to index 4.
+/// Deriving a slot from the key it is bound to therefore reads the wrong
+/// ability, which is why the shard fallback silently checked the ultimate's
+/// cooldown instead of its own.
 fn ability_is_ready(event: &GsiWebhookEvent, ability_name: &str) -> bool {
     (0..=5).any(|index| {
         event
@@ -152,6 +168,26 @@ fn plan_dark_pact(event: &GsiWebhookEvent, enabled: bool) -> DarkPactDecision {
     DarkPactDecision::Arm
 }
 
+/// When each escape last fired.
+///
+/// Tracked separately because they are separate resources. A single shared
+/// timer meant spending Shadow Dance also locked out the shard for the same
+/// window — precisely when the fallback is wanted, since the ultimate being
+/// down is its entire trigger condition.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct EscapeCooldowns {
+    shadow_dance: Option<Instant>,
+    shard: Option<Instant>,
+}
+
+/// Whether enough time has passed since an escape last fired.
+fn off_retry_cooldown(last: Option<Instant>, now: Instant, cooldown_ms: u64) -> bool {
+    match last {
+        Some(last) => now.duration_since(last) >= Duration::from_millis(cooldown_ms),
+        None => true,
+    }
+}
+
 /// Which escape the low-HP watcher should spend, if any.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LowHpEscape {
@@ -161,43 +197,6 @@ enum LowHpEscape {
     ShadowDance,
     /// Shadow Dance is down but the shard ability is up.
     Shard,
-}
-
-/// The GSI ability slot an ability key sits on.
-///
-/// Dota lays a hero's abilities out in a fixed order and the default binds
-/// follow it, which is the same `index` ↔ `key` pairing `AutoAbilityConfig`
-/// documents. `None` means a non-standard bind we cannot place.
-fn ability_slot_for_key(key: char) -> Option<u8> {
-    match key.to_ascii_lowercase() {
-        'q' => Some(0),
-        'w' => Some(1),
-        'e' => Some(2),
-        'r' => Some(3),
-        'd' => Some(4),
-        'f' => Some(5),
-        _ => None,
-    }
-}
-
-/// Whether the ability sitting on `key` is levelled and castable right now.
-///
-/// Identifying the ability by its key rather than its GSI name means no name
-/// has to be configured or kept up to date across patches — the key we are
-/// going to press *is* the identity.
-///
-/// A key outside the standard six returns `true` rather than `false`: we cannot
-/// place it in a slot, and refusing to fire would silently break a legitimate
-/// custom bind. The cost of being wrong is one wasted portrait click.
-fn ability_on_key_is_ready(event: &GsiWebhookEvent, key: char) -> bool {
-    let Some(slot) = ability_slot_for_key(key) else {
-        return true;
-    };
-
-    event
-        .abilities
-        .get_by_index(slot)
-        .is_some_and(|ability| ability.level > 0 && ability.can_cast)
 }
 
 /// Whether the hero can issue a cast at all this instant.
@@ -220,7 +219,7 @@ fn plan_low_hp_escape(
     config: &SlarkConfig,
     in_danger: bool,
     now: Instant,
-    last_escape: Option<Instant>,
+    cooldowns: EscapeCooldowns,
 ) -> LowHpEscape {
     if !config.auto_shadow_dance_on_low_hp {
         return LowHpEscape::None;
@@ -238,23 +237,21 @@ fn plan_low_hp_escape(
         return LowHpEscape::None;
     }
 
-    if let Some(last_escape) = last_escape {
-        if now.duration_since(last_escape)
-            < Duration::from_millis(config.shadow_dance_trigger_cooldown_ms)
-        {
-            return LowHpEscape::None;
-        }
-    }
+    let retry_ms = config.shadow_dance_trigger_cooldown_ms;
 
-    if ability_is_ready(event, SHADOW_DANCE_ABILITY_NAME) {
+    if ability_is_ready(event, SHADOW_DANCE_ABILITY_NAME)
+        && off_retry_cooldown(cooldowns.shadow_dance, now, retry_ms)
+    {
         return LowHpEscape::ShadowDance;
     }
 
     // The shard is the consolation prize, so it is only reached once Shadow
-    // Dance has already been ruled out.
+    // Dance has already been ruled out — and it carries its own retry timer, so
+    // spending the ultimate does not lock it out for the same window.
     if config.shard_fallback_enabled
         && event.hero.aghanims_shard
-        && ability_on_key_is_ready(event, config.shard_key)
+        && ability_is_ready(event, DEPTH_SHROUD_ABILITY_NAME)
+        && off_retry_cooldown(cooldowns.shard, now, retry_ms)
     {
         return LowHpEscape::Shard;
     }
@@ -277,7 +274,7 @@ fn explain_missing_escape(
     event: &GsiWebhookEvent,
     config: &SlarkConfig,
     in_danger: bool,
-    last_escape: Option<Instant>,
+    cooldowns: EscapeCooldowns,
     now: Instant,
 ) {
     let Ok(mut last_logged) = SLARK_LAST_ESCAPE_DIAGNOSTIC.try_lock() else {
@@ -291,13 +288,14 @@ fn explain_missing_escape(
     }
     *last_logged = Some(now);
 
-    let cooldown_remaining_ms = last_escape
-        .map(|last| {
+    let remaining = |last: Option<Instant>| {
+        last.map(|last| {
             Duration::from_millis(config.shadow_dance_trigger_cooldown_ms)
                 .saturating_sub(now.duration_since(last))
                 .as_millis()
         })
-        .unwrap_or(0);
+        .unwrap_or(0)
+    };
 
     let abilities: Vec<String> = (0..=5)
         .filter_map(|index| event.abilities.get_by_index(index).map(|a| (index, a)))
@@ -309,13 +307,11 @@ fn explain_missing_escape(
         })
         .collect();
 
-    let shard_slot = ability_slot_for_key(config.shard_key);
-
     warn!(
         "🐟 Low HP escape wanted but nothing fired. hp={}% (line {}%), in_danger={} \
-         (required {}), stunned={}, hexed={}, silenced={}, retry_cooldown_remaining={}ms, \
-         shadow_dance_ready={}, shard_fallback_enabled={}, aghanims_shard={}, \
-         shard_key='{}' -> slot {:?}. Abilities: [{}]",
+         (required {}), stunned={}, hexed={}, silenced={}, \
+         shadow_dance_ready={} (retry in {}ms), shard_fallback_enabled={}, \
+         aghanims_shard={}, {}_ready={} (retry in {}ms), shard_key='{}'. Abilities: [{}]",
         event.hero.health_percent,
         config.shadow_dance_hp_threshold_percent,
         in_danger,
@@ -323,12 +319,14 @@ fn explain_missing_escape(
         event.hero.stunned,
         event.hero.hexed,
         event.hero.silenced,
-        cooldown_remaining_ms,
         ability_is_ready(event, SHADOW_DANCE_ABILITY_NAME),
+        remaining(cooldowns.shadow_dance),
         config.shard_fallback_enabled,
         event.hero.aghanims_shard,
+        DEPTH_SHROUD_ABILITY_NAME,
+        ability_is_ready(event, DEPTH_SHROUD_ABILITY_NAME),
+        remaining(cooldowns.shard),
         config.shard_key,
-        shard_slot,
         abilities.join(", ")
     );
 }
@@ -454,11 +452,11 @@ impl SlarkScript {
 
         // try_lock for the same reason as the Dark Pact window: never block the
         // GSI handler on a contended tick.
-        let Ok(mut last_escape) = SLARK_LAST_ESCAPE.try_lock() else {
+        let Ok(mut cooldowns) = SLARK_LAST_ESCAPE.try_lock() else {
             return;
         };
 
-        match plan_low_hp_escape(event, &config, in_danger, now, *last_escape) {
+        match plan_low_hp_escape(event, &config, in_danger, now, *cooldowns) {
             LowHpEscape::None => {
                 // Only when an escape was actually wanted — below the line and
                 // alive with the feature on. Otherwise this fires on every
@@ -467,7 +465,7 @@ impl SlarkScript {
                     && event.hero.is_alive()
                     && event.hero.health_percent <= config.shadow_dance_hp_threshold_percent
                 {
-                    explain_missing_escape(event, &config, in_danger, *last_escape, now);
+                    explain_missing_escape(event, &config, in_danger, *cooldowns, now);
                 }
             }
             LowHpEscape::ShadowDance => {
@@ -476,7 +474,7 @@ impl SlarkScript {
                     event.hero.health_percent
                 );
                 crate::input::simulation::press_key(config.shadow_dance_key);
-                *last_escape = Some(now);
+                cooldowns.shadow_dance = Some(now);
             }
             LowHpEscape::Shard => {
                 // Dota will not self-cast this one, so it is aimed by clicking
@@ -486,25 +484,25 @@ impl SlarkScript {
                     crate::observability::hud_anchors::resolve_portrait_point(&hud)
                 else {
                     warn!(
-                        "🐟 Shadow Dance is down and the shard ability on '{}' is ready, but \
-                         the HUD portrait anchor is not calibrated (or Dota was not found) — \
-                         skipping. Calibrate it with the {} hotkey.",
-                        config.shard_key, hud.capture_portrait_key
+                        "🐟 Shadow Dance is down and {} is ready, but the HUD portrait anchor \
+                         is not calibrated (or Dota was not found) — skipping. Calibrate it \
+                         with the {} hotkey.",
+                        DEPTH_SHROUD_ABILITY_NAME, hud.capture_portrait_key
                     );
                     return;
                 };
 
                 info!(
-                    "🐟 Shadow Dance is down — falling back to the shard ability on '{}' at \
-                     {}% HP via the portrait at ({}, {})",
-                    config.shard_key, event.hero.health_percent, portrait.x, portrait.y
-                );
-                crate::input::simulation::portrait_cast(
+                    "🐟 Shadow Dance is down — falling back to {} on '{}' at {}% HP via the \
+                     portrait at ({}, {})",
+                    DEPTH_SHROUD_ABILITY_NAME,
                     config.shard_key,
+                    event.hero.health_percent,
                     portrait.x,
-                    portrait.y,
+                    portrait.y
                 );
-                *last_escape = Some(now);
+                crate::input::simulation::portrait_cast(config.shard_key, portrait.x, portrait.y);
+                cooldowns.shard = Some(now);
             }
         }
 
@@ -687,14 +685,14 @@ mod tests {
         event
     }
 
-    /// Put a castable ability in the slot the shard key maps to.
+    /// Put Shadow Dance on cooldown.
     ///
-    /// Its *name* is deliberately not asserted anywhere: the key is the
-    /// identity, so what Valve calls the shard ability does not matter here.
-    fn with_shard_ability_ready(event: &mut GsiWebhookEvent) {
-        event.abilities.ability4.level = 1;
-        event.abilities.ability4.can_cast = true;
-        event.abilities.ability4.name = "some_shard_ability".to_string();
+    /// It lives at index **4** on a shard Slark, not 3: the shard ability is
+    /// inserted ahead of the ultimate. Captured from a real payload — see the
+    /// fixture.
+    fn with_shadow_dance_down(event: &mut GsiWebhookEvent) {
+        assert_eq!(event.abilities.ability4.name, SHADOW_DANCE_ABILITY_NAME);
+        event.abilities.ability4.can_cast = false;
     }
 
     fn now() -> Instant {
@@ -704,7 +702,13 @@ mod tests {
     #[test]
     fn shadow_dance_fires_when_low_and_in_danger() {
         assert_eq!(
-            plan_low_hp_escape(&low_hp_fixture(), &SlarkConfig::default(), true, now(), None),
+            plan_low_hp_escape(
+                &low_hp_fixture(),
+                &SlarkConfig::default(),
+                true,
+                now(),
+                EscapeCooldowns::default()
+            ),
             LowHpEscape::ShadowDance
         );
     }
@@ -715,7 +719,13 @@ mod tests {
         event.hero.health_percent = 80;
 
         assert_eq!(
-            plan_low_hp_escape(&event, &SlarkConfig::default(), true, now(), None),
+            plan_low_hp_escape(
+                &event,
+                &SlarkConfig::default(),
+                true,
+                now(),
+                EscapeCooldowns::default()
+            ),
             LowHpEscape::None
         );
     }
@@ -724,7 +734,13 @@ mod tests {
     fn requiring_danger_holds_the_ultimate_when_merely_low() {
         // Low HP but not under fire — walking home, regenerating in lane.
         assert_eq!(
-            plan_low_hp_escape(&low_hp_fixture(), &SlarkConfig::default(), false, now(), None),
+            plan_low_hp_escape(
+                &low_hp_fixture(),
+                &SlarkConfig::default(),
+                false,
+                now(),
+                EscapeCooldowns::default()
+            ),
             LowHpEscape::None
         );
     }
@@ -737,7 +753,13 @@ mod tests {
         };
 
         assert_eq!(
-            plan_low_hp_escape(&low_hp_fixture(), &config, false, now(), None),
+            plan_low_hp_escape(
+                &low_hp_fixture(),
+                &config,
+                false,
+                now(),
+                EscapeCooldowns::default()
+            ),
             LowHpEscape::ShadowDance
         );
     }
@@ -746,18 +768,17 @@ mod tests {
     fn the_shard_is_only_reached_once_shadow_dance_is_down() {
         let config = SlarkConfig::default();
         let mut event = low_hp_fixture();
-        with_shard_ability_ready(&mut event);
 
         // Both up: the ultimate wins.
         assert_eq!(
-            plan_low_hp_escape(&event, &config, true, now(), None),
+            plan_low_hp_escape(&event, &config, true, now(), EscapeCooldowns::default()),
             LowHpEscape::ShadowDance
         );
 
         // Ultimate on cooldown: fall through to the shard.
-        event.abilities.ability3.can_cast = false;
+        with_shadow_dance_down(&mut event);
         assert_eq!(
-            plan_low_hp_escape(&event, &config, true, now(), None),
+            plan_low_hp_escape(&event, &config, true, now(), EscapeCooldowns::default()),
             LowHpEscape::Shard
         );
     }
@@ -765,57 +786,128 @@ mod tests {
     #[test]
     fn the_shard_needs_the_shard_to_actually_be_granted() {
         let mut event = low_hp_fixture();
-        with_shard_ability_ready(&mut event);
-        event.abilities.ability3.can_cast = false;
+        with_shadow_dance_down(&mut event);
         event.hero.aghanims_shard = false;
 
         assert_eq!(
-            plan_low_hp_escape(&event, &SlarkConfig::default(), true, now(), None),
+            plan_low_hp_escape(
+                &event,
+                &SlarkConfig::default(),
+                true,
+                now(),
+                EscapeCooldowns::default()
+            ),
             LowHpEscape::None
         );
     }
 
     #[test]
-    fn the_shard_is_skipped_while_its_own_slot_is_on_cooldown() {
+    fn the_shard_is_skipped_while_depth_shroud_itself_is_on_cooldown() {
         let mut event = low_hp_fixture();
-        with_shard_ability_ready(&mut event);
+        with_shadow_dance_down(&mut event);
+        assert_eq!(event.abilities.ability3.name, DEPTH_SHROUD_ABILITY_NAME);
         event.abilities.ability3.can_cast = false;
-        // The D slot itself is down, so there is nothing to click the portrait
-        // for — no wasted mouse move.
-        event.abilities.ability4.can_cast = false;
 
         assert_eq!(
-            plan_low_hp_escape(&event, &SlarkConfig::default(), true, now(), None),
+            plan_low_hp_escape(
+                &event,
+                &SlarkConfig::default(),
+                true,
+                now(),
+                EscapeCooldowns::default()
+            ),
             LowHpEscape::None
         );
     }
 
+    /// The regression this whole correction exists for.
+    ///
+    /// Depth Shroud sits at index 3 and Shadow Dance at index 4 on a shard
+    /// Slark. Deriving the slot from the `d` key landed on index 4, so the
+    /// fallback read the *ultimate's* cooldown — false exactly when the shard
+    /// was wanted — and never fired.
     #[test]
-    fn the_shard_key_picks_the_slot_it_will_actually_press() {
-        assert_eq!(ability_slot_for_key('q'), Some(0));
-        assert_eq!(ability_slot_for_key('r'), Some(3));
-        assert_eq!(ability_slot_for_key('d'), Some(4));
-        assert_eq!(ability_slot_for_key('F'), Some(5));
-        assert_eq!(ability_slot_for_key('z'), None);
+    fn the_shard_is_found_by_name_not_by_the_slot_its_key_suggests() {
+        let mut event = low_hp_fixture();
+        with_shadow_dance_down(&mut event);
+
+        assert_eq!(event.abilities.ability3.name, DEPTH_SHROUD_ABILITY_NAME);
+        assert_eq!(event.abilities.ability4.name, SHADOW_DANCE_ABILITY_NAME);
+        assert!(ability_is_ready(&event, DEPTH_SHROUD_ABILITY_NAME));
+        assert!(!ability_is_ready(&event, SHADOW_DANCE_ABILITY_NAME));
+
+        assert_eq!(
+            plan_low_hp_escape(
+                &event,
+                &SlarkConfig::default(),
+                true,
+                now(),
+                EscapeCooldowns::default()
+            ),
+            LowHpEscape::Shard
+        );
     }
 
+    /// Spending the ultimate must not lock out the shard, which is a separate
+    /// resource — and whose entire trigger is the ultimate being unavailable.
     #[test]
-    fn a_non_standard_bind_is_trusted_rather_than_silently_never_firing() {
-        // We cannot place 'z' in a GSI slot, so readiness is unknowable. Firing
-        // and possibly wasting a click beats never working at all.
-        let event = low_hp_fixture();
-        assert!(ability_on_key_is_ready(&event, 'z'));
-    }
-
-    #[test]
-    fn a_recent_escape_suppresses_the_next_one() {
+    fn a_recent_shadow_dance_does_not_suppress_the_shard() {
         let config = SlarkConfig::default();
         let now = now();
-        let just_fired = now - Duration::from_millis(config.shadow_dance_trigger_cooldown_ms / 2);
+        let mut event = low_hp_fixture();
+        with_shadow_dance_down(&mut event);
+
+        let cooldowns = EscapeCooldowns {
+            shadow_dance: Some(now - Duration::from_millis(50)),
+            shard: None,
+        };
 
         assert_eq!(
-            plan_low_hp_escape(&low_hp_fixture(), &config, true, now, Some(just_fired)),
+            plan_low_hp_escape(&event, &config, true, now, cooldowns),
+            LowHpEscape::Shard
+        );
+    }
+
+    #[test]
+    fn a_recent_escape_debounces_the_same_kind() {
+        let config = SlarkConfig::default();
+        let now = now();
+        // No shard, so there is nothing to escalate to and the debounce on
+        // Shadow Dance is what the result actually shows.
+        let mut event = low_hp_fixture();
+        event.hero.aghanims_shard = false;
+
+        let cooldowns = EscapeCooldowns {
+            shadow_dance: Some(
+                now - Duration::from_millis(config.shadow_dance_trigger_cooldown_ms / 2),
+            ),
+            shard: None,
+        };
+
+        assert_eq!(
+            plan_low_hp_escape(&event, &config, true, now, cooldowns),
             LowHpEscape::None
+        );
+    }
+
+    /// A debounced ultimate escalates rather than stalling.
+    ///
+    /// The debounce stops the same key being spammed; it is not a reason to sit
+    /// on a second escape while still under fire.
+    #[test]
+    fn a_debounced_shadow_dance_escalates_to_the_shard() {
+        let config = SlarkConfig::default();
+        let now = now();
+        let cooldowns = EscapeCooldowns {
+            shadow_dance: Some(
+                now - Duration::from_millis(config.shadow_dance_trigger_cooldown_ms / 2),
+            ),
+            shard: None,
+        };
+
+        assert_eq!(
+            plan_low_hp_escape(&low_hp_fixture(), &config, true, now, cooldowns),
+            LowHpEscape::Shard
         );
     }
 
@@ -823,10 +915,15 @@ mod tests {
     fn the_escape_reopens_once_the_trigger_cooldown_expires() {
         let config = SlarkConfig::default();
         let now = now();
-        let long_ago = now - Duration::from_millis(config.shadow_dance_trigger_cooldown_ms + 1);
+        let cooldowns = EscapeCooldowns {
+            shadow_dance: Some(
+                now - Duration::from_millis(config.shadow_dance_trigger_cooldown_ms + 1),
+            ),
+            shard: None,
+        };
 
         assert_eq!(
-            plan_low_hp_escape(&low_hp_fixture(), &config, true, now, Some(long_ago)),
+            plan_low_hp_escape(&low_hp_fixture(), &config, true, now, cooldowns),
             LowHpEscape::ShadowDance
         );
     }
@@ -844,7 +941,13 @@ mod tests {
             }
 
             assert_eq!(
-                plan_low_hp_escape(&event, &SlarkConfig::default(), true, now(), None),
+                plan_low_hp_escape(
+                    &event,
+                    &SlarkConfig::default(),
+                    true,
+                    now(),
+                    EscapeCooldowns::default()
+                ),
                 LowHpEscape::None,
                 "{lock} should block the escape"
             );
@@ -859,7 +962,13 @@ mod tests {
         };
 
         assert_eq!(
-            plan_low_hp_escape(&low_hp_fixture(), &config, true, now(), None),
+            plan_low_hp_escape(
+                &low_hp_fixture(),
+                &config,
+                true,
+                now(),
+                EscapeCooldowns::default()
+            ),
             LowHpEscape::None
         );
     }

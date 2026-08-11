@@ -6,44 +6,44 @@
     "attributes_level": 0,
     "break": false,
     "buyback_cooldown": 0,
-    "buyback_cost": 1180,
+    "buyback_cost": 7999,
     "disarmed": false,
-    "facet": 1,
+    "facet": 0,
     "has_debuff": false,
-    "health": 1240,
-    "health_percent": 68,
+    "health": 868,
+    "health_percent": 100,
     "hexed": false,
     "id": 93,
-    "level": 15,
+    "level": 8,
     "magicimmune": false,
-    "mana": 610,
-    "mana_percent": 74,
-    "max_health": 1820,
-    "max_mana": 820,
+    "mana": 423,
+    "mana_percent": 100,
+    "max_health": 868,
+    "max_mana": 423,
     "muted": false,
     "name": "npc_dota_hero_slark",
     "respawn_seconds": 0,
     "silenced": false,
     "smoked": false,
     "stunned": false,
-    "talent_1": true,
+    "talent_1": false,
     "talent_2": false,
     "talent_3": false,
-    "talent_4": true,
-    "talent_5": true,
+    "talent_4": false,
+    "talent_5": false,
     "talent_6": false,
     "talent_7": false,
     "talent_8": false,
-    "xp": 12980,
-    "xpos": -1640,
-    "ypos": 820
+    "xp": 4000,
+    "xpos": -2311,
+    "ypos": 1078
   },
   "abilities": {
     "ability0": {
       "ability_active": true,
       "can_cast": true,
       "cooldown": 0,
-      "level": 4,
+      "level": 2,
       "name": "slark_dark_pact",
       "passive": false,
       "ultimate": false
@@ -52,122 +52,224 @@
       "ability_active": true,
       "can_cast": true,
       "cooldown": 0,
-      "level": 4,
+      "level": 3,
       "name": "slark_pounce",
       "passive": false,
       "ultimate": false
     },
     "ability2": {
-      "ability_active": false,
-      "can_cast": false,
+      "ability_active": true,
+      "can_cast": true,
       "cooldown": 0,
-      "level": 4,
-      "name": "slark_essence_shift",
-      "passive": true,
+      "level": 2,
+      "name": "slark_saltwater_shiv",
+      "passive": false,
       "ultimate": false
     },
     "ability3": {
       "ability_active": true,
       "can_cast": true,
       "cooldown": 0,
-      "level": 2,
+      "level": 1,
+      "name": "slark_depth_shroud",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability4": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 1,
       "name": "slark_shadow_dance",
       "passive": false,
       "ultimate": true
     },
-    "ability4": {
-      "ability_active": false,
-      "can_cast": false,
-      "cooldown": 0,
-      "level": 0,
-      "name": "empty",
-      "passive": false,
-      "ultimate": false
-    },
     "ability5": {
-      "ability_active": false,
-      "can_cast": false,
+      "ability_active": true,
+      "can_cast": true,
       "cooldown": 0,
-      "level": 0,
-      "name": "empty",
+      "level": 1,
+      "name": "plus_high_five",
       "passive": false,
       "ultimate": false
     }
   },
   "items": {
     "neutral0": {
-      "name": "item_pupils_gift",
-      "can_cast": false,
-      "cooldown": 0,
-      "passive": true
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
     },
     "slot0": {
-      "name": "item_echo_sabre",
-      "can_cast": false,
-      "cooldown": 0,
-      "passive": true
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
     },
     "slot1": {
-      "name": "item_black_king_bar",
-      "can_cast": true,
-      "cooldown": 0,
-      "passive": false
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
     },
     "slot2": {
-      "name": "item_silver_edge",
-      "can_cast": true,
-      "cooldown": 0,
-      "passive": false
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
     },
     "slot3": {
-      "name": "item_phase_boots",
-      "can_cast": true,
-      "cooldown": 0,
-      "passive": false
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
     },
     "slot4": {
-      "name": "item_magic_wand",
-      "can_cast": true,
-      "cooldown": 0,
-      "passive": false
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
     },
     "slot5": {
-      "name": "empty"
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
     },
     "slot6": {
-      "name": "empty"
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
     },
     "slot7": {
-      "name": "empty"
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
     },
     "slot8": {
-      "name": "empty"
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
     },
     "stash0": {
-      "name": "empty"
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
     },
     "stash1": {
-      "name": "empty"
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
     },
     "stash2": {
-      "name": "empty"
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
     },
     "stash3": {
-      "name": "empty"
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
     },
     "stash4": {
-      "name": "empty"
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
     },
     "stash5": {
-      "name": "empty"
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
     },
     "teleport0": {
       "name": "item_tpscroll",
       "can_cast": true,
-      "cooldown": 0
+      "cooldown": 0,
+      "item_level": 1,
+      "passive": false,
+      "purchaser": 0,
+      "charges": 2,
+      "item_charges": 2
     }
   },
   "map": {
-    "clock_time": 1520
+    "clock_time": 8640
+  },
+  "player": {
+    "team_name": "radiant"
   }
 }

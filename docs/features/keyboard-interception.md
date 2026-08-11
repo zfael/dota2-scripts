@@ -399,7 +399,7 @@ These are still part of the interception surface even though this page centers o
 - the worker holds `ALT`, right-clicks to face the cursor, releases `ALT`, waits `turn_delay_ms`, then presses the Pounce key
 - ALT is released before the ability press for the same reason as Magnus: Pounce takes no target, and holding ALT over an ability key pings it instead of casting it
 - like Magnus, the intercept is **gated on GSI**: `SlarkState::can_intercept_pounce()` reads `SLARK_LAST_EVENT` and requires `slark_pounce` to have `level > 0 && can_cast`. A failed check leaves the key unblocked
-- Dark Pact, Essence Shift, and Shadow Dance are never intercepted
+- Dark Pact, Saltwater Shiv, and Shadow Dance are never intercepted
 
 ### Broodmother
 
