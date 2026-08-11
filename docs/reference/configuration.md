@@ -162,7 +162,7 @@ See `docs/features/survivability.md`.
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |
 |---|---:|---:|---|
 | `enabled` | `false` | `false` | Enables JSONL event logging in `src/gsi/handler.rs`. |
-| `output_dir` | `"logs/gsi_events"` | `"logs/gsi_events"` | Directory is created on startup if possible. |
+| `output_dir` | `"logs/gsi_events"` | `"logs/gsi_events"` | Created on startup if possible. **A relative path resolves against `%LOCALAPPDATA%\dota2-scripts\`, not the working directory** — so the default lands in the same place whether launched by `cargo run` or from an installed shortcut. An absolute path is used as typed. |
 
 See `docs/reference/gsi-schema-and-usage.md`.
 
@@ -555,6 +555,18 @@ All fifteen fields are exposed in the React UI under **Heroes → Slark**.
 
 See `docs/heroes/slark.md`, `docs/features/hud-anchors.md`, and
 `docs/features/keyboard-interception.md`.
+
+## `[logging]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `level` | `"info"` | `"info"` | `debug` / `info` / `warn` / `error`. `RUST_LOG` overrides it. |
+| `file_enabled` | `true` | `true` | Also write a rotating daily log file to `%LOCALAPPDATA%\dota2-scripts\logs\`. **Restart required** — tracing subscribers cannot be swapped on a live process. |
+
+The desktop build is a GUI process with nowhere for console output to go, so the
+file is the only record of what the app did. Diagnostic dumps land in the same
+directory: `gsi_rejected/` for unparseable GSI payloads and
+`neutral_items_discovered.txt`.
 
 ## `[hud]`
 

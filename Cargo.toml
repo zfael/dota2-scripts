@@ -40,6 +40,7 @@ enigo = "0.2"
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
 
 # Global hotkeys with grab support for key interception
 rdev = { version = "0.5", features = ["unstable_grab"] }

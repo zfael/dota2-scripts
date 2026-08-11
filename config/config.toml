@@ -20,6 +20,11 @@ combo_trigger = "Home"
 
 [logging]
 level = "info"
+# Also write a log file to %LOCALAPPDATA%\dota2-scripts\logs\, rotated daily.
+# The desktop build is a GUI process with nowhere for console output to go, so
+# this file is the only record of what the app did. Read once at startup --
+# changing it needs a restart.
+file_enabled = true
 
 [rune_alerts]
 enabled = true

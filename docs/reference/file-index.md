@@ -176,6 +176,7 @@
 | `src/observability/wave_tracker.rs` | Clock-driven creep wave spawn cadence, lane path interpolation, and clash prediction | `docs/features/wave-tracker.md` |
 | `src/observability/wave_overlay.rs` | Screen-space placement maths for the click-through minimap overlay | `docs/features/wave-tracker.md` |
 | `src/observability/hud_anchors.rs` | Calibrated HUD positions (hero portrait), cursor capture, and client-rect fraction maths | `docs/features/hud-anchors.md` |
+| `src/logging.rs` | Tracing setup: console plus the rotating log file under `%LOCALAPPDATA%` | `docs/reference/configuration.md` |
 | `src/observability/alerts.rs` | Objective alert schedules, cue assignments, and fire-once scheduling | `docs/features/objective-alerts.md` |
 | `src/audio/motif.rs` | Procedural synthesis of alert cues (pure DSP, no device needed) | `docs/features/objective-alerts.md` |
 | `src/audio/player.rs` | rodio output: PCM and file playback for alert cues | `docs/features/objective-alerts.md` |

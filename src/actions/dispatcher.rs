@@ -56,15 +56,17 @@ fn log_neutral_item_discovery(event: &GsiWebhookEvent, settings: &Settings) {
     // Add to discovered set
     discovered.insert(neutral_item.name.clone());
 
-    // Create logs directory if it doesn't exist
-    if let Err(e) = fs::create_dir_all("logs") {
-        warn!("Failed to create logs directory: {}", e);
+    // Resolved rather than relative, for the same reason as the rejected-payload
+    // dumps: a working-directory `logs/` does not exist once the app is installed.
+    let log_dir = crate::config::storage::resolve_log_dir();
+    if let Err(e) = fs::create_dir_all(&log_dir) {
+        warn!("Failed to create logs directory {}: {}", log_dir.display(), e);
         return;
     }
 
     // Append to log file
-    let log_path = "logs/neutral_items_discovered.txt";
-    match OpenOptions::new().create(true).append(true).open(log_path) {
+    let log_path = log_dir.join("neutral_items_discovered.txt");
+    match OpenOptions::new().create(true).append(true).open(&log_path) {
         Ok(mut file) => {
             let can_cast = neutral_item.can_cast.unwrap_or(false);
             let passive = neutral_item.passive.unwrap_or(false);

@@ -53,6 +53,52 @@ impl ConfigPaths {
     pub fn legacy_install_config_path(&self) -> PathBuf {
         self.exe_dir.join("config").join("config.toml")
     }
+
+    /// The app's own data directory, parent of `config/`, `logs/`, `assets/`.
+    pub fn app_data_dir(&self) -> PathBuf {
+        self.local_app_data_dir.join("dota2-scripts")
+    }
+
+    /// Where log files and diagnostic dumps go, alongside the live config.
+    ///
+    /// Same reasoning as [`Self::voice_pack_dir`]: a working-directory-relative
+    /// `logs/` only lands somewhere useful when the app is launched from the
+    /// repo root by `cargo run`. Installed, the working directory is the exe's
+    /// folder under Program Files, where creating a directory fails outright —
+    /// which is how diagnostics can silently go missing exactly when they are
+    /// needed.
+    pub fn log_dir(&self) -> PathBuf {
+        self.local_app_data_dir.join("dota2-scripts").join("logs")
+    }
+}
+
+/// The log directory, or a temp-dir fallback when `LOCALAPPDATA` is unreadable.
+///
+/// Never fails: losing logs is bad, but refusing to start because we cannot
+/// resolve a log path is worse.
+pub fn resolve_log_dir() -> PathBuf {
+    resolve_app_relative_path("logs")
+}
+
+/// Resolve a configured output path against the app's data directory.
+///
+/// An absolute path is honoured as typed. A relative one is joined onto
+/// `%LOCALAPPDATA%\dota2-scripts` rather than the working directory — so a
+/// config value like `logs/gsi_events` means the same thing whether the app was
+/// launched by `cargo run` from the repo or from an installed shortcut, instead
+/// of silently writing somewhere unwritable under Program Files.
+pub fn resolve_app_relative_path(configured: impl AsRef<std::path::Path>) -> PathBuf {
+    let configured = configured.as_ref();
+
+    if configured.is_absolute() {
+        return configured.to_path_buf();
+    }
+
+    let base = ConfigPaths::detect()
+        .map(|paths| paths.app_data_dir())
+        .unwrap_or_else(|_| std::env::temp_dir().join("dota2-scripts"));
+
+    base.join(configured)
 }
 
 pub fn bootstrap_live_config(

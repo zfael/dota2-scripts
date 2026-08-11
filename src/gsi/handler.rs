@@ -93,7 +93,11 @@ fn dump_rejected_payload(body: &Bytes, error: &serde_json::Error) {
         return;
     }
 
-    let dir = PathBuf::from("logs/gsi_rejected");
+    // Resolved rather than relative: a working-directory `logs/` only exists
+    // when launched from the repo by `cargo run`. Installed, this used to try
+    // to write under Program Files and fail silently — losing the dump exactly
+    // when a schema mismatch made it worth having.
+    let dir = crate::config::storage::resolve_log_dir().join("gsi_rejected");
     if fs::create_dir_all(&dir).is_err() {
         return;
     }
@@ -192,9 +196,18 @@ pub async fn process_gsi_events(
     let session_file: Option<PathBuf> = {
         let settings = settings.lock().unwrap();
         if settings.gsi_logging.enabled {
-            let output_dir = PathBuf::from(&settings.gsi_logging.output_dir);
+            // Relative values resolve against the app data dir, not the working
+            // directory — the default `logs/gsi_events` otherwise lands under
+            // Program Files when installed and fails to create.
+            let output_dir = crate::config::storage::resolve_app_relative_path(
+                &settings.gsi_logging.output_dir,
+            );
             if let Err(e) = fs::create_dir_all(&output_dir) {
-                warn!("Failed to create GSI log directory: {}", e);
+                warn!(
+                    "Failed to create GSI log directory {}: {}",
+                    output_dir.display(),
+                    e
+                );
                 None
             } else {
                 let filename = output_dir.join(format!(

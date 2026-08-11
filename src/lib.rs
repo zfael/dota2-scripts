@@ -3,6 +3,7 @@ pub mod audio;
 pub mod config;
 pub mod gsi;
 pub mod input;
+pub mod logging;
 pub mod models;
 pub mod observability;
 pub mod state;

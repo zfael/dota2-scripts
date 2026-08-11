@@ -30,12 +30,26 @@ pub fn run() {
     // Load settings
     let settings = Arc::new(Mutex::new(Settings::load()));
 
-    // Initialize logging with config level or environment variable
-    let log_level = std::env::var("RUST_LOG")
-        .unwrap_or_else(|_| settings.lock().unwrap().logging.level.clone());
-    tracing_subscriber::fmt().with_env_filter(log_level).init();
+    // Initialize logging with config level or environment variable.
+    //
+    // The handle owns the file writer and is held for the whole of `run()`:
+    // dropping it stops the writer thread and truncates the log mid-session.
+    // This matters more here than in the headless binary — the desktop build is
+    // a GUI process, so the console half goes nowhere and the file is the only
+    // record there is.
+    let (log_level, log_to_file) = {
+        let settings = settings.lock().unwrap();
+        (
+            std::env::var("RUST_LOG").unwrap_or_else(|_| settings.logging.level.clone()),
+            settings.logging.file_enabled,
+        )
+    };
+    let _logging = dota2_scripts::logging::init(&log_level, log_to_file);
 
     info!("Starting Dota 2 Script Automation (Tauri)...");
+    if let Some(log_dir) = _logging.log_dir() {
+        info!("Writing logs to {}", log_dir.display());
+    }
     info!("Server port: {}", settings.lock().unwrap().server.port);
 
     // Initialize shared state

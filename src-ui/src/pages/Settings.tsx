@@ -136,6 +136,17 @@ export default function Settings() {
               ]}
               onChange={(v) => updateConfig("logging", { level: v as "debug" | "info" | "warn" | "error" })}
             />
+            <Toggle
+              label="Write Log File"
+              checked={config.logging.file_enabled}
+              onChange={(v) => updateConfig("logging", { file_enabled: v })}
+            />
+            <p className="text-xs text-muted">
+              Writes to <code>%LOCALAPPDATA%\dota2-scripts\logs\</code>, rotated
+              daily. This app has no console, so the file is the only record of
+              what it did — leave it on if you might need to report a problem.
+            </p>
+            <p className="text-xs text-warning">⚠ Restart required after changing this.</p>
           </Card>
 
           <Card title="Advanced" collapsible defaultOpen={false}>

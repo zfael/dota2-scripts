@@ -7,7 +7,7 @@ export const mockConfig: Settings = {
     slot0: "z", slot1: "x", slot2: "c", slot3: "v", slot4: "b", slot5: "n",
     neutral0: "0", combo_trigger: "Home",
   },
-  logging: { level: "info" },
+  logging: { level: "info", file_enabled: true },
   common: {
     survivability_hp_threshold: 30,
     lane_phase_duration_seconds: 480,

@@ -61,6 +61,13 @@ pub struct KeybindingsConfig {
 pub struct LoggingConfig {
     #[serde(default = "default_log_level")]
     pub level: String,
+    /// Write a log file to `%LOCALAPPDATA%\dota2-scripts\logs\` as well as the
+    /// console.
+    ///
+    /// Read once at startup — tracing subscribers cannot be swapped out on a
+    /// live process — so changing this needs a restart.
+    #[serde(default = "default_log_to_file")]
+    pub file_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1354,6 +1361,9 @@ fn default_hotkey() -> String {
 fn default_log_level() -> String {
     "info".to_string()
 }
+fn default_log_to_file() -> bool {
+    true
+}
 fn default_survivability_threshold() -> u32 {
     30
 }
@@ -2291,6 +2301,7 @@ impl Default for LoggingConfig {
     fn default() -> Self {
         Self {
             level: default_log_level(),
+            file_enabled: default_log_to_file(),
         }
     }
 }

@@ -5,6 +5,7 @@ mod audio;
 mod config;
 mod gsi;
 mod input;
+mod logging;
 mod models;
 mod observability;
 mod state;
@@ -24,19 +25,27 @@ use crate::state::{AppState, UpdateCheckState};
 use crate::update::{check_for_update, UpdateCheckResult};
 use std::sync::{Arc, Mutex, RwLock};
 use tracing::{info, warn};
-use tracing_subscriber;
 
 #[tokio::main]
 async fn main() {
     // Load settings first to get log level
     let settings = Arc::new(Mutex::new(Settings::load()));
 
-    // Initialize logging with config level or environment variable
-    let log_level = std::env::var("RUST_LOG")
-        .unwrap_or_else(|_| settings.lock().unwrap().logging.level.clone());
-    tracing_subscriber::fmt().with_env_filter(log_level).init();
+    // Initialize logging with config level or environment variable.
+    // The handle owns the file writer and must outlive everything that logs.
+    let (log_level, log_to_file) = {
+        let settings = settings.lock().unwrap();
+        (
+            std::env::var("RUST_LOG").unwrap_or_else(|_| settings.logging.level.clone()),
+            settings.logging.file_enabled,
+        )
+    };
+    let _logging = logging::init(&log_level, log_to_file);
 
     info!("Starting Dota 2 Script Automation...");
+    if let Some(log_dir) = _logging.log_dir() {
+        info!("Writing logs to {}", log_dir.display());
+    }
     info!("Server port: {}", settings.lock().unwrap().server.port);
 
     // Initialize shared state

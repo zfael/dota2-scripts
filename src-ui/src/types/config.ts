@@ -20,6 +20,7 @@ export interface KeybindingsConfig {
 
 export interface LoggingConfig {
   level: "debug" | "info" | "warn" | "error";
+  file_enabled: boolean;
 }
 
 export interface CommonConfig {
