@@ -249,6 +249,9 @@ export interface SlarkConfig {
   pounce_key: string;
   turn_delay_ms: number;
   require_ability_ready: boolean;
+  auto_dark_pact_on_debuff: boolean;
+  dark_pact_key: string;
+  dark_pact_delay_ms: number;
 }
 
 export interface SnapfireConfig {

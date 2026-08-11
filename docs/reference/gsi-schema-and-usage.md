@@ -94,7 +94,7 @@ The model includes many fields, but the runtime currently reads this subset:
 | `hero.max_mana` | UI | Mana percentage display |
 | `hero.stunned` | `src/actions/common.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs`, UI | Skip armlet toggles, gate Meepo defensive casts, gate Meepo farm assist, status display |
 | `hero.silenced` | `src/actions/dispel.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs`, UI | Silence dispel logic, gate Meepo defensive casts, gate Meepo farm assist, and drive status display |
-| `hero.has_debuff` | `src/actions/heroes/huskar.rs` | Huskar Berserker Blood cleanse timing |
+| `hero.has_debuff` | `src/actions/heroes/huskar.rs`, `src/actions/heroes/slark.rs` | Huskar Berserker Blood cleanse timing; Slark Dark Pact cleanse trigger |
 | `hero.aghanims_scepter` | `src/actions/heroes/largo.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs`, tests | Largo dual-song mode detection; Meepo MegaMeepo gate; Meepo observed-state UI |
 | `hero.aghanims_shard` | `src/actions/heroes/largo.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs` | Largo dual-song mode detection; Meepo Dig gate; Meepo observed-state UI |
 | `hero.level` | `src/actions/heroes/meepo_state.rs`, UI, tests | Status display, Meepo observed-state UI, and fixture assertions |

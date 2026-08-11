@@ -310,6 +310,16 @@ pub struct SlarkConfig {
     /// cooldown press never issues the facing right-click.
     #[serde(default = "default_slark_require_ability_ready")]
     pub require_ability_ready: bool,
+    /// Cast Dark Pact automatically when GSI reports a debuff on Slark.
+    #[serde(default = "default_slark_auto_dark_pact_on_debuff")]
+    pub auto_dark_pact_on_debuff: bool,
+    /// Dark Pact ability key, pressed by the auto-cleanse.
+    #[serde(default = "default_slark_dark_pact_key")]
+    pub dark_pact_key: char,
+    /// Settle window after the first debuff before casting, so a burst of
+    /// debuffs is cleansed by a single Dark Pact.
+    #[serde(default = "default_slark_dark_pact_delay_ms")]
+    pub dark_pact_delay_ms: u64,
 }
 
 /// Configuration for auto-casting an ability during Space+Right-click combo
@@ -1394,6 +1404,15 @@ fn default_slark_turn_delay_ms() -> u64 {
 fn default_slark_require_ability_ready() -> bool {
     true
 }
+fn default_slark_auto_dark_pact_on_debuff() -> bool {
+    true
+}
+fn default_slark_dark_pact_key() -> char {
+    'q'
+}
+fn default_slark_dark_pact_delay_ms() -> u64 {
+    300
+}
 fn default_sf_auto_bkb_on_ultimate() -> bool {
     false
 }
@@ -2296,6 +2315,9 @@ impl Default for SlarkConfig {
             pounce_key: default_slark_pounce_key(),
             turn_delay_ms: default_slark_turn_delay_ms(),
             require_ability_ready: default_slark_require_ability_ready(),
+            auto_dark_pact_on_debuff: default_slark_auto_dark_pact_on_debuff(),
+            dark_pact_key: default_slark_dark_pact_key(),
+            dark_pact_delay_ms: default_slark_dark_pact_delay_ms(),
         }
     }
 }
@@ -2765,6 +2787,9 @@ mod tests {
         assert_eq!(cfg.pounce_key, 'w');
         assert_eq!(cfg.turn_delay_ms, 200);
         assert!(cfg.require_ability_ready);
+        assert!(cfg.auto_dark_pact_on_debuff);
+        assert_eq!(cfg.dark_pact_key, 'q');
+        assert_eq!(cfg.dark_pact_delay_ms, 300);
     }
 
     #[test]

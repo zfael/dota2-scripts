@@ -370,6 +370,16 @@ turn_delay_ms = 200
 # a cooldown press from issuing the facing right-click and walking Slark toward
 # the cursor for nothing.
 require_ability_ready = true
+# Cast Dark Pact automatically whenever GSI reports a debuff on Slark. GSI only
+# exposes a single has_debuff flag and never says which modifier landed, so this
+# fires on trivial debuffs too — turn it off if you would rather keep Dark Pact
+# for farming.
+auto_dark_pact_on_debuff = true
+# Dark Pact ability key. Must match your in-game binding.
+dark_pact_key = "q"
+# Settle window after the first debuff before casting (ms), so a burst of
+# debuffs from one engagement is cleansed by a single Dark Pact.
+dark_pact_delay_ms = 300
 
 [heroes.invoker]
 quas_key = "q"

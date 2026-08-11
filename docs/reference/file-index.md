@@ -77,7 +77,7 @@
 | `src/actions/heroes/meepo.rs` | Meepo standalone combo, GSI-driven Dig / MegaMeepo, and survivability wiring | `docs/heroes/meepo.md` |
 | `src/actions/heroes/meepo_state.rs` | Read-only Meepo observed-state derivation and cache | `docs/heroes/meepo.md`, `docs/reference/gsi-schema-and-usage.md` |
 | `src/actions/heroes/outworld_destroyer.rs` | Outworld Destroyer barrier, combo worker, ultimate interception support, and self-Astral helper | `docs/heroes/outworld_destroyer.md`, `docs/features/keyboard-interception.md` |
-| `src/actions/heroes/slark.rs` | Slark directional Pounce automation (Pounce-key intercept + GSI readiness gate) | `docs/heroes/slark.md`, `docs/features/keyboard-interception.md` |
+| `src/actions/heroes/slark.rs` | Slark directional Pounce automation (Pounce-key intercept + GSI readiness gate) and GSI-driven Dark Pact debuff cleanse | `docs/heroes/slark.md`, `docs/features/keyboard-interception.md` |
 | `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend raze / ultimate / standalone combo logic | `docs/heroes/shadow_fiend.md`, `docs/features/keyboard-interception.md` |
 | `src/actions/heroes/snapfire.rs` | Snapfire directional Firesnap Cookie automation (trigger-key intercept + ALT self-cast leap) | `docs/heroes/snapfire.md`, `docs/features/keyboard-interception.md` |
 | `src/actions/heroes/tiny.rs` | Tiny standalone combo | `docs/heroes/tiny.md` |
@@ -133,7 +133,7 @@
 | `src-ui/src/pages/WaveOverlay.tsx` | Chrome-free overlay view rendered in the click-through overlay window | `docs/features/wave-tracker.md` |
 | `src-ui/src/lib/overlay.ts` | Overlay-window detection and pre-paint body style stripping | `docs/features/wave-tracker.md` |
 | `src-ui/src/components/heroes/configs/MagnusConfig.tsx` | Magnus directional-ultimate config panel: intercept toggle, ultimate key, turn delay, readiness gate, camera recentre | `docs/heroes/magnus.md` |
-| `src-ui/src/components/heroes/configs/SlarkConfig.tsx` | Slark directional-Pounce config panel: intercept toggle, Pounce key, turn delay, readiness gate | `docs/heroes/slark.md` |
+| `src-ui/src/components/heroes/configs/SlarkConfig.tsx` | Slark config panel: Pounce intercept toggle, Pounce key, turn delay, readiness gate, and auto Dark Pact cleanse | `docs/heroes/slark.md` |
 | `src-ui/src/components/heroes/configs/SnapfireConfig.tsx` | Snapfire directional-cookie config panel: intercept toggle, trigger key, turn delay, cookie key | `docs/heroes/snapfire.md` |
 | `src-ui/src/components/heroes/configs/InvokerConfig.tsx` | Invoker profile-builder shell that wires preset library, profile list, and editor state | `docs/heroes/invoker.md` |
 | `src-ui/src/components/heroes/configs/InvokerConfig.test.tsx` | Vitest coverage for Invoker profile rendering and duplication | `docs/heroes/invoker.md` |

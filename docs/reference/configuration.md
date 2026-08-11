@@ -540,8 +540,11 @@ See `docs/heroes/magnus.md` and `docs/features/keyboard-interception.md`.
 | `pounce_key` | `"w"` | `"w"` | Pounce ability key. This is also the key intercepted. Intercept is gated on Slark being the active hero. |
 | `turn_delay_ms` | `200` | `200` | Delay after the facing right-click before the Pounce cast. Slark's turn rate needs noticeably more settle time than the other facing combos. |
 | `require_ability_ready` | `true` | `true` | Only intercept when `slark_pounce` is levelled and castable. Prevents a cooldown press from issuing the facing right-click. |
+| `auto_dark_pact_on_debuff` | `true` | `true` | Cast Dark Pact when `hero.has_debuff` is set. GSI never names the modifier, so this fires on trivial debuffs too. |
+| `dark_pact_key` | `"q"` | `"q"` | Dark Pact ability key pressed by the cleanse. Must match the in-game binding. |
+| `dark_pact_delay_ms` | `300` | `300` | Settle window after the first debuff, so a burst is cleansed by a single cast. |
 
-All four fields are exposed in the React UI under **Heroes → Slark**.
+All seven fields are exposed in the React UI under **Heroes → Slark**.
 
 See `docs/heroes/slark.md` and `docs/features/keyboard-interception.md`.
 

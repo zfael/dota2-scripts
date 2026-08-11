@@ -25,6 +25,18 @@ export default function SlarkConfig() {
       </div>
 
       <div className="space-y-4">
+        <Card title="Auto Dark Pact">
+          <Toggle label="Cleanse Debuffs With Dark Pact" checked={config.auto_dark_pact_on_debuff} onChange={(v) => set({ auto_dark_pact_on_debuff: v })} />
+          <KeyInput label="Dark Pact Key" value={config.dark_pact_key} onChange={(v) => set({ dark_pact_key: v })} />
+          <NumberInput label="Settle Window" value={config.dark_pact_delay_ms} onChange={(v) => set({ dark_pact_delay_ms: v })} suffix="ms" />
+          <p className="text-xs text-muted">
+            Casts Dark Pact whenever GSI reports a debuff. GSI never says
+            <em> which</em> debuff landed, so this fires on trivial ones too —
+            turn it off if you would rather keep Dark Pact for farming. The
+            settle window waits out a burst so one cast cleanses all of it.
+          </p>
+        </Card>
+
         <Card title="Safety">
           <Toggle label="Only Intercept When Ready" checked={config.require_ability_ready} onChange={(v) => set({ require_ability_ready: v })} />
           <p className="text-xs text-muted">

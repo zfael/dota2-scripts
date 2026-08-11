@@ -191,6 +191,8 @@ export const mockConfig: Settings = {
     slark: {
       enabled: true, pounce_key: "w",
       turn_delay_ms: 200, require_ability_ready: true,
+      auto_dark_pact_on_debuff: true, dark_pact_key: "q",
+      dark_pact_delay_ms: 300,
     },
     snapfire: {
       enabled: true, trigger_key: "Space",

@@ -6,10 +6,11 @@ use crate::models::{GsiWebhookEvent, Hero};
 use lazy_static::lazy_static;
 use std::sync::{mpsc, Arc, LazyLock, Mutex};
 use std::thread;
-use std::time::Duration;
-use tracing::{info, warn};
+use std::time::{Duration, Instant};
+use tracing::{debug, info, warn};
 
 const POUNCE_ABILITY_NAME: &str = "slark_pounce";
+const DARK_PACT_ABILITY_NAME: &str = "slark_dark_pact";
 
 /// Settle time before the facing right-click, matching the other facing combos.
 const PRE_TURN_SETTLE_MS: u64 = 50;
@@ -19,6 +20,9 @@ const ALT_RELEASE_DELAY_MS: u64 = 50;
 
 lazy_static! {
     static ref SLARK_LAST_EVENT: Arc<Mutex<Option<GsiWebhookEvent>>> = Arc::new(Mutex::new(None));
+    /// When the current run of debuffs was first seen, for the Dark Pact
+    /// settle window. `None` means Slark is clean.
+    static ref SLARK_DEBUFF_DETECTED: Mutex<Option<Instant>> = Mutex::new(None);
 }
 
 /// Work item for the dedicated Slark worker thread.
@@ -104,6 +108,41 @@ fn ability_is_ready(event: &GsiWebhookEvent, ability_name: &str) -> bool {
     })
 }
 
+/// What the debuff watcher should do with the current payload.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DarkPactDecision {
+    /// Nothing to cleanse — drop any pending settle window.
+    Idle,
+    /// Debuffed, but Dark Pact cannot be cast right now. The settle window
+    /// keeps running so the cleanse fires the moment it becomes castable.
+    Hold,
+    /// Debuffed and castable — start or finish the settle window.
+    Arm,
+}
+
+/// Decide what to do about Slark's debuffs from one payload.
+///
+/// Split out from the timer bookkeeping so the gating is testable without
+/// touching global state or the clock.
+fn plan_dark_pact(event: &GsiWebhookEvent, enabled: bool) -> DarkPactDecision {
+    if !enabled || !event.hero.is_alive() || !event.hero.has_debuff {
+        return DarkPactDecision::Idle;
+    }
+
+    // Dark Pact cannot be cast through any of these, but whatever else is on
+    // Slark is still worth cleansing the moment the lock lifts — so hold the
+    // window rather than dropping it.
+    if event.hero.stunned || event.hero.hexed || event.hero.silenced {
+        return DarkPactDecision::Hold;
+    }
+
+    if !ability_is_ready(event, DARK_PACT_ABILITY_NAME) {
+        return DarkPactDecision::Hold;
+    }
+
+    DarkPactDecision::Arm
+}
+
 pub struct SlarkState;
 
 impl SlarkState {
@@ -153,6 +192,63 @@ impl SlarkScript {
     pub fn new(settings: Arc<Mutex<Settings>>, executor: Arc<ActionExecutor>) -> Self {
         Self { settings, executor }
     }
+
+    /// Cast Dark Pact to shed debuffs.
+    ///
+    /// Dark Pact applies a basic dispel to Slark when it pulses, which is the
+    /// cheapest cleanse he has. GSI only exposes a single `has_debuff` flag —
+    /// there is no way to see *which* modifier landed — so this fires on any
+    /// debuff at all. The settle window exists so a burst of debuffs from one
+    /// engagement is cleansed by one cast instead of the first one spending it.
+    fn dark_pact_cleanse(&self, event: &GsiWebhookEvent) {
+        let settings = self.settings.lock().unwrap();
+        let slark = &settings.heroes.slark;
+        let enabled = slark.auto_dark_pact_on_debuff;
+        let key = slark.dark_pact_key;
+        let delay_ms = slark.dark_pact_delay_ms;
+        drop(settings);
+
+        let decision = plan_dark_pact(event, enabled);
+
+        // try_lock: a contended tick is worth skipping, not blocking the GSI
+        // handler for. The next payload is 0.1s away.
+        let Ok(mut debuff_since) = SLARK_DEBUFF_DETECTED.try_lock() else {
+            return;
+        };
+
+        match decision {
+            DarkPactDecision::Idle => {
+                if debuff_since.is_some() {
+                    debug!("🐟 Slark is clean, dropping the Dark Pact settle window");
+                    *debuff_since = None;
+                }
+            }
+            DarkPactDecision::Hold => {
+                if debuff_since.is_none() {
+                    debug!("🐟 Debuff detected while Dark Pact is unavailable, holding");
+                    *debuff_since = Some(Instant::now());
+                }
+            }
+            DarkPactDecision::Arm => match *debuff_since {
+                Some(first_seen) if first_seen.elapsed() >= Duration::from_millis(delay_ms) => {
+                    info!(
+                        "🐟 Dark Pact cleansing debuffs ({}ms settle window elapsed)",
+                        delay_ms
+                    );
+                    crate::input::simulation::press_key(key);
+                    *debuff_since = None;
+                }
+                Some(_) => {}
+                None => {
+                    debug!(
+                        "🐟 Debuff detected, starting {}ms Dark Pact settle window",
+                        delay_ms
+                    );
+                    *debuff_since = Some(Instant::now());
+                }
+            },
+        }
+    }
 }
 
 impl HeroScript for SlarkScript {
@@ -161,6 +257,10 @@ impl HeroScript for SlarkScript {
             let mut last_event = SLARK_LAST_EVENT.lock().unwrap();
             *last_event = Some(event.clone());
         }
+
+        // Debuff cleansing is the most time-sensitive thing on this path, so it
+        // runs before the shared survivability checks.
+        self.dark_pact_cleanse(event);
 
         let settings = self.settings.lock().unwrap();
 
@@ -239,5 +339,78 @@ mod tests {
     fn unknown_ability_name_is_not_ready() {
         let event = slark_fixture();
         assert!(!ability_is_ready(&event, "slark_not_a_real_ability"));
+    }
+
+    /// The fixture is clean by default; debuff cases opt in.
+    fn debuffed_fixture() -> GsiWebhookEvent {
+        let mut event = slark_fixture();
+        event.hero.has_debuff = true;
+        event
+    }
+
+    #[test]
+    fn dark_pact_arms_on_a_debuff_when_castable() {
+        assert_eq!(
+            plan_dark_pact(&debuffed_fixture(), true),
+            DarkPactDecision::Arm
+        );
+    }
+
+    #[test]
+    fn dark_pact_is_idle_without_a_debuff() {
+        assert_eq!(
+            plan_dark_pact(&slark_fixture(), true),
+            DarkPactDecision::Idle
+        );
+    }
+
+    #[test]
+    fn dark_pact_is_idle_when_the_toggle_is_off() {
+        assert_eq!(
+            plan_dark_pact(&debuffed_fixture(), false),
+            DarkPactDecision::Idle
+        );
+    }
+
+    #[test]
+    fn dark_pact_is_idle_while_dead() {
+        let mut event = debuffed_fixture();
+        event.hero.alive = false;
+
+        assert_eq!(plan_dark_pact(&event, true), DarkPactDecision::Idle);
+    }
+
+    #[test]
+    fn dark_pact_holds_through_a_cast_lock() {
+        for lock in ["stunned", "hexed", "silenced"] {
+            let mut event = debuffed_fixture();
+            match lock {
+                "stunned" => event.hero.stunned = true,
+                "hexed" => event.hero.hexed = true,
+                _ => event.hero.silenced = true,
+            }
+
+            assert_eq!(
+                plan_dark_pact(&event, true),
+                DarkPactDecision::Hold,
+                "{lock} should hold the settle window, not drop it"
+            );
+        }
+    }
+
+    #[test]
+    fn dark_pact_holds_while_on_cooldown() {
+        let mut event = debuffed_fixture();
+        event.abilities.ability0.can_cast = false;
+
+        assert_eq!(plan_dark_pact(&event, true), DarkPactDecision::Hold);
+    }
+
+    #[test]
+    fn dark_pact_holds_while_unlevelled() {
+        let mut event = debuffed_fixture();
+        event.abilities.ability0.level = 0;
+
+        assert_eq!(plan_dark_pact(&event, true), DarkPactDecision::Hold);
     }
 }
