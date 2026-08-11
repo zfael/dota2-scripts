@@ -548,6 +548,7 @@ See `docs/heroes/magnus.md` and `docs/features/keyboard-interception.md`.
 | `shadow_dance_hp_threshold_percent` | `35` | `35` | HP percentage at or below which the escape fires. |
 | `shadow_dance_require_danger` | `true` | `true` | Also require the danger detector. Off, the HP line alone fires it — including while walking home. |
 | `shadow_dance_trigger_cooldown_ms` | `3000` | `3000` | Minimum gap between two escape attempts. |
+| `shadow_dance_active_ms` | `4000` | `4000` | How long the ultimate runs after a cast. The shard is held that long so the two do not pop together. Level-1 duration; raise to 5000 / 6000 as it levels. Manual casts count — detected from the ability's cooldown edge. |
 | `shard_fallback_enabled` | `true` | `true` | Fall back to Depth Shroud when Shadow Dance is on cooldown. Presses the key and clicks at the cursor — the shroud lands where you are pointing, not on Slark. |
 | `shard_key` | `"d"` | `"d"` | Key Depth Shroud sits on. Only the key is configurable; readiness is checked by matching `slark_depth_shroud` by name, because GSI slot order is ability order, not key order. |
 

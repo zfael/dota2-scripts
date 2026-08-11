@@ -65,11 +65,18 @@ export default function SlarkConfig() {
         <Card title="Shard Fallback">
           <Toggle label="Use Shard When Ultimate Is Down" checked={config.shard_fallback_enabled} onChange={(v) => set({ shard_fallback_enabled: v })} />
           <KeyInput label="Shard Key" value={config.shard_key} onChange={(v) => set({ shard_key: v })} />
+          <NumberInput label="Shadow Dance Duration" value={config.shadow_dance_active_ms} onChange={(v) => set({ shadow_dance_active_ms: v })} suffix="ms" />
           <p className="text-xs text-muted">
-            Only reached when Shadow Dance is on cooldown. Dota will not
-            self-cast Depth Shroud, so it is cast <em>where your cursor already
-            is</em> — the mouse is never moved. Mid-fight that is normally close
-            enough to be useful; it will not land on your hero exactly.
+            Only reached when Shadow Dance is on cooldown, and held until it has
+            finished running — otherwise both go off on the same moment for no
+            extra survivability. Set the duration to match your ultimate's level
+            (4s / 5s / 6s). Casts you make yourself count too.
+          </p>
+          <p className="text-xs text-muted">
+            Dota will not self-cast Depth Shroud, so it is cast <em>where your
+            cursor already is</em> — the mouse is never moved. Mid-fight that is
+            normally close enough to be useful; it will not land on your hero
+            exactly.
           </p>
         </Card>
       </div>

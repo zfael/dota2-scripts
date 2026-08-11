@@ -258,6 +258,7 @@ export interface SlarkConfig {
   shadow_dance_hp_threshold_percent: number;
   shadow_dance_require_danger: boolean;
   shadow_dance_trigger_cooldown_ms: number;
+  shadow_dance_active_ms: number;
   shard_fallback_enabled: boolean;
   shard_key: string;
 }

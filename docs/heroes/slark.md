@@ -44,6 +44,7 @@ Directional **Pounce** (W) on a single keypress, GSI-driven **Dark Pact** debuff
 | `shadow_dance_hp_threshold_percent` | u32 | `35` | HP line for the escape. |
 | `shadow_dance_require_danger` | bool | `true` | Also require the danger detector. |
 | `shadow_dance_trigger_cooldown_ms` | u64 | `3000` | Minimum gap between attempts. |
+| `shadow_dance_active_ms` | u64 | `4000` | How long the ultimate runs; the shard is held that long after a cast. |
 | `shard_fallback_enabled` | bool | `true` | Use the shard when the ultimate is down. |
 | `shard_key` | char | `"d"` | Key Depth Shroud sits on. Only the key is configurable; the ability is matched by name. |
 
@@ -61,6 +62,7 @@ shadow_dance_key = "r"
 shadow_dance_hp_threshold_percent = 35
 shadow_dance_require_danger = true
 shadow_dance_trigger_cooldown_ms = 3000
+shadow_dance_active_ms = 4000
 shard_fallback_enabled = true
 shard_key = "d"
 ```
@@ -152,7 +154,22 @@ more than a salve. `plan_low_hp_escape` picks one of three outcomes:
 |---|---|
 | `None` | toggle off, dead, stunned/hexed/silenced, above the HP line, danger required but absent, inside the trigger cooldown, or nothing castable |
 | `ShadowDance` | `slark_shadow_dance` levelled and castable — **always preferred** |
-| `Shard` | ultimate unavailable, `hero.aghanims_shard` set, and `slark_depth_shroud` castable |
+| `Shard` | ultimate unavailable **and finished running**, `hero.aghanims_shard` set, and `slark_depth_shroud` castable |
+
+### Waiting out the ultimate
+
+Shadow Dance being *on cooldown* is not the same as it being *spent*. For its
+first few seconds it is still running, and firing the shroud then burns both
+escapes on one moment for no extra survivability.
+
+GSI exposes no modifiers, so "is the ultimate currently running" cannot be read
+directly. What it does expose is `Ability.cooldown`, and a `0 -> N` transition on
+it is a cast — the same trick `actions::invisibility` uses for Shadow Blade.
+`shadow_dance_active_ms` then measures the active window from that edge.
+
+Inferring the cast this way rather than recording our own keypress is deliberate:
+you cast Shadow Dance manually far more often than the automation does, and a
+manual cast has to count.
 
 Each escape carries its **own** retry timer. A single shared one meant spending
 Shadow Dance also locked out the shard for the same window — precisely when the

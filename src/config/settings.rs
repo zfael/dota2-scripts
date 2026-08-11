@@ -345,6 +345,14 @@ pub struct SlarkConfig {
     /// Minimum gap between two escape attempts (ms).
     #[serde(default = "default_slark_shadow_dance_trigger_cooldown_ms")]
     pub shadow_dance_trigger_cooldown_ms: u64,
+    /// How long Shadow Dance stays active after a cast (ms).
+    ///
+    /// The shard fallback is held for this long after the ultimate goes off, so
+    /// the two do not pop together — while Shadow Dance is running it is
+    /// already doing the job. Defaults to its level-1 duration; raise it to
+    /// 5000 / 6000 as the ultimate levels up.
+    #[serde(default = "default_slark_shadow_dance_active_ms")]
+    pub shadow_dance_active_ms: u64,
     /// Fall back to the shard ability when Shadow Dance is on cooldown.
     #[serde(default = "default_slark_shard_fallback_enabled")]
     pub shard_fallback_enabled: bool,
@@ -1511,6 +1519,9 @@ fn default_slark_shadow_dance_hp_threshold_percent() -> u32 {
 fn default_slark_shadow_dance_trigger_cooldown_ms() -> u64 {
     3_000
 }
+fn default_slark_shadow_dance_active_ms() -> u64 {
+    4_000
+}
 fn default_slark_shard_fallback_enabled() -> bool {
     true
 }
@@ -2431,6 +2442,7 @@ impl Default for SlarkConfig {
             shadow_dance_hp_threshold_percent: default_slark_shadow_dance_hp_threshold_percent(),
             shadow_dance_require_danger: default_slark_shadow_dance_require_danger(),
             shadow_dance_trigger_cooldown_ms: default_slark_shadow_dance_trigger_cooldown_ms(),
+            shadow_dance_active_ms: default_slark_shadow_dance_active_ms(),
             shard_fallback_enabled: default_slark_shard_fallback_enabled(),
             shard_key: default_slark_shard_key(),
         }
@@ -2927,6 +2939,7 @@ mod tests {
         assert_eq!(cfg.shadow_dance_hp_threshold_percent, 35);
         assert!(cfg.shadow_dance_require_danger);
         assert_eq!(cfg.shadow_dance_trigger_cooldown_ms, 3_000);
+        assert_eq!(cfg.shadow_dance_active_ms, 4_000);
         assert!(cfg.shard_fallback_enabled);
         assert_eq!(cfg.shard_key, 'd');
     }

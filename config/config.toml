@@ -396,6 +396,12 @@ shadow_dance_hp_threshold_percent = 35
 shadow_dance_require_danger = true
 # Minimum gap between two escape attempts (ms).
 shadow_dance_trigger_cooldown_ms = 3000
+# How long Shadow Dance stays active after a cast (ms). The shard fallback is
+# held for this long afterwards so the two do not pop on the same moment --
+# while the ultimate is running it is already doing the job. This is its level-1
+# duration; raise it to 5000 / 6000 as the ultimate levels up. Counts casts you
+# make yourself too, not just the automation's.
+shadow_dance_active_ms = 4000
 # When Shadow Dance is on cooldown, fall back to Depth Shroud (the shard
 # ability). Dota will not self-cast it, so this presses the key and clicks where
 # your cursor already is -- the mouse is never moved. The shroud therefore lands

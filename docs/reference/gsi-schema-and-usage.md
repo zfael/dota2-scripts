@@ -97,6 +97,7 @@ The model includes many fields, but the runtime currently reads this subset:
 | `hero.has_debuff` | `src/actions/heroes/huskar.rs`, `src/actions/heroes/slark.rs` | Huskar Berserker Blood cleanse timing; Slark Dark Pact cleanse trigger |
 | `hero.aghanims_scepter` | `src/actions/heroes/largo.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs`, tests | Largo dual-song mode detection; Meepo MegaMeepo gate; Meepo observed-state UI |
 | `hero.aghanims_shard` | `src/actions/heroes/largo.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs`, `src/actions/heroes/slark.rs` | Largo dual-song mode detection; Meepo Dig gate; Meepo observed-state UI; Slark shard-fallback gate |
+| `abilities.abilityN.cooldown` | `src/actions/heroes/slark.rs` | Slark infers a Shadow Dance cast from the `0 -> N` cooldown edge, since GSI exposes no modifiers to say whether the ultimate is still running |
 | `hero.level` | `src/actions/heroes/meepo_state.rs`, UI, tests | Status display, Meepo observed-state UI, and fixture assertions |
 | `hero.respawn_seconds` | UI | Respawn countdown text |
 | `hero.xpos` | `src/actions/common.rs` | Shared Phase Boots movement automation pathing checks |
