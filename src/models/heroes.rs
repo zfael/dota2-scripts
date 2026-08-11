@@ -48,6 +48,7 @@ pub enum Hero {
     Jakiro,
     Juggernaut,
     KeeperOfTheLight,
+    Kez,
     Kunkka,
     Largo,
     LegionCommander,
@@ -89,6 +90,7 @@ pub enum Hero {
     Rattletrap,
     Razor,
     Riki,
+    Ringmaster,
     Rubick,
     SandKing,
     ShadowDemon,
@@ -129,6 +131,38 @@ pub enum Hero {
     WitchDoctor,
     Zuus,
 }
+
+/// Every variant of `Hero`. Kept here so the two name tables below can be
+/// checked against each other in tests — `to_game_name` is exhaustive by the
+/// compiler, but `from_game_name` is not, and a missing arm there is silent.
+#[allow(dead_code)]
+pub const ALL_HEROES: &[Hero] = &[
+    Hero::Abaddon, Hero::AbyssalUnderlord, Hero::Alchemist, Hero::AncientApparition,
+    Hero::AntiMage, Hero::ArcWarden, Hero::Axe, Hero::Bane, Hero::Batrider, Hero::Beastmaster,
+    Hero::Bloodseeker, Hero::BountyHunter, Hero::Brewmaster, Hero::Bristleback,
+    Hero::Broodmother, Hero::Centaur, Hero::ChaosKnight, Hero::Chen, Hero::Clinkz,
+    Hero::CrystalMaiden, Hero::DarkSeer, Hero::DarkWillow, Hero::Dawnbreaker, Hero::Dazzle,
+    Hero::DeathProphet, Hero::Disruptor, Hero::DoomBringer, Hero::DragonKnight,
+    Hero::DrowRanger, Hero::EarthSpirit, Hero::Earthshaker, Hero::ElderTitan, Hero::EmberSpirit,
+    Hero::Enchantress, Hero::Enigma, Hero::FacelessVoid, Hero::Furion, Hero::Grimstroke,
+    Hero::Gyrocopter, Hero::Hoodwink, Hero::Huskar, Hero::Invoker, Hero::Jakiro,
+    Hero::Juggernaut, Hero::KeeperOfTheLight, Hero::Kez, Hero::Kunkka, Hero::Largo,
+    Hero::LegionCommander, Hero::Leshrac, Hero::Lich, Hero::LifeStealer, Hero::Lina, Hero::Lion,
+    Hero::LoneDruid, Hero::Luna, Hero::Lycan, Hero::Magnataur, Hero::Marci, Hero::Mars,
+    Hero::Medusa, Hero::Meepo, Hero::Mirana, Hero::MonkeyKing, Hero::Morphling, Hero::Muerta,
+    Hero::NagaSiren, Hero::Necrolyte, Hero::Nevermore, Hero::NightStalker, Hero::NyxAssassin,
+    Hero::ObsidianDestroyer, Hero::OgreMagi, Hero::Omniknight, Hero::Oracle, Hero::Pangolier,
+    Hero::PhantomAssassin, Hero::PhantomLancer, Hero::Phoenix, Hero::PrimalBeast, Hero::Puck,
+    Hero::Pudge, Hero::Pugna, Hero::QueenOfPain, Hero::Rattletrap, Hero::Razor, Hero::Riki,
+    Hero::Ringmaster, Hero::Rubick, Hero::SandKing, Hero::ShadowDemon, Hero::ShadowShaman,
+    Hero::Shredder, Hero::Silencer, Hero::SkeletonKing, Hero::SkywrathMage, Hero::Slardar,
+    Hero::Slark, Hero::Snapfire, Hero::Sniper, Hero::Spectre, Hero::SpiritBreaker,
+    Hero::StormSpirit, Hero::Sven, Hero::Techies, Hero::TemplarAssassin, Hero::Terrorblade,
+    Hero::Tidehunter, Hero::Tinker, Hero::Tiny, Hero::Treant, Hero::TrollWarlord, Hero::Tusk,
+    Hero::Undying, Hero::Ursa, Hero::VengefulSpirit, Hero::Venomancer, Hero::Viper,
+    Hero::Visage, Hero::VoidSpirit, Hero::Warlock, Hero::Weaver, Hero::Windrunner,
+    Hero::WinterWyvern, Hero::Wisp, Hero::WitchDoctor, Hero::Zuus,
+];
 
 impl Hero {
     /// Convert Hero enum to the game's internal hero name string
@@ -179,6 +213,7 @@ impl Hero {
             Hero::Jakiro => "npc_dota_hero_jakiro",
             Hero::Juggernaut => "npc_dota_hero_juggernaut",
             Hero::KeeperOfTheLight => "npc_dota_hero_keeper_of_the_light",
+            Hero::Kez => "npc_dota_hero_kez",
             Hero::Kunkka => "npc_dota_hero_kunkka",
             Hero::Largo => "npc_dota_hero_largo",
             Hero::LegionCommander => "npc_dota_hero_legion_commander",
@@ -220,6 +255,7 @@ impl Hero {
             Hero::Rattletrap => "npc_dota_hero_rattletrap",
             Hero::Razor => "npc_dota_hero_razor",
             Hero::Riki => "npc_dota_hero_riki",
+            Hero::Ringmaster => "npc_dota_hero_ringmaster",
             Hero::Rubick => "npc_dota_hero_rubick",
             Hero::SandKing => "npc_dota_hero_sand_king",
             Hero::ShadowDemon => "npc_dota_hero_shadow_demon",
@@ -311,7 +347,9 @@ impl Hero {
             "npc_dota_hero_jakiro" => Some(Hero::Jakiro),
             "npc_dota_hero_juggernaut" => Some(Hero::Juggernaut),
             "npc_dota_hero_keeper_of_the_light" => Some(Hero::KeeperOfTheLight),
+            "npc_dota_hero_kez" => Some(Hero::Kez),
             "npc_dota_hero_kunkka" => Some(Hero::Kunkka),
+            "npc_dota_hero_largo" => Some(Hero::Largo),
             "npc_dota_hero_legion_commander" => Some(Hero::LegionCommander),
             "npc_dota_hero_leshrac" => Some(Hero::Leshrac),
             "npc_dota_hero_lich" => Some(Hero::Lich),
@@ -351,6 +389,7 @@ impl Hero {
             "npc_dota_hero_rattletrap" => Some(Hero::Rattletrap),
             "npc_dota_hero_razor" => Some(Hero::Razor),
             "npc_dota_hero_riki" => Some(Hero::Riki),
+            "npc_dota_hero_ringmaster" => Some(Hero::Ringmaster),
             "npc_dota_hero_rubick" => Some(Hero::Rubick),
             "npc_dota_hero_sand_king" => Some(Hero::SandKing),
             "npc_dota_hero_shadow_demon" => Some(Hero::ShadowDemon),
@@ -460,7 +499,34 @@ pub fn display_name_for_game_name(name: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::display_name_for_game_name;
+    use super::{display_name_for_game_name, Hero, ALL_HEROES};
+
+    /// Regression: `Hero::Largo` had a `to_game_name` arm but no
+    /// `from_game_name` arm, so the lookup silently returned `None` for it.
+    #[test]
+    fn every_hero_round_trips_through_both_name_tables() {
+        for hero in ALL_HEROES {
+            let game_name = hero.to_game_name();
+            assert_eq!(
+                Hero::from_game_name(game_name),
+                Some(*hero),
+                "{} is missing a from_game_name arm",
+                game_name
+            );
+        }
+    }
+
+    #[test]
+    fn internal_names_are_unique() {
+        let mut seen = std::collections::HashSet::new();
+        for hero in ALL_HEROES {
+            assert!(
+                seen.insert(hero.to_game_name()),
+                "duplicate internal name: {}",
+                hero.to_game_name()
+            );
+        }
+    }
 
     #[test]
     fn humanises_a_regular_internal_name() {
