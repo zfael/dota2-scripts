@@ -15,6 +15,7 @@ import HeroDetail from "./pages/HeroDetail";
 import DangerDetection from "./pages/DangerDetection";
 import SoulRing from "./pages/SoulRing";
 import Armlet from "./pages/Armlet";
+import Boots from "./pages/Boots";
 import ActivityLog from "./pages/ActivityLog";
 import Diagnostics from "./pages/Diagnostics";
 import Settings from "./pages/Settings";
@@ -100,6 +101,7 @@ export default function App() {
               <Route path="/danger" element={<DangerDetection />} />
               <Route path="/soul-ring" element={<SoulRing />} />
               <Route path="/armlet" element={<Armlet />} />
+              <Route path="/boots" element={<Boots />} />
               <Route path="/activity" element={<ActivityLog />} />
               <Route path="/minimap" element={<MinimapIntelligence />} />
               <Route path="/waves" element={<WaveTracker />} />

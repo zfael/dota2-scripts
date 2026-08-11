@@ -46,35 +46,6 @@ export default function Settings() {
               suffix="%"
             />
           </Card>
-
-          <Card title="Phase Boots Automation">
-            <Toggle
-              label="Enable Phase Boots Automation"
-              checked={config.phase_boots_automation.enabled}
-              onChange={(v) => updateConfig("phase_boots_automation", { enabled: v })}
-            />
-            <NumberInput
-              label="Minimum Movement Distance"
-              value={config.phase_boots_automation.minimum_distance_units}
-              onChange={(v) => updateConfig("phase_boots_automation", { minimum_distance_units: v })}
-              suffix="u"
-            />
-            <p className="text-xs text-subtle">
-              Only triggers once the hero has actually walked at least this far
-              during the current movement segment.
-            </p>
-            <Toggle
-              label="Hold While Invisible"
-              checked={config.phase_boots_automation.suppress_while_invisible}
-              onChange={(v) =>
-                updateConfig("phase_boots_automation", { suppress_while_invisible: v })
-              }
-            />
-            <p className="text-xs text-subtle">
-              Activating Phase Boots breaks Shadow Blade and Silver Edge
-              invisibility, so automation waits it out instead.
-            </p>
-          </Card>
         </div>
 
         <div className="space-y-4">

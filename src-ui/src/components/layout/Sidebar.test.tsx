@@ -20,6 +20,7 @@ describe("Sidebar", () => {
     expect(screen.getByText("Danger")).toBeInTheDocument();
     expect(screen.getByText("Soul Ring")).toBeInTheDocument();
     expect(screen.getByText("Armlet")).toBeInTheDocument();
+    expect(screen.getByText("Boots")).toBeInTheDocument();
     expect(screen.getByText("Activity")).toBeInTheDocument();
     expect(screen.getByText("Diagnostics")).toBeInTheDocument();
     expect(screen.getByText("Settings")).toBeInTheDocument();
