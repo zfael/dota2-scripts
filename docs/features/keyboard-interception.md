@@ -13,6 +13,7 @@
 | `src/actions/soul_ring.rs` | Soul Ring shared state, key eligibility rules, health/mana/cooldown gates |
 | `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend intercepted-sequence planning and dedicated request worker (`Q/W/E` razes, `R` ultimate combo, standalone combo) |
 | `src/actions/heroes/magnus.rs` | Magnus directional ultimate planning, GSI readiness gate, and dedicated request worker |
+| `src/actions/heroes/slark.rs` | Slark directional Pounce planning, GSI readiness gate, and dedicated request worker |
 | `src/actions/heroes/invoker.rs` | Invoker combo profiles, invoke planning, dedicated request worker (panic Ghost Walk, prep pairs, primary combo) |
 | `src/input/simulation.rs` | High-level synthetic keys/mouse emission + `SIMULATING_KEYS` guard |
 | `src/gsi/handler.rs` | Rebuilds the shared `KeyboardSnapshot` when GSI detection changes the hero |
@@ -61,7 +62,7 @@ so these are the rebuild triggers:
 The GSI rebuild is what makes hero intercepts go live without any UI
 interaction. It is gated on `AppState::update_from_gsi` reporting a hero change,
 so it costs nothing on the steady-state event stream. Without it, picking a hero
-in-game leaves Shadow Fiend / Magnus / Snapfire intercepts inert until an
+in-game leaves Shadow Fiend / Magnus / Slark / Snapfire intercepts inert until an
 unrelated UI toggle happens to refresh the cache — the failure mode covered by
 `process_gsi_events_rebuilds_the_keyboard_snapshot_on_hero_detection`.
 
@@ -72,6 +73,7 @@ The snapshot holds only static keyboard-facing facts:
 - Outworld Destroyer interception flags, keys, and combo config
 - Broodmother callback-facing config and pre-parsed keys
 - Magnus intercept flags, pre-parsed ultimate key, and turn delay
+- Slark intercept flags, pre-parsed Pounce key, and turn delay
 - Soul Ring thresholds, ability keys, and item-slot keys
 - Armlet Roshan toggle key when `[armlet.roshan].enabled = true`
 
@@ -123,22 +125,30 @@ Current callback order on key/button input:
     - enqueue the `ALT down -> right-click (face cursor) -> ALT up -> wait -> press R`
       sequence onto the dedicated Magnus worker
     - on a failed readiness check the branch falls through and `R` reaches Dota
-11. **Outworld Destroyer intercepts**
+11. **Slark directional Pounce intercept**
+    - if `snapshot.slark_enabled` and `snapshot.slark.enabled`
+    - block the configured Pounce key (default `W`) **only** when
+      `SlarkState::can_intercept_pounce()` passes, or when
+      `require_ability_ready = false`
+    - enqueue the `ALT down -> right-click (face cursor) -> ALT up -> wait -> press W`
+      sequence onto the dedicated Slark worker
+    - on a failed readiness check the branch falls through and `W` reaches Dota
+12. **Outworld Destroyer intercepts**
     - if `snapshot.od_enabled` and `heroes.outworld_destroyer.ultimate_intercept_enabled`
     - block `R` only when `Sanity's Eclipse` is ready
     - enqueue `BKB -> Objurgation -> R` onto the dedicated OD worker
     - optionally block the configured self-Astral panic hotkey and double-tap Astral on self
-12. **Armlet Roshan toggle**
+13. **Armlet Roshan toggle**
     - if `[armlet.roshan].enabled = true` and the configured hotkey matches
     - emit `HotkeyEvent::ArmletRoshanToggle`
     - block the original key so it does not also reach Dota 2
-13. **Largo / generic ability-key path**
+14. **Largo / generic ability-key path**
     - emit `HotkeyEvent::LargoQ/W/E/R`
     - if Soul Ring should trigger, block and replay
     - otherwise pass through
-14. **Item-slot Soul Ring interception**
+15. **Item-slot Soul Ring interception**
      - blocks configured item keys when the item is mana-using and Soul Ring should fire first
-15. **Standalone combo key**
+16. **Standalone combo key**
      - sends `HotkeyEvent::ComboTrigger`
      - does not block the original key
 
@@ -376,6 +386,15 @@ These are still part of the interception surface even though this page centers o
 - unlike Snapfire, the intercept is **gated on GSI**: `MagnusState::can_intercept_ultimate()` reads `MAGNUS_LAST_EVENT` and requires `magnataur_reverse_polarity` to have `level > 0 && can_cast`. A failed check leaves the key unblocked
 - Skewer is never intercepted
 
+### Slark
+
+- activation is gated on `snapshot.slark_enabled`, derived from `selected_hero == Some(HeroType::Slark)`
+- the configured Pounce key (default `W`) is blocked and enqueues one `DirectionalPounce` request onto the dedicated Slark worker
+- the worker holds `ALT`, right-clicks to face the cursor, releases `ALT`, waits `turn_delay_ms`, then presses the Pounce key
+- ALT is released before the ability press for the same reason as Magnus: Pounce takes no target, and holding ALT over an ability key pings it instead of casting it
+- like Magnus, the intercept is **gated on GSI**: `SlarkState::can_intercept_pounce()` reads `SLARK_LAST_EVENT` and requires `slark_pounce` to have `level > 0 && can_cast`. A failed check leaves the key unblocked
+- Dark Pact, Essence Shift, and Shadow Dance are never intercepted
+
 ### Broodmother
 
 - Broodmother callback actions now queue to one dedicated worker instead of spawning raw threads from the callback
@@ -404,6 +423,7 @@ These are still part of the interception surface even though this page centers o
 | Armlet Roshan | `config/config.toml` -> `[armlet.roshan]` | `enabled`, `toggle_key` |
 | Shadow Fiend | `config/config.toml` -> `[heroes.shadow_fiend]` | `raze_intercept_enabled`, `raze_delay_ms`, `auto_bkb_on_ultimate`, `auto_d_on_ultimate` |
 | Magnus | `config/config.toml` -> `[heroes.magnus]` | `enabled`, `ultimate_key`, `turn_delay_ms`, `require_ability_ready`, `center_camera_on_ultimate`, `camera_center_key`, `camera_center_delay_ms` |
+| Slark | `config/config.toml` -> `[heroes.slark]` | `enabled`, `pounce_key`, `turn_delay_ms`, `require_ability_ready` |
 | Global hotkey | `config/config.toml` -> `[keybindings]` | slot key mappings; the live standalone trigger is read from `AppState.trigger_key` and cached as a parsed `snapshot.trigger_key` |
 
 ---
@@ -423,4 +443,5 @@ Related docs:
 - `docs/features/soul-ring.md`
 - `docs/heroes/shadow_fiend.md`
 - `docs/heroes/magnus.md`
+- `docs/heroes/slark.md`
 - `docs/architecture/runtime-flow.md`

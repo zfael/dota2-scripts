@@ -8,6 +8,7 @@ export type HeroType =
   | "meepo"
   | "outworld_destroyer"
   | "shadow_fiend"
+  | "slark"
   | "snapfire"
   | "tiny";
 
@@ -29,6 +30,7 @@ export const HEROES: HeroInfo[] = [
   { id: "meepo", displayName: "Meepo", internalName: "npc_dota_hero_meepo", icon: "🐾", role: "Carry / Escape" },
   { id: "outworld_destroyer", displayName: "Outworld Destroyer", internalName: "npc_dota_hero_obsidian_destroyer", icon: "🌀", role: "Carry / Nuker" },
   { id: "shadow_fiend", displayName: "Shadow Fiend", internalName: "npc_dota_hero_nevermore", icon: "👻", role: "Carry / Nuker" },
+  { id: "slark", displayName: "Slark", internalName: "npc_dota_hero_slark", icon: "🐟", role: "Carry / Escape" },
   { id: "snapfire", displayName: "Snapfire", internalName: "npc_dota_hero_snapfire", icon: "🍪", role: "Support / Nuker" },
   { id: "tiny", displayName: "Tiny", internalName: "npc_dota_hero_tiny", icon: "🪨", role: "Initiator / Nuker" },
 ];

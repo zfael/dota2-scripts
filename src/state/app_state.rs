@@ -20,6 +20,7 @@ pub enum HeroType {
     Meepo,
     OutworldDestroyer,
     ShadowFiend,
+    Slark,
     Snapfire,
     Tiny,
 }
@@ -57,6 +58,7 @@ impl HeroType {
                 Some(HeroType::OutworldDestroyer)
             }
             name if name == Hero::Nevermore.to_game_name() => Some(HeroType::ShadowFiend),
+            name if name == Hero::Slark.to_game_name() => Some(HeroType::Slark),
             name if name == Hero::Snapfire.to_game_name() => Some(HeroType::Snapfire),
             name if name == Hero::Tiny.to_game_name() => Some(HeroType::Tiny),
             _ => None,
@@ -73,6 +75,7 @@ impl HeroType {
             HeroType::Meepo => "Meepo",
             HeroType::OutworldDestroyer => "Outworld Destroyer",
             HeroType::ShadowFiend => "Shadow Fiend",
+            HeroType::Slark => "Slark",
             HeroType::Snapfire => "Snapfire",
             HeroType::Tiny => "Tiny",
         }
@@ -256,6 +259,15 @@ mod tests {
             Some(HeroType::Magnus)
         );
         assert_eq!(HeroType::Magnus.to_display_name(), "Magnus");
+    }
+
+    #[test]
+    fn slark_hero_type_maps_name_and_display() {
+        assert_eq!(
+            HeroType::from_hero_name(crate::models::Hero::Slark.to_game_name()),
+            Some(HeroType::Slark)
+        );
+        assert_eq!(HeroType::Slark.to_display_name(), "Slark");
     }
 
     #[test]

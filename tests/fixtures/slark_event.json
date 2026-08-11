@@ -1,0 +1,173 @@
+{
+  "hero": {
+    "aghanims_scepter": false,
+    "aghanims_shard": true,
+    "alive": true,
+    "attributes_level": 0,
+    "break": false,
+    "buyback_cooldown": 0,
+    "buyback_cost": 1180,
+    "disarmed": false,
+    "facet": 1,
+    "has_debuff": false,
+    "health": 1240,
+    "health_percent": 68,
+    "hexed": false,
+    "id": 93,
+    "level": 15,
+    "magicimmune": false,
+    "mana": 610,
+    "mana_percent": 74,
+    "max_health": 1820,
+    "max_mana": 820,
+    "muted": false,
+    "name": "npc_dota_hero_slark",
+    "respawn_seconds": 0,
+    "silenced": false,
+    "smoked": false,
+    "stunned": false,
+    "talent_1": true,
+    "talent_2": false,
+    "talent_3": false,
+    "talent_4": true,
+    "talent_5": true,
+    "talent_6": false,
+    "talent_7": false,
+    "talent_8": false,
+    "xp": 12980,
+    "xpos": -1640,
+    "ypos": 820
+  },
+  "abilities": {
+    "ability0": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 4,
+      "name": "slark_dark_pact",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability1": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 4,
+      "name": "slark_pounce",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability2": {
+      "ability_active": false,
+      "can_cast": false,
+      "cooldown": 0,
+      "level": 4,
+      "name": "slark_essence_shift",
+      "passive": true,
+      "ultimate": false
+    },
+    "ability3": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 2,
+      "name": "slark_shadow_dance",
+      "passive": false,
+      "ultimate": true
+    },
+    "ability4": {
+      "ability_active": false,
+      "can_cast": false,
+      "cooldown": 0,
+      "level": 0,
+      "name": "empty",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability5": {
+      "ability_active": false,
+      "can_cast": false,
+      "cooldown": 0,
+      "level": 0,
+      "name": "empty",
+      "passive": false,
+      "ultimate": false
+    }
+  },
+  "items": {
+    "neutral0": {
+      "name": "item_pupils_gift",
+      "can_cast": false,
+      "cooldown": 0,
+      "passive": true
+    },
+    "slot0": {
+      "name": "item_echo_sabre",
+      "can_cast": false,
+      "cooldown": 0,
+      "passive": true
+    },
+    "slot1": {
+      "name": "item_black_king_bar",
+      "can_cast": true,
+      "cooldown": 0,
+      "passive": false
+    },
+    "slot2": {
+      "name": "item_silver_edge",
+      "can_cast": true,
+      "cooldown": 0,
+      "passive": false
+    },
+    "slot3": {
+      "name": "item_phase_boots",
+      "can_cast": true,
+      "cooldown": 0,
+      "passive": false
+    },
+    "slot4": {
+      "name": "item_magic_wand",
+      "can_cast": true,
+      "cooldown": 0,
+      "passive": false
+    },
+    "slot5": {
+      "name": "empty"
+    },
+    "slot6": {
+      "name": "empty"
+    },
+    "slot7": {
+      "name": "empty"
+    },
+    "slot8": {
+      "name": "empty"
+    },
+    "stash0": {
+      "name": "empty"
+    },
+    "stash1": {
+      "name": "empty"
+    },
+    "stash2": {
+      "name": "empty"
+    },
+    "stash3": {
+      "name": "empty"
+    },
+    "stash4": {
+      "name": "empty"
+    },
+    "stash5": {
+      "name": "empty"
+    },
+    "teleport0": {
+      "name": "item_tpscroll",
+      "can_cast": true,
+      "cooldown": 0
+    }
+  },
+  "map": {
+    "clock_time": 1520
+  }
+}

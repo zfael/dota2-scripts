@@ -244,6 +244,13 @@ export interface MagnusConfig {
   camera_center_delay_ms: number;
 }
 
+export interface SlarkConfig {
+  enabled: boolean;
+  pounce_key: string;
+  turn_delay_ms: number;
+  require_ability_ready: boolean;
+}
+
 export interface SnapfireConfig {
   enabled: boolean;
   trigger_key: string;
@@ -257,6 +264,7 @@ export interface HeroesConfig {
   legion_commander: LegionCommanderConfig;
   magnus: MagnusConfig;
   shadow_fiend: ShadowFiendConfig;
+  slark: SlarkConfig;
   snapfire: SnapfireConfig;
   tiny: TinyConfig;
   outworld_destroyer: OutworldDestroyerConfig;

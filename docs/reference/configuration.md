@@ -532,6 +532,19 @@ All seven fields are exposed in the React UI under **Heroes → Magnus**.
 
 See `docs/heroes/magnus.md` and `docs/features/keyboard-interception.md`.
 
+## `[heroes.slark]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `enabled` | `true` | `true` | Master toggle for the directional Pounce intercept. |
+| `pounce_key` | `"w"` | `"w"` | Pounce ability key. This is also the key intercepted. Intercept is gated on Slark being the active hero. |
+| `turn_delay_ms` | `200` | `200` | Delay after the facing right-click before the Pounce cast. Slark's turn rate needs noticeably more settle time than the other facing combos. |
+| `require_ability_ready` | `true` | `true` | Only intercept when `slark_pounce` is levelled and castable. Prevents a cooldown press from issuing the facing right-click. |
+
+All four fields are exposed in the React UI under **Heroes → Slark**.
+
+See `docs/heroes/slark.md` and `docs/features/keyboard-interception.md`.
+
 ## `[heroes.invoker]`
 
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |

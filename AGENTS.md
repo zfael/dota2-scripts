@@ -21,7 +21,7 @@ Start here. Follow links to the source or doc file relevant to your task.
 | Config template | `config/config.toml` (embedded into the binary at build time) |
 | Live config | `%LOCALAPPDATA%\dota2-scripts\config\config.toml` |
 
-Supported heroes: **Broodmother, Huskar, Invoker, Largo, Legion Commander, Magnus, Meepo, Outworld Destroyer, Shadow Fiend, Snapfire, Tiny**
+Supported heroes: **Broodmother, Huskar, Invoker, Largo, Legion Commander, Magnus, Meepo, Outworld Destroyer, Shadow Fiend, Slark, Snapfire, Tiny**
 
 ---
 
@@ -98,6 +98,7 @@ broken test build there once went unnoticed.
 | Meepo | `npc_dota_hero_meepo` | `docs/heroes/meepo.md` | `src/actions/heroes/meepo.rs` |
 | Outworld Destroyer | `npc_dota_hero_obsidian_destroyer` | `docs/heroes/outworld_destroyer.md` | `src/actions/heroes/outworld_destroyer.rs` |
 | Shadow Fiend | `npc_dota_hero_nevermore` | `docs/heroes/shadow_fiend.md` | `src/actions/heroes/shadow_fiend.rs` |
+| Slark | `npc_dota_hero_slark` | `docs/heroes/slark.md` | `src/actions/heroes/slark.rs` |
 | Snapfire | `npc_dota_hero_snapfire` | `docs/heroes/snapfire.md` | `src/actions/heroes/snapfire.rs` |
 | Tiny | `npc_dota_hero_tiny` | `docs/heroes/tiny.md` | `src/actions/heroes/tiny.rs` |
 
@@ -120,6 +121,7 @@ broken test build there once went unnoticed.
 | `actions/executor.rs` | Action queue workers and delayed scheduling |
 | `actions/activity.rs` | Activity feed entries surfaced in the UI |
 | `actions/heroes/magnus.rs` | Magnus directional Reverse Polarity worker and GSI readiness gate |
+| `actions/heroes/slark.rs` | Slark directional Pounce worker and GSI readiness gate |
 | `actions/heroes/traits.rs` | `HeroScript` trait — implement this to add a hero |
 | `actions/heroes/*.rs` | Per-hero automation; see the Hero Docs table |
 

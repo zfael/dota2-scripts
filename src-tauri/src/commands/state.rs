@@ -108,6 +108,7 @@ pub fn select_hero(
                 "Meepo" => "npc_dota_hero_meepo",
                 "Outworld Destroyer" => "npc_dota_hero_obsidian_destroyer",
                 "Shadow Fiend" => "npc_dota_hero_nevermore",
+                "Slark" => "npc_dota_hero_slark",
                 "Snapfire" => "npc_dota_hero_snapfire",
                 "Tiny" => "npc_dota_hero_tiny",
                 _ => return Err(format!("Unknown hero: {}", name)),

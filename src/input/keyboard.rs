@@ -15,6 +15,7 @@ use crate::actions::heroes::outworld_destroyer::{
 };
 use crate::actions::heroes::shadow_fiend::ShadowFiendState;
 use crate::actions::heroes::magnus::MagnusState;
+use crate::actions::heroes::slark::SlarkState;
 use crate::actions::heroes::snapfire::SnapfireState;
 use crate::actions::soul_ring::{SoulRingKeyboardConfig, SoulRingState};
 use crate::actions::SOUL_RING_STATE;
@@ -483,6 +484,30 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                     }
                 }
 
+                // Handle Slark directional Pounce.
+                // Pounce leaps along Slark's facing at cast time, so face the
+                // cursor first and the leap lands where you are pointing.
+                if snapshot.slark_enabled && snapshot.slark.enabled {
+                    if let Some(pounce_key) = snapshot.slark.pounce_key {
+                        if key == pounce_key {
+                            // Falling through leaves the key unblocked, so a
+                            // cooldown press never issues the facing right-click
+                            // and never walks Slark toward the cursor.
+                            if !snapshot.slark.require_ability_ready
+                                || SlarkState::can_intercept_pounce()
+                            {
+                                info!("🐟 Slark pounce pressed - directional Pounce");
+                                SlarkState::execute_directional_pounce(
+                                    snapshot.slark.pounce_char,
+                                    snapshot.slark.turn_delay_ms,
+                                );
+                                // Block original key (combo re-presses it).
+                                return None;
+                            }
+                        }
+                    }
+                }
+
                 if snapshot.od_enabled {
                     if snapshot.outworld_destroyer.ultimate_intercept_enabled && key == Key::KeyR {
                         if OutworldDestroyerState::can_intercept_ultimate() {
@@ -638,6 +663,18 @@ pub struct SnapfireKeyboardSnapshot {
     pub turn_delay_ms: u64,
 }
 
+/// Snapshot of the Slark keyboard-relevant config.
+#[derive(Debug, Clone)]
+pub struct SlarkKeyboardSnapshot {
+    pub enabled: bool,
+    /// Pre-parsed Pounce key, used to match the intercepted press.
+    pub pounce_key: Option<Key>,
+    /// The same key as a char, used to re-press it after the turn.
+    pub pounce_char: char,
+    pub turn_delay_ms: u64,
+    pub require_ability_ready: bool,
+}
+
 /// Snapshot of the Magnus keyboard-relevant config.
 #[derive(Debug, Clone)]
 pub struct MagnusKeyboardSnapshot {
@@ -719,6 +756,9 @@ pub struct KeyboardSnapshot {
     /// Whether Magnus is the active hero (drives the ultimate intercept).
     pub magnus_enabled: bool,
     pub magnus: MagnusKeyboardSnapshot,
+    /// Whether Slark is the active hero (drives the Pounce intercept).
+    pub slark_enabled: bool,
+    pub slark: SlarkKeyboardSnapshot,
     /// Static Soul Ring keyboard config (thresholds, key sets, delays).
     pub soul_ring: SoulRingKeyboardConfig,
     pub invoker_profiles: Vec<InvokerHotkeyProfileSnapshot>,
@@ -852,6 +892,7 @@ impl KeyboardSnapshot {
         let bm = &settings.heroes.broodmother;
         let sp = &settings.heroes.snapfire;
         let mg = &settings.heroes.magnus;
+        let sk = &settings.heroes.slark;
 
         Self {
             selected_hero: state.selected_hero.clone(),
@@ -924,6 +965,14 @@ impl KeyboardSnapshot {
                 camera_center_key: parse_key_string(&mg.camera_center_key),
                 camera_center_delay_ms: mg.camera_center_delay_ms,
             },
+            slark_enabled: state.selected_hero == Some(crate::state::HeroType::Slark),
+            slark: SlarkKeyboardSnapshot {
+                enabled: sk.enabled,
+                pounce_key: char_to_key(sk.pounce_key),
+                pounce_char: sk.pounce_key,
+                turn_delay_ms: sk.turn_delay_ms,
+                require_ability_ready: sk.require_ability_ready,
+            },
             soul_ring: SoulRingKeyboardConfig::from_settings(settings),
             invoker_profiles: settings
                 .heroes
@@ -991,6 +1040,14 @@ impl Default for KeyboardSnapshot {
                 center_camera_on_ultimate: false,
                 camera_center_key: None,
                 camera_center_delay_ms: 0,
+            },
+            slark_enabled: false,
+            slark: SlarkKeyboardSnapshot {
+                enabled: false,
+                pounce_key: None,
+                pounce_char: 'w',
+                turn_delay_ms: 0,
+                require_ability_ready: true,
             },
             soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
             invoker_profiles: vec![],
@@ -1167,6 +1224,14 @@ mod tests {
                 camera_center_key: None,
                 camera_center_delay_ms: 0,
             },
+            slark_enabled: false,
+            slark: SlarkKeyboardSnapshot {
+                enabled: false,
+                pounce_key: None,
+                pounce_char: 'w',
+                turn_delay_ms: 0,
+                require_ability_ready: true,
+            },
             soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
             invoker_profiles: vec![],
         }
@@ -1294,6 +1359,23 @@ mod tests {
 
         let other = KeyboardSnapshot::from_runtime(&Settings::default(), &AppState::default());
         assert!(!other.magnus_enabled);
+    }
+
+    #[test]
+    fn keyboard_snapshot_populates_slark_fields_for_slark() {
+        let mut state = AppState::default();
+        state.selected_hero = Some(HeroType::Slark);
+        let snapshot = KeyboardSnapshot::from_runtime(&Settings::default(), &state);
+
+        assert!(snapshot.slark_enabled);
+        assert!(snapshot.slark.enabled);
+        assert_eq!(snapshot.slark.pounce_key, Some(Key::KeyW));
+        assert_eq!(snapshot.slark.pounce_char, 'w');
+        assert_eq!(snapshot.slark.turn_delay_ms, 200);
+        assert!(snapshot.slark.require_ability_ready);
+
+        let other = KeyboardSnapshot::from_runtime(&Settings::default(), &AppState::default());
+        assert!(!other.slark_enabled);
     }
 
     #[test]

@@ -295,6 +295,23 @@ pub struct MagnusConfig {
     pub camera_center_delay_ms: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SlarkConfig {
+    /// Master toggle for the directional Pounce intercept.
+    #[serde(default = "default_slark_enabled")]
+    pub enabled: bool,
+    /// Pounce ability key. This is also the key the hook intercepts.
+    #[serde(default = "default_slark_pounce_key")]
+    pub pounce_key: char,
+    /// Delay between the facing right-click and the Pounce cast (ms).
+    #[serde(default = "default_slark_turn_delay_ms")]
+    pub turn_delay_ms: u64,
+    /// Pass the key through untouched when Pounce is not castable, so a
+    /// cooldown press never issues the facing right-click.
+    #[serde(default = "default_slark_require_ability_ready")]
+    pub require_ability_ready: bool,
+}
+
 /// Configuration for auto-casting an ability during Space+Right-click combo
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutoAbilityConfig {
@@ -571,6 +588,8 @@ pub struct HeroesConfig {
     pub snapfire: SnapfireConfig,
     #[serde(default)]
     pub magnus: MagnusConfig,
+    #[serde(default)]
+    pub slark: SlarkConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1362,6 +1381,18 @@ fn default_magnus_camera_center_key() -> String {
 }
 fn default_magnus_camera_center_delay_ms() -> u64 {
     60
+}
+fn default_slark_enabled() -> bool {
+    true
+}
+fn default_slark_pounce_key() -> char {
+    'w'
+}
+fn default_slark_turn_delay_ms() -> u64 {
+    200
+}
+fn default_slark_require_ability_ready() -> bool {
+    true
 }
 fn default_sf_auto_bkb_on_ultimate() -> bool {
     false
@@ -2258,6 +2289,17 @@ impl Default for MagnusConfig {
     }
 }
 
+impl Default for SlarkConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_slark_enabled(),
+            pounce_key: default_slark_pounce_key(),
+            turn_delay_ms: default_slark_turn_delay_ms(),
+            require_ability_ready: default_slark_require_ability_ready(),
+        }
+    }
+}
+
 impl Default for OutworldDestroyerConfig {
     fn default() -> Self {
         Self {
@@ -2407,6 +2449,7 @@ impl Default for HeroesConfig {
             meepo: MeepoConfig::default(),
             snapfire: SnapfireConfig::default(),
             magnus: MagnusConfig::default(),
+            slark: SlarkConfig::default(),
         }
     }
 }
@@ -2713,6 +2756,15 @@ mod tests {
         assert!(cfg.center_camera_on_ultimate);
         assert_eq!(cfg.camera_center_key, "1");
         assert_eq!(cfg.camera_center_delay_ms, 60);
+    }
+
+    #[test]
+    fn slark_config_defaults_gate_pounce_on_readiness() {
+        let cfg = SlarkConfig::default();
+        assert!(cfg.enabled);
+        assert_eq!(cfg.pounce_key, 'w');
+        assert_eq!(cfg.turn_delay_ms, 200);
+        assert!(cfg.require_ability_ready);
     }
 
     #[test]

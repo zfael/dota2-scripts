@@ -357,6 +357,20 @@ camera_center_key = "1"
 # Delay between the ultimate cast and the first camera tap (ms).
 camera_center_delay_ms = 60
 
+[heroes.slark]
+# Press W to face the cursor and then cast Pounce, so the leap goes where you
+# are pointing instead of wherever Slark happened to be facing.
+enabled = true
+# Pounce ability key. This is also the key that gets intercepted.
+pounce_key = "w"
+# Delay after the facing right-click before the Pounce cast (ms). Increase if
+# Pounce fires before Slark finishes turning.
+turn_delay_ms = 200
+# Only intercept when Pounce is levelled and off cooldown. Leave true: it stops
+# a cooldown press from issuing the facing right-click and walking Slark toward
+# the cursor for nothing.
+require_ability_ready = true
+
 [heroes.invoker]
 quas_key = "q"
 wex_key = "w"
