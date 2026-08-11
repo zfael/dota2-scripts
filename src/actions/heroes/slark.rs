@@ -27,7 +27,12 @@ lazy_static! {
     static ref SLARK_DEBUFF_DETECTED: Mutex<Option<Instant>> = Mutex::new(None);
     /// Last time the low-HP escape fired, for its own trigger cooldown.
     static ref SLARK_LAST_ESCAPE: Mutex<Option<Instant>> = Mutex::new(None);
+    /// Throttle for the "wanted an escape, got none" explanation.
+    static ref SLARK_LAST_ESCAPE_DIAGNOSTIC: Mutex<Option<Instant>> = Mutex::new(None);
 }
+
+/// How often the escape diagnostic may repeat while the situation persists.
+const ESCAPE_DIAGNOSTIC_INTERVAL_MS: u64 = 3_000;
 
 /// Work item for the dedicated Slark worker thread.
 #[derive(Debug, PartialEq, Eq)]
@@ -257,6 +262,77 @@ fn plan_low_hp_escape(
     LowHpEscape::None
 }
 
+/// Explain why a wanted escape did not happen.
+///
+/// `plan_low_hp_escape` collapses every reason down to one `None`, which makes
+/// "the shard never fires" impossible to diagnose from outside — a danger flag
+/// that cleared looks exactly like a shard ability sitting in a slot we did not
+/// expect. This reports the whole decision, throttled so a sustained low-HP
+/// fight cannot flood the log.
+///
+/// The full ability dump is the point: it is the only way to find out where
+/// Dota actually puts a shard-granted ability, and what it reports for `level`
+/// and `can_cast` on one.
+fn explain_missing_escape(
+    event: &GsiWebhookEvent,
+    config: &SlarkConfig,
+    in_danger: bool,
+    last_escape: Option<Instant>,
+    now: Instant,
+) {
+    let Ok(mut last_logged) = SLARK_LAST_ESCAPE_DIAGNOSTIC.try_lock() else {
+        return;
+    };
+
+    if let Some(logged_at) = *last_logged {
+        if now.duration_since(logged_at) < Duration::from_millis(ESCAPE_DIAGNOSTIC_INTERVAL_MS) {
+            return;
+        }
+    }
+    *last_logged = Some(now);
+
+    let cooldown_remaining_ms = last_escape
+        .map(|last| {
+            Duration::from_millis(config.shadow_dance_trigger_cooldown_ms)
+                .saturating_sub(now.duration_since(last))
+                .as_millis()
+        })
+        .unwrap_or(0);
+
+    let abilities: Vec<String> = (0..=5)
+        .filter_map(|index| event.abilities.get_by_index(index).map(|a| (index, a)))
+        .map(|(index, ability)| {
+            format!(
+                "{}={} (lvl {}, can_cast {})",
+                index, ability.name, ability.level, ability.can_cast
+            )
+        })
+        .collect();
+
+    let shard_slot = ability_slot_for_key(config.shard_key);
+
+    warn!(
+        "🐟 Low HP escape wanted but nothing fired. hp={}% (line {}%), in_danger={} \
+         (required {}), stunned={}, hexed={}, silenced={}, retry_cooldown_remaining={}ms, \
+         shadow_dance_ready={}, shard_fallback_enabled={}, aghanims_shard={}, \
+         shard_key='{}' -> slot {:?}. Abilities: [{}]",
+        event.hero.health_percent,
+        config.shadow_dance_hp_threshold_percent,
+        in_danger,
+        config.shadow_dance_require_danger,
+        event.hero.stunned,
+        event.hero.hexed,
+        event.hero.silenced,
+        cooldown_remaining_ms,
+        ability_is_ready(event, SHADOW_DANCE_ABILITY_NAME),
+        config.shard_fallback_enabled,
+        event.hero.aghanims_shard,
+        config.shard_key,
+        shard_slot,
+        abilities.join(", ")
+    );
+}
+
 pub struct SlarkState;
 
 impl SlarkState {
@@ -383,7 +459,17 @@ impl SlarkScript {
         };
 
         match plan_low_hp_escape(event, &config, in_danger, now, *last_escape) {
-            LowHpEscape::None => {}
+            LowHpEscape::None => {
+                // Only when an escape was actually wanted — below the line and
+                // alive with the feature on. Otherwise this fires on every
+                // healthy payload, which is most of them.
+                if config.auto_shadow_dance_on_low_hp
+                    && event.hero.is_alive()
+                    && event.hero.health_percent <= config.shadow_dance_hp_threshold_percent
+                {
+                    explain_missing_escape(event, &config, in_danger, *last_escape, now);
+                }
+            }
             LowHpEscape::ShadowDance => {
                 info!(
                     "🐟 Shadow Dance escape at {}% HP",
