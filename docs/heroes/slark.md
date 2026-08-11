@@ -45,8 +45,7 @@ Directional **Pounce** (W) on a single keypress, GSI-driven **Dark Pact** debuff
 | `shadow_dance_require_danger` | bool | `true` | Also require the danger detector. |
 | `shadow_dance_trigger_cooldown_ms` | u64 | `3000` | Minimum gap between attempts. |
 | `shard_fallback_enabled` | bool | `true` | Use the shard when the ultimate is down. |
-| `shard_ability_name` | String | `"slark_depth_shroud"` | GSI name checked for readiness. |
-| `shard_key` | char | `"d"` | Key the shard ability sits on. |
+| `shard_key` | char | `"d"` | Key the shard ability sits on — and the whole of its identity. |
 
 ```toml
 [heroes.slark]
@@ -63,11 +62,10 @@ shadow_dance_hp_threshold_percent = 35
 shadow_dance_require_danger = true
 shadow_dance_trigger_cooldown_ms = 3000
 shard_fallback_enabled = true
-shard_ability_name = "slark_depth_shroud"
 shard_key = "d"
 ```
 
-All sixteen fields are exposed in the React UI under **Heroes → Slark**. The shard
+All fifteen fields are exposed in the React UI under **Heroes → Slark**. The shard
 fallback additionally depends on `[hud]` — see [HUD Anchors](../features/hud-anchors.md).
 
 ## Related Files
@@ -155,7 +153,7 @@ more than a salve. `plan_low_hp_escape` picks one of three outcomes:
 |---|---|
 | `None` | toggle off, dead, stunned/hexed/silenced, above the HP line, danger required but absent, inside the trigger cooldown, or nothing castable |
 | `ShadowDance` | `slark_shadow_dance` levelled and castable — **always preferred** |
-| `Shard` | ultimate unavailable, `hero.aghanims_shard` set, and `shard_ability_name` castable |
+| `Shard` | ultimate unavailable, `hero.aghanims_shard` set, and the ability on `shard_key` castable |
 
 With `shadow_dance_require_danger` on (the default) this needs the danger detector
 *and* the HP line, matching the Outworld Destroyer barrier. `in_danger` already
@@ -177,12 +175,17 @@ If that returns `None` — the anchor was never calibrated, or Dota is not runni
 the branch logs the reason and does nothing. It never guesses a coordinate: a stray
 click in Dota is a move order.
 
-**`shard_ability_name` is configurable on purpose.** Slark's shard has changed across
-patches and the correct GSI name was not verified when this was written, so a wrong
-name fails safe by simply never matching. When the shard is granted but the
-configured name is absent from the payload, the log warns **once per run and lists
-every ability name GSI did report** — read the right one out of that line and put it
-in config.
+**The ability is identified by its key, not its GSI name.** `shard_key` is the key we
+press, and its position in Dota's fixed `Q/W/E/R/D/F` ability order is the slot the
+readiness check reads — the same `index` ↔ `key` pairing `AutoAbilityConfig`
+documents. Nothing has to know what Valve calls the ability, so nothing breaks when
+the shard changes across patches.
+
+Readiness matters only to avoid moving your mouse for nothing: if the shard ability
+is on cooldown there is no point parking the cursor on the portrait and clicking. A
+key outside the standard six cannot be placed in a slot, so `ability_on_key_is_ready`
+returns `true` for it — a custom bind still works, at the cost of an occasional
+wasted click.
 
 ### Standalone trigger
 

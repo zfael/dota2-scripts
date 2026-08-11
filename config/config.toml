@@ -395,11 +395,10 @@ shadow_dance_trigger_cooldown_ms = 3000
 # Dota will not self-cast it, so it is aimed by clicking the hero portrait --
 # which requires [hud] portrait_calibrated. Uncalibrated, this never fires.
 shard_fallback_enabled = true
-# GSI ability name the shard grants. Configurable because Slark's shard has
-# moved between patches; a name that never appears in the payload simply never
-# fires, and the log lists the names GSI actually reported.
-shard_ability_name = "slark_depth_shroud"
-# Key the shard ability sits on.
+# Key the shard ability sits on. This is its whole identity as far as automation
+# is concerned: it is the key we press, and its position in Dota's fixed
+# Q/W/E/R/D/F order is what the "is it off cooldown" check reads. No ability
+# name to configure or keep current across patches.
 shard_key = "d"
 
 [heroes.invoker]

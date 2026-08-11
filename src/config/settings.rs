@@ -341,12 +341,12 @@ pub struct SlarkConfig {
     /// Fall back to the shard ability when Shadow Dance is on cooldown.
     #[serde(default = "default_slark_shard_fallback_enabled")]
     pub shard_fallback_enabled: bool,
-    /// GSI ability name the shard grants. Configurable because the shard's
-    /// ability has moved between patches — a name that does not appear in the
-    /// payload simply never fires, and is logged.
-    #[serde(default = "default_slark_shard_ability_name")]
-    pub shard_ability_name: String,
     /// Key the shard ability sits on.
+    ///
+    /// This is the whole identity of the ability as far as automation is
+    /// concerned: it is the key we press, and its slot in Dota's fixed
+    /// `Q/W/E/R/D/F` order is what the readiness check reads — the same
+    /// index/key pairing [`AutoAbilityConfig`] documents.
     ///
     /// Dota will not self-cast this ability, so it is aimed by clicking the HUD
     /// hero portrait — see `[hud]`. That means the portrait anchor must be
@@ -1504,9 +1504,6 @@ fn default_slark_shadow_dance_trigger_cooldown_ms() -> u64 {
 fn default_slark_shard_fallback_enabled() -> bool {
     true
 }
-fn default_slark_shard_ability_name() -> String {
-    "slark_depth_shroud".to_string()
-}
 fn default_slark_shard_key() -> char {
     'd'
 }
@@ -2424,7 +2421,6 @@ impl Default for SlarkConfig {
             shadow_dance_require_danger: default_slark_shadow_dance_require_danger(),
             shadow_dance_trigger_cooldown_ms: default_slark_shadow_dance_trigger_cooldown_ms(),
             shard_fallback_enabled: default_slark_shard_fallback_enabled(),
-            shard_ability_name: default_slark_shard_ability_name(),
             shard_key: default_slark_shard_key(),
         }
     }
@@ -2921,7 +2917,6 @@ mod tests {
         assert!(cfg.shadow_dance_require_danger);
         assert_eq!(cfg.shadow_dance_trigger_cooldown_ms, 3_000);
         assert!(cfg.shard_fallback_enabled);
-        assert_eq!(cfg.shard_ability_name, "slark_depth_shroud");
         assert_eq!(cfg.shard_key, 'd');
     }
 
@@ -2937,7 +2932,7 @@ mod tests {
         // falling back to `#[serde(default)]`.
         assert_eq!(settings.hud.capture_portrait_key, "F9");
         assert!(!settings.hud.portrait_calibrated);
-        assert_eq!(settings.heroes.slark.shard_ability_name, "slark_depth_shroud");
+        assert_eq!(settings.heroes.slark.shard_key, 'd');
         assert_eq!(settings.heroes.slark.shadow_dance_hp_threshold_percent, 35);
     }
 

@@ -158,6 +158,43 @@ enum LowHpEscape {
     Shard,
 }
 
+/// The GSI ability slot an ability key sits on.
+///
+/// Dota lays a hero's abilities out in a fixed order and the default binds
+/// follow it, which is the same `index` ↔ `key` pairing `AutoAbilityConfig`
+/// documents. `None` means a non-standard bind we cannot place.
+fn ability_slot_for_key(key: char) -> Option<u8> {
+    match key.to_ascii_lowercase() {
+        'q' => Some(0),
+        'w' => Some(1),
+        'e' => Some(2),
+        'r' => Some(3),
+        'd' => Some(4),
+        'f' => Some(5),
+        _ => None,
+    }
+}
+
+/// Whether the ability sitting on `key` is levelled and castable right now.
+///
+/// Identifying the ability by its key rather than its GSI name means no name
+/// has to be configured or kept up to date across patches — the key we are
+/// going to press *is* the identity.
+///
+/// A key outside the standard six returns `true` rather than `false`: we cannot
+/// place it in a slot, and refusing to fire would silently break a legitimate
+/// custom bind. The cost of being wrong is one wasted portrait click.
+fn ability_on_key_is_ready(event: &GsiWebhookEvent, key: char) -> bool {
+    let Some(slot) = ability_slot_for_key(key) else {
+        return true;
+    };
+
+    event
+        .abilities
+        .get_by_index(slot)
+        .is_some_and(|ability| ability.level > 0 && ability.can_cast)
+}
+
 /// Whether the hero can issue a cast at all this instant.
 ///
 /// Deliberately excludes `has_debuff`: most debuffs do not stop a cast, and
@@ -212,7 +249,7 @@ fn plan_low_hp_escape(
     // Dance has already been ruled out.
     if config.shard_fallback_enabled
         && event.hero.aghanims_shard
-        && ability_is_ready(event, &config.shard_ability_name)
+        && ability_on_key_is_ready(event, config.shard_key)
     {
         return LowHpEscape::Shard;
     }
@@ -363,21 +400,18 @@ impl SlarkScript {
                     crate::observability::hud_anchors::resolve_portrait_point(&hud)
                 else {
                     warn!(
-                        "🐟 Shadow Dance is down and {} is ready, but the HUD portrait anchor \
-                         is not calibrated (or Dota was not found) — skipping. Calibrate it \
-                         with the {} hotkey.",
-                        config.shard_ability_name, hud.capture_portrait_key
+                        "🐟 Shadow Dance is down and the shard ability on '{}' is ready, but \
+                         the HUD portrait anchor is not calibrated (or Dota was not found) — \
+                         skipping. Calibrate it with the {} hotkey.",
+                        config.shard_key, hud.capture_portrait_key
                     );
                     return;
                 };
 
                 info!(
-                    "🐟 Shadow Dance is down — falling back to {} at {}% HP via the portrait \
-                     at ({}, {})",
-                    config.shard_ability_name,
-                    event.hero.health_percent,
-                    portrait.x,
-                    portrait.y
+                    "🐟 Shadow Dance is down — falling back to the shard ability on '{}' at \
+                     {}% HP via the portrait at ({}, {})",
+                    config.shard_key, event.hero.health_percent, portrait.x, portrait.y
                 );
                 crate::input::simulation::portrait_cast(
                     config.shard_key,
@@ -388,51 +422,7 @@ impl SlarkScript {
             }
         }
 
-        drop(last_escape);
-        warn_on_missing_shard_ability(event, &config);
     }
-}
-
-/// Surface a shard ability name that never matches the payload.
-///
-/// The name is configurable because Slark's shard has changed across patches,
-/// and a wrong name fails safe — the fallback simply never fires. Silence would
-/// make that indistinguishable from "the shard was never up", so say it once
-/// per run instead.
-fn warn_on_missing_shard_ability(event: &GsiWebhookEvent, config: &SlarkConfig) {
-    if !config.shard_fallback_enabled || !event.hero.aghanims_shard {
-        return;
-    }
-
-    let present = (0..=5).any(|index| {
-        event
-            .abilities
-            .get_by_index(index)
-            .is_some_and(|ability| ability.name == config.shard_ability_name)
-    });
-
-    if present {
-        return;
-    }
-
-    static WARNED: std::sync::Once = std::sync::Once::new();
-    WARNED.call_once(|| {
-        // Listing what GSI *did* report turns "why does nothing happen" into a
-        // name the user can copy straight into config.
-        let reported: Vec<&str> = (0..=5)
-            .filter_map(|index| event.abilities.get_by_index(index))
-            .map(|ability| ability.name.as_str())
-            .filter(|name| !name.is_empty() && *name != "empty")
-            .collect();
-
-        warn!(
-            "🐟 Shard is granted but no ability named '{}' is in the payload, so the shard \
-             fallback will never fire. GSI reported: [{}]. Set heroes.slark.shard_ability_name \
-             to whichever of those is the shard ability.",
-            config.shard_ability_name,
-            reported.join(", ")
-        );
-    });
 }
 
 impl HeroScript for SlarkScript {
@@ -611,13 +601,14 @@ mod tests {
         event
     }
 
-    /// The fixture has no shard ability in it, so tests that want the fallback
-    /// to be reachable have to name one that is actually present.
-    fn config_with_shard_named(name: &str) -> SlarkConfig {
-        SlarkConfig {
-            shard_ability_name: name.to_string(),
-            ..SlarkConfig::default()
-        }
+    /// Put a castable ability in the slot the shard key maps to.
+    ///
+    /// Its *name* is deliberately not asserted anywhere: the key is the
+    /// identity, so what Valve calls the shard ability does not matter here.
+    fn with_shard_ability_ready(event: &mut GsiWebhookEvent) {
+        event.abilities.ability4.level = 1;
+        event.abilities.ability4.can_cast = true;
+        event.abilities.ability4.name = "some_shard_ability".to_string();
     }
 
     fn now() -> Instant {
@@ -667,8 +658,9 @@ mod tests {
 
     #[test]
     fn the_shard_is_only_reached_once_shadow_dance_is_down() {
-        let config = config_with_shard_named(DARK_PACT_ABILITY_NAME);
+        let config = SlarkConfig::default();
         let mut event = low_hp_fixture();
+        with_shard_ability_ready(&mut event);
 
         // Both up: the ultimate wins.
         assert_eq!(
@@ -686,29 +678,47 @@ mod tests {
 
     #[test]
     fn the_shard_needs_the_shard_to_actually_be_granted() {
-        let config = config_with_shard_named(DARK_PACT_ABILITY_NAME);
         let mut event = low_hp_fixture();
+        with_shard_ability_ready(&mut event);
         event.abilities.ability3.can_cast = false;
         event.hero.aghanims_shard = false;
 
         assert_eq!(
-            plan_low_hp_escape(&event, &config, true, now(), None),
+            plan_low_hp_escape(&event, &SlarkConfig::default(), true, now(), None),
             LowHpEscape::None
         );
     }
 
     #[test]
-    fn an_unknown_shard_ability_name_never_fires() {
-        // The whole point of the name being configurable: a wrong one fails
-        // safe rather than pressing a key that does something else.
-        let config = config_with_shard_named("slark_not_a_real_ability");
+    fn the_shard_is_skipped_while_its_own_slot_is_on_cooldown() {
         let mut event = low_hp_fixture();
+        with_shard_ability_ready(&mut event);
         event.abilities.ability3.can_cast = false;
+        // The D slot itself is down, so there is nothing to click the portrait
+        // for — no wasted mouse move.
+        event.abilities.ability4.can_cast = false;
 
         assert_eq!(
-            plan_low_hp_escape(&event, &config, true, now(), None),
+            plan_low_hp_escape(&event, &SlarkConfig::default(), true, now(), None),
             LowHpEscape::None
         );
+    }
+
+    #[test]
+    fn the_shard_key_picks_the_slot_it_will_actually_press() {
+        assert_eq!(ability_slot_for_key('q'), Some(0));
+        assert_eq!(ability_slot_for_key('r'), Some(3));
+        assert_eq!(ability_slot_for_key('d'), Some(4));
+        assert_eq!(ability_slot_for_key('F'), Some(5));
+        assert_eq!(ability_slot_for_key('z'), None);
+    }
+
+    #[test]
+    fn a_non_standard_bind_is_trusted_rather_than_silently_never_firing() {
+        // We cannot place 'z' in a GSI slot, so readiness is unknowable. Firing
+        // and possibly wasting a click beats never working at all.
+        let event = low_hp_fixture();
+        assert!(ability_on_key_is_ready(&event, 'z'));
     }
 
     #[test]

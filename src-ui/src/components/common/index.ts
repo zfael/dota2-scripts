@@ -4,7 +4,6 @@ export { Button } from "./Button";
 export { Slider } from "./Slider";
 export { NumberInput } from "./NumberInput";
 export { KeyInput } from "./KeyInput";
-export { TextInput } from "./TextInput";
 export { TagList } from "./TagList";
 export { HPBar } from "./HPBar";
 export { ManaBar } from "./ManaBar";

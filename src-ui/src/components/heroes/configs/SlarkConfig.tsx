@@ -2,7 +2,6 @@ import { Card } from "../../common/Card";
 import { Toggle } from "../../common/Toggle";
 import { NumberInput } from "../../common/NumberInput";
 import { KeyInput } from "../../common/KeyInput";
-import { TextInput } from "../../common/TextInput";
 import { useConfigStore } from "../../../stores/configStore";
 
 export default function SlarkConfig() {
@@ -67,7 +66,6 @@ export default function SlarkConfig() {
         <Card title="Shard Fallback">
           <Toggle label="Use Shard When Ultimate Is Down" checked={config.shard_fallback_enabled} onChange={(v) => set({ shard_fallback_enabled: v })} />
           <KeyInput label="Shard Key" value={config.shard_key} onChange={(v) => set({ shard_key: v })} />
-          <TextInput label="Shard Ability Name" value={config.shard_ability_name} onChange={(v) => set({ shard_ability_name: v })} placeholder="slark_depth_shroud" />
           {!portraitCalibrated && (
             <p className="text-xs text-warning">
               ⚠ The HUD portrait anchor is not calibrated, so this cannot fire.
@@ -77,9 +75,9 @@ export default function SlarkConfig() {
           <p className="text-xs text-muted">
             Only reached when Shadow Dance is on cooldown. Dota will not
             self-cast this ability, so it is aimed by clicking your hero
-            portrait — which briefly moves the mouse and puts it back. If the
-            ability name is wrong the fallback simply never fires; check the log,
-            which lists the names GSI actually reports.
+            portrait — which briefly moves the mouse and puts it back. The key
+            is the only thing to set: its slot in Dota's ability order is what
+            the cooldown check reads.
           </p>
         </Card>
       </div>

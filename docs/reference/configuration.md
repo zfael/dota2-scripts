@@ -549,10 +549,9 @@ See `docs/heroes/magnus.md` and `docs/features/keyboard-interception.md`.
 | `shadow_dance_require_danger` | `true` | `true` | Also require the danger detector. Off, the HP line alone fires it — including while walking home. |
 | `shadow_dance_trigger_cooldown_ms` | `3000` | `3000` | Minimum gap between two escape attempts. |
 | `shard_fallback_enabled` | `true` | `true` | Fall back to the shard ability when Shadow Dance is on cooldown. Requires a calibrated `[hud]` portrait anchor. |
-| `shard_ability_name` | `"slark_depth_shroud"` | `"slark_depth_shroud"` | GSI ability name checked for readiness. A name absent from the payload never fires and is logged with the names GSI did report. |
-| `shard_key` | `"d"` | `"d"` | Key the shard ability sits on. |
+| `shard_key` | `"d"` | `"d"` | Key the shard ability sits on, and its whole identity: the key is pressed, and its slot in Dota's `Q/W/E/R/D/F` order is what the readiness check reads. No ability name to maintain. |
 
-All sixteen fields are exposed in the React UI under **Heroes → Slark**.
+All fifteen fields are exposed in the React UI under **Heroes → Slark**.
 
 See `docs/heroes/slark.md`, `docs/features/hud-anchors.md`, and
 `docs/features/keyboard-interception.md`.

@@ -197,8 +197,7 @@ export const mockConfig: Settings = {
       shadow_dance_hp_threshold_percent: 35,
       shadow_dance_require_danger: true,
       shadow_dance_trigger_cooldown_ms: 3000,
-      shard_fallback_enabled: true,
-      shard_ability_name: "slark_depth_shroud", shard_key: "d",
+      shard_fallback_enabled: true, shard_key: "d",
     },
     snapfire: {
       enabled: true, trigger_key: "Space",
