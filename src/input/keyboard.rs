@@ -30,6 +30,8 @@ pub enum HotkeyEvent {
     MeepoFarmToggle,
     ArmletRoshanToggle,
     WaveOverlayToggle,
+    /// Record the cursor's current position as the HUD hero portrait.
+    CaptureHudPortrait,
     InvokerCycleComboProfile,
     LargoQ,
     LargoW,
@@ -608,6 +610,16 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                             let _ = event_tx.send(hotkey_event);
                             return None;
                         }
+                        HotkeyEvent::CaptureHudPortrait => {
+                            info!(
+                                "{:?} key pressed - capturing the HUD portrait anchor",
+                                snapshot.hud_capture_portrait_key
+                            );
+                            // Blocked for the same reason as the overlay toggle:
+                            // the key is ours while calibrating.
+                            let _ = event_tx.send(hotkey_event);
+                            return None;
+                        }
                         HotkeyEvent::ComboTrigger => {
                             info!("{:?} key pressed - triggering combo", snapshot.trigger_key);
                         }
@@ -742,6 +754,8 @@ pub struct KeyboardSnapshot {
     pub armlet_roshan_toggle_key: Option<Key>,
     /// Parsed wave-overlay toggle key, if the overlay is enabled.
     pub wave_overlay_toggle_key: Option<Key>,
+    /// Parsed hotkey that captures the HUD hero portrait anchor.
+    pub hud_capture_portrait_key: Option<Key>,
     /// Hardcoded Invoker combo-cycle key for v1.
     pub invoker_cycle_hotkey: Option<Key>,
     /// Whether Shadow Fiend raze interception is active.
@@ -915,6 +929,7 @@ impl KeyboardSnapshot {
             } else {
                 None
             },
+            hud_capture_portrait_key: parse_key_string(&settings.hud.capture_portrait_key),
             invoker_cycle_hotkey: parse_key_string(&settings.heroes.invoker.cycle_combo_profiles_hotkey),
             sf_enabled,
             od_enabled,
@@ -998,6 +1013,7 @@ impl Default for KeyboardSnapshot {
             meepo_farm_toggle_key: None,
             armlet_roshan_toggle_key: None,
             wave_overlay_toggle_key: None,
+            hud_capture_portrait_key: None,
             invoker_cycle_hotkey: None,
             sf_enabled: false,
             od_enabled: false,
@@ -1106,6 +1122,13 @@ fn plan_global_hotkey_event(key: Key, snapshot: &KeyboardSnapshot) -> Option<Hot
         return Some(HotkeyEvent::WaveOverlayToggle);
     }
 
+    if snapshot
+        .hud_capture_portrait_key
+        .is_some_and(|capture_key| key == capture_key)
+    {
+        return Some(HotkeyEvent::CaptureHudPortrait);
+    }
+
     if snapshot.selected_hero == Some(crate::state::HeroType::Invoker) {
         if snapshot
             .invoker_cycle_hotkey
@@ -1181,6 +1204,7 @@ mod tests {
             meepo_farm_toggle_key: None,
             armlet_roshan_toggle_key: None,
             wave_overlay_toggle_key: None,
+            hud_capture_portrait_key: None,
             invoker_cycle_hotkey: None,
             sf_enabled: false,
             od_enabled: false,
@@ -1359,6 +1383,18 @@ mod tests {
 
         let other = KeyboardSnapshot::from_runtime(&Settings::default(), &AppState::default());
         assert!(!other.magnus_enabled);
+    }
+
+    #[test]
+    fn hud_portrait_capture_key_is_parsed_and_plans_its_event() {
+        let snapshot = KeyboardSnapshot::from_runtime(&Settings::default(), &AppState::default());
+        assert_eq!(snapshot.hud_capture_portrait_key, Some(Key::F9));
+
+        let mut pressed = HashSet::new();
+        assert_eq!(
+            plan_global_hotkey_press_event(Key::F9, &snapshot, &mut pressed),
+            Some(HotkeyEvent::CaptureHudPortrait)
+        );
     }
 
     #[test]

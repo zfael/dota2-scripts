@@ -144,6 +144,7 @@ pub fn run() {
 
             let handle = app.handle().clone();
             commands::overlay::register_app_handle(handle.clone());
+            commands::hud::register_app_handle(handle.clone());
             events::start_game_state_emitter(handle.clone());
 
             // Closing the main window must also close the overlay. Tauri exits
@@ -169,6 +170,8 @@ pub fn run() {
             commands::config::get_config,
             commands::config::update_config,
             commands::config::update_hero_config,
+            commands::hud::capture_hud_portrait,
+            commands::hud::test_hud_portrait,
             commands::state::get_app_state,
             commands::state::set_gsi_enabled,
             commands::state::set_standalone_enabled,
@@ -336,6 +339,9 @@ fn handle_hotkey_events(
             }
             HotkeyEvent::WaveOverlayToggle => {
                 commands::overlay::toggle_from_hotkey();
+            }
+            HotkeyEvent::CaptureHudPortrait => {
+                commands::hud::capture_from_hotkey(&settings);
             }
             HotkeyEvent::InvokerCycleComboProfile => {
                 let settings = settings.lock().unwrap();

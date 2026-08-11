@@ -5,6 +5,78 @@ import { KeyInput } from "../components/common/KeyInput";
 import { Dropdown } from "../components/common/Dropdown";
 import { Button } from "../components/common/Button";
 import { useConfigStore } from "../stores/configStore";
+import { useState } from "react";
+
+/// Calibration for points on Dota's HUD that automation clicks.
+///
+/// Some abilities cannot be self-cast — Dota aims them at the cursor — so the
+/// only way to land one on your own hero is to click the hero portrait. That
+/// needs a coordinate nobody can derive, hence measuring it once here.
+function HudAnchorsCard() {
+  const hud = useConfigStore((s) => s.config.hud);
+  const [status, setStatus] = useState<{ tone: "ok" | "error"; message: string } | null>(null);
+
+  const run = async (command: "capture_hud_portrait" | "test_hud_portrait", success: string) => {
+    setStatus(null);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke(command);
+      setStatus({ tone: "ok", message: success });
+    } catch (e) {
+      setStatus({ tone: "error", message: e instanceof Error ? e.message : String(e) });
+    }
+  };
+
+  return (
+    <Card title="HUD Anchors">
+      <p className="text-xs text-muted">
+        Slark's shard ability — and anything else Dota refuses to self-cast — is
+        aimed by clicking your hero portrait. Hover the centre of the portrait
+        in-game and press <code>{hud.capture_portrait_key}</code>, or use the
+        button below with Dota visible.
+      </p>
+
+      <div className="flex items-center gap-2 text-xs">
+        <span className={hud.portrait_calibrated ? "text-green-400" : "text-warning"}>
+          {hud.portrait_calibrated ? "✓ Portrait calibrated" : "⚠ Portrait not calibrated"}
+        </span>
+        <span className="font-mono text-muted">
+          ({hud.portrait_x_fraction.toFixed(4)}, {hud.portrait_y_fraction.toFixed(4)})
+        </span>
+      </div>
+
+      {!hud.portrait_calibrated && (
+        <p className="text-xs text-muted">
+          Until this is calibrated, automation that would click the portrait is
+          skipped rather than guessing — a stray click in Dota is a move order.
+        </p>
+      )}
+
+      <div className="flex gap-2">
+        <Button onClick={() => run("capture_hud_portrait", "Portrait captured.")}>
+          Capture Now
+        </Button>
+        <Button
+          variant="secondary"
+          disabled={!hud.portrait_calibrated}
+          onClick={() => run("test_hud_portrait", "Cursor moved to the anchor.")}
+        >
+          Test
+        </Button>
+      </div>
+
+      {status && (
+        <p className={`text-xs ${status.tone === "ok" ? "text-green-400" : "text-red-400"}`}>
+          {status.message}
+        </p>
+      )}
+      <p className="text-xs text-muted">
+        Test parks the cursor on the anchor without clicking, so you can see
+        exactly where it lands.
+      </p>
+    </Card>
+  );
+}
 
 export default function Settings() {
   const config = useConfigStore((s) => s.config);
@@ -36,7 +108,10 @@ export default function Settings() {
             </div>
             <KeyInput label="Neutral Slot" value={config.keybindings.neutral0} onChange={(v) => updateConfig("keybindings", { neutral0: v })} />
             <KeyInput label="Combo Trigger" value={config.keybindings.combo_trigger} onChange={(v) => updateConfig("keybindings", { combo_trigger: v })} />
+            <KeyInput label="Capture HUD Portrait" value={config.hud.capture_portrait_key} onChange={(v) => updateConfig("hud", { capture_portrait_key: v })} />
           </Card>
+
+          <HudAnchorsCard />
         </div>
 
         <div className="space-y-4">

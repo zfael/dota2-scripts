@@ -121,7 +121,7 @@ broken test build there once went unnoticed.
 | `actions/executor.rs` | Action queue workers and delayed scheduling |
 | `actions/activity.rs` | Activity feed entries surfaced in the UI |
 | `actions/heroes/magnus.rs` | Magnus directional Reverse Polarity worker and GSI readiness gate |
-| `actions/heroes/slark.rs` | Slark directional Pounce worker and GSI readiness gate |
+| `actions/heroes/slark.rs` | Slark directional Pounce worker, Dark Pact cleanse, and low-HP escape |
 | `actions/heroes/traits.rs` | `HeroScript` trait — implement this to add a hero |
 | `actions/heroes/*.rs` | Per-hero automation; see the Hero Docs table |
 
@@ -133,6 +133,7 @@ Situational awareness. No input simulation lives here.
 |---|---|
 | `observability/wave_tracker.rs` | Clock-driven creep wave spawn cadence, lane interpolation, clash prediction |
 | `observability/wave_overlay.rs` | Screen-space placement maths for the click-through minimap overlay |
+| `observability/hud_anchors.rs` | Calibrated HUD positions (hero portrait) for abilities Dota will not self-cast |
 | `observability/alerts.rs` | Objective alert schedules, cue assignment, fire-once scheduling |
 | `observability/rune_alerts.rs` | Legacy generic rune timer; drives the status-header countdown |
 | `observability/minimap_capture.rs` | Capture worker loop |

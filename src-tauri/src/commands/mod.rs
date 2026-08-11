@@ -2,6 +2,7 @@ pub mod alerts;
 pub mod config;
 pub mod diagnostics;
 pub mod game;
+pub mod hud;
 pub mod meepo;
 pub mod minimap;
 pub mod overlay;

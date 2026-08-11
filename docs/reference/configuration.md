@@ -543,10 +543,37 @@ See `docs/heroes/magnus.md` and `docs/features/keyboard-interception.md`.
 | `auto_dark_pact_on_debuff` | `true` | `true` | Cast Dark Pact when `hero.has_debuff` is set. GSI never names the modifier, so this fires on trivial debuffs too. |
 | `dark_pact_key` | `"q"` | `"q"` | Dark Pact ability key pressed by the cleanse. Must match the in-game binding. |
 | `dark_pact_delay_ms` | `300` | `300` | Settle window after the first debuff, so a burst is cleansed by a single cast. |
+| `auto_shadow_dance_on_low_hp` | `true` | `true` | Spend Shadow Dance to survive when Slark drops low. |
+| `shadow_dance_key` | `"r"` | `"r"` | Shadow Dance ability key. |
+| `shadow_dance_hp_threshold_percent` | `35` | `35` | HP percentage at or below which the escape fires. |
+| `shadow_dance_require_danger` | `true` | `true` | Also require the danger detector. Off, the HP line alone fires it — including while walking home. |
+| `shadow_dance_trigger_cooldown_ms` | `3000` | `3000` | Minimum gap between two escape attempts. |
+| `shard_fallback_enabled` | `true` | `true` | Fall back to the shard ability when Shadow Dance is on cooldown. Requires a calibrated `[hud]` portrait anchor. |
+| `shard_ability_name` | `"slark_depth_shroud"` | `"slark_depth_shroud"` | GSI ability name checked for readiness. A name absent from the payload never fires and is logged with the names GSI did report. |
+| `shard_key` | `"d"` | `"d"` | Key the shard ability sits on. |
 
-All seven fields are exposed in the React UI under **Heroes → Slark**.
+All sixteen fields are exposed in the React UI under **Heroes → Slark**.
 
-See `docs/heroes/slark.md` and `docs/features/keyboard-interception.md`.
+See `docs/heroes/slark.md`, `docs/features/hud-anchors.md`, and
+`docs/features/keyboard-interception.md`.
+
+## `[hud]`
+
+Calibrated positions on Dota's own HUD that automation clicks. Positions are fractions
+of Dota's **client rect**, so they survive a window move, a resolution change, and a
+second monitor.
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `portrait_x_fraction` | `0.44` | `0.44` | Hero portrait X. Do not edit by hand — capture it. |
+| `portrait_y_fraction` | `0.90` | `0.90` | Hero portrait Y. |
+| `portrait_calibrated` | `false` | `false` | Whether the values above were measured. **Nothing clicks the portrait until this is true**, so a guessed coordinate can never become a stray move order. |
+| `capture_portrait_key` | `"F9"` | `"F9"` | Hotkey that records the cursor as the anchor. Blocked from reaching Dota. |
+
+Calibrate by hovering the centre of the hero portrait in game and pressing the capture
+key, or via **Settings → HUD Anchors → Capture Now**.
+
+See `docs/features/hud-anchors.md`.
 
 ## `[heroes.invoker]`
 

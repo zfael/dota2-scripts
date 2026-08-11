@@ -23,7 +23,7 @@ use crate::state::{AppState, UpdateCheckState};
 
 use crate::update::{check_for_update, UpdateCheckResult};
 use std::sync::{Arc, Mutex, RwLock};
-use tracing::info;
+use tracing::{info, warn};
 use tracing_subscriber;
 
 #[tokio::main]
@@ -221,6 +221,15 @@ async fn main() {
                     // The overlay is a Tauri window; this binary is headless and
                     // has no way to show it.
                     info!("Wave overlay toggle ignored - this binary is headless");
+                }
+                input::keyboard::HotkeyEvent::CaptureHudPortrait => {
+                    match observability::hud_anchors::apply_portrait_capture(&hotkey_settings) {
+                        Ok((x, y)) => info!(
+                            "HUD portrait anchor captured at ({:.4}, {:.4})",
+                            x, y
+                        ),
+                        Err(e) => warn!("HUD portrait capture failed: {}", e.user_message()),
+                    }
                 }
                 input::keyboard::HotkeyEvent::InvokerCycleComboProfile => {
                     let enabled_combo_profile_ids = hotkey_settings

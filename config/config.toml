@@ -380,6 +380,27 @@ dark_pact_key = "q"
 # Settle window after the first debuff before casting (ms), so a burst of
 # debuffs from one engagement is cleansed by a single Dark Pact.
 dark_pact_delay_ms = 300
+# Spend Shadow Dance to survive when Slark drops low.
+auto_shadow_dance_on_low_hp = true
+# Shadow Dance ability key.
+shadow_dance_key = "r"
+# HP percentage at or below which the escape fires.
+shadow_dance_hp_threshold_percent = 35
+# Also require the danger detector, not just the HP line. Leave true: it reads
+# as "low AND actually under fire", so limping home at 30% never spends the ult.
+shadow_dance_require_danger = true
+# Minimum gap between two escape attempts (ms).
+shadow_dance_trigger_cooldown_ms = 3000
+# When Shadow Dance is on cooldown, fall back to the Aghanim's Shard ability.
+# Dota will not self-cast it, so it is aimed by clicking the hero portrait --
+# which requires [hud] portrait_calibrated. Uncalibrated, this never fires.
+shard_fallback_enabled = true
+# GSI ability name the shard grants. Configurable because Slark's shard has
+# moved between patches; a name that never appears in the payload simply never
+# fires, and the log lists the names GSI actually reported.
+shard_ability_name = "slark_depth_shroud"
+# Key the shard ability sits on.
+shard_key = "d"
 
 [heroes.invoker]
 quas_key = "q"
@@ -729,3 +750,26 @@ green_hue_min = 80.0
 green_hue_max = 160.0
 green_min_saturation = 35.0
 green_min_value = 25.0
+
+[hud]
+# Points on Dota's own HUD that automation clicks.
+#
+# Some abilities cannot be self-cast -- Dota aims them at the cursor -- so the
+# only way to land one on your own hero is to click the hero portrait, which
+# Dota resolves as a click on the hero. That needs a screen coordinate nobody
+# can derive, so it is measured once.
+#
+# Positions are fractions of Dota's CLIENT RECT, not the display, so they
+# survive moving the window, changing resolution, and a second monitor.
+#
+# Do not edit these by hand: hover the centre of the hero portrait in game and
+# press capture_portrait_key, or use Settings -> HUD Anchors -> Capture Now.
+portrait_x_fraction = 0.44
+portrait_y_fraction = 0.90
+# Whether the values above were actually measured. Nothing may click the
+# portrait until this is true, so a guessed coordinate can never turn into a
+# stray move order. Capture sets it.
+portrait_calibrated = false
+# Hotkey that records the cursor position as the portrait anchor. Blocked from
+# reaching Dota while the app is running, so pick a key Dota does not need.
+capture_portrait_key = "F9"

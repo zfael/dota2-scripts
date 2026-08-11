@@ -2,8 +2,8 @@
 
 ## Purpose
 
-Directional **Pounce** (W) on a single keypress, plus GSI-driven **Dark Pact** debuff cleansing.
-**Read this when:** changing the Slark Pounce key, the facing technique, the turn timing, the readiness gate, or the Dark Pact cleanse.
+Directional **Pounce** (W) on a single keypress, GSI-driven **Dark Pact** debuff cleansing, and a low-HP **Shadow Dance** escape with a shard fallback.
+**Read this when:** changing the Slark Pounce key, the facing technique, the turn timing, the readiness gate, the Dark Pact cleanse, or the low-HP escape.
 
 ## Feature Summary
 
@@ -20,6 +20,12 @@ Directional **Pounce** (W) on a single keypress, plus GSI-driven **Dark Pact** d
 - **GSI exposes a single `has_debuff` bool and never names the modifier**, so this cannot tell a Doom from a Drow slow. It cleanses on anything.
 - Held (not dropped) while stunned, hexed, silenced, or while Dark Pact is on cooldown, so the cleanse fires the instant it becomes castable.
 
+### Low HP escape
+
+- GSI-driven. Spends **Shadow Dance** when Slark drops to the HP line while the danger detector is active.
+- Falls back to the **Aghanim's Shard** ability only when Shadow Dance is on cooldown.
+- The shard ability cannot be self-cast, so it is aimed by clicking the hero portrait — which requires a calibrated [HUD anchor](../features/hud-anchors.md). Uncalibrated, the fallback is skipped rather than guessing.
+
 ## Configuration
 
 `config/config.toml` under `[heroes.slark]`:
@@ -33,6 +39,14 @@ Directional **Pounce** (W) on a single keypress, plus GSI-driven **Dark Pact** d
 | `auto_dark_pact_on_debuff` | bool | `true` | Cast Dark Pact when GSI reports a debuff. |
 | `dark_pact_key` | char | `"q"` | Dark Pact ability key, pressed by the cleanse. |
 | `dark_pact_delay_ms` | u64 | `300` | Settle window after the first debuff before casting. |
+| `auto_shadow_dance_on_low_hp` | bool | `true` | Spend Shadow Dance to survive. |
+| `shadow_dance_key` | char | `"r"` | Shadow Dance ability key. |
+| `shadow_dance_hp_threshold_percent` | u32 | `35` | HP line for the escape. |
+| `shadow_dance_require_danger` | bool | `true` | Also require the danger detector. |
+| `shadow_dance_trigger_cooldown_ms` | u64 | `3000` | Minimum gap between attempts. |
+| `shard_fallback_enabled` | bool | `true` | Use the shard when the ultimate is down. |
+| `shard_ability_name` | String | `"slark_depth_shroud"` | GSI name checked for readiness. |
+| `shard_key` | char | `"d"` | Key the shard ability sits on. |
 
 ```toml
 [heroes.slark]
@@ -43,15 +57,25 @@ require_ability_ready = true
 auto_dark_pact_on_debuff = true
 dark_pact_key = "q"
 dark_pact_delay_ms = 300
+auto_shadow_dance_on_low_hp = true
+shadow_dance_key = "r"
+shadow_dance_hp_threshold_percent = 35
+shadow_dance_require_danger = true
+shadow_dance_trigger_cooldown_ms = 3000
+shard_fallback_enabled = true
+shard_ability_name = "slark_depth_shroud"
+shard_key = "d"
 ```
 
-All seven fields are exposed in the React UI under **Heroes → Slark**.
+All sixteen fields are exposed in the React UI under **Heroes → Slark**. The shard
+fallback additionally depends on `[hud]` — see [HUD Anchors](../features/hud-anchors.md).
 
 ## Related Files
 
 | File | Purpose |
 |---|---|
-| `src/actions/heroes/slark.rs` | Hero script, dedicated worker, `SlarkState::execute_directional_pounce`, readiness gate, `plan_dark_pact` cleanse. |
+| `src/actions/heroes/slark.rs` | Hero script, dedicated worker, `SlarkState::execute_directional_pounce`, readiness gate, `plan_dark_pact` cleanse, `plan_low_hp_escape`. |
+| `src/observability/hud_anchors.rs` | Portrait anchor the shard fallback aims through. |
 | `src/input/keyboard.rs` | Pounce-key interception branch + `SlarkKeyboardSnapshot`. |
 | `src/config/settings.rs` | `SlarkConfig` + defaults. |
 | `config/config.toml` | `[heroes.slark]` block. |
@@ -121,6 +145,45 @@ away.
 Same shape as Huskar's Berserker's Blood cleanse, which reads the same
 `has_debuff` flag.
 
+### Low HP escape
+
+`SlarkScript::low_hp_escape` runs on every `handle_gsi_event`, after the Dark Pact
+cleanse and before the shared survivability item checks — the ultimate is worth
+more than a salve. `plan_low_hp_escape` picks one of three outcomes:
+
+| Result | When |
+|---|---|
+| `None` | toggle off, dead, stunned/hexed/silenced, above the HP line, danger required but absent, inside the trigger cooldown, or nothing castable |
+| `ShadowDance` | `slark_shadow_dance` levelled and castable — **always preferred** |
+| `Shard` | ultimate unavailable, `hero.aghanims_shard` set, and `shard_ability_name` castable |
+
+With `shadow_dance_require_danger` on (the default) this needs the danger detector
+*and* the HP line, matching the Outworld Destroyer barrier. `in_danger` already
+means "losing HP or lost a burst of it", so the pair reads as "low **and** actually
+under fire" — sitting at 30% in the fountain never spends the ultimate. Turn it off
+and the HP line alone fires it, including while limping home.
+
+The order is the point: Shadow Dance is the stronger escape, so the shard is only
+ever reached once the ultimate has been ruled out.
+
+### Shard fallback and the portrait click
+
+Dota will not self-cast the shard ability — no double-tap, no ALT modifier. It
+resolves wherever the mouse is. The only way to land it on Slark is to click his
+HUD portrait, so the fallback runs through
+[`hud_anchors::resolve_portrait_point`](../features/hud-anchors.md).
+
+If that returns `None` — the anchor was never calibrated, or Dota is not running —
+the branch logs the reason and does nothing. It never guesses a coordinate: a stray
+click in Dota is a move order.
+
+**`shard_ability_name` is configurable on purpose.** Slark's shard has changed across
+patches and the correct GSI name was not verified when this was written, so a wrong
+name fails safe by simply never matching. When the shard is granted but the
+configured name is absent from the payload, the log warns **once per run and lists
+every ability name GSI did report** — read the right one out of that line and put it
+in config.
+
 ### Standalone trigger
 
 `handle_standalone_trigger()` runs the same combo, so the generic standalone
@@ -152,6 +215,14 @@ heroes. Note this path does **not** consult the readiness gate.
   sooner than the ability itself allows.
 - **`dark_pact_key` must match your in-game binding.** The app does not read
   Dota's keybindings; it presses what you configure.
+- **The shard fallback moves your mouse.** It parks the cursor on the portrait,
+  clicks, and puts it back. If you are aiming or dragging at that moment, your input
+  and ours interleave. There is no way around it — the ability cannot be cast any
+  other way. `shard_fallback_enabled` turns just this off and leaves Shadow Dance
+  working.
+- **The escape cannot see what is killing you.** It reads HP and the danger
+  detector, not incoming damage type or whether Shadow Dance would actually save
+  you. It will spend the ultimate on a losing fight.
 - **Shadow Dance invisibility is not tracked.** `src/actions/invisibility.rs`
   only infers invisibility from Shadow Blade and Silver Edge cooldown edges, so
   item automation does not hold off during Slark's own ultimate.
@@ -172,4 +243,5 @@ When editing this hero's code, update this doc:
 - [ ] Changed combo sequence? → Update the input sequence
 - [ ] Modified the readiness gate? → Update Readiness gate
 - [ ] Changed the Dark Pact decisions? → Update the Dark Pact cleanse table
+- [ ] Changed the escape ordering or gating? → Update the Low HP escape table
 - [ ] New logging statements? → Update Logging

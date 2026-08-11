@@ -252,6 +252,14 @@ export interface SlarkConfig {
   auto_dark_pact_on_debuff: boolean;
   dark_pact_key: string;
   dark_pact_delay_ms: number;
+  auto_shadow_dance_on_low_hp: boolean;
+  shadow_dance_key: string;
+  shadow_dance_hp_threshold_percent: number;
+  shadow_dance_require_danger: boolean;
+  shadow_dance_trigger_cooldown_ms: number;
+  shard_fallback_enabled: boolean;
+  shard_ability_name: string;
+  shard_key: string;
 }
 
 export interface SnapfireConfig {
@@ -423,4 +431,15 @@ export interface Settings {
   wave_tracker: WaveTrackerConfig;
   wave_overlay: WaveOverlayConfig;
   alerts: AlertsConfig;
+  hud: HudConfig;
+}
+
+/// Points on Dota's own HUD that automation needs to click. Positions are
+/// fractions of Dota's client rect, so they survive a resolution or window
+/// change. Nothing may click the portrait until `portrait_calibrated` is true.
+export interface HudConfig {
+  portrait_x_fraction: number;
+  portrait_y_fraction: number;
+  portrait_calibrated: boolean;
+  capture_portrait_key: string;
 }

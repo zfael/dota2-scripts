@@ -1,6 +1,7 @@
 use crate::actions::common::SurvivabilityActions;
 use crate::actions::executor::ActionExecutor;
 use crate::actions::heroes::HeroScript;
+use crate::config::settings::SlarkConfig;
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Hero};
 use lazy_static::lazy_static;
@@ -11,6 +12,7 @@ use tracing::{debug, info, warn};
 
 const POUNCE_ABILITY_NAME: &str = "slark_pounce";
 const DARK_PACT_ABILITY_NAME: &str = "slark_dark_pact";
+const SHADOW_DANCE_ABILITY_NAME: &str = "slark_shadow_dance";
 
 /// Settle time before the facing right-click, matching the other facing combos.
 const PRE_TURN_SETTLE_MS: u64 = 50;
@@ -23,6 +25,8 @@ lazy_static! {
     /// When the current run of debuffs was first seen, for the Dark Pact
     /// settle window. `None` means Slark is clean.
     static ref SLARK_DEBUFF_DETECTED: Mutex<Option<Instant>> = Mutex::new(None);
+    /// Last time the low-HP escape fired, for its own trigger cooldown.
+    static ref SLARK_LAST_ESCAPE: Mutex<Option<Instant>> = Mutex::new(None);
 }
 
 /// Work item for the dedicated Slark worker thread.
@@ -143,6 +147,79 @@ fn plan_dark_pact(event: &GsiWebhookEvent, enabled: bool) -> DarkPactDecision {
     DarkPactDecision::Arm
 }
 
+/// Which escape the low-HP watcher should spend, if any.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LowHpEscape {
+    /// Hold everything — not in danger, above the line, or nothing castable.
+    None,
+    /// Shadow Dance is up. Always preferred: it is the stronger escape.
+    ShadowDance,
+    /// Shadow Dance is down but the shard ability is up.
+    Shard,
+}
+
+/// Whether the hero can issue a cast at all this instant.
+///
+/// Deliberately excludes `has_debuff`: most debuffs do not stop a cast, and
+/// being debuffed is usually *why* the escape is wanted.
+fn can_cast_now(event: &GsiWebhookEvent) -> bool {
+    event.hero.is_alive() && !event.hero.stunned && !event.hero.hexed && !event.hero.silenced
+}
+
+/// Pick the low-HP escape for one payload.
+///
+/// With `shadow_dance_require_danger` on — the default — this needs the danger
+/// detector *and* the HP line, matching the Outworld Destroyer barrier.
+/// `in_danger` already means "losing HP or lost a burst of it", so the pair
+/// reads as "low and actually under fire", and sitting at 30% in the fountain
+/// never spends the ultimate. Off, the HP line alone is enough.
+fn plan_low_hp_escape(
+    event: &GsiWebhookEvent,
+    config: &SlarkConfig,
+    in_danger: bool,
+    now: Instant,
+    last_escape: Option<Instant>,
+) -> LowHpEscape {
+    if !config.auto_shadow_dance_on_low_hp {
+        return LowHpEscape::None;
+    }
+
+    if config.shadow_dance_require_danger && !in_danger {
+        return LowHpEscape::None;
+    }
+
+    if !can_cast_now(event) {
+        return LowHpEscape::None;
+    }
+
+    if event.hero.health_percent > config.shadow_dance_hp_threshold_percent {
+        return LowHpEscape::None;
+    }
+
+    if let Some(last_escape) = last_escape {
+        if now.duration_since(last_escape)
+            < Duration::from_millis(config.shadow_dance_trigger_cooldown_ms)
+        {
+            return LowHpEscape::None;
+        }
+    }
+
+    if ability_is_ready(event, SHADOW_DANCE_ABILITY_NAME) {
+        return LowHpEscape::ShadowDance;
+    }
+
+    // The shard is the consolation prize, so it is only reached once Shadow
+    // Dance has already been ruled out.
+    if config.shard_fallback_enabled
+        && event.hero.aghanims_shard
+        && ability_is_ready(event, &config.shard_ability_name)
+    {
+        return LowHpEscape::Shard;
+    }
+
+    LowHpEscape::None
+}
+
 pub struct SlarkState;
 
 impl SlarkState {
@@ -249,6 +326,113 @@ impl SlarkScript {
             },
         }
     }
+
+    /// Spend Shadow Dance — or the shard ability behind it — to survive.
+    ///
+    /// Shadow Dance is always preferred; the shard is only reached when the
+    /// ultimate is on cooldown, which is the order asked for.
+    fn low_hp_escape(&self, event: &GsiWebhookEvent, in_danger: bool) {
+        let settings = self.settings.lock().unwrap();
+        let config = settings.heroes.slark.clone();
+        let hud = settings.hud.clone();
+        drop(settings);
+
+        let now = Instant::now();
+
+        // try_lock for the same reason as the Dark Pact window: never block the
+        // GSI handler on a contended tick.
+        let Ok(mut last_escape) = SLARK_LAST_ESCAPE.try_lock() else {
+            return;
+        };
+
+        match plan_low_hp_escape(event, &config, in_danger, now, *last_escape) {
+            LowHpEscape::None => {}
+            LowHpEscape::ShadowDance => {
+                info!(
+                    "🐟 Shadow Dance escape at {}% HP",
+                    event.hero.health_percent
+                );
+                crate::input::simulation::press_key(config.shadow_dance_key);
+                *last_escape = Some(now);
+            }
+            LowHpEscape::Shard => {
+                // Dota will not self-cast this one, so it is aimed by clicking
+                // the hero portrait. No calibrated anchor means no click: a
+                // guessed coordinate would be a move order into the fog.
+                let Some(portrait) =
+                    crate::observability::hud_anchors::resolve_portrait_point(&hud)
+                else {
+                    warn!(
+                        "🐟 Shadow Dance is down and {} is ready, but the HUD portrait anchor \
+                         is not calibrated (or Dota was not found) — skipping. Calibrate it \
+                         with the {} hotkey.",
+                        config.shard_ability_name, hud.capture_portrait_key
+                    );
+                    return;
+                };
+
+                info!(
+                    "🐟 Shadow Dance is down — falling back to {} at {}% HP via the portrait \
+                     at ({}, {})",
+                    config.shard_ability_name,
+                    event.hero.health_percent,
+                    portrait.x,
+                    portrait.y
+                );
+                crate::input::simulation::portrait_cast(
+                    config.shard_key,
+                    portrait.x,
+                    portrait.y,
+                );
+                *last_escape = Some(now);
+            }
+        }
+
+        drop(last_escape);
+        warn_on_missing_shard_ability(event, &config);
+    }
+}
+
+/// Surface a shard ability name that never matches the payload.
+///
+/// The name is configurable because Slark's shard has changed across patches,
+/// and a wrong name fails safe — the fallback simply never fires. Silence would
+/// make that indistinguishable from "the shard was never up", so say it once
+/// per run instead.
+fn warn_on_missing_shard_ability(event: &GsiWebhookEvent, config: &SlarkConfig) {
+    if !config.shard_fallback_enabled || !event.hero.aghanims_shard {
+        return;
+    }
+
+    let present = (0..=5).any(|index| {
+        event
+            .abilities
+            .get_by_index(index)
+            .is_some_and(|ability| ability.name == config.shard_ability_name)
+    });
+
+    if present {
+        return;
+    }
+
+    static WARNED: std::sync::Once = std::sync::Once::new();
+    WARNED.call_once(|| {
+        // Listing what GSI *did* report turns "why does nothing happen" into a
+        // name the user can copy straight into config.
+        let reported: Vec<&str> = (0..=5)
+            .filter_map(|index| event.abilities.get_by_index(index))
+            .map(|ability| ability.name.as_str())
+            .filter(|name| !name.is_empty() && *name != "empty")
+            .collect();
+
+        warn!(
+            "🐟 Shard is granted but no ability named '{}' is in the payload, so the shard \
+             fallback will never fire. GSI reported: [{}]. Set heroes.slark.shard_ability_name \
+             to whichever of those is the shard ability.",
+            config.shard_ability_name,
+            reported.join(", ")
+        );
+    });
 }
 
 impl HeroScript for SlarkScript {
@@ -268,6 +452,10 @@ impl HeroScript for SlarkScript {
         let survivability = SurvivabilityActions::new(self.settings.clone(), self.executor.clone());
         let in_danger = crate::actions::danger_detector::update(event, &settings.danger_detection);
         drop(settings);
+
+        // Before the item checks: the ultimate is worth more than a salve.
+        self.low_hp_escape(event, in_danger);
+
         survivability.check_and_use_healing_items_with_danger(event, in_danger);
         survivability.use_defensive_items_if_danger_with_snapshot(event, in_danger);
         survivability.use_neutral_item_if_danger_with_snapshot(event, in_danger);
@@ -412,5 +600,171 @@ mod tests {
         event.abilities.ability0.level = 0;
 
         assert_eq!(plan_dark_pact(&event, true), DarkPactDecision::Hold);
+    }
+
+    /// Low enough to be over the line, with the shard granted so both escape
+    /// routes are on the table.
+    fn low_hp_fixture() -> GsiWebhookEvent {
+        let mut event = slark_fixture();
+        event.hero.health_percent = 20;
+        event.hero.aghanims_shard = true;
+        event
+    }
+
+    /// The fixture has no shard ability in it, so tests that want the fallback
+    /// to be reachable have to name one that is actually present.
+    fn config_with_shard_named(name: &str) -> SlarkConfig {
+        SlarkConfig {
+            shard_ability_name: name.to_string(),
+            ..SlarkConfig::default()
+        }
+    }
+
+    fn now() -> Instant {
+        Instant::now()
+    }
+
+    #[test]
+    fn shadow_dance_fires_when_low_and_in_danger() {
+        assert_eq!(
+            plan_low_hp_escape(&low_hp_fixture(), &SlarkConfig::default(), true, now(), None),
+            LowHpEscape::ShadowDance
+        );
+    }
+
+    #[test]
+    fn nothing_fires_above_the_hp_line() {
+        let mut event = low_hp_fixture();
+        event.hero.health_percent = 80;
+
+        assert_eq!(
+            plan_low_hp_escape(&event, &SlarkConfig::default(), true, now(), None),
+            LowHpEscape::None
+        );
+    }
+
+    #[test]
+    fn requiring_danger_holds_the_ultimate_when_merely_low() {
+        // Low HP but not under fire — walking home, regenerating in lane.
+        assert_eq!(
+            plan_low_hp_escape(&low_hp_fixture(), &SlarkConfig::default(), false, now(), None),
+            LowHpEscape::None
+        );
+    }
+
+    #[test]
+    fn without_requiring_danger_the_hp_line_alone_is_enough() {
+        let config = SlarkConfig {
+            shadow_dance_require_danger: false,
+            ..SlarkConfig::default()
+        };
+
+        assert_eq!(
+            plan_low_hp_escape(&low_hp_fixture(), &config, false, now(), None),
+            LowHpEscape::ShadowDance
+        );
+    }
+
+    #[test]
+    fn the_shard_is_only_reached_once_shadow_dance_is_down() {
+        let config = config_with_shard_named(DARK_PACT_ABILITY_NAME);
+        let mut event = low_hp_fixture();
+
+        // Both up: the ultimate wins.
+        assert_eq!(
+            plan_low_hp_escape(&event, &config, true, now(), None),
+            LowHpEscape::ShadowDance
+        );
+
+        // Ultimate on cooldown: fall through to the shard.
+        event.abilities.ability3.can_cast = false;
+        assert_eq!(
+            plan_low_hp_escape(&event, &config, true, now(), None),
+            LowHpEscape::Shard
+        );
+    }
+
+    #[test]
+    fn the_shard_needs_the_shard_to_actually_be_granted() {
+        let config = config_with_shard_named(DARK_PACT_ABILITY_NAME);
+        let mut event = low_hp_fixture();
+        event.abilities.ability3.can_cast = false;
+        event.hero.aghanims_shard = false;
+
+        assert_eq!(
+            plan_low_hp_escape(&event, &config, true, now(), None),
+            LowHpEscape::None
+        );
+    }
+
+    #[test]
+    fn an_unknown_shard_ability_name_never_fires() {
+        // The whole point of the name being configurable: a wrong one fails
+        // safe rather than pressing a key that does something else.
+        let config = config_with_shard_named("slark_not_a_real_ability");
+        let mut event = low_hp_fixture();
+        event.abilities.ability3.can_cast = false;
+
+        assert_eq!(
+            plan_low_hp_escape(&event, &config, true, now(), None),
+            LowHpEscape::None
+        );
+    }
+
+    #[test]
+    fn a_recent_escape_suppresses_the_next_one() {
+        let config = SlarkConfig::default();
+        let now = now();
+        let just_fired = now - Duration::from_millis(config.shadow_dance_trigger_cooldown_ms / 2);
+
+        assert_eq!(
+            plan_low_hp_escape(&low_hp_fixture(), &config, true, now, Some(just_fired)),
+            LowHpEscape::None
+        );
+    }
+
+    #[test]
+    fn the_escape_reopens_once_the_trigger_cooldown_expires() {
+        let config = SlarkConfig::default();
+        let now = now();
+        let long_ago = now - Duration::from_millis(config.shadow_dance_trigger_cooldown_ms + 1);
+
+        assert_eq!(
+            plan_low_hp_escape(&low_hp_fixture(), &config, true, now, Some(long_ago)),
+            LowHpEscape::ShadowDance
+        );
+    }
+
+    #[test]
+    fn a_cast_lock_blocks_the_escape_entirely() {
+        // Unlike Dark Pact there is no settle window to preserve here, so a
+        // stun simply means "not this tick".
+        for lock in ["stunned", "hexed", "silenced"] {
+            let mut event = low_hp_fixture();
+            match lock {
+                "stunned" => event.hero.stunned = true,
+                "hexed" => event.hero.hexed = true,
+                _ => event.hero.silenced = true,
+            }
+
+            assert_eq!(
+                plan_low_hp_escape(&event, &SlarkConfig::default(), true, now(), None),
+                LowHpEscape::None,
+                "{lock} should block the escape"
+            );
+        }
+    }
+
+    #[test]
+    fn the_escape_is_off_when_the_toggle_is_off() {
+        let config = SlarkConfig {
+            auto_shadow_dance_on_low_hp: false,
+            ..SlarkConfig::default()
+        };
+
+        assert_eq!(
+            plan_low_hp_escape(&low_hp_fixture(), &config, true, now(), None),
+            LowHpEscape::None
+        );
     }
 }

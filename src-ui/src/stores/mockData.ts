@@ -193,6 +193,12 @@ export const mockConfig: Settings = {
       turn_delay_ms: 200, require_ability_ready: true,
       auto_dark_pact_on_debuff: true, dark_pact_key: "q",
       dark_pact_delay_ms: 300,
+      auto_shadow_dance_on_low_hp: true, shadow_dance_key: "r",
+      shadow_dance_hp_threshold_percent: 35,
+      shadow_dance_require_danger: true,
+      shadow_dance_trigger_cooldown_ms: 3000,
+      shard_fallback_enabled: true,
+      shard_ability_name: "slark_depth_shroud", shard_key: "d",
     },
     snapfire: {
       enabled: true, trigger_key: "Space",
@@ -294,6 +300,10 @@ export const mockConfig: Settings = {
     map_offset_x: -0.02, map_offset_y: 0.015,
     map_scale_x: 0.993, map_scale_y: 0.929,
     calibrating: false,
+  },
+  hud: {
+    portrait_x_fraction: 0.44, portrait_y_fraction: 0.9,
+    portrait_calibrated: false, capture_portrait_key: "F9",
   },
   alerts: {
     enabled: true,

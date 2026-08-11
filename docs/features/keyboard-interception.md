@@ -76,6 +76,7 @@ The snapshot holds only static keyboard-facing facts:
 - Slark intercept flags, pre-parsed Pounce key, and turn delay
 - Soul Ring thresholds, ability keys, and item-slot keys
 - Armlet Roshan toggle key when `[armlet.roshan].enabled = true`
+- HUD portrait capture key from `[hud]`
 
 It does **not** replace live Soul Ring runtime state. Cooldowns, mana, health, alive state, Soul Ring availability, and slot-to-item contents still come from `SOUL_RING_STATE`, which is refreshed from GSI. That means moving an item between slots in-game still updates the interception path once GSI reports the new inventory layout.
 
@@ -142,13 +143,18 @@ Current callback order on key/button input:
     - if `[armlet.roshan].enabled = true` and the configured hotkey matches
     - emit `HotkeyEvent::ArmletRoshanToggle`
     - block the original key so it does not also reach Dota 2
-14. **Largo / generic ability-key path**
+14. **HUD portrait capture**
+    - if `[hud] capture_portrait_key` matches (default `F9`)
+    - emit `HotkeyEvent::CaptureHudPortrait`
+    - block the original key: it is ours while calibrating
+    - planned alongside the other global hotkeys in `plan_global_hotkey_press_event`
+15. **Largo / generic ability-key path**
     - emit `HotkeyEvent::LargoQ/W/E/R`
     - if Soul Ring should trigger, block and replay
     - otherwise pass through
-15. **Item-slot Soul Ring interception**
+16. **Item-slot Soul Ring interception**
      - blocks configured item keys when the item is mana-using and Soul Ring should fire first
-16. **Standalone combo key**
+17. **Standalone combo key**
      - sends `HotkeyEvent::ComboTrigger`
      - does not block the original key
 
@@ -424,6 +430,7 @@ These are still part of the interception surface even though this page centers o
 | Shadow Fiend | `config/config.toml` -> `[heroes.shadow_fiend]` | `raze_intercept_enabled`, `raze_delay_ms`, `auto_bkb_on_ultimate`, `auto_d_on_ultimate` |
 | Magnus | `config/config.toml` -> `[heroes.magnus]` | `enabled`, `ultimate_key`, `turn_delay_ms`, `require_ability_ready`, `center_camera_on_ultimate`, `camera_center_key`, `camera_center_delay_ms` |
 | Slark | `config/config.toml` -> `[heroes.slark]` | `enabled`, `pounce_key`, `turn_delay_ms`, `require_ability_ready` |
+| HUD anchors | `config/config.toml` -> `[hud]` | `capture_portrait_key` (blocked from reaching Dota), plus the stored portrait fractions |
 | Global hotkey | `config/config.toml` -> `[keybindings]` | slot key mappings; the live standalone trigger is read from `AppState.trigger_key` and cached as a parsed `snapshot.trigger_key` |
 
 ---
@@ -444,4 +451,5 @@ Related docs:
 - `docs/heroes/shadow_fiend.md`
 - `docs/heroes/magnus.md`
 - `docs/heroes/slark.md`
+- `docs/features/hud-anchors.md`
 - `docs/architecture/runtime-flow.md`

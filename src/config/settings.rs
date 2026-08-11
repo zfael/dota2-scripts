@@ -320,6 +320,39 @@ pub struct SlarkConfig {
     /// debuffs is cleansed by a single Dark Pact.
     #[serde(default = "default_slark_dark_pact_delay_ms")]
     pub dark_pact_delay_ms: u64,
+    /// Cast Shadow Dance when the danger detector fires below the HP line.
+    #[serde(default = "default_slark_auto_shadow_dance_on_low_hp")]
+    pub auto_shadow_dance_on_low_hp: bool,
+    /// Shadow Dance ability key.
+    #[serde(default = "default_slark_shadow_dance_key")]
+    pub shadow_dance_key: char,
+    /// HP percentage at or below which the escape fires.
+    #[serde(default = "default_slark_shadow_dance_hp_threshold_percent")]
+    pub shadow_dance_hp_threshold_percent: u32,
+    /// Also require the danger detector, not just the HP line.
+    ///
+    /// On, this reads as "low *and* actually under fire", so limping home at
+    /// 30% never spends the ultimate. Off, the HP line alone is enough.
+    #[serde(default = "default_slark_shadow_dance_require_danger")]
+    pub shadow_dance_require_danger: bool,
+    /// Minimum gap between two escape attempts (ms).
+    #[serde(default = "default_slark_shadow_dance_trigger_cooldown_ms")]
+    pub shadow_dance_trigger_cooldown_ms: u64,
+    /// Fall back to the shard ability when Shadow Dance is on cooldown.
+    #[serde(default = "default_slark_shard_fallback_enabled")]
+    pub shard_fallback_enabled: bool,
+    /// GSI ability name the shard grants. Configurable because the shard's
+    /// ability has moved between patches — a name that does not appear in the
+    /// payload simply never fires, and is logged.
+    #[serde(default = "default_slark_shard_ability_name")]
+    pub shard_ability_name: String,
+    /// Key the shard ability sits on.
+    ///
+    /// Dota will not self-cast this ability, so it is aimed by clicking the HUD
+    /// hero portrait — see `[hud]`. That means the portrait anchor must be
+    /// calibrated before the fallback can fire at all.
+    #[serde(default = "default_slark_shard_key")]
+    pub shard_key: char,
 }
 
 /// Configuration for auto-casting an ability during Space+Right-click combo
@@ -1253,6 +1286,40 @@ pub struct Settings {
     pub wave_overlay: WaveOverlayConfig,
     #[serde(default)]
     pub alerts: AlertsConfig,
+    #[serde(default)]
+    pub hud: HudConfig,
+}
+
+/// Points on Dota's own HUD that automation needs to click.
+///
+/// Some abilities cannot be self-cast — Dota resolves them wherever the mouse
+/// happens to be. Clicking the hero portrait is the only way to land those on
+/// your own hero, which means the app needs to know where the portrait is.
+///
+/// Positions are fractions of Dota's **client rect**, not of the display, so a
+/// calibration survives moving the window, changing resolution, and a second
+/// monitor. Where the HUD sits inside that rect still depends on Dota's UI
+/// scale, so it has to be calibrated per setup — same situation as
+/// `[wave_overlay]`'s `map_offset_*`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HudConfig {
+    /// Hero portrait X, as a fraction of Dota's client width.
+    #[serde(default = "default_hud_portrait_x_fraction")]
+    pub portrait_x_fraction: f32,
+    /// Hero portrait Y, as a fraction of Dota's client height.
+    #[serde(default = "default_hud_portrait_y_fraction")]
+    pub portrait_y_fraction: f32,
+    /// Whether the portrait above was actually measured.
+    ///
+    /// Defaults to `false`, and nothing may click the portrait until it is
+    /// true. The shipped fractions are a starting point for the Test button
+    /// only — a guessed coordinate must never be able to send a stray click
+    /// into the game world.
+    #[serde(default)]
+    pub portrait_calibrated: bool,
+    /// Hotkey that records the cursor's position as the portrait anchor.
+    #[serde(default = "default_hud_capture_portrait_key")]
+    pub capture_portrait_key: String,
 }
 
 // Default functions
@@ -1412,6 +1479,39 @@ fn default_slark_dark_pact_key() -> char {
 }
 fn default_slark_dark_pact_delay_ms() -> u64 {
     300
+}
+fn default_hud_portrait_x_fraction() -> f32 {
+    0.44
+}
+fn default_hud_portrait_y_fraction() -> f32 {
+    0.90
+}
+fn default_hud_capture_portrait_key() -> String {
+    "F9".to_string()
+}
+fn default_slark_auto_shadow_dance_on_low_hp() -> bool {
+    true
+}
+fn default_slark_shadow_dance_key() -> char {
+    'r'
+}
+fn default_slark_shadow_dance_hp_threshold_percent() -> u32 {
+    35
+}
+fn default_slark_shadow_dance_trigger_cooldown_ms() -> u64 {
+    3_000
+}
+fn default_slark_shard_fallback_enabled() -> bool {
+    true
+}
+fn default_slark_shard_ability_name() -> String {
+    "slark_depth_shroud".to_string()
+}
+fn default_slark_shard_key() -> char {
+    'd'
+}
+fn default_slark_shadow_dance_require_danger() -> bool {
+    true
 }
 fn default_sf_auto_bkb_on_ultimate() -> bool {
     false
@@ -2318,6 +2418,14 @@ impl Default for SlarkConfig {
             auto_dark_pact_on_debuff: default_slark_auto_dark_pact_on_debuff(),
             dark_pact_key: default_slark_dark_pact_key(),
             dark_pact_delay_ms: default_slark_dark_pact_delay_ms(),
+            auto_shadow_dance_on_low_hp: default_slark_auto_shadow_dance_on_low_hp(),
+            shadow_dance_key: default_slark_shadow_dance_key(),
+            shadow_dance_hp_threshold_percent: default_slark_shadow_dance_hp_threshold_percent(),
+            shadow_dance_require_danger: default_slark_shadow_dance_require_danger(),
+            shadow_dance_trigger_cooldown_ms: default_slark_shadow_dance_trigger_cooldown_ms(),
+            shard_fallback_enabled: default_slark_shard_fallback_enabled(),
+            shard_ability_name: default_slark_shard_ability_name(),
+            shard_key: default_slark_shard_key(),
         }
     }
 }
@@ -2556,6 +2664,18 @@ impl Default for Settings {
             wave_tracker: WaveTrackerConfig::default(),
             wave_overlay: WaveOverlayConfig::default(),
             alerts: AlertsConfig::default(),
+            hud: HudConfig::default(),
+        }
+    }
+}
+
+impl Default for HudConfig {
+    fn default() -> Self {
+        Self {
+            portrait_x_fraction: default_hud_portrait_x_fraction(),
+            portrait_y_fraction: default_hud_portrait_y_fraction(),
+            portrait_calibrated: false,
+            capture_portrait_key: default_hud_capture_portrait_key(),
         }
     }
 }
@@ -2790,6 +2910,44 @@ mod tests {
         assert!(cfg.auto_dark_pact_on_debuff);
         assert_eq!(cfg.dark_pact_key, 'q');
         assert_eq!(cfg.dark_pact_delay_ms, 300);
+    }
+
+    #[test]
+    fn slark_config_defaults_arm_the_low_hp_escape() {
+        let cfg = SlarkConfig::default();
+        assert!(cfg.auto_shadow_dance_on_low_hp);
+        assert_eq!(cfg.shadow_dance_key, 'r');
+        assert_eq!(cfg.shadow_dance_hp_threshold_percent, 35);
+        assert!(cfg.shadow_dance_require_danger);
+        assert_eq!(cfg.shadow_dance_trigger_cooldown_ms, 3_000);
+        assert!(cfg.shard_fallback_enabled);
+        assert_eq!(cfg.shard_ability_name, "slark_depth_shroud");
+        assert_eq!(cfg.shard_key, 'd');
+    }
+
+    /// The shipped template is what every new install starts from, so a typo or
+    /// a key that drifted from the structs would ship broken defaults.
+    #[test]
+    fn the_embedded_config_template_deserializes_into_settings() {
+        let settings: Settings = toml::from_str(EMBEDDED_CONFIG_TEMPLATE)
+            .expect("config/config.toml should parse into Settings");
+
+        // Spot-check a value from the template rather than a Rust default, so
+        // this fails if the section is missing entirely rather than silently
+        // falling back to `#[serde(default)]`.
+        assert_eq!(settings.hud.capture_portrait_key, "F9");
+        assert!(!settings.hud.portrait_calibrated);
+        assert_eq!(settings.heroes.slark.shard_ability_name, "slark_depth_shroud");
+        assert_eq!(settings.heroes.slark.shadow_dance_hp_threshold_percent, 35);
+    }
+
+    #[test]
+    fn hud_portrait_anchor_starts_uncalibrated() {
+        let cfg = HudConfig::default();
+        // The shipped fractions are only a starting point for the Test button —
+        // nothing may click the portrait until it has actually been measured.
+        assert!(!cfg.portrait_calibrated);
+        assert_eq!(cfg.capture_portrait_key, "F9");
     }
 
     #[test]

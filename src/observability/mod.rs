@@ -1,4 +1,6 @@
 #[allow(dead_code)]
+pub mod hud_anchors;
+#[allow(dead_code)]
 pub mod minimap_artifacts;
 pub mod minimap_analysis;
 pub mod minimap_baseline;

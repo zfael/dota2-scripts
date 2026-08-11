@@ -77,7 +77,7 @@
 | `src/actions/heroes/meepo.rs` | Meepo standalone combo, GSI-driven Dig / MegaMeepo, and survivability wiring | `docs/heroes/meepo.md` |
 | `src/actions/heroes/meepo_state.rs` | Read-only Meepo observed-state derivation and cache | `docs/heroes/meepo.md`, `docs/reference/gsi-schema-and-usage.md` |
 | `src/actions/heroes/outworld_destroyer.rs` | Outworld Destroyer barrier, combo worker, ultimate interception support, and self-Astral helper | `docs/heroes/outworld_destroyer.md`, `docs/features/keyboard-interception.md` |
-| `src/actions/heroes/slark.rs` | Slark directional Pounce automation (Pounce-key intercept + GSI readiness gate) and GSI-driven Dark Pact debuff cleanse | `docs/heroes/slark.md`, `docs/features/keyboard-interception.md` |
+| `src/actions/heroes/slark.rs` | Slark directional Pounce automation (Pounce-key intercept + GSI readiness gate), GSI-driven Dark Pact debuff cleanse, and the low-HP Shadow Dance escape with shard fallback | `docs/heroes/slark.md`, `docs/features/keyboard-interception.md`, `docs/features/hud-anchors.md` |
 | `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend raze / ultimate / standalone combo logic | `docs/heroes/shadow_fiend.md`, `docs/features/keyboard-interception.md` |
 | `src/actions/heroes/snapfire.rs` | Snapfire directional Firesnap Cookie automation (trigger-key intercept + ALT self-cast leap) | `docs/heroes/snapfire.md`, `docs/features/keyboard-interception.md` |
 | `src/actions/heroes/tiny.rs` | Tiny standalone combo | `docs/heroes/tiny.md` |
@@ -175,6 +175,7 @@
 | `src/observability/lane_heat.rs` | Zone activity classifier, rolling lane heat tracker, and event detection | `docs/superpowers/specs/2026-03-31-lane-heat-analysis-design.md` |
 | `src/observability/wave_tracker.rs` | Clock-driven creep wave spawn cadence, lane path interpolation, and clash prediction | `docs/features/wave-tracker.md` |
 | `src/observability/wave_overlay.rs` | Screen-space placement maths for the click-through minimap overlay | `docs/features/wave-tracker.md` |
+| `src/observability/hud_anchors.rs` | Calibrated HUD positions (hero portrait), cursor capture, and client-rect fraction maths | `docs/features/hud-anchors.md` |
 | `src/observability/alerts.rs` | Objective alert schedules, cue assignments, and fire-once scheduling | `docs/features/objective-alerts.md` |
 | `src/audio/motif.rs` | Procedural synthesis of alert cues (pure DSP, no device needed) | `docs/features/objective-alerts.md` |
 | `src/audio/player.rs` | rodio output: PCM and file playback for alert cues | `docs/features/objective-alerts.md` |
@@ -186,6 +187,7 @@
 | `src-ui/src/pages/Alerts.tsx` | Alerts page: master controls and per-event settings with test buttons | `docs/features/objective-alerts.md` |
 | `src-tauri/src/commands/waves.rs` | Tauri commands exposing lane geometry and wave snapshots to the UI | `docs/features/wave-tracker.md` |
 | `src-tauri/src/commands/overlay.rs` | Overlay window lifecycle, click-through setup, and the follow-Dota reposition loop | `docs/features/wave-tracker.md` |
+| `src-tauri/src/commands/hud.rs` | HUD anchor capture and test commands, plus the hotkey entry point | `docs/features/hud-anchors.md` |
 
 ## `tests/`
 
@@ -230,7 +232,8 @@
 | `docs/heroes/meepo.md` | Meepo automation doc |
 | `docs/heroes/outworld_destroyer.md` | Outworld Destroyer automation doc |
 | `docs/heroes/shadow_fiend.md` | Shadow Fiend automation doc |
-| `docs/heroes/slark.md` | Slark automation doc: directional Pounce |
+| `docs/heroes/slark.md` | Slark automation doc: directional Pounce, Dark Pact cleanse, low-HP escape |
+| `docs/features/hud-anchors.md` | HUD anchor doc: why the portrait click exists, calibration, and failing safe |
 | `docs/heroes/tiny.md` | Tiny automation doc |
 | `docs/heroes/hero-template.md` | Template for new hero docs |
 | `docs/reference/configuration.md` | Section-by-section config reference and fallback defaults |
