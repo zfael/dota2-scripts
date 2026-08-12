@@ -23,14 +23,16 @@
 //!
 //! Known blind spot: a right-click attack breaks invisibility and produces no GSI
 //! signal whatsoever, so the window stays open until it times out. That is the
-//! right direction to fail — a skipped Phase activation costs a little movespeed,
-//! a wrongly fired one costs the whole Shadow Blade.
+//! right direction to fail — a skipped Phase activation costs a little movespeed
+//! and a skipped Dark Pact costs a debuff a moment longer, while a wrongly fired
+//! one costs the whole Shadow Blade.
 
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tracing::debug;
 
+use crate::config::Settings;
 use crate::models::gsi_event::GsiWebhookEvent;
 
 /// Ability panel width GSI reports, matching `Abilities::get_by_index`.
@@ -95,6 +97,15 @@ pub fn is_invisible() -> bool {
         .unwrap()
         .as_ref()
         .is_some_and(|snapshot| snapshot.active.is_some())
+}
+
+/// Whether an automation that would break invisibility must hold this tick.
+///
+/// The single gate for every automation that casts an ability or activates an
+/// item. Callers that *grant* invisibility — Slark's Shadow Dance and Depth
+/// Shroud — must not consult it: they replace the window rather than ending it.
+pub fn suppresses_automation(settings: &Settings) -> bool {
+    settings.invisibility.suppress_automation && is_invisible()
 }
 
 /// Advance the tracker with one GSI payload. Must run for *every* event, whether
@@ -244,6 +255,18 @@ fn read_ability_cooldowns(event: &GsiWebhookEvent) -> [u32; ABILITY_SLOTS] {
 #[cfg(test)]
 pub fn replace_snapshot_for_tests(snapshot: Option<InvisSnapshot>) {
     *LAST_INVIS_SNAPSHOT.lock().unwrap() = snapshot;
+}
+
+/// Serialises every test that swaps the global snapshot.
+///
+/// The tracker is process-wide and `cargo test` runs the crate's tests on
+/// threads, so a test that installs an invisibility window would otherwise be
+/// visible to unrelated tests running beside it. One lock for the whole crate,
+/// not one per module — two locks would not serialise against each other.
+#[cfg(test)]
+pub fn snapshot_test_lock() -> &'static Mutex<()> {
+    static TEST_LOCK: std::sync::OnceLock<Mutex<()>> = std::sync::OnceLock::new();
+    TEST_LOCK.get_or_init(|| Mutex::new(()))
 }
 
 /// Build a snapshot that reports the hero as invisible, for tests that only care
@@ -460,6 +483,25 @@ mod tests {
         let snapshot = advance_invis_snapshot(None, &event_with(25, 0, 0), 1_000);
 
         assert!(snapshot.active.is_none());
+    }
+
+    /// The gate every automation shares. Both halves have to be true, so a
+    /// player who turns the suppression off keeps the old behaviour outright.
+    #[test]
+    fn the_shared_gate_needs_both_the_setting_and_a_live_window() {
+        let _guard = snapshot_test_lock().lock().unwrap();
+        let mut settings = Settings::default();
+
+        replace_snapshot_for_tests(None);
+        assert!(!suppresses_automation(&settings));
+
+        replace_snapshot_for_tests(Some(active_snapshot_for_tests("npc_dota_hero_slark")));
+        assert!(suppresses_automation(&settings));
+
+        settings.invisibility.suppress_automation = false;
+        assert!(!suppresses_automation(&settings));
+
+        replace_snapshot_for_tests(None);
     }
 
     #[test]

@@ -40,6 +40,13 @@ pub fn check_and_dispel_silence(
         return;
     }
 
+    // Silence does not break invisibility, but Manta and Lotus both would. A
+    // silenced hero can still walk away invisible, so the dispel is worth less
+    // than the escape it would cost.
+    if crate::actions::invisibility::suppresses_automation(settings) {
+        return;
+    }
+
     let manta_enabled = settings.danger_detection.auto_manta_on_silence;
     let lotus_enabled = settings.danger_detection.auto_lotus_on_silence;
 
@@ -65,7 +72,7 @@ pub fn check_and_dispel_silence(
                 return;
             }
         }
-        
+
         // Check Lotus Orb (self-cast with double-tap)
         if lotus_enabled && item.name == "item_lotus_orb" {
             if item.can_cast.unwrap_or(false) && item.cooldown.unwrap_or(0) == 0 {

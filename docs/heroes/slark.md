@@ -19,6 +19,7 @@ Directional **Pounce** (W) on a single keypress, GSI-driven **Dark Pact** debuff
 - Casts Dark Pact when `hero.has_debuff` is true, after a short settle window.
 - **GSI exposes a single `has_debuff` bool and never names the modifier**, so this cannot tell a Doom from a Drow slow. It cleanses on anything.
 - Held (not dropped) while stunned, hexed, silenced, or while Dark Pact is on cooldown, so the cleanse fires the instant it becomes castable.
+- Also held while Shadow Blade / Silver Edge invisibility is running: casting Dark Pact would break it, and Slark bought that item to leave the fight.
 
 ### Low HP escape
 
@@ -121,13 +122,13 @@ so before the first payload W behaves normally.
 ### Dark Pact cleanse
 
 `SlarkScript::dark_pact_cleanse` runs on every `handle_gsi_event`, before the
-shared survivability checks. The gating lives in `plan_dark_pact(event, enabled)`,
-which returns one of three decisions:
+shared survivability checks. The gating lives in
+`plan_dark_pact(event, enabled, invisible)`, which returns one of three decisions:
 
 | Decision | When | Effect on the settle window |
 |---|---|---|
 | `Idle` | toggle off, dead, or `has_debuff = false` | dropped |
-| `Hold` | stunned / hexed / silenced, or `slark_dark_pact` unlevelled or on cooldown | kept running |
+| `Hold` | invisible from Shadow Blade / Silver Edge, stunned / hexed / silenced, or `slark_dark_pact` unlevelled or on cooldown | kept running |
 | `Arm` | debuffed and castable | started, or spent once `dark_pact_delay_ms` has elapsed |
 
 `Hold` is the interesting case. Dark Pact cannot be cast through a stun or a
@@ -136,6 +137,15 @@ lock lifts — so the window keeps running rather than restarting. The same is
 true on cooldown: a debuff that lands during the cooldown fires the cleanse
 immediately when Dark Pact comes back, because the elapsed time is already past
 the settle window.
+
+The invisibility hold is the same reasoning applied to a resource rather than a
+lock. Casting Dark Pact ends a Shadow Blade or Silver Edge window, which is worth
+more than a debuff shed a few seconds early — so the cleanse waits and lands the
+moment the window closes. `invisible` is passed in rather than read inside
+`plan_dark_pact` so the planner stays free of global state; the caller asks
+`invisibility::suppresses_automation(&settings)`, the crate-wide gate described in
+`docs/features/survivability.md`. Setting `[invisibility] suppress_automation =
+false` restores the old behaviour.
 
 The timer itself (`SLARK_DEBUFF_DETECTED`) is taken with `try_lock`. A contended
 tick is skipped rather than blocking the GSI handler; the next payload is 0.1s
@@ -155,6 +165,10 @@ more than a salve. `plan_low_hp_escape` picks one of three outcomes:
 | `None` | toggle off, dead, stunned/hexed/silenced, above the HP line, danger required but absent, inside the trigger cooldown, or nothing castable |
 | `ShadowDance` | `slark_shadow_dance` levelled and castable — **always preferred** |
 | `Shard` | ultimate unavailable **and finished running**, `hero.aghanims_shard` set, and `slark_depth_shroud` castable |
+
+Neither escape consults the invisibility gate that holds Dark Pact. Both *grant*
+invisibility, so casting one out of a Shadow Blade window replaces it with a
+better one rather than ending it.
 
 ### Waiting out the ultimate
 

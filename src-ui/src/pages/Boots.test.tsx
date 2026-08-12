@@ -26,7 +26,6 @@ function setPhaseBoots() {
         minimum_distance_units: 100,
         // Not editable from the UI; configured through config.toml only.
         excluded_heroes: [],
-        suppress_while_invisible: true,
       },
     },
     loaded: true,
@@ -56,8 +55,24 @@ describe("Boots page phase boots automation controls", () => {
     expect(screen.getByText("Phase Boots")).toBeInTheDocument();
     expect(screen.getByText("Enable Phase Boots Automation")).toBeInTheDocument();
     expect(screen.getByText("Minimum Movement Distance")).toBeInTheDocument();
-    expect(screen.getByText("Hold While Invisible")).toBeInTheDocument();
     expect(screen.queryByText("Excluded Heroes")).not.toBeInTheDocument();
+  });
+
+  // The switch moved to Survivability once it stopped being about Phase Boots.
+  it("points at Survivability for the invisibility hold instead of owning it", () => {
+    render(
+      <MemoryRouter>
+        <Boots />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.queryByRole("switch", { name: "Hold While Invisible" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Survivability" })).toHaveAttribute(
+      "href",
+      "/survivability",
+    );
   });
 
   it("persists phase boots toggle changes through the shared config store", async () => {
@@ -84,27 +99,4 @@ describe("Boots page phase boots automation controls", () => {
     });
   });
 
-  it("persists the invisibility hold toggle through the shared config store", async () => {
-    invokeMock.mockResolvedValue(undefined);
-
-    render(
-      <MemoryRouter>
-        <Boots />
-      </MemoryRouter>,
-    );
-
-    await fireEvent.click(
-      screen.getByRole("switch", { name: "Hold While Invisible" }),
-    );
-
-    await vi.advanceTimersByTimeAsync(300);
-    await vi.waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith("update_config", {
-        section: "phase_boots_automation",
-        updates: {
-          suppress_while_invisible: false,
-        },
-      });
-    });
-  });
 });

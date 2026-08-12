@@ -317,7 +317,10 @@ export interface PhaseBootsAutomationConfig {
   enabled: boolean;
   minimum_distance_units: number;
   excluded_heroes: string[];
-  suppress_while_invisible: boolean;
+}
+
+export interface InvisibilityConfig {
+  suppress_automation: boolean;
 }
 
 export interface SoulRingConfig {
@@ -424,6 +427,7 @@ export interface Settings {
   danger_detection: DangerDetectionConfig;
   neutral_items: NeutralItemConfig;
   phase_boots_automation: PhaseBootsAutomationConfig;
+  invisibility: InvisibilityConfig;
   soul_ring: SoulRingConfig;
   updates: UpdateConfig;
   rune_alerts: RuneAlertConfig;

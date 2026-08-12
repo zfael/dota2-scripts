@@ -722,10 +722,30 @@ pub struct PhaseBootsAutomationConfig {
     pub minimum_distance_units: u32,
     #[serde(default = "default_phase_boots_excluded_heroes")]
     pub excluded_heroes: Vec<String>,
-    /// Hold Phase Boots while Shadow Blade / Silver Edge invisibility is running,
-    /// since activating it would break the invisibility.
-    #[serde(default = "default_phase_boots_suppress_while_invisible")]
-    pub suppress_while_invisible: bool,
+}
+
+/// What automation may do while the hero is invisible from an item.
+///
+/// Shadow Blade and Silver Edge invisibility drops the moment the hero casts an
+/// ability or activates an item — which is exactly what every automation here
+/// does. The invisibility was almost always bought as an escape, so spending it
+/// on a Phase Boots activation or a Dark Pact cleanse is a bad trade the player
+/// never asked for.
+///
+/// This was originally `[phase_boots_automation] suppress_while_invisible`, back
+/// when Phase Boots was the only automation that could break invisibility.
+/// `Settings::load` still honours that key when this section is absent.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InvisibilityConfig {
+    /// Hold every invisibility-breaking automation while the window is running.
+    ///
+    /// Automation that *grants* invisibility is deliberately not covered — Slark's
+    /// Shadow Dance and Depth Shroud replace the window with a better one rather
+    /// than ending it. Neither is Soul Ring or Armlet: both are driven by the
+    /// player's own keypress or by imminent death, where the invisibility is
+    /// already forfeit or worth less than surviving.
+    #[serde(default = "default_suppress_automation_while_invisible")]
+    pub suppress_automation: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1283,6 +1303,8 @@ pub struct Settings {
     pub mana_automation: ManaAutomationConfig,
     #[serde(default)]
     pub phase_boots_automation: PhaseBootsAutomationConfig,
+    #[serde(default)]
+    pub invisibility: InvisibilityConfig,
     #[serde(default)]
     pub soul_ring: SoulRingConfig,
     #[serde(default)]
@@ -2207,7 +2229,7 @@ fn default_phase_boots_minimum_distance_units() -> u32 {
 fn default_phase_boots_excluded_heroes() -> Vec<String> {
     Vec::new()
 }
-fn default_phase_boots_suppress_while_invisible() -> bool {
+fn default_suppress_automation_while_invisible() -> bool {
     true
 }
 fn default_gsi_logging_enabled() -> bool {
@@ -2656,7 +2678,14 @@ impl Default for PhaseBootsAutomationConfig {
             enabled: default_phase_boots_automation_enabled(),
             minimum_distance_units: default_phase_boots_minimum_distance_units(),
             excluded_heroes: default_phase_boots_excluded_heroes(),
-            suppress_while_invisible: default_phase_boots_suppress_while_invisible(),
+        }
+    }
+}
+
+impl Default for InvisibilityConfig {
+    fn default() -> Self {
+        Self {
+            suppress_automation: default_suppress_automation_while_invisible(),
         }
     }
 }
@@ -2674,6 +2703,7 @@ impl Default for Settings {
             neutral_items: NeutralItemConfig::default(),
             mana_automation: ManaAutomationConfig::default(),
             phase_boots_automation: PhaseBootsAutomationConfig::default(),
+            invisibility: InvisibilityConfig::default(),
             soul_ring: SoulRingConfig::default(),
             gsi_logging: GsiLoggingConfig::default(),
             updates: UpdateConfig::default(),
@@ -2697,6 +2727,25 @@ impl Default for HudConfig {
             capture_portrait_key: default_hud_capture_portrait_key(),
         }
     }
+}
+
+/// Read the pre-`[invisibility]` spelling of the suppression flag.
+///
+/// The gate used to live at `[phase_boots_automation] suppress_while_invisible`,
+/// which is still what an existing config on disk says. Returns `Some` only when
+/// the old key is present *and* the new section is not, so a config that has been
+/// updated is never second-guessed by a stale key someone left behind.
+fn legacy_suppress_while_invisible(contents: &str) -> Option<bool> {
+    let document: toml::Value = toml::from_str(contents).ok()?;
+
+    if document.get("invisibility").is_some() {
+        return None;
+    }
+
+    document
+        .get("phase_boots_automation")?
+        .get("suppress_while_invisible")?
+        .as_bool()
 }
 
 impl Settings {
@@ -2727,7 +2776,15 @@ impl Settings {
             Ok(contents) => match toml::from_str(&contents) {
                 Ok(settings) => {
                     info!("Loaded configuration from {}", config_path.display());
-                    let settings: Settings = settings;
+                    let mut settings: Settings = settings;
+                    if let Some(legacy) = legacy_suppress_while_invisible(&contents) {
+                        info!(
+                            "Carrying [phase_boots_automation] suppress_while_invisible = {} over \
+                             to [invisibility] suppress_automation",
+                            legacy
+                        );
+                        settings.invisibility.suppress_automation = legacy;
+                    }
                     settings.validate_keybindings();
                     settings
                 }
@@ -2958,6 +3015,15 @@ mod tests {
         assert!(!settings.hud.portrait_calibrated);
         assert_eq!(settings.heroes.slark.shard_key, 'd');
         assert_eq!(settings.heroes.slark.shadow_dance_hp_threshold_percent, 35);
+
+        // `suppress_automation` defaults to the same `true` the template sets, so
+        // asserting the value would pass even with the section missing. The
+        // legacy reader answers `None` only when `[invisibility]` is really there.
+        assert!(settings.invisibility.suppress_automation);
+        assert_eq!(
+            legacy_suppress_while_invisible(EMBEDDED_CONFIG_TEMPLATE),
+            None
+        );
     }
 
     #[test]
@@ -3052,7 +3118,43 @@ mod tests {
         assert!(settings.phase_boots_automation.enabled);
         assert_eq!(settings.phase_boots_automation.minimum_distance_units, 100);
         assert!(settings.phase_boots_automation.excluded_heroes.is_empty());
-        assert!(settings.phase_boots_automation.suppress_while_invisible);
+    }
+
+    #[test]
+    fn invisibility_suppression_defaults_to_on() {
+        assert!(Settings::default().invisibility.suppress_automation);
+    }
+
+    #[test]
+    fn a_config_without_the_invisibility_section_keeps_the_old_phase_boots_flag() {
+        let legacy = r#"
+[phase_boots_automation]
+enabled = true
+suppress_while_invisible = false
+"#;
+
+        assert_eq!(legacy_suppress_while_invisible(legacy), Some(false));
+    }
+
+    #[test]
+    fn the_new_section_wins_over_a_stale_phase_boots_key() {
+        let both = r#"
+[phase_boots_automation]
+suppress_while_invisible = false
+
+[invisibility]
+suppress_automation = true
+"#;
+
+        assert_eq!(legacy_suppress_while_invisible(both), None);
+    }
+
+    #[test]
+    fn a_config_with_neither_key_reports_nothing_to_carry_over() {
+        assert_eq!(
+            legacy_suppress_while_invisible("[phase_boots_automation]\nenabled = true\n"),
+            None
+        );
     }
 
     #[test]

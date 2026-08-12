@@ -50,6 +50,23 @@ describe("Survivability page", () => {
     expect(screen.getByText("Defensive Items")).toBeInTheDocument();
     expect(screen.getByText("Dispels")).toBeInTheDocument();
     expect(screen.getByText("Neutral Items")).toBeInTheDocument();
+    expect(screen.getByText("Invisibility")).toBeInTheDocument();
+  });
+
+  it("persists the invisibility hold to its own section", async () => {
+    renderSurvivability();
+
+    fireEvent.click(
+      screen.getByRole("switch", { name: "Hold Automation While Invisible" }),
+    );
+
+    await vi.advanceTimersByTimeAsync(300);
+    await vi.waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("update_config", {
+        section: "invisibility",
+        updates: { suppress_automation: false },
+      });
+    });
   });
 
   it("persists the shared healing threshold to the common section", async () => {

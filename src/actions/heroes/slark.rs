@@ -195,9 +195,18 @@ enum DarkPactDecision {
 ///
 /// Split out from the timer bookkeeping so the gating is testable without
 /// touching global state or the clock.
-fn plan_dark_pact(event: &GsiWebhookEvent, enabled: bool) -> DarkPactDecision {
+fn plan_dark_pact(event: &GsiWebhookEvent, enabled: bool, invisible: bool) -> DarkPactDecision {
     if !enabled || !event.hero.is_alive() || !event.hero.has_debuff {
         return DarkPactDecision::Idle;
+    }
+
+    // Dark Pact is a cast, and a cast drops Shadow Blade / Silver Edge
+    // invisibility — the same trade Phase Boots is held for. Slark popped that
+    // item to leave the fight; shedding a debuff is not worth being seen again.
+    // `Hold` rather than `Idle` so the settle window survives the window and the
+    // cleanse lands the moment invisibility ends.
+    if invisible {
+        return DarkPactDecision::Hold;
     }
 
     // Dark Pact cannot be cast through any of these, but whatever else is on
@@ -450,9 +459,10 @@ impl SlarkScript {
         let enabled = slark.auto_dark_pact_on_debuff;
         let key = slark.dark_pact_key;
         let delay_ms = slark.dark_pact_delay_ms;
+        let invisible = crate::actions::invisibility::suppresses_automation(&settings);
         drop(settings);
 
-        let decision = plan_dark_pact(event, enabled);
+        let decision = plan_dark_pact(event, enabled, invisible);
 
         // try_lock: a contended tick is worth skipping, not blocking the GSI
         // handler for. The next payload is 0.1s away.
@@ -679,26 +689,26 @@ mod tests {
         event
     }
 
+    /// Plan a cleanse with Slark **visible**, which is the common case. The
+    /// invisibility gate has its own tests below.
+    fn plan_pact(event: &GsiWebhookEvent, enabled: bool) -> DarkPactDecision {
+        plan_dark_pact(event, enabled, false)
+    }
+
     #[test]
     fn dark_pact_arms_on_a_debuff_when_castable() {
-        assert_eq!(
-            plan_dark_pact(&debuffed_fixture(), true),
-            DarkPactDecision::Arm
-        );
+        assert_eq!(plan_pact(&debuffed_fixture(), true), DarkPactDecision::Arm);
     }
 
     #[test]
     fn dark_pact_is_idle_without_a_debuff() {
-        assert_eq!(
-            plan_dark_pact(&slark_fixture(), true),
-            DarkPactDecision::Idle
-        );
+        assert_eq!(plan_pact(&slark_fixture(), true), DarkPactDecision::Idle);
     }
 
     #[test]
     fn dark_pact_is_idle_when_the_toggle_is_off() {
         assert_eq!(
-            plan_dark_pact(&debuffed_fixture(), false),
+            plan_pact(&debuffed_fixture(), false),
             DarkPactDecision::Idle
         );
     }
@@ -708,7 +718,7 @@ mod tests {
         let mut event = debuffed_fixture();
         event.hero.alive = false;
 
-        assert_eq!(plan_dark_pact(&event, true), DarkPactDecision::Idle);
+        assert_eq!(plan_pact(&event, true), DarkPactDecision::Idle);
     }
 
     #[test]
@@ -722,7 +732,7 @@ mod tests {
             }
 
             assert_eq!(
-                plan_dark_pact(&event, true),
+                plan_pact(&event, true),
                 DarkPactDecision::Hold,
                 "{lock} should hold the settle window, not drop it"
             );
@@ -734,7 +744,7 @@ mod tests {
         let mut event = debuffed_fixture();
         event.abilities.ability0.can_cast = false;
 
-        assert_eq!(plan_dark_pact(&event, true), DarkPactDecision::Hold);
+        assert_eq!(plan_pact(&event, true), DarkPactDecision::Hold);
     }
 
     #[test]
@@ -742,7 +752,32 @@ mod tests {
         let mut event = debuffed_fixture();
         event.abilities.ability0.level = 0;
 
-        assert_eq!(plan_dark_pact(&event, true), DarkPactDecision::Hold);
+        assert_eq!(plan_pact(&event, true), DarkPactDecision::Hold);
+    }
+
+    /// Casting Dark Pact would drop a Shadow Blade / Silver Edge window that
+    /// Slark spent an item on. Everything else here is green, so the gate is the
+    /// only thing standing between this payload and a cast.
+    #[test]
+    fn dark_pact_holds_while_invisible_from_an_item() {
+        let event = debuffed_fixture();
+        assert_eq!(plan_pact(&event, true), DarkPactDecision::Arm);
+
+        assert_eq!(
+            plan_dark_pact(&event, true, true),
+            DarkPactDecision::Hold,
+            "invisibility should hold the window, so the cleanse lands once it ends"
+        );
+    }
+
+    /// The gate must not outlive the invisibility: the debuff is still there and
+    /// the settle window has been running the whole time.
+    #[test]
+    fn dark_pact_arms_again_once_invisibility_ends() {
+        assert_eq!(
+            plan_dark_pact(&debuffed_fixture(), true, false),
+            DarkPactDecision::Arm
+        );
     }
 
     /// Low enough to be over the line, with the shard granted so both escape

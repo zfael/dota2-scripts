@@ -270,6 +270,45 @@ threshold.
 
 ---
 
+## Invisibility hold
+
+Owned by `src/actions/invisibility.rs`, which infers a Shadow Blade / Silver Edge
+window from item cooldown edges (GSI exposes no modifiers). One gate,
+`invisibility::suppresses_automation(&settings)`, is consulted by every automation
+that would end that window:
+
+| Automation | Where the gate sits |
+|---|---|
+| Healing items | `check_and_use_healing_items_with_danger` |
+| Defensive items | `use_defensive_items_if_danger_with_snapshot` |
+| Neutral items | `use_neutral_item_if_danger_with_snapshot` |
+| Low-mana items | `check_and_use_mana_items` |
+| Phase Boots | `eligible_movement_item` |
+| Silence dispel | `dispel::check_and_dispel_silence` |
+| Slark Dark Pact | `heroes::slark::plan_dark_pact` |
+
+The gate lives at the point of the key press rather than inside the planner
+functions, so the planners stay pure and their tests stay order-independent.
+Slark is the exception: `plan_dark_pact` takes the answer as an argument for the
+same reason.
+
+**Not** gated, deliberately:
+
+- Slark's Shadow Dance and Depth Shroud — they grant invisibility, so they
+  replace the window rather than ending it.
+- Soul Ring — it fires off your own ability keypress, which has already broken
+  invisibility by the time we would act.
+- Armlet — its whole job is stopping you dying to the HP drain; being seen is
+  the cheaper outcome.
+
+Turn the whole thing off with `[invisibility] suppress_automation = false`.
+
+Blind spot inherited from the tracker: a plain right-click attack breaks
+invisibility and produces no GSI signal, so the hold stays on until the window
+times out.
+
+---
+
 ## Silence dispel
 
 Owned by `src/actions/dispel.rs::check_and_dispel_silence()`.
@@ -327,6 +366,7 @@ across three config sections rather than mirroring one:
 | Defensive Items | `[danger_detection]` | `auto_bkb`, `auto_satanic`, `satanic_hp_threshold`, `auto_blade_mail`, `auto_glimmer_cape`, `auto_ghost_scepter`, `auto_shivas_guard` |
 | Dispels | `[danger_detection]` | `auto_manta_on_silence`, `auto_lotus_on_silence` |
 | Neutral Items | `[neutral_items]` | `enabled`, `use_in_danger`, `hp_threshold`, `self_cast_key`, `allowed_items` |
+| Invisibility | `[invisibility]` | `suppress_automation` |
 
 The Lane Phase toggle is derived, not stored: it writes
 `lane_phase_duration_seconds = 0` to disable and `480` to re-enable, matching the
@@ -336,7 +376,9 @@ Deliberately **not** on that page:
 
 - danger *detection* heuristics — `docs/features/danger-detection.md`, `/danger`
 - `[armlet]` — `/armlet`
-- `[phase_boots_automation]` — `/boots`
+- `[phase_boots_automation]` — `/boots`. Its invisibility hold is the exception:
+  that switch stopped being about Phase Boots when the gate went crate-wide, so
+  it lives in the Invisibility card here and `/boots` links across to it.
 - `[mana_automation]` — TOML-only; the feature is not shaped well enough to expose yet
 - `neutral_items.log_discoveries`, and every `excluded_heroes` list — TOML-only
 
@@ -354,6 +396,7 @@ Deliberately **not** on that page:
 | `[neutral_items]` | `enabled`, `self_cast_key`, `use_in_danger`, `hp_threshold`, `allowed_items` |
 | `[mana_automation]` | `enabled`, `mana_threshold_percent`, `excluded_heroes`, `allowed_items` |
 | `[phase_boots_automation]` | `enabled`, `minimum_distance_units`, `excluded_heroes` |
+| `[invisibility]` | `suppress_automation` |
 
 ---
 

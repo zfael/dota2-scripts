@@ -445,9 +445,7 @@ fn eligible_movement_item(
     ) {
         return None;
     }
-    // Activating Phase Boots is an item use, which drops Shadow Blade / Silver Edge
-    // invisibility. Hold off rather than popping the player's own escape.
-    if settings.phase_boots_automation.suppress_while_invisible && invisibility::is_invisible() {
+    if invisibility::suppresses_automation(settings) {
         return None;
     }
 
@@ -535,6 +533,9 @@ impl SurvivabilityActions {
     ) {
         let plan = {
             let settings = self.settings.lock().unwrap();
+            if invisibility::suppresses_automation(&settings) {
+                return;
+            }
             plan_healing_items(event, &settings, in_danger)
         }; // Lock released before any key press
 
@@ -577,6 +578,9 @@ impl SurvivabilityActions {
             let current_config = &settings.danger_detection;
 
             if !should_consider_defensive_items(event, &settings, in_danger) {
+                return;
+            }
+            if invisibility::suppresses_automation(&settings) {
                 return;
             }
 
@@ -691,6 +695,9 @@ impl SurvivabilityActions {
         }
 
         let settings = self.settings.lock().unwrap();
+        if invisibility::suppresses_automation(&settings) {
+            return;
+        }
         let Some(spec) = eligible_danger_neutral_spec(event, &settings, in_danger) else {
             return;
         };
@@ -739,6 +746,9 @@ impl SurvivabilityActions {
         }
 
         let settings = self.settings.lock().unwrap();
+        if invisibility::suppresses_automation(&settings) {
+            return;
+        }
         let Some((spec, item_key)) = eligible_low_mana_item(event, &settings) else {
             return;
         };
@@ -1040,7 +1050,7 @@ mod tests {
 
 #[cfg(test)]
 mod snapshot_tests {
-    use std::sync::{Arc, Mutex, OnceLock};
+    use std::sync::{Arc, Mutex};
 
     use crate::actions::executor::ActionExecutor;
     use crate::actions::invisibility;
@@ -1057,9 +1067,12 @@ mod snapshot_tests {
         should_consider_defensive_items, should_consider_neutral_item, SurvivabilityActions,
     };
 
+    /// Guards the movement snapshot, the global lockouts and the invisibility
+    /// tracker. It *is* the invisibility lock rather than a second one beside
+    /// it — these tests swap the invisibility snapshot, so a separate lock would
+    /// serialise nothing.
     fn shared_state_test_lock() -> &'static Mutex<()> {
-        static TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        TEST_LOCK.get_or_init(|| Mutex::new(()))
+        invisibility::snapshot_test_lock()
     }
 
     fn empty_ability() -> Ability {
@@ -1539,7 +1552,7 @@ mod snapshot_tests {
         let mut settings = Settings::default();
         settings.phase_boots_automation.enabled = true;
         settings.phase_boots_automation.minimum_distance_units = 100;
-        settings.phase_boots_automation.suppress_while_invisible = false;
+        settings.invisibility.suppress_automation = false;
 
         let event = walking_phase_boots_event();
         invisibility::replace_snapshot_for_tests(Some(invisibility::active_snapshot_for_tests(

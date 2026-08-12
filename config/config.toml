@@ -260,7 +260,14 @@ allowed_items = [
 enabled = true
 minimum_distance_units = 100
 excluded_heroes = []
-suppress_while_invisible = true  # Don't pop Shadow Blade / Silver Edge invisibility
+
+[invisibility]
+# Hold every automation that would break Shadow Blade / Silver Edge invisibility:
+# Dark Pact, Phase Boots, healing, defensive, neutral and mana items, and the
+# Manta/Lotus silence dispel. Abilities that grant invisibility instead of ending
+# it — Slark's Shadow Dance and Depth Shroud — are never held. Neither are Soul
+# Ring or Armlet: those fire off your own keypress or to stop you dying.
+suppress_automation = true
 
 [heroes.largo]
 amphibian_rhapsody_enabled = true

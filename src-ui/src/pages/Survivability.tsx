@@ -11,12 +11,15 @@ export default function Survivability() {
   const common = useConfigStore((s) => s.config.common);
   const danger = useConfigStore((s) => s.config.danger_detection);
   const neutral = useConfigStore((s) => s.config.neutral_items);
+  const invisibility = useConfigStore((s) => s.config.invisibility);
   const updateCommon = (updates: Partial<typeof common>) =>
     useConfigStore.getState().updateConfig("common", updates);
   const updateDanger = (updates: Partial<typeof danger>) =>
     useConfigStore.getState().updateConfig("danger_detection", updates);
   const updateNeutral = (updates: Partial<typeof neutral>) =>
     useConfigStore.getState().updateConfig("neutral_items", updates);
+  const updateInvisibility = (updates: Partial<typeof invisibility>) =>
+    useConfigStore.getState().updateConfig("invisibility", updates);
 
   const lanePhaseEnabled = common.lane_phase_duration_seconds > 0;
 
@@ -124,6 +127,25 @@ export default function Survivability() {
                 </p>
               </>
             )}
+          </Card>
+
+          <Card title="Invisibility">
+            <Toggle
+              label="Hold Automation While Invisible"
+              checked={invisibility.suppress_automation}
+              onChange={(v) => updateInvisibility({ suppress_automation: v })}
+            />
+            <p className="text-xs text-subtle">
+              Shadow Blade and Silver Edge invisibility drops the moment anything
+              is cast or activated. While it is running, this holds Slark's Dark
+              Pact, Phase Boots, healing, defensive, neutral and mana items, and
+              the silence dispels.
+            </p>
+            <p className="text-xs text-muted">
+              Never held: Slark's Shadow Dance and Depth Shroud, which grant
+              invisibility rather than ending it, and Soul Ring and Armlet, which
+              fire off your own keypress or to stop you dying.
+            </p>
           </Card>
 
           <Card title="Dispels">

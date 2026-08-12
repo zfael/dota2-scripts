@@ -157,6 +157,23 @@ See `docs/features/survivability.md`.
 
 See `docs/features/survivability.md`.
 
+## `[invisibility]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `suppress_automation` | `true` | `true` | Holds every automation that would break Shadow Blade / Silver Edge invisibility: Slark's Dark Pact, Phase Boots, healing items, defensive items, neutral items, low-mana items, and the Manta/Lotus silence dispel. |
+
+Not held: Slark's Shadow Dance and Depth Shroud, which *grant* invisibility rather
+than ending it, and Soul Ring and Armlet, which fire off your own keypress or to
+stop you dying.
+
+This was `[phase_boots_automation] suppress_while_invisible` before the gate
+covered anything but Phase Boots. `Settings::load` still reads that key when
+`[invisibility]` is absent, so an un-migrated config keeps its old answer; once
+the new section exists, the old key is ignored.
+
+See `docs/features/survivability.md`.
+
 ## `[gsi_logging]`
 
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |
