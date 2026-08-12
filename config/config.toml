@@ -392,6 +392,10 @@ dark_pact_key = "q"
 # Settle window after the first debuff before casting (ms), so a burst of
 # debuffs from one engagement is cleansed by a single Dark Pact.
 dark_pact_delay_ms = 300
+# Also require the danger detector, not just has_debuff. Leave true: a creep's
+# slow sets the same flag a Doom does, so without this the cleanse gets spent on
+# chip damage while farming at full HP.
+dark_pact_require_danger = true
 # Spend Shadow Dance to survive when Slark drops low.
 auto_shadow_dance_on_low_hp = true
 # Shadow Dance ability key.

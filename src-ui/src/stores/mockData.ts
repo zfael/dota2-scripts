@@ -193,6 +193,7 @@ export const mockConfig: Settings = {
       turn_delay_ms: 200, require_ability_ready: true,
       auto_dark_pact_on_debuff: true, dark_pact_key: "q",
       dark_pact_delay_ms: 300,
+      dark_pact_require_danger: true,
       auto_shadow_dance_on_low_hp: true, shadow_dance_key: "r",
       shadow_dance_hp_threshold_percent: 35,
       shadow_dance_require_danger: true,

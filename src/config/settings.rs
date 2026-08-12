@@ -327,6 +327,14 @@ pub struct SlarkConfig {
     /// debuffs is cleansed by a single Dark Pact.
     #[serde(default = "default_slark_dark_pact_delay_ms")]
     pub dark_pact_delay_ms: u64,
+    /// Also require the danger detector, not just `has_debuff`.
+    ///
+    /// GSI reports one `has_debuff` bool for every modifier in the game, so a
+    /// creep's slow reads exactly like a Doom. On — the default — the cleanse
+    /// also needs to be actually under fire, which is what stops Dark Pact
+    /// being spent on chip damage while farming at full HP.
+    #[serde(default = "default_slark_dark_pact_require_danger")]
+    pub dark_pact_require_danger: bool,
     /// Cast Shadow Dance when the danger detector fires below the HP line.
     #[serde(default = "default_slark_auto_shadow_dance_on_low_hp")]
     pub auto_shadow_dance_on_low_hp: bool,
@@ -1520,6 +1528,9 @@ fn default_slark_dark_pact_key() -> char {
 fn default_slark_dark_pact_delay_ms() -> u64 {
     300
 }
+fn default_slark_dark_pact_require_danger() -> bool {
+    true
+}
 fn default_hud_portrait_x_fraction() -> f32 {
     0.44
 }
@@ -2459,6 +2470,7 @@ impl Default for SlarkConfig {
             auto_dark_pact_on_debuff: default_slark_auto_dark_pact_on_debuff(),
             dark_pact_key: default_slark_dark_pact_key(),
             dark_pact_delay_ms: default_slark_dark_pact_delay_ms(),
+            dark_pact_require_danger: default_slark_dark_pact_require_danger(),
             auto_shadow_dance_on_low_hp: default_slark_auto_shadow_dance_on_low_hp(),
             shadow_dance_key: default_slark_shadow_dance_key(),
             shadow_dance_hp_threshold_percent: default_slark_shadow_dance_hp_threshold_percent(),

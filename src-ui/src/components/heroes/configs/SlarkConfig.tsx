@@ -29,11 +29,14 @@ export default function SlarkConfig() {
           <Toggle label="Cleanse Debuffs With Dark Pact" checked={config.auto_dark_pact_on_debuff} onChange={(v) => set({ auto_dark_pact_on_debuff: v })} />
           <KeyInput label="Dark Pact Key" value={config.dark_pact_key} onChange={(v) => set({ dark_pact_key: v })} />
           <NumberInput label="Settle Window" value={config.dark_pact_delay_ms} onChange={(v) => set({ dark_pact_delay_ms: v })} suffix="ms" />
+          <Toggle label="Only While Taking Damage" checked={config.dark_pact_require_danger} onChange={(v) => set({ dark_pact_require_danger: v })} />
           <p className="text-xs text-muted">
             Casts Dark Pact whenever GSI reports a debuff. GSI never says
-            <em> which</em> debuff landed, so this fires on trivial ones too —
-            turn it off if you would rather keep Dark Pact for farming. The
-            settle window waits out a burst so one cast cleanses all of it.
+            <em> which</em> debuff landed — a creep's slow sets the same flag a
+            Doom does. "Only while taking damage" pairs it with the danger
+            detector so farming at full HP does not spend the cleanse; turn it
+            off to fire on any debuff at all. The settle window waits out a burst
+            so one cast cleanses all of it.
           </p>
         </Card>
 

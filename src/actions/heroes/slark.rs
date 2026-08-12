@@ -195,8 +195,25 @@ enum DarkPactDecision {
 ///
 /// Split out from the timer bookkeeping so the gating is testable without
 /// touching global state or the clock.
-fn plan_dark_pact(event: &GsiWebhookEvent, enabled: bool, invisible: bool) -> DarkPactDecision {
-    if !enabled || !event.hero.is_alive() || !event.hero.has_debuff {
+fn plan_dark_pact(
+    event: &GsiWebhookEvent,
+    config: &SlarkConfig,
+    invisible: bool,
+    in_danger: bool,
+) -> DarkPactDecision {
+    if !config.auto_dark_pact_on_debuff || !event.hero.is_alive() || !event.hero.has_debuff {
+        return DarkPactDecision::Idle;
+    }
+
+    // `has_debuff` is one bool for every modifier in the game, so a creep's slow
+    // reads exactly like a Doom. Pairing it with the danger detector is what
+    // makes the cleanse mean "debuffed *and* actually under fire" rather than
+    // "took a hit while farming".
+    //
+    // `Idle` rather than `Hold`: out of danger there is nothing to wait for, and
+    // dropping the window stops a flicker of the danger flag from firing an
+    // instant cast off a settle timer that has been running since the creep camp.
+    if config.dark_pact_require_danger && !in_danger {
         return DarkPactDecision::Idle;
     }
 
@@ -451,18 +468,20 @@ impl SlarkScript {
     /// Dark Pact applies a basic dispel to Slark when it pulses, which is the
     /// cheapest cleanse he has. GSI only exposes a single `has_debuff` flag —
     /// there is no way to see *which* modifier landed — so this fires on any
-    /// debuff at all. The settle window exists so a burst of debuffs from one
-    /// engagement is cleansed by one cast instead of the first one spending it.
-    fn dark_pact_cleanse(&self, event: &GsiWebhookEvent) {
+    /// debuff at all — gated on the danger detector by default, so a creep's
+    /// slow does not spend it. The settle window exists so a burst of debuffs
+    /// from one engagement is cleansed by one cast instead of the first one
+    /// spending it.
+    fn dark_pact_cleanse(&self, event: &GsiWebhookEvent, in_danger: bool) {
         let settings = self.settings.lock().unwrap();
-        let slark = &settings.heroes.slark;
-        let enabled = slark.auto_dark_pact_on_debuff;
-        let key = slark.dark_pact_key;
-        let delay_ms = slark.dark_pact_delay_ms;
+        let config = settings.heroes.slark.clone();
         let invisible = crate::actions::invisibility::suppresses_automation(&settings);
         drop(settings);
 
-        let decision = plan_dark_pact(event, enabled, invisible);
+        let key = config.dark_pact_key;
+        let delay_ms = config.dark_pact_delay_ms;
+
+        let decision = plan_dark_pact(event, &config, invisible, in_danger);
 
         // try_lock: a contended tick is worth skipping, not blocking the GSI
         // handler for. The next payload is 0.1s away.
@@ -595,16 +614,19 @@ impl HeroScript for SlarkScript {
             *last_event = Some(event.clone());
         }
 
+        // The detector has to advance before anything reads it, and the Dark
+        // Pact cleanse now reads it too — not just the escape.
+        let in_danger = {
+            let settings = self.settings.lock().unwrap();
+            crate::actions::danger_detector::update(event, &settings.danger_detection)
+        };
+
         // Debuff cleansing is the most time-sensitive thing on this path, so it
         // runs before the shared survivability checks.
-        self.dark_pact_cleanse(event);
-
-        let settings = self.settings.lock().unwrap();
+        self.dark_pact_cleanse(event, in_danger);
 
         // Shared survivability only — the directional pounce is keyboard-driven.
         let survivability = SurvivabilityActions::new(self.settings.clone(), self.executor.clone());
-        let in_danger = crate::actions::danger_detector::update(event, &settings.danger_detection);
-        drop(settings);
 
         // Before the item checks: the ultimate is worth more than a salve.
         self.low_hp_escape(event, in_danger);
@@ -689,10 +711,18 @@ mod tests {
         event
     }
 
-    /// Plan a cleanse with Slark **visible**, which is the common case. The
-    /// invisibility gate has its own tests below.
+    fn pact_config(enabled: bool) -> SlarkConfig {
+        SlarkConfig {
+            auto_dark_pact_on_debuff: enabled,
+            ..SlarkConfig::default()
+        }
+    }
+
+    /// Plan a cleanse with Slark **visible and under fire**, which is what the
+    /// other gates are tested against. The invisibility hold and the danger
+    /// requirement have their own tests below.
     fn plan_pact(event: &GsiWebhookEvent, enabled: bool) -> DarkPactDecision {
-        plan_dark_pact(event, enabled, false)
+        plan_dark_pact(event, &pact_config(enabled), false, true)
     }
 
     #[test]
@@ -764,7 +794,7 @@ mod tests {
         assert_eq!(plan_pact(&event, true), DarkPactDecision::Arm);
 
         assert_eq!(
-            plan_dark_pact(&event, true, true),
+            plan_dark_pact(&event, &pact_config(true), true, true),
             DarkPactDecision::Hold,
             "invisibility should hold the window, so the cleanse lands once it ends"
         );
@@ -775,9 +805,55 @@ mod tests {
     #[test]
     fn dark_pact_arms_again_once_invisibility_ends() {
         assert_eq!(
-            plan_dark_pact(&debuffed_fixture(), true, false),
+            plan_dark_pact(&debuffed_fixture(), &pact_config(true), false, true),
             DarkPactDecision::Arm
         );
+    }
+
+    /// The reason the danger gate exists: farming at full HP, a creep lands a
+    /// slow, `has_debuff` flips, and Dark Pact used to go off for it.
+    #[test]
+    fn dark_pact_ignores_a_debuff_taken_outside_danger() {
+        let event = debuffed_fixture();
+
+        assert_eq!(
+            plan_dark_pact(&event, &pact_config(true), false, false),
+            DarkPactDecision::Idle,
+            "a creep debuff while farming must not arm the cleanse"
+        );
+    }
+
+    /// Idle, not Hold — a settle window left running through a farming camp
+    /// would fire the instant the danger flag so much as flickered.
+    #[test]
+    fn the_danger_gate_drops_the_settle_window_rather_than_holding_it() {
+        let mut event = debuffed_fixture();
+        event.hero.stunned = true;
+
+        // Stunned *and* out of danger: the danger gate is checked first, so the
+        // window is dropped rather than kept alive by the cast lock behind it.
+        assert_eq!(
+            plan_dark_pact(&event, &pact_config(true), false, false),
+            DarkPactDecision::Idle
+        );
+    }
+
+    #[test]
+    fn turning_the_danger_requirement_off_cleanses_on_the_debuff_alone() {
+        let config = SlarkConfig {
+            dark_pact_require_danger: false,
+            ..pact_config(true)
+        };
+
+        assert_eq!(
+            plan_dark_pact(&debuffed_fixture(), &config, false, false),
+            DarkPactDecision::Arm
+        );
+    }
+
+    #[test]
+    fn the_danger_requirement_defaults_to_on() {
+        assert!(SlarkConfig::default().dark_pact_require_danger);
     }
 
     /// Low enough to be over the line, with the shard granted so both escape

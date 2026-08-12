@@ -253,6 +253,7 @@ export interface SlarkConfig {
   auto_dark_pact_on_debuff: boolean;
   dark_pact_key: string;
   dark_pact_delay_ms: number;
+  dark_pact_require_danger: boolean;
   auto_shadow_dance_on_low_hp: boolean;
   shadow_dance_key: string;
   shadow_dance_hp_threshold_percent: number;

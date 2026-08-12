@@ -17,7 +17,8 @@ Directional **Pounce** (W) on a single keypress, GSI-driven **Dark Pact** debuff
 
 - GSI-driven, not keyboard-driven: runs from `handle_gsi_event`, no key is intercepted.
 - Casts Dark Pact when `hero.has_debuff` is true, after a short settle window.
-- **GSI exposes a single `has_debuff` bool and never names the modifier**, so this cannot tell a Doom from a Drow slow. It cleanses on anything.
+- **GSI exposes a single `has_debuff` bool and never names the modifier**, so this cannot tell a Doom from a Drow slow.
+- Because of that, it also requires the danger detector by default (`dark_pact_require_danger`) — otherwise a creep's slow spends the cleanse while farming at full HP. Turn it off to cleanse on any debuff at all.
 - Held (not dropped) while stunned, hexed, silenced, or while Dark Pact is on cooldown, so the cleanse fires the instant it becomes castable.
 - Also held while Shadow Blade / Silver Edge invisibility is running: casting Dark Pact would break it, and Slark bought that item to leave the fight.
 
@@ -40,6 +41,7 @@ Directional **Pounce** (W) on a single keypress, GSI-driven **Dark Pact** debuff
 | `auto_dark_pact_on_debuff` | bool | `true` | Cast Dark Pact when GSI reports a debuff. |
 | `dark_pact_key` | char | `"q"` | Dark Pact ability key, pressed by the cleanse. |
 | `dark_pact_delay_ms` | u64 | `300` | Settle window after the first debuff before casting. |
+| `dark_pact_require_danger` | bool | `true` | Also require the danger detector, not just `has_debuff`. |
 | `auto_shadow_dance_on_low_hp` | bool | `true` | Spend Shadow Dance to survive. |
 | `shadow_dance_key` | char | `"r"` | Shadow Dance ability key. |
 | `shadow_dance_hp_threshold_percent` | u32 | `35` | HP line for the escape. |
@@ -122,14 +124,23 @@ so before the first payload W behaves normally.
 ### Dark Pact cleanse
 
 `SlarkScript::dark_pact_cleanse` runs on every `handle_gsi_event`, before the
-shared survivability checks. The gating lives in
-`plan_dark_pact(event, enabled, invisible)`, which returns one of three decisions:
+shared survivability checks but *after* `danger_detector::update` — the cleanse
+reads the danger flag now, so the detector has to advance first. The gating lives
+in `plan_dark_pact(event, config, invisible, in_danger)`, which returns one of
+three decisions:
 
 | Decision | When | Effect on the settle window |
 |---|---|---|
-| `Idle` | toggle off, dead, or `has_debuff = false` | dropped |
+| `Idle` | toggle off, dead, `has_debuff = false`, or `dark_pact_require_danger` set and not in danger | dropped |
 | `Hold` | invisible from Shadow Blade / Silver Edge, stunned / hexed / silenced, or `slark_dark_pact` unlevelled or on cooldown | kept running |
-| `Arm` | debuffed and castable | started, or spent once `dark_pact_delay_ms` has elapsed |
+| `Arm` | debuffed, in danger (or the requirement is off), and castable | started, or spent once `dark_pact_delay_ms` has elapsed |
+
+The danger requirement is `Idle`, not `Hold`, and it is checked before the cast
+locks. Out of danger there is nothing to wait for, and a settle window left
+running through a farming camp would fire an instant cast the moment the danger
+flag so much as flickered. It exists because `has_debuff` is one bool for every
+modifier in the game: a creep's slow reads exactly like a Doom, and without the
+pairing Dark Pact gets spent on chip damage at full HP.
 
 `Hold` is the interesting case. Dark Pact cannot be cast through a stun or a
 silence, but whatever else is on Slark is still worth shedding the moment the
@@ -258,9 +269,12 @@ heroes. Note this path does **not** consult the readiness gate.
   the cast. On an escape Pounce that delay is real; drop the leading settle time
   in `slark.rs` if it costs you kills.
 - **The cleanse cannot tell debuffs apart.** `hero.has_debuff` is one bool for
-  every modifier in the game, so Dark Pact gets spent on a passing slow just as
-  readily as on a real threat. There is no GSI field that would fix this — if it
-  costs you too much farm or too many cooldowns, turn the toggle off.
+  every modifier in the game, so Dark Pact cannot distinguish a passing slow from
+  a real threat. There is no GSI field that would fix this.
+  `dark_pact_require_danger` is the workaround, not a cure: it narrows the
+  cleanse to "debuffed while under fire", which stops the farming case but still
+  fires on a trivial debuff taken mid-fight — and conversely will not cleanse a
+  real debuff the danger detector never noticed.
 - **Dark Pact is a basic dispel and it pulses after ~1.75s.** It never removes
   stuns, and the automation reacting instantly does not make the dispel land any
   sooner than the ability itself allows.
