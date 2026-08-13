@@ -549,6 +549,19 @@ All seven fields are exposed in the React UI under **Heroes → Magnus**.
 
 See `docs/heroes/magnus.md` and `docs/features/keyboard-interception.md`.
 
+## `[heroes.mirana]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `enabled` | `true` | `true` | Master toggle for the directional Leap intercept. |
+| `leap_key` | `"e"` | `"e"` | Leap ability key. This is also the key intercepted. Intercept is gated on Mirana being the active hero. |
+| `turn_delay_ms` | `200` | `200` | Delay after the facing right-click before the Leap cast. Same as Slark's Pounce: a leap that fires mid-turn lands somewhere else. |
+| `require_ability_ready` | `true` | `true` | Only intercept when `mirana_leap` is levelled and castable. Prevents a cooldown press from issuing the facing right-click. Leap is charge-based — if the intercept is skipped while Leap is visibly castable, set this `false`. |
+
+All four fields are exposed in the React UI under **Heroes → Mirana**.
+
+See `docs/heroes/mirana.md` and `docs/features/keyboard-interception.md`.
+
 ## `[heroes.slark]`
 
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |

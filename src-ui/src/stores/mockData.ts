@@ -183,6 +183,10 @@ export const mockConfig: Settings = {
       center_camera_on_ultimate: true, camera_center_key: "1",
       camera_center_delay_ms: 60,
     },
+    mirana: {
+      enabled: true, leap_key: "e",
+      turn_delay_ms: 200, require_ability_ready: true,
+    },
     shadow_fiend: {
       raze_intercept_enabled: true, raze_delay_ms: 10,
       auto_bkb_on_ultimate: true, auto_d_on_ultimate: true,

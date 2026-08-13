@@ -113,6 +113,7 @@ Fields such as `hero.magicimmune`, `hero.break`, talents, and buyback data are m
 | `abilities.ability0`-`ability3` | `src/actions/heroes/huskar.rs` | Scan for `huskar_berserkers_blood` by ability name |
 | `abilities.ability0`-`ability4` | `src/actions/heroes/outworld_destroyer.rs` | Scan for Arcane Orb, Astral Imprisonment, Sanity's Eclipse, and Objurgation readiness by ability name |
 | `abilities.ability0`-`ability5` | `src/actions/heroes/magnus.rs` | Scan for `magnataur_reverse_polarity` readiness; gates whether the keyboard hook swallows Magnus's ultimate key |
+| `abilities.ability0`-`ability5` | `src/actions/heroes/mirana.rs` | Scan for `mirana_leap` readiness; gates whether the keyboard hook swallows Mirana's Leap key. **Leap is charge-based and this is unverified against a live payload** — see `docs/heroes/mirana.md` |
 | `abilities.ability0`-`ability5` | `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs` | Scan for `meepo_poof`, `meepo_petrify` (Dig), and `meepo_megameepo` readiness by ability name; expose Meepo readiness in the UI and gate Meepo farm-assist pulses |
 | `abilities.get_by_index(index)` | `src/actions/auto_items.rs` | Broodmother auto-abilities by configured slot index |
 | `ability.can_cast` | `src/actions/heroes/huskar.rs`, `src/actions/auto_items.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/shadow_fiend.rs`, `src/actions/heroes/outworld_destroyer.rs`, `src/actions/heroes/magnus.rs` | Ability readiness checks |

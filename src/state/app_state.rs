@@ -18,6 +18,7 @@ pub enum HeroType {
     LegionCommander,
     Magnus,
     Meepo,
+    Mirana,
     OutworldDestroyer,
     ShadowFiend,
     Slark,
@@ -54,6 +55,7 @@ impl HeroType {
             name if name == Hero::LegionCommander.to_game_name() => Some(HeroType::LegionCommander),
             name if name == Hero::Magnataur.to_game_name() => Some(HeroType::Magnus),
             name if name == Hero::Meepo.to_game_name() => Some(HeroType::Meepo),
+            name if name == Hero::Mirana.to_game_name() => Some(HeroType::Mirana),
             name if name == Hero::ObsidianDestroyer.to_game_name() => {
                 Some(HeroType::OutworldDestroyer)
             }
@@ -73,6 +75,7 @@ impl HeroType {
             HeroType::LegionCommander => "Legion Commander",
             HeroType::Magnus => "Magnus",
             HeroType::Meepo => "Meepo",
+            HeroType::Mirana => "Mirana",
             HeroType::OutworldDestroyer => "Outworld Destroyer",
             HeroType::ShadowFiend => "Shadow Fiend",
             HeroType::Slark => "Slark",
@@ -259,6 +262,15 @@ mod tests {
             Some(HeroType::Magnus)
         );
         assert_eq!(HeroType::Magnus.to_display_name(), "Magnus");
+    }
+
+    #[test]
+    fn mirana_hero_type_maps_name_and_display() {
+        assert_eq!(
+            HeroType::from_hero_name(crate::models::Hero::Mirana.to_game_name()),
+            Some(HeroType::Mirana)
+        );
+        assert_eq!(HeroType::Mirana.to_display_name(), "Mirana");
     }
 
     #[test]

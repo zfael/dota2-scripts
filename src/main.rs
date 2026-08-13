@@ -181,6 +181,7 @@ async fn main() {
                                 }
                                 state::HeroType::Magnus => models::Hero::Magnataur.to_game_name(),
                                 state::HeroType::Meepo => models::Hero::Meepo.to_game_name(),
+                                state::HeroType::Mirana => models::Hero::Mirana.to_game_name(),
                                 state::HeroType::OutworldDestroyer => {
                                     models::Hero::ObsidianDestroyer.to_game_name()
                                 }

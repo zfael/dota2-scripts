@@ -106,6 +106,7 @@ pub fn select_hero(
                 "Legion Commander" => "npc_dota_hero_legion_commander",
                 "Magnus" => "npc_dota_hero_magnataur",
                 "Meepo" => "npc_dota_hero_meepo",
+                "Mirana" => "npc_dota_hero_mirana",
                 "Outworld Destroyer" => "npc_dota_hero_obsidian_destroyer",
                 "Shadow Fiend" => "npc_dota_hero_nevermore",
                 "Slark" => "npc_dota_hero_slark",

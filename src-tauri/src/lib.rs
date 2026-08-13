@@ -310,6 +310,7 @@ fn handle_hotkey_events(
                             HeroType::LegionCommander => Hero::LegionCommander.to_game_name(),
                             HeroType::Magnus => Hero::Magnataur.to_game_name(),
                             HeroType::Meepo => Hero::Meepo.to_game_name(),
+                            HeroType::Mirana => Hero::Mirana.to_game_name(),
                             HeroType::OutworldDestroyer => {
                                 Hero::ObsidianDestroyer.to_game_name()
                             }

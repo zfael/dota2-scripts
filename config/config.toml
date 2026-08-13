@@ -369,6 +369,21 @@ camera_center_key = "1"
 # Delay between the ultimate cast and the first camera tap (ms).
 camera_center_delay_ms = 60
 
+[heroes.mirana]
+# Press E to face the cursor and then cast Leap, so the leap goes where you are
+# pointing instead of wherever Mirana happened to be facing.
+enabled = true
+# Leap ability key. This is also the key that gets intercepted.
+leap_key = "e"
+# Delay after the facing right-click before the Leap cast (ms). Increase if Leap
+# fires before Mirana finishes turning.
+turn_delay_ms = 200
+# Only intercept when Leap is levelled and off cooldown. Leave true: it stops a
+# cooldown press from issuing the facing right-click and walking Mirana toward
+# the cursor for nothing. Leap is charge-based, so if you see the intercept
+# skipped while Leap is visibly castable, set this false and report it.
+require_ability_ready = true
+
 [heroes.slark]
 # Press W to face the cursor and then cast Pounce, so the leap goes where you
 # are pointing instead of wherever Slark happened to be facing.

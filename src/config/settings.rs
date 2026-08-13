@@ -303,6 +303,23 @@ pub struct MagnusConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MiranaConfig {
+    /// Master toggle for the directional Leap intercept.
+    #[serde(default = "default_mirana_enabled")]
+    pub enabled: bool,
+    /// Leap ability key. This is also the key the hook intercepts.
+    #[serde(default = "default_mirana_leap_key")]
+    pub leap_key: char,
+    /// Delay between the facing right-click and the Leap cast (ms).
+    #[serde(default = "default_mirana_turn_delay_ms")]
+    pub turn_delay_ms: u64,
+    /// Pass the key through untouched when Leap is not castable, so a cooldown
+    /// press never issues the facing right-click.
+    #[serde(default = "default_mirana_require_ability_ready")]
+    pub require_ability_ready: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SlarkConfig {
     /// Master toggle for the directional Pounce intercept.
     #[serde(default = "default_slark_enabled")]
@@ -654,6 +671,8 @@ pub struct HeroesConfig {
     pub snapfire: SnapfireConfig,
     #[serde(default)]
     pub magnus: MagnusConfig,
+    #[serde(default)]
+    pub mirana: MiranaConfig,
     #[serde(default)]
     pub slark: SlarkConfig,
 }
@@ -1506,6 +1525,21 @@ fn default_magnus_camera_center_key() -> String {
 }
 fn default_magnus_camera_center_delay_ms() -> u64 {
     60
+}
+fn default_mirana_enabled() -> bool {
+    true
+}
+fn default_mirana_leap_key() -> char {
+    'e'
+}
+/// Same 200ms Slark's Pounce settled on, and for the same reason: the 60ms the
+/// Magnus and Snapfire combos use is enough for a facing that only has to be
+/// approximately right, but a leap that fires mid-turn lands somewhere else.
+fn default_mirana_turn_delay_ms() -> u64 {
+    200
+}
+fn default_mirana_require_ability_ready() -> bool {
+    true
 }
 fn default_slark_enabled() -> bool {
     true
@@ -2460,6 +2494,17 @@ impl Default for MagnusConfig {
     }
 }
 
+impl Default for MiranaConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_mirana_enabled(),
+            leap_key: default_mirana_leap_key(),
+            turn_delay_ms: default_mirana_turn_delay_ms(),
+            require_ability_ready: default_mirana_require_ability_ready(),
+        }
+    }
+}
+
 impl Default for SlarkConfig {
     fn default() -> Self {
         Self {
@@ -2632,6 +2677,7 @@ impl Default for HeroesConfig {
             meepo: MeepoConfig::default(),
             snapfire: SnapfireConfig::default(),
             magnus: MagnusConfig::default(),
+            mirana: MiranaConfig::default(),
             slark: SlarkConfig::default(),
         }
     }
@@ -2986,6 +3032,15 @@ mod tests {
         assert!(cfg.center_camera_on_ultimate);
         assert_eq!(cfg.camera_center_key, "1");
         assert_eq!(cfg.camera_center_delay_ms, 60);
+    }
+
+    #[test]
+    fn mirana_config_defaults_gate_leap_on_readiness() {
+        let cfg = MiranaConfig::default();
+        assert!(cfg.enabled);
+        assert_eq!(cfg.leap_key, 'e');
+        assert_eq!(cfg.turn_delay_ms, 200);
+        assert!(cfg.require_ability_ready);
     }
 
     #[test]

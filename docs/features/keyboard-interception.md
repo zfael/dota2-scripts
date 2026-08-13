@@ -14,6 +14,7 @@
 | `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend intercepted-sequence planning and dedicated request worker (`Q/W/E` razes, `R` ultimate combo, standalone combo) |
 | `src/actions/heroes/magnus.rs` | Magnus directional ultimate planning, GSI readiness gate, and dedicated request worker |
 | `src/actions/heroes/slark.rs` | Slark directional Pounce planning, GSI readiness gate, and dedicated request worker |
+| `src/actions/heroes/mirana.rs` | Mirana directional Leap planning, GSI readiness gate, and dedicated request worker |
 | `src/actions/heroes/invoker.rs` | Invoker combo profiles, invoke planning, dedicated request worker (panic Ghost Walk, prep pairs, primary combo) |
 | `src/input/simulation.rs` | High-level synthetic keys/mouse emission + `SIMULATING_KEYS` guard |
 | `src/gsi/handler.rs` | Rebuilds the shared `KeyboardSnapshot` when GSI detection changes the hero |
@@ -62,7 +63,7 @@ so these are the rebuild triggers:
 The GSI rebuild is what makes hero intercepts go live without any UI
 interaction. It is gated on `AppState::update_from_gsi` reporting a hero change,
 so it costs nothing on the steady-state event stream. Without it, picking a hero
-in-game leaves Shadow Fiend / Magnus / Slark / Snapfire intercepts inert until an
+in-game leaves Shadow Fiend / Magnus / Slark / Mirana / Snapfire intercepts inert until an
 unrelated UI toggle happens to refresh the cache — the failure mode covered by
 `process_gsi_events_rebuilds_the_keyboard_snapshot_on_hero_detection`.
 
@@ -74,6 +75,7 @@ The snapshot holds only static keyboard-facing facts:
 - Broodmother callback-facing config and pre-parsed keys
 - Magnus intercept flags, pre-parsed ultimate key, and turn delay
 - Slark intercept flags, pre-parsed Pounce key, and turn delay
+- Mirana intercept flags, pre-parsed Leap key, and turn delay
 - Soul Ring thresholds, ability keys, and item-slot keys
 - Armlet Roshan toggle key when `[armlet.roshan].enabled = true`
 - HUD portrait capture key from `[hud]`
@@ -134,27 +136,35 @@ Current callback order on key/button input:
     - enqueue the `ALT down -> right-click (face cursor) -> ALT up -> wait -> press W`
       sequence onto the dedicated Slark worker
     - on a failed readiness check the branch falls through and `W` reaches Dota
-12. **Outworld Destroyer intercepts**
+12. **Mirana directional Leap intercept**
+    - if `snapshot.mirana_enabled` and `snapshot.mirana.enabled`
+    - block the configured Leap key (default `E`) **only** when
+      `MiranaState::can_intercept_leap()` passes, or when
+      `require_ability_ready = false`
+    - enqueue the `ALT down -> right-click (face cursor) -> ALT up -> wait -> press E`
+      sequence onto the dedicated Mirana worker
+    - on a failed readiness check the branch falls through and `E` reaches Dota
+13. **Outworld Destroyer intercepts**
     - if `snapshot.od_enabled` and `heroes.outworld_destroyer.ultimate_intercept_enabled`
     - block `R` only when `Sanity's Eclipse` is ready
     - enqueue `BKB -> Objurgation -> R` onto the dedicated OD worker
     - optionally block the configured self-Astral panic hotkey and double-tap Astral on self
-13. **Armlet Roshan toggle**
+14. **Armlet Roshan toggle**
     - if `[armlet.roshan].enabled = true` and the configured hotkey matches
     - emit `HotkeyEvent::ArmletRoshanToggle`
     - block the original key so it does not also reach Dota 2
-14. **HUD portrait capture**
+15. **HUD portrait capture**
     - if `[hud] capture_portrait_key` matches (default `F9`)
     - emit `HotkeyEvent::CaptureHudPortrait`
     - block the original key: it is ours while calibrating
     - planned alongside the other global hotkeys in `plan_global_hotkey_press_event`
-15. **Largo / generic ability-key path**
+16. **Largo / generic ability-key path**
     - emit `HotkeyEvent::LargoQ/W/E/R`
     - if Soul Ring should trigger, block and replay
     - otherwise pass through
-16. **Item-slot Soul Ring interception**
+17. **Item-slot Soul Ring interception**
      - blocks configured item keys when the item is mana-using and Soul Ring should fire first
-17. **Standalone combo key**
+18. **Standalone combo key**
      - sends `HotkeyEvent::ComboTrigger`
      - does not block the original key
 
@@ -401,6 +411,16 @@ These are still part of the interception surface even though this page centers o
 - like Magnus, the intercept is **gated on GSI**: `SlarkState::can_intercept_pounce()` reads `SLARK_LAST_EVENT` and requires `slark_pounce` to have `level > 0 && can_cast`. A failed check leaves the key unblocked
 - Dark Pact, Saltwater Shiv, and Shadow Dance are never intercepted
 
+### Mirana
+
+- activation is gated on `snapshot.mirana_enabled`, derived from `selected_hero == Some(HeroType::Mirana)`
+- the configured Leap key (default `E`) is blocked and enqueues one `DirectionalLeap` request onto the dedicated Mirana worker
+- the worker holds `ALT`, right-clicks to face the cursor, releases `ALT`, waits `turn_delay_ms`, then presses the Leap key — byte-for-byte the Slark sequence, because Leap and Pounce are the same kind of ability
+- ALT is released before the ability press for the same reason as Magnus and Slark: Leap takes no target, and holding ALT over an ability key pings it instead of casting it
+- the intercept is **gated on GSI**: `MiranaState::can_intercept_leap()` reads `MIRANA_LAST_EVENT` and requires `mirana_leap` to have `level > 0 && can_cast`. A failed check leaves the key unblocked
+- **Leap is charge-based**, and how GSI reports `can_cast` for a banked charge is unverified against a live payload. If the gate proves wrong in-game the symptom is a silently inert feature; `require_ability_ready = false` is the escape hatch
+- Sacred Arrow, Starstorm, and Moonlight Shadow are never intercepted
+
 ### Broodmother
 
 - Broodmother callback actions now queue to one dedicated worker instead of spawning raw threads from the callback
@@ -430,6 +450,7 @@ These are still part of the interception surface even though this page centers o
 | Shadow Fiend | `config/config.toml` -> `[heroes.shadow_fiend]` | `raze_intercept_enabled`, `raze_delay_ms`, `auto_bkb_on_ultimate`, `auto_d_on_ultimate` |
 | Magnus | `config/config.toml` -> `[heroes.magnus]` | `enabled`, `ultimate_key`, `turn_delay_ms`, `require_ability_ready`, `center_camera_on_ultimate`, `camera_center_key`, `camera_center_delay_ms` |
 | Slark | `config/config.toml` -> `[heroes.slark]` | `enabled`, `pounce_key`, `turn_delay_ms`, `require_ability_ready` |
+| Mirana | `config/config.toml` -> `[heroes.mirana]` | `enabled`, `leap_key`, `turn_delay_ms`, `require_ability_ready` |
 | HUD anchors | `config/config.toml` -> `[hud]` | `capture_portrait_key` (blocked from reaching Dota), plus the stored portrait fractions |
 | Global hotkey | `config/config.toml` -> `[keybindings]` | slot key mappings; the live standalone trigger is read from `AppState.trigger_key` and cached as a parsed `snapshot.trigger_key` |
 
@@ -451,5 +472,6 @@ Related docs:
 - `docs/heroes/shadow_fiend.md`
 - `docs/heroes/magnus.md`
 - `docs/heroes/slark.md`
+- `docs/heroes/mirana.md`
 - `docs/features/hud-anchors.md`
 - `docs/architecture/runtime-flow.md`

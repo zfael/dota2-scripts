@@ -245,6 +245,13 @@ export interface MagnusConfig {
   camera_center_delay_ms: number;
 }
 
+export interface MiranaConfig {
+  enabled: boolean;
+  leap_key: string;
+  turn_delay_ms: number;
+  require_ability_ready: boolean;
+}
+
 export interface SlarkConfig {
   enabled: boolean;
   pounce_key: string;
@@ -276,6 +283,7 @@ export interface HeroesConfig {
   invoker: InvokerConfig;
   legion_commander: LegionCommanderConfig;
   magnus: MagnusConfig;
+  mirana: MiranaConfig;
   shadow_fiend: ShadowFiendConfig;
   slark: SlarkConfig;
   snapfire: SnapfireConfig;

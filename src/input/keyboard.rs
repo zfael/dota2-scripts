@@ -15,6 +15,7 @@ use crate::actions::heroes::outworld_destroyer::{
 };
 use crate::actions::heroes::shadow_fiend::ShadowFiendState;
 use crate::actions::heroes::magnus::MagnusState;
+use crate::actions::heroes::mirana::MiranaState;
 use crate::actions::heroes::slark::SlarkState;
 use crate::actions::heroes::snapfire::SnapfireState;
 use crate::actions::soul_ring::{SoulRingKeyboardConfig, SoulRingState};
@@ -510,6 +511,30 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                     }
                 }
 
+                // Handle Mirana directional Leap.
+                // Leap jumps along Mirana's facing at cast time, so face the
+                // cursor first and she lands where you are pointing.
+                if snapshot.mirana_enabled && snapshot.mirana.enabled {
+                    if let Some(leap_key) = snapshot.mirana.leap_key {
+                        if key == leap_key {
+                            // Falling through leaves the key unblocked, so a
+                            // cooldown press never issues the facing right-click
+                            // and never walks Mirana toward the cursor.
+                            if !snapshot.mirana.require_ability_ready
+                                || MiranaState::can_intercept_leap()
+                            {
+                                info!("🌙 Mirana leap pressed - directional Leap");
+                                MiranaState::execute_directional_leap(
+                                    snapshot.mirana.leap_char,
+                                    snapshot.mirana.turn_delay_ms,
+                                );
+                                // Block original key (combo re-presses it).
+                                return None;
+                            }
+                        }
+                    }
+                }
+
                 if snapshot.od_enabled {
                     if snapshot.outworld_destroyer.ultimate_intercept_enabled && key == Key::KeyR {
                         if OutworldDestroyerState::can_intercept_ultimate() {
@@ -687,6 +712,18 @@ pub struct SlarkKeyboardSnapshot {
     pub require_ability_ready: bool,
 }
 
+/// Snapshot of the Mirana keyboard-relevant config.
+#[derive(Debug, Clone)]
+pub struct MiranaKeyboardSnapshot {
+    pub enabled: bool,
+    /// Pre-parsed Leap key, used to match the intercepted press.
+    pub leap_key: Option<Key>,
+    /// The same key as a char, used to re-press it after the turn.
+    pub leap_char: char,
+    pub turn_delay_ms: u64,
+    pub require_ability_ready: bool,
+}
+
 /// Snapshot of the Magnus keyboard-relevant config.
 #[derive(Debug, Clone)]
 pub struct MagnusKeyboardSnapshot {
@@ -773,6 +810,9 @@ pub struct KeyboardSnapshot {
     /// Whether Slark is the active hero (drives the Pounce intercept).
     pub slark_enabled: bool,
     pub slark: SlarkKeyboardSnapshot,
+    /// Whether Mirana is the active hero (drives the Leap intercept).
+    pub mirana_enabled: bool,
+    pub mirana: MiranaKeyboardSnapshot,
     /// Static Soul Ring keyboard config (thresholds, key sets, delays).
     pub soul_ring: SoulRingKeyboardConfig,
     pub invoker_profiles: Vec<InvokerHotkeyProfileSnapshot>,
@@ -907,6 +947,7 @@ impl KeyboardSnapshot {
         let sp = &settings.heroes.snapfire;
         let mg = &settings.heroes.magnus;
         let sk = &settings.heroes.slark;
+        let mi = &settings.heroes.mirana;
 
         Self {
             selected_hero: state.selected_hero.clone(),
@@ -988,6 +1029,14 @@ impl KeyboardSnapshot {
                 turn_delay_ms: sk.turn_delay_ms,
                 require_ability_ready: sk.require_ability_ready,
             },
+            mirana_enabled: state.selected_hero == Some(crate::state::HeroType::Mirana),
+            mirana: MiranaKeyboardSnapshot {
+                enabled: mi.enabled,
+                leap_key: char_to_key(mi.leap_key),
+                leap_char: mi.leap_key,
+                turn_delay_ms: mi.turn_delay_ms,
+                require_ability_ready: mi.require_ability_ready,
+            },
             soul_ring: SoulRingKeyboardConfig::from_settings(settings),
             invoker_profiles: settings
                 .heroes
@@ -1062,6 +1111,14 @@ impl Default for KeyboardSnapshot {
                 enabled: false,
                 pounce_key: None,
                 pounce_char: 'w',
+                turn_delay_ms: 0,
+                require_ability_ready: true,
+            },
+            mirana_enabled: false,
+            mirana: MiranaKeyboardSnapshot {
+                enabled: false,
+                leap_key: None,
+                leap_char: 'e',
                 turn_delay_ms: 0,
                 require_ability_ready: true,
             },
@@ -1256,6 +1313,14 @@ mod tests {
                 turn_delay_ms: 0,
                 require_ability_ready: true,
             },
+            mirana_enabled: false,
+            mirana: MiranaKeyboardSnapshot {
+                enabled: false,
+                leap_key: None,
+                leap_char: 'e',
+                turn_delay_ms: 0,
+                require_ability_ready: true,
+            },
             soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
             invoker_profiles: vec![],
         }
@@ -1395,6 +1460,23 @@ mod tests {
             plan_global_hotkey_press_event(Key::F9, &snapshot, &mut pressed),
             Some(HotkeyEvent::CaptureHudPortrait)
         );
+    }
+
+    #[test]
+    fn keyboard_snapshot_populates_mirana_fields_for_mirana() {
+        let mut state = AppState::default();
+        state.selected_hero = Some(HeroType::Mirana);
+        let snapshot = KeyboardSnapshot::from_runtime(&Settings::default(), &state);
+
+        assert!(snapshot.mirana_enabled);
+        assert!(snapshot.mirana.enabled);
+        assert_eq!(snapshot.mirana.leap_key, Some(Key::KeyE));
+        assert_eq!(snapshot.mirana.leap_char, 'e');
+        assert_eq!(snapshot.mirana.turn_delay_ms, 200);
+        assert!(snapshot.mirana.require_ability_ready);
+
+        let other = KeyboardSnapshot::from_runtime(&Settings::default(), &AppState::default());
+        assert!(!other.mirana_enabled);
     }
 
     #[test]
