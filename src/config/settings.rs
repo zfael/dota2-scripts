@@ -303,6 +303,37 @@ pub struct MagnusConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmberSpiritConfig {
+    /// Master toggle for the remnant chase combo.
+    #[serde(default = "default_ember_spirit_enabled")]
+    pub enabled: bool,
+    /// Fire Remnant ability key, pressed first to drop the remnant.
+    #[serde(default = "default_ember_spirit_remnant_key")]
+    pub remnant_key: char,
+    /// Activate Fire Remnant key, pressed second to dash to the remnant.
+    #[serde(default = "default_ember_spirit_activate_key")]
+    pub activate_key: char,
+    /// Delay between the two presses (ms).
+    #[serde(default = "default_ember_spirit_activate_delay_ms")]
+    pub activate_delay_ms: u64,
+    /// Cast Flame Guard automatically while the danger detector is tripped and
+    /// HP is at or below the threshold below. Independent of `enabled`, which
+    /// only gates the remnant chase.
+    #[serde(default = "default_ember_spirit_auto_flame_guard_on_danger")]
+    pub auto_flame_guard_on_danger: bool,
+    /// Flame Guard ability key pressed by the auto-cast.
+    #[serde(default = "default_ember_spirit_flame_guard_key")]
+    pub flame_guard_key: char,
+    /// Only auto-cast Flame Guard at or below this health percentage.
+    #[serde(default = "default_ember_spirit_flame_guard_hp_threshold_percent")]
+    pub flame_guard_hp_threshold_percent: u32,
+    /// Minimum gap between two auto-casts (ms), so one burst of GSI payloads
+    /// cannot spam the key.
+    #[serde(default = "default_ember_spirit_flame_guard_trigger_cooldown_ms")]
+    pub flame_guard_trigger_cooldown_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MiranaConfig {
     /// Master toggle for the directional Leap intercept.
     #[serde(default = "default_mirana_enabled")]
@@ -673,6 +704,8 @@ pub struct HeroesConfig {
     pub magnus: MagnusConfig,
     #[serde(default)]
     pub mirana: MiranaConfig,
+    #[serde(default)]
+    pub ember_spirit: EmberSpiritConfig,
     #[serde(default)]
     pub slark: SlarkConfig,
 }
@@ -1525,6 +1558,36 @@ fn default_magnus_camera_center_key() -> String {
 }
 fn default_magnus_camera_center_delay_ms() -> u64 {
     60
+}
+fn default_ember_spirit_enabled() -> bool {
+    true
+}
+fn default_ember_spirit_remnant_key() -> char {
+    'r'
+}
+fn default_ember_spirit_activate_key() -> char {
+    'd'
+}
+/// Long enough for the remnant to exist server-side before the activate goes
+/// out. Too short and Ember dashes to the remnants that were already on the map
+/// while the new one is still being placed; too long and the chase is sluggish.
+fn default_ember_spirit_activate_delay_ms() -> u64 {
+    150
+}
+fn default_ember_spirit_auto_flame_guard_on_danger() -> bool {
+    true
+}
+fn default_ember_spirit_flame_guard_key() -> char {
+    'e'
+}
+/// Higher than OD's 55 because Flame Guard is a damage *shield*, not a nuke:
+/// its value comes from being up before the burst lands, so waiting until Ember
+/// is nearly dead wastes most of the absorb.
+fn default_ember_spirit_flame_guard_hp_threshold_percent() -> u32 {
+    65
+}
+fn default_ember_spirit_flame_guard_trigger_cooldown_ms() -> u64 {
+    2000
 }
 fn default_mirana_enabled() -> bool {
     true
@@ -2494,6 +2557,23 @@ impl Default for MagnusConfig {
     }
 }
 
+impl Default for EmberSpiritConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_ember_spirit_enabled(),
+            remnant_key: default_ember_spirit_remnant_key(),
+            activate_key: default_ember_spirit_activate_key(),
+            activate_delay_ms: default_ember_spirit_activate_delay_ms(),
+            auto_flame_guard_on_danger: default_ember_spirit_auto_flame_guard_on_danger(),
+            flame_guard_key: default_ember_spirit_flame_guard_key(),
+            flame_guard_hp_threshold_percent:
+                default_ember_spirit_flame_guard_hp_threshold_percent(),
+            flame_guard_trigger_cooldown_ms:
+                default_ember_spirit_flame_guard_trigger_cooldown_ms(),
+        }
+    }
+}
+
 impl Default for MiranaConfig {
     fn default() -> Self {
         Self {
@@ -2678,6 +2758,7 @@ impl Default for HeroesConfig {
             snapfire: SnapfireConfig::default(),
             magnus: MagnusConfig::default(),
             mirana: MiranaConfig::default(),
+            ember_spirit: EmberSpiritConfig::default(),
             slark: SlarkConfig::default(),
         }
     }
@@ -3032,6 +3113,42 @@ mod tests {
         assert!(cfg.center_camera_on_ultimate);
         assert_eq!(cfg.camera_center_key, "1");
         assert_eq!(cfg.camera_center_delay_ms, 60);
+    }
+
+    #[test]
+    fn ember_spirit_config_defaults_chase_with_r_then_d() {
+        let cfg = EmberSpiritConfig::default();
+        assert!(cfg.enabled);
+        assert_eq!(cfg.remnant_key, 'r');
+        assert_eq!(cfg.activate_key, 'd');
+        assert_eq!(cfg.activate_delay_ms, 150);
+    }
+
+    #[test]
+    fn ember_spirit_config_defaults_auto_cast_flame_guard_on_danger() {
+        let cfg = EmberSpiritConfig::default();
+        assert!(cfg.auto_flame_guard_on_danger);
+        assert_eq!(cfg.flame_guard_key, 'e');
+        assert_eq!(cfg.flame_guard_hp_threshold_percent, 65);
+        assert_eq!(cfg.flame_guard_trigger_cooldown_ms, 2000);
+    }
+
+    /// Every shipped value here equals the Rust default, so
+    /// `the_embedded_config_template_deserializes_into_settings` would still
+    /// pass with the section deleted. Check for the section itself instead.
+    #[test]
+    fn the_embedded_config_template_ships_the_ember_spirit_section() {
+        assert!(EMBEDDED_CONFIG_TEMPLATE.contains("[heroes.ember_spirit]"));
+
+        let settings: Settings = toml::from_str(EMBEDDED_CONFIG_TEMPLATE)
+            .expect("config/config.toml should parse into Settings");
+        assert_eq!(settings.heroes.ember_spirit.remnant_key, 'r');
+        assert_eq!(settings.heroes.ember_spirit.activate_key, 'd');
+        assert_eq!(settings.heroes.ember_spirit.activate_delay_ms, 150);
+        assert_eq!(
+            settings.heroes.ember_spirit.flame_guard_hp_threshold_percent,
+            65
+        );
     }
 
     #[test]

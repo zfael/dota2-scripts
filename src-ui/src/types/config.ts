@@ -245,6 +245,17 @@ export interface MagnusConfig {
   camera_center_delay_ms: number;
 }
 
+export interface EmberSpiritConfig {
+  enabled: boolean;
+  remnant_key: string;
+  activate_key: string;
+  activate_delay_ms: number;
+  auto_flame_guard_on_danger: boolean;
+  flame_guard_key: string;
+  flame_guard_hp_threshold_percent: number;
+  flame_guard_trigger_cooldown_ms: number;
+}
+
 export interface MiranaConfig {
   enabled: boolean;
   leap_key: string;
@@ -284,6 +295,7 @@ export interface HeroesConfig {
   legion_commander: LegionCommanderConfig;
   magnus: MagnusConfig;
   mirana: MiranaConfig;
+  ember_spirit: EmberSpiritConfig;
   shadow_fiend: ShadowFiendConfig;
   slark: SlarkConfig;
   snapfire: SnapfireConfig;

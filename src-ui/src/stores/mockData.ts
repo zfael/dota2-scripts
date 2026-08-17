@@ -187,6 +187,13 @@ export const mockConfig: Settings = {
       enabled: true, leap_key: "e",
       turn_delay_ms: 200, require_ability_ready: true,
     },
+    ember_spirit: {
+      enabled: true, remnant_key: "r",
+      activate_key: "d", activate_delay_ms: 150,
+      auto_flame_guard_on_danger: true, flame_guard_key: "e",
+      flame_guard_hp_threshold_percent: 65,
+      flame_guard_trigger_cooldown_ms: 2000,
+    },
     shadow_fiend: {
       raze_intercept_enabled: true, raze_delay_ms: 10,
       auto_bkb_on_ultimate: true, auto_d_on_ultimate: true,

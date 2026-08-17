@@ -562,6 +562,28 @@ All four fields are exposed in the React UI under **Heroes → Mirana**.
 
 See `docs/heroes/mirana.md` and `docs/features/keyboard-interception.md`.
 
+## `[heroes.ember_spirit]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `enabled` | `true` | `true` | Master toggle for the remnant chase combo. |
+| `remnant_key` | `"r"` | `"r"` | Fire Remnant ability key, pressed first. Assumes quickcast is on for it. |
+| `activate_key` | `"d"` | `"d"` | Activate Fire Remnant key, pressed second. |
+| `activate_delay_ms` | `150` | `150` | Delay between the two presses. The remnant must exist server-side before the activate can pick it up. |
+| `auto_flame_guard_on_danger` | `true` | `true` | Cast Flame Guard when the danger detector trips and HP is at or below the threshold. Independent of `enabled`. |
+| `flame_guard_key` | `"e"` | `"e"` | Flame Guard ability key pressed by the auto-cast. |
+| `flame_guard_hp_threshold_percent` | `65` | `65` | Only auto-cast at or below this health percentage. Higher than OD's `55` because Flame Guard is a shield, not a nuke — it is worth most before the burst lands. |
+| `flame_guard_trigger_cooldown_ms` | `2000` | `2000` | Minimum gap between two auto-casts, so one burst of payloads cannot spam the key. |
+
+All eight fields are exposed in the React UI under **Heroes → Ember Spirit**.
+
+The remnant chase is fired by the global standalone combo trigger key, not by a
+key of its own, so there is no keyboard-interception entry for this hero. The
+Flame Guard auto-cast is GSI-driven and reads `in_danger` from
+`src/actions/danger_detector.rs`.
+
+See `docs/heroes/ember_spirit.md` and `docs/features/danger-detection.md`.
+
 ## `[heroes.slark]`
 
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |

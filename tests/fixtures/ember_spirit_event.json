@@ -1,0 +1,215 @@
+{
+  "hero": {
+    "aghanims_scepter": false,
+    "aghanims_shard": false,
+    "alive": true,
+    "attributes_level": 0,
+    "break": false,
+    "buyback_cooldown": 0,
+    "buyback_cost": 7999,
+    "disarmed": false,
+    "facet": 0,
+    "has_debuff": true,
+    "health": 376,
+    "health_percent": 40,
+    "hexed": false,
+    "id": 106,
+    "level": 11,
+    "magicimmune": false,
+    "mana": 480,
+    "mana_percent": 80,
+    "max_health": 940,
+    "max_mana": 600,
+    "muted": false,
+    "name": "npc_dota_hero_ember_spirit",
+    "respawn_seconds": 0,
+    "silenced": false,
+    "smoked": false,
+    "stunned": false,
+    "talent_1": false,
+    "talent_2": false,
+    "talent_3": false,
+    "talent_4": false,
+    "talent_5": false,
+    "talent_6": false,
+    "talent_7": false,
+    "talent_8": false,
+    "xp": 7000,
+    "xpos": -1240,
+    "ypos": 2210
+  },
+  "abilities": {
+    "ability0": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 4,
+      "name": "ember_spirit_searing_chains",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability1": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 1,
+      "name": "ember_spirit_sleight_of_fist",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability2": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 4,
+      "name": "ember_spirit_flame_guard",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability3": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 2,
+      "name": "ember_spirit_fire_remnant",
+      "passive": false,
+      "ultimate": true
+    },
+    "ability4": {
+      "ability_active": true,
+      "can_cast": true,
+      "cooldown": 0,
+      "level": 2,
+      "name": "ember_spirit_activate_fire_remnant",
+      "passive": false,
+      "ultimate": false
+    },
+    "ability5": {
+      "ability_active": false,
+      "can_cast": false,
+      "cooldown": 0,
+      "level": 0,
+      "name": "",
+      "passive": false,
+      "ultimate": false
+    }
+  },
+  "items": {
+    "neutral0": {
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
+    },
+    "slot0": {
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
+    },
+    "slot1": {
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
+    },
+    "slot2": {
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
+    },
+    "slot3": {
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
+    },
+    "slot4": {
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
+    },
+    "slot5": {
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
+    },
+    "slot6": {
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
+    },
+    "slot7": {
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
+    },
+    "slot8": {
+      "name": "empty",
+      "can_cast": null,
+      "cooldown": null,
+      "item_level": null,
+      "passive": null,
+      "purchaser": null,
+      "charges": null,
+      "item_charges": null
+    },
+    "teleport0": {
+      "name": "item_tpscroll",
+      "can_cast": true,
+      "cooldown": 0,
+      "item_level": 1,
+      "passive": false,
+      "purchaser": 0,
+      "charges": 1,
+      "item_charges": 1
+    }
+  },
+  "map": {
+    "clock_time": 1420
+  },
+  "player": {
+    "team_name": "radiant"
+  }
+}

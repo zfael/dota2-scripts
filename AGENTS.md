@@ -21,7 +21,7 @@ Start here. Follow links to the source or doc file relevant to your task.
 | Config template | `config/config.toml` (embedded into the binary at build time) |
 | Live config | `%LOCALAPPDATA%\dota2-scripts\config\config.toml` |
 
-Supported heroes: **Broodmother, Huskar, Invoker, Largo, Legion Commander, Magnus, Meepo, Mirana, Outworld Destroyer, Shadow Fiend, Slark, Snapfire, Tiny**
+Supported heroes: **Broodmother, Ember Spirit, Huskar, Invoker, Largo, Legion Commander, Magnus, Meepo, Mirana, Outworld Destroyer, Shadow Fiend, Slark, Snapfire, Tiny**
 
 ---
 
@@ -90,6 +90,7 @@ broken test build there once went unnoticed.
 | Hero | Internal Name | Doc | Source |
 |---|---|---|---|
 | Broodmother | `npc_dota_hero_broodmother` | `docs/heroes/broodmother.md` | `src/actions/heroes/broodmother.rs` |
+| Ember Spirit | `npc_dota_hero_ember_spirit` | `docs/heroes/ember_spirit.md` | `src/actions/heroes/ember_spirit.rs` |
 | Huskar | `npc_dota_hero_huskar` | `docs/heroes/huskar.md` | `src/actions/heroes/huskar.rs` |
 | Invoker | `npc_dota_hero_invoker` | `docs/heroes/invoker.md` | `src/actions/heroes/invoker.rs` |
 | Largo | `npc_dota_hero_largo` | `docs/heroes/largo.md` | `src/actions/heroes/largo.rs` |
@@ -121,6 +122,7 @@ broken test build there once went unnoticed.
 | `actions/armlet.rs` | Armlet toggle logic, including Roshan mode |
 | `actions/executor.rs` | Action queue workers and delayed scheduling |
 | `actions/activity.rs` | Activity feed entries surfaced in the UI |
+| `actions/heroes/ember_spirit.rs` | Ember Spirit remnant chase worker (Fire Remnant then Activate Fire Remnant) and Flame Guard auto-cast on danger |
 | `actions/heroes/magnus.rs` | Magnus directional Reverse Polarity worker and GSI readiness gate |
 | `actions/heroes/mirana.rs` | Mirana directional Leap worker and GSI readiness gate |
 | `actions/heroes/slark.rs` | Slark directional Pounce worker, Dark Pact cleanse, and low-HP escape |

@@ -384,6 +384,36 @@ turn_delay_ms = 200
 # skipped while Leap is visibly castable, set this false and report it.
 require_ability_ready = true
 
+[heroes.ember_spirit]
+# One combo-key press drops a Fire Remnant and immediately dashes to it, so
+# chasing costs one key instead of two. Fired by the global combo trigger key
+# (Settings -> Trigger Key, default Home) while Ember Spirit is the active hero.
+enabled = true
+# Fire Remnant ability key, pressed first. This assumes quickcast is ON for it:
+# without quickcast the press only arms the cursor, and the no-target activate
+# that follows cancels the targeting instead of placing the remnant.
+remnant_key = "r"
+# Activate Fire Remnant key, pressed second. This is the sub-ability that dashes
+# to every remnant on the map.
+activate_key = "d"
+# Delay between the two presses (ms). The remnant has to exist server-side
+# before the activate can pick it up. Raise it if the dash skips the remnant you
+# just placed; lower it if the chase feels sluggish.
+activate_delay_ms = 150
+# Cast Flame Guard automatically when the danger detector trips and HP is at or
+# below the threshold. Independent of `enabled` above, which only gates the
+# remnant chase.
+auto_flame_guard_on_danger = true
+# Flame Guard ability key pressed by the auto-cast.
+flame_guard_key = "e"
+# Only auto-cast at or below this health percentage. Higher than the other
+# danger thresholds in this file on purpose: Flame Guard is a damage shield, so
+# its value comes from being up before the burst lands.
+flame_guard_hp_threshold_percent = 65
+# Minimum gap between two auto-casts (ms), so a burst of GSI payloads cannot
+# spam the key.
+flame_guard_trigger_cooldown_ms = 2000
+
 [heroes.slark]
 # Press W to face the cursor and then cast Pounce, so the leap goes where you
 # are pointing instead of wherever Slark happened to be facing.

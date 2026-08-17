@@ -305,6 +305,7 @@ fn handle_hotkey_events(
                     }
                     Some(hero_type) => {
                         let hero_name = match hero_type {
+                            HeroType::EmberSpirit => Hero::EmberSpirit.to_game_name(),
                             HeroType::Huskar => Hero::Huskar.to_game_name(),
                             HeroType::Largo => Hero::Largo.to_game_name(),
                             HeroType::LegionCommander => Hero::LegionCommander.to_game_name(),

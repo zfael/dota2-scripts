@@ -1,6 +1,6 @@
 use crate::actions::executor::ActionExecutor;
 use crate::actions::heroes::{
-    BroodmotherScript, HeroScript, HuskarScript, InvokerScript, LargoScript,
+    BroodmotherScript, EmberSpiritScript, HeroScript, HuskarScript, InvokerScript, LargoScript,
     LegionCommanderScript, MagnusScript, MeepoScript, MiranaScript, OutworldDestroyerScript,
     ShadowFiendScript, SlarkScript, SnapfireScript, TinyScript,
 };
@@ -159,6 +159,9 @@ impl ActionDispatcher {
 
         let mirana = Arc::new(MiranaScript::new(settings.clone(), executor.clone()));
         hero_scripts.insert(mirana.hero_name().to_string(), mirana);
+
+        let ember_spirit = Arc::new(EmberSpiritScript::new(settings.clone(), executor.clone()));
+        hero_scripts.insert(ember_spirit.hero_name().to_string(), ember_spirit);
 
         Self {
             hero_scripts,

@@ -12,6 +12,7 @@ const GSI_ACTIVITY_TIMEOUT: Duration = Duration::from_secs(35);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HeroType {
+    EmberSpirit,
     Huskar,
     Invoker,
     Largo,
@@ -49,6 +50,7 @@ pub enum UpdateCheckState {
 impl HeroType {
     pub fn from_hero_name(name: &str) -> Option<Self> {
         match name {
+            name if name == Hero::EmberSpirit.to_game_name() => Some(HeroType::EmberSpirit),
             name if name == Hero::Huskar.to_game_name() => Some(HeroType::Huskar),
             name if name == Hero::Invoker.to_game_name() => Some(HeroType::Invoker),
             name if name == Hero::Largo.to_game_name() => Some(HeroType::Largo),
@@ -69,6 +71,7 @@ impl HeroType {
 
     pub fn to_display_name(&self) -> &'static str {
         match self {
+            HeroType::EmberSpirit => "Ember Spirit",
             HeroType::Huskar => "Huskar",
             HeroType::Invoker => "Invoker",
             HeroType::Largo => "Largo",
@@ -271,6 +274,15 @@ mod tests {
             Some(HeroType::Mirana)
         );
         assert_eq!(HeroType::Mirana.to_display_name(), "Mirana");
+    }
+
+    #[test]
+    fn ember_spirit_hero_type_maps_name_and_display() {
+        assert_eq!(
+            HeroType::from_hero_name(crate::models::Hero::EmberSpirit.to_game_name()),
+            Some(HeroType::EmberSpirit)
+        );
+        assert_eq!(HeroType::EmberSpirit.to_display_name(), "Ember Spirit");
     }
 
     #[test]
