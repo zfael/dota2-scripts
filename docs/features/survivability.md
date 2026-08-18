@@ -315,15 +315,31 @@ Owned by `src/actions/dispel.rs::check_and_dispel_silence()`.
 
 This path is survivability-adjacent but **not** tied to `is_in_danger()`.
 
+`check_and_dispel_silence()` is state bookkeeping around one pure planner,
+`plan_dispel()`, which returns `Idle` / `Hold` / `Cast { slot, item }` — the same
+shape as Slark's `plan_dark_pact()`, and testable without globals or a clock.
+
 Current rules:
 
-- if the hero is not silenced, reset `DISPEL_TRIGGERED`
-- while silenced, trigger at most once per silence
-- prefer `item_manta`
-- otherwise try `item_lotus_orb`
+- `Idle` (forget the silence and reset the state) when both toggles are off, the
+  hero is dead, or the hero is not silenced
+- `Hold` while invisible, and while `stunned`, `hexed`, or `muted` — Dota drops
+  item orders issued through those, so a press would be thrown away. The silence
+  stays tracked, so the dispel fires on the first tick the lock lifts instead of
+  being lost for the rest of the silence
+- prefer `item_manta` across the whole inventory (it is instant; Lotus has a cast
+  point), then `item_lotus_orb`
 - only cast if `can_cast == true` and cooldown is `0`
 - add random human-like jitter of `30..100ms`
 - Lotus self-casts by double-tapping
+- after a press, wait `PRESS_SETTLE_MS` (600ms) for GSI to confirm it. The
+  pressed item going on cooldown is the confirmation; if it is still ready after
+  the window, the press never reached the game and it is pressed again
+- a confirmed press ends the episode: the hero is still silenced *after* a
+  dispel landed, so the silence is undispellable (Doom and other strong debuffs)
+  and the second item is not burned on it
+- at most `MAX_PRESSES_PER_SILENCE` (4) presses per silence, so a mis-bound key
+  cannot turn into key spam
 
 The toggles live under `[danger_detection]`:
 

@@ -92,7 +92,9 @@ The model includes many fields, but the runtime currently reads this subset:
 | `hero.mana` | UI | Mana bar text |
 | `hero.mana_percent` | `src/actions/heroes/largo.rs`, `src/actions/heroes/meepo_state.rs`, `src/actions/soul_ring.rs` | Largo low-mana shutdown, Meepo observed-state UI, and Soul Ring gating |
 | `hero.max_mana` | UI | Mana percentage display |
-| `hero.stunned` | `src/actions/common.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs`, UI | Skip armlet toggles, gate Meepo defensive casts, gate Meepo farm assist, status display |
+| `hero.stunned` | `src/actions/common.rs`, `src/actions/dispel.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs`, `src/actions/heroes/slark.rs`, `src/actions/heroes/ember_spirit.rs`, UI | Skip armlet toggles, hold the silence dispel while orders are dropped, gate Meepo defensive casts, gate Meepo farm assist, gate Slark/Ember casts, status display |
+| `hero.hexed` | `src/actions/dispel.rs`, `src/actions/heroes/slark.rs`, `src/actions/heroes/ember_spirit.rs` | Hold the silence dispel while orders are dropped; gate Slark Dark Pact and Ember casts |
+| `hero.muted` | `src/actions/dispel.rs` | Hold the silence dispel — a mute blocks item use specifically |
 | `hero.silenced` | `src/actions/dispel.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs`, UI | Silence dispel logic, gate Meepo defensive casts, gate Meepo farm assist, and drive status display |
 | `hero.has_debuff` | `src/actions/heroes/huskar.rs`, `src/actions/heroes/slark.rs` | Huskar Berserker Blood cleanse timing; Slark Dark Pact cleanse trigger |
 | `hero.aghanims_scepter` | `src/actions/heroes/largo.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs`, tests | Largo dual-song mode detection; Meepo MegaMeepo gate; Meepo observed-state UI |

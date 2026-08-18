@@ -156,12 +156,16 @@ These toggles are **related to the danger feature area**, but they do **not** re
 
 Current behavior:
 
-- reset `DISPEL_TRIGGERED` when silence ends
-- while silenced, trigger at most once per silence
+- forget the silence episode when it ends, the hero dies, or both toggles are off
+- hold — without spending a press — while invisible, stunned, hexed, or muted,
+  then fire on the first tick the cast lock lifts
 - prefer `item_manta` first
 - otherwise try `item_lotus_orb`
 - execute on a short background thread with `30..100ms` random jitter
 - Lotus uses a double-tap for self-cast
+- retry a press that GSI never confirms, and stop once one is confirmed
+
+See `docs/features/survivability.md` for the full decision table.
 
 ---
 
