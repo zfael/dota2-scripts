@@ -11,6 +11,7 @@ Two independent features: a hotkey **remnant chase**, and a GSI-driven **Flame G
 
 - Fired by the **global standalone combo trigger key** (`AppState.trigger_key`, default `Home`) while Ember Spirit is the active hero. There is no per-key interception.
 - Combo: `press remnant_key → wait activate_delay_ms → press activate_key`.
+- **The wait drops to the shorter `scepter_activate_delay_ms` while Ember holds an Aghanim's Scepter**, which places the remnant instantly. Shorter, not zero — the activate still has to land after the remnant registers server-side. `use_scepter_activate_delay = false` keeps the plain delay regardless.
 - Fire Remnant (R) places a remnant at the cursor; Activate Fire Remnant (D) dashes to every remnant on the map. Pairing them turns a two-key chase into one.
 - **No readiness gate.** Unlike the facing combos (Magnus, Mirana, Slark), a wasted press costs nothing here: Dota ignores a Fire Remnant press with no charges banked, and the activate that follows is still worth sending because it dashes to remnants already on the map.
 
@@ -35,6 +36,8 @@ event, as with every other hero.
 | `remnant_key` | char | `"r"` | Fire Remnant ability key, pressed first. |
 | `activate_key` | char | `"d"` | Activate Fire Remnant key, pressed second. |
 | `activate_delay_ms` | u64 | `150` | Delay between the two presses. |
+| `use_scepter_activate_delay` | bool | `true` | Use the shorter scepter delay while Ember holds an Aghanim's Scepter. |
+| `scepter_activate_delay_ms` | u64 | `40` | Delay between the two presses while Ember holds an Aghanim's Scepter. |
 | `auto_flame_guard_on_danger` | bool | `true` | Master toggle for the Flame Guard auto-cast. |
 | `flame_guard_key` | char | `"e"` | Flame Guard ability key pressed by the auto-cast. |
 | `flame_guard_hp_threshold_percent` | u32 | `65` | Only auto-cast at or below this health percentage. |
@@ -46,13 +49,15 @@ enabled = true
 remnant_key = "r"
 activate_key = "d"
 activate_delay_ms = 150
+use_scepter_activate_delay = true
+scepter_activate_delay_ms = 40
 auto_flame_guard_on_danger = true
 flame_guard_key = "e"
 flame_guard_hp_threshold_percent = 65
 flame_guard_trigger_cooldown_ms = 2000
 ```
 
-All eight fields are exposed in the React UI under **Heroes → Ember Spirit**.
+All ten fields are exposed in the React UI under **Heroes → Ember Spirit**.
 
 ## Related Files
 
@@ -81,7 +86,8 @@ intercepts a key for this hero.
 1. The keyboard hook matches the pressed key against `KeyboardSnapshot.trigger_key` and sends `HotkeyEvent::ComboTrigger`.
 2. The hotkey loop checks `standalone_enabled` and `selected_hero`, then calls `dispatch_standalone_trigger(...)`.
 3. `EmberSpiritScript::handle_standalone_trigger()` reads the config, returns early when `enabled = false`, and enqueues the request.
-4. The dedicated Ember Spirit worker runs `press_key(remnant_key) → sleep(activate_delay_ms) → press_key(activate_key)` via the `src/input/simulation.rs` helpers.
+4. `handle_standalone_trigger` resolves the delay through `resolve_activate_delay_ms(...)`, which returns `scepter_activate_delay_ms` when `use_scepter_activate_delay` is on and the last GSI payload showed a scepter, and `activate_delay_ms` otherwise.
+5. The dedicated Ember Spirit worker runs `press_key(remnant_key) → sleep(resolved delay) → press_key(activate_key)` via the `src/input/simulation.rs` helpers, skipping the sleep outright if the resolved delay is `0`.
 
 The enqueue is non-blocking, so the hotkey thread returns immediately and the
 sleep happens on the worker. `SIMULATING_KEYS` guards both synthetic presses so
@@ -93,6 +99,27 @@ The remnant has to exist server-side before the activate can pick it up. Press
 the activate too early and Ember dashes to the *previous* remnants only, while
 the new one is still being placed. `150` is the shipped starting point; tune it
 against your latency.
+
+### Why the scepter gets its own delay
+
+Aghanim's Scepter places the remnant instantly, so the delay no longer has to
+cover the remnant travelling to the cursor — but it is still a wait, not none.
+The activate has to arrive after the remnant registers server-side, and pressing
+both in the same tick loses the new remnant exactly as it does un-upgraded.
+`scepter_activate_delay_ms` (default `40`) is that shorter wait, tunable on its
+own; raise it if the scepter chase dashes without placing.
+
+The remnant chase is hotkey-driven and has no GSI
+event in hand, so `handle_gsi_event` stores the answer in the `HAS_SCEPTER`
+atomic on every payload and `handle_standalone_trigger` reads it. Scepter is read
+from `hero.aghanims_scepter` **or** an `item_ultimate_scepter` in any slot — same
+belt-and-braces pair Largo uses, since a scepter sitting in a slot already grants
+the upgrade.
+
+The atomic starts `false` and is never reset, so the two edges are: a chase fired
+before the first GSI payload of the game uses the plain delay, and a chase fired
+right after a game where Ember had a scepter uses the scepter delay until the
+first payload of the new game corrects it. Both self-heal on the next payload.
 
 ### Flame Guard gate
 
@@ -141,6 +168,9 @@ indices are already shifted relative to keys in a real payload.
   placed.
 - **`activate_delay_ms` is latency-sensitive.** A value tuned on a local server
   can be too short on a distant one.
+- **The scepter delay trusts the last GSI payload.** It reads a cached flag, not
+  live state, so the first chase of a game runs on stale or default information
+  (see *Why the scepter gets its own delay*).
 - **The Flame Guard auto-cast cannot tell a gank from a creep pull.** The danger
   detector is a pure HP-rate heuristic with no vision of who is hitting you, so
   taking a hard creep camp at low HP can spend the cooldown. Lower
@@ -163,7 +193,7 @@ start/exit, queue fallback).
 When editing this hero's code, update this doc:
 
 - [ ] New config option added? → Update Configuration table
-- [ ] Changed combo sequence? → Update the input sequence
+- [ ] Changed combo sequence or the delay resolution? → Update the input sequence
 - [ ] Changed the Flame Guard conditions? → Update Flame Guard gate
 - [ ] Added a readiness gate to the chase? → Update Feature Summary and Limitations
 - [ ] New logging statements? → Update Logging

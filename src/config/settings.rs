@@ -316,6 +316,17 @@ pub struct EmberSpiritConfig {
     /// Delay between the two presses (ms).
     #[serde(default = "default_ember_spirit_activate_delay_ms")]
     pub activate_delay_ms: u64,
+    /// Use `scepter_activate_delay_ms` instead of `activate_delay_ms` while
+    /// Ember holds an Aghanim's Scepter. Turn off to keep the configured delay
+    /// regardless of scepter.
+    #[serde(default = "default_ember_spirit_use_scepter_activate_delay")]
+    pub use_scepter_activate_delay: bool,
+    /// Delay between the two presses (ms) while Ember holds an Aghanim's
+    /// Scepter. Shorter than `activate_delay_ms` because the scepter places the
+    /// remnant instantly, but not zero: the activate still has to land after
+    /// the remnant exists server-side.
+    #[serde(default = "default_ember_spirit_scepter_activate_delay_ms")]
+    pub scepter_activate_delay_ms: u64,
     /// Cast Flame Guard automatically while the danger detector is tripped and
     /// HP is at or below the threshold below. Independent of `enabled`, which
     /// only gates the remnant chase.
@@ -1574,6 +1585,16 @@ fn default_ember_spirit_activate_key() -> char {
 fn default_ember_spirit_activate_delay_ms() -> u64 {
     150
 }
+fn default_ember_spirit_use_scepter_activate_delay() -> bool {
+    true
+}
+/// A fraction of the un-upgraded delay, not zero. The scepter takes the
+/// remnant's travel time out of the wait, but the activate still has to land
+/// after the remnant registers server-side — press both in the same tick and
+/// the dash misses the remnant that was just placed.
+fn default_ember_spirit_scepter_activate_delay_ms() -> u64 {
+    40
+}
 fn default_ember_spirit_auto_flame_guard_on_danger() -> bool {
     true
 }
@@ -2564,6 +2585,8 @@ impl Default for EmberSpiritConfig {
             remnant_key: default_ember_spirit_remnant_key(),
             activate_key: default_ember_spirit_activate_key(),
             activate_delay_ms: default_ember_spirit_activate_delay_ms(),
+            use_scepter_activate_delay: default_ember_spirit_use_scepter_activate_delay(),
+            scepter_activate_delay_ms: default_ember_spirit_scepter_activate_delay_ms(),
             auto_flame_guard_on_danger: default_ember_spirit_auto_flame_guard_on_danger(),
             flame_guard_key: default_ember_spirit_flame_guard_key(),
             flame_guard_hp_threshold_percent:
@@ -3122,6 +3145,8 @@ mod tests {
         assert_eq!(cfg.remnant_key, 'r');
         assert_eq!(cfg.activate_key, 'd');
         assert_eq!(cfg.activate_delay_ms, 150);
+        assert!(cfg.use_scepter_activate_delay);
+        assert_eq!(cfg.scepter_activate_delay_ms, 40);
     }
 
     #[test]

@@ -400,6 +400,15 @@ activate_key = "d"
 # before the activate can pick it up. Raise it if the dash skips the remnant you
 # just placed; lower it if the chase feels sluggish.
 activate_delay_ms = 150
+# Use the shorter delay below while Ember holds an Aghanim's Scepter, which
+# places the remnant instantly. Set to false to keep the delay above regardless
+# of scepter.
+use_scepter_activate_delay = true
+# Delay between the two presses (ms) while Ember holds an Aghanim's Scepter.
+# Shorter than the plain delay because the remnant no longer has to travel, but
+# not zero: the activate still has to land after the remnant registers
+# server-side. Raise it if the scepter chase dashes without placing.
+scepter_activate_delay_ms = 40
 # Cast Flame Guard automatically when the danger detector trips and HP is at or
 # below the threshold. Independent of `enabled` above, which only gates the
 # remnant chase.

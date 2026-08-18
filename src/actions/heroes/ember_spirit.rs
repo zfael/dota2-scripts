@@ -6,17 +6,26 @@ use crate::config::Settings;
 use crate::input::simulation::press_key;
 use crate::models::{GsiWebhookEvent, Hero};
 use lazy_static::lazy_static;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, LazyLock, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 use tracing::{info, warn};
 
 const FLAME_GUARD_ABILITY_NAME: &str = "ember_spirit_flame_guard";
+const ULTIMATE_SCEPTER_ITEM_NAME: &str = "item_ultimate_scepter";
 
 lazy_static! {
     /// Last time the auto-cast fired, for its own retry cooldown.
     static ref LAST_FLAME_GUARD_TRIGGER: Mutex<Option<Instant>> = Mutex::new(None);
 }
+
+/// Scepter state from the last GSI payload, for the hotkey path to read.
+///
+/// The remnant chase is hotkey-driven and has no event in hand, so the GSI
+/// handler leaves the answer here. Starts `false`, which only means the chase
+/// keeps its configured delay until the first payload of the game arrives.
+static HAS_SCEPTER: AtomicBool = AtomicBool::new(false);
 
 /// Whether a named ability is levelled and castable right now.
 ///
@@ -35,6 +44,36 @@ fn ability_is_ready(event: &GsiWebhookEvent, ability_name: &str) -> bool {
                 ability.name == ability_name && ability.level > 0 && ability.can_cast
             })
     })
+}
+
+/// Whether Ember has the scepter upgrade right now.
+///
+/// The inventory scan backs up `hero.aghanims_scepter`, which is the flag Dota
+/// sets for the upgrade itself: same belt-and-braces pair Largo uses, for the
+/// same reason — a scepter sitting in a slot already grants the upgrade.
+fn has_scepter(event: &GsiWebhookEvent) -> bool {
+    event.hero.aghanims_scepter
+        || event
+            .items
+            .all_slots()
+            .iter()
+            .any(|(_, item)| item.name == ULTIMATE_SCEPTER_ITEM_NAME)
+}
+
+/// Delay to use between the remnant press and the activate press.
+///
+/// The scepter takes the remnant's travel time out of the wait, so the chase
+/// switches to the shorter `scepter_activate_delay_ms`. It is a shorter wait,
+/// not no wait: the activate still has to land after the remnant registers
+/// server-side, and pressing both in the same tick loses the new remnant
+/// exactly as it does without the scepter. Without a scepter — or with
+/// `use_scepter_activate_delay` off — the configured delay stands.
+fn resolve_activate_delay_ms(config: &EmberSpiritConfig, has_scepter: bool) -> u64 {
+    if config.use_scepter_activate_delay && has_scepter {
+        config.scepter_activate_delay_ms
+    } else {
+        config.activate_delay_ms
+    }
 }
 
 /// Whether this payload should fire the Flame Guard auto-cast.
@@ -138,10 +177,14 @@ fn run_ember_spirit_request(request: EmberSpiritRequest) {
 /// **Assumes quickcast on the remnant key.** R is point-target: without
 /// quickcast it only arms the cursor, and the no-target D that follows cancels
 /// the targeting instead of resolving it.
+/// The caller resolves which delay applies (scepter or not); a configured `0`
+/// skips the sleep outright rather than sleeping for nothing.
 fn run_remnant_chase_request(remnant_key: char, activate_key: char, activate_delay_ms: u64) {
     crate::input::simulation::press_key(remnant_key);
 
-    thread::sleep(Duration::from_millis(activate_delay_ms));
+    if activate_delay_ms > 0 {
+        thread::sleep(Duration::from_millis(activate_delay_ms));
+    }
     crate::input::simulation::press_key(activate_key);
 }
 
@@ -184,7 +227,10 @@ impl EmberSpiritState {
 ///    active hero.
 /// 2. The dispatcher routes it to `handle_standalone_trigger()`.
 /// 3. The dedicated worker presses the remnant key, waits, then presses the
-///    activate key.
+///    activate key. The wait drops to the shorter `scepter_activate_delay_ms`
+///    while Ember holds an Aghanim's Scepter, which places the remnant
+///    instantly. `use_scepter_activate_delay` turns that off for anyone who
+///    wants the configured delay regardless.
 ///
 /// There is no readiness gate. Unlike the facing combos (Magnus, Mirana,
 /// Slark), a wasted press here costs nothing: Dota ignores a Fire Remnant press
@@ -234,6 +280,8 @@ impl HeroScript for EmberSpiritScript {
         // this hero does off GSI, on top of shared survivability.
         let survivability = SurvivabilityActions::new(self.settings.clone(), self.executor.clone());
         let in_danger = crate::actions::danger_detector::update(event, &settings.danger_detection);
+        // Left here for the hotkey path, which has no event of its own.
+        HAS_SCEPTER.store(has_scepter(event), Ordering::Relaxed);
         self.maybe_trigger_flame_guard(event, &settings.heroes.ember_spirit, in_danger);
         drop(settings);
         survivability.check_and_use_healing_items_with_danger(event, in_danger);
@@ -247,7 +295,9 @@ impl HeroScript for EmberSpiritScript {
         let enabled = ember.enabled;
         let remnant_key = ember.remnant_key;
         let activate_key = ember.activate_key;
-        let activate_delay_ms = ember.activate_delay_ms;
+        let has_scepter = HAS_SCEPTER.load(Ordering::Relaxed);
+        let on_the_scepter_delay = has_scepter && ember.use_scepter_activate_delay;
+        let activate_delay_ms = resolve_activate_delay_ms(ember, has_scepter);
         drop(settings);
 
         if !enabled {
@@ -255,7 +305,17 @@ impl HeroScript for EmberSpiritScript {
             return;
         }
 
-        info!("🔥 Ember Spirit remnant chase triggered");
+        if on_the_scepter_delay {
+            info!(
+                "🔥 Ember Spirit remnant chase triggered ({}ms activate delay, Aghanim's)",
+                activate_delay_ms
+            );
+        } else {
+            info!(
+                "🔥 Ember Spirit remnant chase triggered ({}ms activate delay)",
+                activate_delay_ms
+            );
+        }
         EmberSpiritState::execute_remnant_chase(remnant_key, activate_key, activate_delay_ms);
     }
 
@@ -298,6 +358,66 @@ mod tests {
                 activate_delay_ms: 150,
             }
         );
+    }
+
+    #[test]
+    fn scepter_switches_to_the_shorter_activate_delay() {
+        let config = default_config();
+        assert_eq!(
+            resolve_activate_delay_ms(&config, true),
+            config.scepter_activate_delay_ms
+        );
+    }
+
+    /// Shorter, but still a wait — the activate has to land after the remnant
+    /// registers server-side even with the scepter.
+    #[test]
+    fn the_scepter_delay_is_shorter_than_the_plain_one_but_not_zero() {
+        let config = default_config();
+        assert!(config.scepter_activate_delay_ms > 0);
+        assert!(config.scepter_activate_delay_ms < config.activate_delay_ms);
+    }
+
+    #[test]
+    fn the_configured_delay_stands_without_a_scepter() {
+        let config = default_config();
+        assert_eq!(
+            resolve_activate_delay_ms(&config, false),
+            config.activate_delay_ms
+        );
+    }
+
+    /// The checkbox is the escape hatch: with it off the scepter changes
+    /// nothing about the timing.
+    #[test]
+    fn the_scepter_delay_can_be_turned_off() {
+        let mut config = default_config();
+        config.use_scepter_activate_delay = false;
+
+        assert_eq!(
+            resolve_activate_delay_ms(&config, true),
+            config.activate_delay_ms
+        );
+    }
+
+    #[test]
+    fn scepter_is_detected_from_the_hero_flag() {
+        let mut event = ember_spirit_fixture();
+        assert!(!has_scepter(&event));
+
+        event.hero.aghanims_scepter = true;
+        assert!(has_scepter(&event));
+    }
+
+    /// A scepter sitting in a slot already grants the upgrade, so the
+    /// inventory scan backs up the hero flag.
+    #[test]
+    fn scepter_is_detected_from_an_inventory_slot() {
+        let mut event = ember_spirit_fixture();
+        event.hero.aghanims_scepter = false;
+        event.items.slot0.name = ULTIMATE_SCEPTER_ITEM_NAME.to_string();
+
+        assert!(has_scepter(&event));
     }
 
     #[test]

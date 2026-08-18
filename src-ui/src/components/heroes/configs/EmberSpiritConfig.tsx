@@ -17,9 +17,19 @@ export default function EmberSpiritConfig() {
           <KeyInput label="Fire Remnant Key" value={config.remnant_key} onChange={(v) => set({ remnant_key: v })} />
           <KeyInput label="Activate Remnant Key" value={config.activate_key} onChange={(v) => set({ activate_key: v })} />
           <NumberInput label="Activate Delay" value={config.activate_delay_ms} onChange={(v) => set({ activate_delay_ms: v })} suffix="ms" />
+          <Toggle label="Shorter Delay With Aghanim's" checked={config.use_scepter_activate_delay} onChange={(v) => set({ use_scepter_activate_delay: v })} />
+          <NumberInput label="Aghanim's Activate Delay" value={config.scepter_activate_delay_ms} onChange={(v) => set({ scepter_activate_delay_ms: v })} suffix="ms" />
           <p className="text-xs text-muted">
             One press of the combo trigger key drops a Fire Remnant and then
             dashes to it, so chasing costs one key instead of two.
+          </p>
+          <p className="text-xs text-muted">
+            With an Aghanim's Scepter the remnant is placed instantly, so the
+            chase switches to the shorter Aghanim's delay. Still a wait, not
+            zero — the activate has to land after the remnant registers
+            server-side. Turn the toggle off to keep the plain delay regardless
+            of scepter, and raise the Aghanim's delay if the scepter chase
+            dashes without placing.
           </p>
         </Card>
       </div>
