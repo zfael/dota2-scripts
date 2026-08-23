@@ -215,6 +215,7 @@ manipulate windows must stay sync (main thread) — see `commands/overlay.rs`.
 | `tests/rune_alerts_tests.rs` | Rune alert timing tests |
 | `tests/fixtures/` | Sample GSI JSON payloads |
 | `scripts/generate-voice-pack.ps1` | Generates a spoken voice pack via the Windows speech synthesiser |
+| `scripts/generate-mana-costs.ps1` | Regenerates `src/actions/mana_costs.rs` from odota/dotaconstants; rerun after a gameplay patch |
 
 Archived design docs and implementation plans for larger efforts live under
 `docs/superpowers/specs/` and `docs/superpowers/plans/`. They record why something was

@@ -193,7 +193,7 @@ See `docs/reference/gsi-schema-and-usage.md`.
 | `delay_before_ability_ms` | `30` | `30` | Wait between pressing Soul Ring and replaying the blocked key. |
 | `trigger_cooldown_ms` | `10` | `500` | Checked-in config is far more aggressive than the fallback lockout. |
 | `ability_keys` | `["q","w","e","r","d","f"]` | same list | Compared case-insensitively. |
-| `intercept_item_keys` | `true` | `true` | Item-key interception still skips items in `SOUL_RING_SKIP_ITEMS`. |
+| `intercept_item_keys` | `true` | `true` | Item keys are only intercepted when the held item has a non-zero mana cost in `src/actions/mana_costs.rs`. |
 
 See `docs/features/soul-ring.md` and `docs/features/keyboard-interception.md`.
 

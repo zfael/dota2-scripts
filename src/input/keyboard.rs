@@ -388,16 +388,24 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                 // Single live SOUL_RING_STATE read for all Soul Ring interception decisions
                 let should_intercept_for_soul_ring = if let Some(ch) = key_char {
                     let soul_ring_state = SOUL_RING_STATE.lock().unwrap();
-                    let should_intercept =
-                        soul_ring_state.should_intercept_key_with_config(ch, &snapshot.soul_ring);
+                    let spend = soul_ring_state.spend_for_key(ch, &snapshot.soul_ring);
+                    let should_intercept = spend.warrants_soul_ring();
                     let should_trigger =
                         soul_ring_state.should_trigger_with_config(&snapshot.soul_ring);
                     debug!(
-                        "💍 Key '{}': intercept={}, trigger={}, available={}, can_cast={}, mana={}%, health={}%",
-                        ch, should_intercept, should_trigger,
+                        "💍 Key '{}': spend={:?}, intercept={}, trigger={}, available={}, can_cast={}, mana={}%, health={}%",
+                        ch, spend, should_intercept, should_trigger,
                         soul_ring_state.available, soul_ring_state.can_cast,
                         soul_ring_state.hero_mana_percent, soul_ring_state.hero_health_percent
                     );
+                    // An unpriced entry means the generated table is behind a patch. Worth
+                    // surfacing, since it silently costs the buff rather than misfiring.
+                    if matches!(spend, crate::actions::soul_ring::ManaSpend::Unknown) {
+                        debug!(
+                            "💍 Soul Ring: '{}' is not in mana_costs.rs — rerun scripts/generate-mana-costs.ps1",
+                            ch
+                        );
+                    }
                     should_intercept && should_trigger
                 } else {
                     false
@@ -1618,6 +1626,12 @@ mod tests {
         state.hero_alive = true;
         state.hero_mana_percent = 10;
         state.hero_health_percent = 90;
+        // Q must be bound to something that actually spends mana; Starstorm costs 80.
+        state.ability_slots = vec![crate::actions::soul_ring::AbilitySlot {
+            name: "mirana_starfall".to_string(),
+            level: 1,
+            passive: false,
+        }];
 
         let config = soul_ring_test_config();
         let plan = crate::input::keyboard::plan_soul_ring_replay(&state, Key::KeyQ, &config);

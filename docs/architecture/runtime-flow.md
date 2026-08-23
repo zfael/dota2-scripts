@@ -65,7 +65,7 @@ Boot starts in `src/main.rs::main()`:
 2. locks `AppState` and calls `state.update_from_gsi(event.clone())`
 3. updates `state.metrics.current_queue_depth = rx.len()`
 4. refreshes all shared keyboard-supporting runtime state from the latest GSI event, even if full GSI automation is disabled. This includes:
-   - `soul_ring::update_from_gsi(...)`
+   - `soul_ring::update_from_gsi(items, abilities, hero, settings)`
    - `auto_items::update_gsi_state(...)`
    - `BROODMOTHER_ACTIVE`
    - `SF_LAST_EVENT` for Shadow Fiend keyboard combos

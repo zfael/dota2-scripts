@@ -9,6 +9,7 @@ pub mod executor;
 pub mod heroes;
 pub mod invisibility;
 pub mod item_automation;
+pub mod mana_costs;
 pub mod soul_ring;
 
 pub use dispatcher::ActionDispatcher;

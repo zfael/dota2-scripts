@@ -11,7 +11,7 @@ Learn how the Soul Ring item automation automatically triggers Soul Ring before 
 - **GSI-based detection** – Auto-enables when Soul Ring is in inventory
 - **Safety checks** – Health and mana thresholds prevent wasted usage or suicide
 - **Cooldown lockout** – Prevents double-fire on double-tap or rapid key presses
-- **Smart item filtering** – Excludes items that don't cost mana (Blink, Phase Boots, etc.)
+- **Mana-cost gating** – Only fires ahead of an ability or item that actually spends mana, priced from a generated table
 
 ## Configuration
 
@@ -56,6 +56,8 @@ intercept_item_keys = true
 | File | Purpose |
 |------|---------|
 | `src/actions/soul_ring.rs` | State tracking and trigger logic |
+| `src/actions/mana_costs.rs` | **Generated** item/ability mana costs — do not hand-edit |
+| `scripts/generate-mana-costs.ps1` | Regenerates the table from odota/dotaconstants |
 | `src/input/keyboard.rs` | Key interception with `grab()` |
 | `src/actions/dispatcher.rs` | GSI event updates to Soul Ring state |
 | `src/config/settings.rs` | `SoulRingConfig` struct |
@@ -88,6 +90,8 @@ intercept_item_keys = true
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                   Check conditions:                          │
+│   • Does the bound ability/item cost mana?  ← mana_costs.rs  │
+│   • Hero not silenced / muted / hexed?                       │
 │   • Soul Ring in inventory?                                  │
 │   • Soul Ring off cooldown?                                  │
 │   • Mana below threshold?                                    │
@@ -120,6 +124,10 @@ On every Game State Integration event, the script updates:
 | `hero_mana_percent` | `hero.mana_percent` | Current mana % |
 | `hero_health_percent` | `hero.health_percent` | Current health % |
 | `hero_alive` | `hero.alive` | Whether hero is alive |
+| `slot_items` | `items.slot0-5`, `neutral0` | Slot key → item name, for cost lookup |
+| `ability_slots` | `abilities.ability0-5` | Name, level, and passive flag per slot |
+| `ultimate_index` | `ability.ultimate` | Which slot `R` casts |
+| `cast_blocked` | `hero.silenced`, `hero.muted`, `hero.hexed` | Press would be dropped by the game |
 
 ### Auto-Enable/Disable
 
@@ -150,43 +158,108 @@ The automation will **not** trigger Soul Ring when you press Soul Ring's own ite
 
 #### Ability Keys
 
-By default, these keys are intercepted:
-- **Q** - First ability
-- **W** - Second ability
-- **E** - Third ability
-- **R** - Ultimate
-- **D** - Fourth ability (if available)
-- **F** - Fifth ability (if available)
+By default these keys are candidates, each mapping to a GSI ability slot:
+- **Q** → `ability0`
+- **W** → `ability1`
+- **E** → `ability2`
+- **R** → whichever slot GSI flags `ultimate`
+- **D** → `ability3`
+- **F** → `ability4`
+
+A candidate is only intercepted if the bound ability is learned, not passive, and costs
+mana at its current level. Huskar's `Q`/`W`/`R` and Invoker's orbs never intercept.
 
 #### Item Keys
 
 When `intercept_item_keys = true`, item slot keys are also intercepted:
 - Slot keys from `[keybindings]` config (default: Z, X, C, V, B, N)
 - Excludes Soul Ring's own slot (to prevent infinite loop)
-- **Excludes items that don't cost mana** (see Skip List below)
+- **Only items with a non-zero mana cost** (see Mana Cost Table below)
 
 This is useful for mana-costing items like:
-- Shiva's Guard
-- Scythe of Vyse (Hex)
-- Orchid Malevolence
-- Dagon
-- etc.
+- Shiva's Guard (75)
+- Scythe of Vyse (250)
+- Orchid Malevolence (125)
+- Dagon (120)
+- Black King Bar (50)
 
-### Item Skip List
+Note that Quelling Blade, Battle Fury, Blink, Hand of Midas, and Satanic all cost **no**
+mana and are never intercepted, even though several of them have actives.
 
-The following items are **excluded** from triggering Soul Ring because they don't cost mana or would be wasteful:
+### Mana Cost Table
 
-| Category | Items |
-|----------|-------|
-| **Blink Daggers** | Blink Dagger, Overwhelming Blink, Swift Blink, Arcane Blink |
-| **Boots** | Phase Boots, Power Treads, Boots of Travel (1 & 2) |
-| **Consumables** | Bottle, TP Scroll, Salve, Clarity, Mango, Faerie Fire, Tango, Smoke, Dust, Wards, Tome, Cheese |
-| **Toggle Items** | Armlet, BKB, Blade Mail, Mask of Madness |
-| **Shadow/Invis** | Shadow Amulet, Shadow Blade, Silver Edge |
-| **Other Free Actives** | Satanic, Moon Shard, Hand of Midas, Helm of the Dominator/Overlord, Buckler, Basilius, Assault Cuirass, Vladmir's |
-| **Special Cases** | Manta Style (free for melee), Guardian Greaves (restores mana), Pipe of Insight |
+Soul Ring only fires ahead of something that **actually spends mana**. That question is
+answered by a generated lookup table, not a hand-maintained skip list.
 
-The skip list is defined in `src/actions/soul_ring.rs` as `SOUL_RING_SKIP_ITEMS`.
+GSI reports whether an item or ability is *ready* (`can_cast`, `cooldown`) but never what
+it *costs*, so the cost comes from `src/actions/mana_costs.rs`:
+
+| Table | Key | Value |
+|---|---|---|
+| `ITEM_MANA_COST_TABLE` | GSI `item.name` | flat cost, e.g. `("item_shivas_guard", 75)` |
+| `ABILITY_MANA_COST_TABLE` | GSI `ability.name` | per-level costs, e.g. `("axe_culling_blade", &[100, 125, 150])` |
+
+Both are loaded into `LazyLock<HashMap<..>>` for O(1) lookup and read through
+`item_mana_cost()` / `ability_mana_cost(name, level)`.
+
+#### Why a table and not a skip list
+
+A skip list has to enumerate everything that is *free*, and free is the common case:
+
+| | Items | Hero abilities |
+|---|---|---|
+| Passive-only | 225 | 2,103 |
+| Active, costs mana | **59** | **503** |
+| Active, free | 217 | 98 |
+
+Listing what costs mana takes ~59 entries. Listing what does not takes 442, including
+every passive item — pressing a Desolator's slot key does nothing, and the old skip list
+would happily spend 170 HP on it.
+
+Free actives are not edge cases. Quelling Blade's tree chop, Battle Fury, Blink, all four
+Invoker orbs, Ember Spirit's Fire Remnant, and **every one of Huskar's abilities** (he
+pays health, not mana) are all free.
+
+#### Regenerating
+
+```bash
+pwsh scripts/generate-mana-costs.ps1
+```
+
+Source is [odota/dotaconstants](https://github.com/odota/dotaconstants), itself generated
+from Valve's game files. Run it after a gameplay patch and review the diff — a mass change
+to zero usually means an upstream schema change, not a balance patch.
+
+#### Unknown entries fail safe
+
+A name missing from the table returns `None`, which suppresses Soul Ring rather than
+firing it. A post-patch item therefore costs a missed buff, never 170 HP. The distinction
+is preserved in `ManaSpend`:
+
+| Variant | Meaning | Triggers? |
+|---|---|---|
+| `Costs(n)` | known to spend `n` mana | **yes** |
+| `Free` | known to cost nothing | no |
+| `Nothing` | empty slot, unlearned, or passive | no |
+| `Unknown` | not in the table — regenerate | no |
+
+### Ability Keys
+
+Ability keys map to GSI ability slots by Dota's default bindings: `Q`→`ability0`,
+`W`→`ability1`, `E`→`ability2`, `D`→`ability3`, `F`→`ability4`. `R` resolves through the
+`ultimate` flag rather than a fixed index, because Aghanim's- and talent-granted abilities
+shift the tail of the list.
+
+An ability key is skipped when the ability is unlearned (`level == 0`), passive, or has a
+zero cost at its current level. `ability.can_cast` is deliberately **not** consulted — it
+goes false precisely when mana is short, which is the case Soul Ring exists to fix.
+
+#### Known limitation
+
+The table carries base mana costs. Aghanim's Scepter, Aghanim's Shard, and facets can
+change a cost, and those modifiers are not modelled yet. GSI does expose
+`hero.aghanims_scepter`, `hero.aghanims_shard`, and `hero.facet` if this needs to be
+corrected per-ability later.
 
 ### Integration with Hero Scripts
 
@@ -216,10 +289,14 @@ With `level = "info"` in logging config, you'll see:
 
 With `level = "debug"`, additional diagnostics:
 ```
-💍 Key 'q': intercept=true, trigger=true, available=true, can_cast=true, mana=45%, health=80%
+💍 Key 'q': spend=Costs(80), intercept=true, trigger=true, available=true, can_cast=true, mana=45%, health=80%
+💍 Key 'z': spend=Free, intercept=false, trigger=true, available=true, can_cast=true, mana=45%, health=80%
 💍 Pressing Soul Ring key: c
-💍 Soul Ring: skipping no-mana item 'item_blink' on key 'z'
+💍 Soul Ring: 'v' is not in mana_costs.rs — rerun scripts/generate-mana-costs.ps1
 ```
+
+The `spend=` field is the mana-cost verdict for that key. `Free` and `Nothing` mean the
+press was correctly left alone; `Unknown` means the table needs regenerating.
 
 ### Technical Details
 

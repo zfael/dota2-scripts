@@ -257,11 +257,19 @@ The keyboard callback now combines that live state with static config from `snap
 
 ### Which keys can be intercepted
 
-- ability keys listed in `[soul_ring].ability_keys`
+A key is only intercepted when the thing bound to it is **known to spend mana**, priced
+from `src/actions/mana_costs.rs`. See `docs/features/soul-ring.md` for how that table is
+built and regenerated.
+
+- ability keys listed in `[soul_ring].ability_keys`, but only when the bound ability is
+  learned, not passive, and has a non-zero mana cost at its current level
 - item slot keys, but only when:
   - `[soul_ring].intercept_item_keys = true`
   - the key is not Soul Ring's own slot key
-  - the item is not in `SOUL_RING_SKIP_ITEMS`
+  - the slot holds an item with a non-zero mana cost
+
+Nothing is intercepted while the hero is silenced, muted, or hexed — the press would be
+dropped by the game anyway.
 
 ### Replay flow
 

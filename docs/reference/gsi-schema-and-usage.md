@@ -94,7 +94,7 @@ The model includes many fields, but the runtime currently reads this subset:
 | `hero.max_mana` | UI | Mana percentage display |
 | `hero.stunned` | `src/actions/common.rs`, `src/actions/dispel.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs`, `src/actions/heroes/slark.rs`, `src/actions/heroes/ember_spirit.rs`, UI | Skip armlet toggles, hold the silence dispel while orders are dropped, gate Meepo defensive casts, gate Meepo farm assist, gate Slark/Ember casts, status display |
 | `hero.hexed` | `src/actions/dispel.rs`, `src/actions/heroes/slark.rs`, `src/actions/heroes/ember_spirit.rs` | Hold the silence dispel while orders are dropped; gate Slark Dark Pact and Ember casts |
-| `hero.muted` | `src/actions/dispel.rs` | Hold the silence dispel — a mute blocks item use specifically |
+| `hero.muted` | `src/actions/dispel.rs`, `src/actions/soul_ring.rs` | Hold the silence dispel — a mute blocks item use specifically; also suppresses Soul Ring, since the press would be dropped |
 | `hero.silenced` | `src/actions/dispel.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs`, UI | Silence dispel logic, gate Meepo defensive casts, gate Meepo farm assist, and drive status display |
 | `hero.has_debuff` | `src/actions/heroes/huskar.rs`, `src/actions/heroes/slark.rs` | Huskar Berserker Blood cleanse timing; Slark Dark Pact cleanse trigger |
 | `hero.aghanims_scepter` | `src/actions/heroes/largo.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs`, tests | Largo dual-song mode detection; Meepo MegaMeepo gate; Meepo observed-state UI |
@@ -120,7 +120,9 @@ Fields such as `hero.magicimmune`, `hero.break`, talents, and buyback data are m
 | `abilities.get_by_index(index)` | `src/actions/auto_items.rs` | Broodmother auto-abilities by configured slot index |
 | `ability.can_cast` | `src/actions/heroes/huskar.rs`, `src/actions/auto_items.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/shadow_fiend.rs`, `src/actions/heroes/outworld_destroyer.rs`, `src/actions/heroes/magnus.rs` | Ability readiness checks |
 | `ability.cooldown` | `src/actions/heroes/huskar.rs`, `src/actions/auto_items.rs` | Additional readiness checks |
-| `ability.level` | `src/actions/heroes/huskar.rs`, `src/actions/auto_items.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/outworld_destroyer.rs`, `src/actions/heroes/magnus.rs` | Skip unlearned abilities |
+| `ability.level` | `src/actions/heroes/huskar.rs`, `src/actions/auto_items.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/outworld_destroyer.rs`, `src/actions/heroes/magnus.rs`, `src/actions/soul_ring.rs` | Skip unlearned abilities; index the per-level mana cost table |
+| `ability.passive` | `src/actions/heroes/huskar.rs`, `src/actions/soul_ring.rs` | Skip abilities that cannot be cast at all |
+| `ability.ultimate` | `src/actions/soul_ring.rs` | Resolve which slot the `R` key casts, instead of assuming index 3 |
 | `abilities.ability5.can_cast` | `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend standalone combo only fires when the ultimate is ready |
 
 `ability.ultimate` exists in the schema but is not currently read by runtime code.
@@ -146,6 +148,7 @@ Those slots feed these behaviors:
 | `item.cooldown` | `src/actions/auto_items.rs`, `src/actions/dispel.rs` | Readiness checks for auto-items and silence dispels |
 | `item.charges` | tests | Covered by fixture assertions today; current runtime logic does not branch on charges directly |
 | `item.passive` | `src/actions/dispatcher.rs` | Neutral-item discovery logging |
+| `item.name` → mana cost | `src/actions/soul_ring.rs` via `src/actions/mana_costs.rs` | GSI never reports a mana cost; Soul Ring prices the held item from the generated table |
 | `items.neutral0.name` | `src/actions/dispatcher.rs`, `src/actions/common.rs`, tests | Neutral discovery logging and neutral-item auto-use |
 
 The model also includes `slot6`-`slot8`, `stash0`-`stash5`, and `teleport0`, but current action logic does not consult them.

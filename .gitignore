@@ -47,3 +47,7 @@ src-ui/dist/
 # Produced by scripts/generate-voice-pack.ps1, or supplied by the user; binary
 # audio assets age badly in git and are trivially regenerated.
 assets/voice/
+
+# Upstream catalog downloads for scripts/generate-mana-costs.ps1. Re-fetched on
+# demand; only the generated src/actions/mana_costs.rs belongs in the repo.
+.cache/

@@ -60,6 +60,7 @@
 | `src/actions/auto_items.rs` | Cached GSI item state and Broodmother item/ability combo execution | `docs/features/survivability.md`, `docs/reference/gsi-schema-and-usage.md` |
 | `src/actions/dispel.rs` | Silence dispel logic (Manta / Lotus) | `docs/features/survivability.md`, `docs/reference/gsi-schema-and-usage.md` |
 | `src/actions/soul_ring.rs` | Soul Ring shared state, gating rules, and replay helpers | `docs/features/soul-ring.md`, `docs/features/keyboard-interception.md`, `docs/reference/gsi-schema-and-usage.md` |
+| `src/actions/mana_costs.rs` | **Generated** item/ability mana cost tables; regenerate with `scripts/generate-mana-costs.ps1` | `docs/features/soul-ring.md` |
 
 ## `src/actions/heroes/`
 
