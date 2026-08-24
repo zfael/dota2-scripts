@@ -96,6 +96,61 @@ export default function EarthSpiritConfig() {
       </div>
 
       <div className="space-y-4">
+        <Card title="Scepter Escape">
+          <Toggle label="Self-Petrify When In Danger" checked={config.auto_petrify_on_danger} onChange={(v) => set({ auto_petrify_on_danger: v })} />
+          <KeyInput label="Enchant Remnant Key" value={config.petrify_key} onChange={(v) => set({ petrify_key: v })} />
+          <NumberInput label="HP Threshold" value={config.petrify_hp_threshold_percent} onChange={(v) => set({ petrify_hp_threshold_percent: v })} suffix="%" />
+          <NumberInput label="Retry Cooldown" value={config.petrify_trigger_cooldown_ms} onChange={(v) => set({ petrify_trigger_cooldown_ms: v })} suffix="ms" />
+          <Toggle label="Hold ALT For Enchant Remnant (Self-Cast)" checked={config.petrify_alt} onChange={(v) => set({ petrify_alt: v })} />
+          <Toggle label="Double-Tap Enchant Remnant Key (Self-Cast)" checked={config.petrify_double_tap} onChange={(v) => set({ petrify_double_tap: v })} />
+          <NumberInput label="Enchant Remnant Double-Tap Delay" value={config.petrify_double_tap_delay_ms} onChange={(v) => set({ petrify_double_tap_delay_ms: v })} suffix="ms" />
+          <Toggle label="Kick Yourself Out With Boulder Smash" checked={config.petrify_smash_enabled} onChange={(v) => set({ petrify_smash_enabled: v })} />
+          <KeyInput label="Boulder Smash Key" value={config.smash_key} onChange={(v) => set({ smash_key: v })} />
+          <NumberInput label="Delay Before Smash" value={config.petrify_to_smash_delay_ms} onChange={(v) => set({ petrify_to_smash_delay_ms: v })} suffix="ms" />
+          <p className="text-xs text-muted">
+            With an Aghanim's Scepter you get Enchant Remnant.{" "}
+            <strong>Self-cast, it turns you into a Stone Remnant</strong> —
+            untargetable, which is the save — and a remnant is a legal Boulder
+            Smash target, so the kick that follows launches you out of whatever
+            was killing you.
+          </p>
+          <p className="text-xs text-muted">
+            This one fires by itself, off GSI, when the danger detector trips
+            and your HP is at or below the threshold. It is <em>not</em> gated
+            by the combo toggles above — turning the key remaps off leaves the
+            panic button armed.
+          </p>
+          <p className="text-xs text-muted">
+            Keep the HP threshold well under your danger-detection threshold.
+            The escape takes you out of the fight entirely, so it should be the
+            last thing tried, after the defensive items have gone off.
+          </p>
+          <p className="text-xs text-muted">
+            <strong>Self-cast is what makes the remnant be you.</strong> Same
+            two routes as the roll above, both on:{" "}
+            <strong>ALT</strong> survives quickcast, the double-tap is Dota's
+            default binding. Turning both off does not disable the escape — it
+            petrifies whoever your cursor was over, which is a completely
+            different spell.
+          </p>
+          <p className="text-xs text-muted">
+            The smash is a single plain press — not self-cast, not aimed. Its
+            delay waits on the petrify <em>resolving</em>, not just on the key
+            clearing: there is no remnant to kick until you are actually stone.
+          </p>
+          <p className="text-xs text-muted">
+            The retry cooldown is longer than the other auto-casts on purpose.
+            You stay petrified for several seconds, and GSI keeps reporting the
+            low HP that triggered it the whole time.
+          </p>
+          <p className="text-xs text-muted">
+            Without a scepter, Enchant Remnant is not in the GSI payload at all
+            and none of this ever runs.
+          </p>
+        </Card>
+      </div>
+
+      <div className="space-y-4">
         <Card title="Safety">
           <Toggle label="Only Remap Grip When Ready" checked={config.require_grip_ready} onChange={(v) => set({ require_grip_ready: v })} />
           <Toggle label="Only Remap Roll When Ready" checked={config.require_roll_ready} onChange={(v) => set({ require_roll_ready: v })} />

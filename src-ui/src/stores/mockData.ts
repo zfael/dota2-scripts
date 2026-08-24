@@ -196,6 +196,12 @@ export const mockConfig: Settings = {
       roll_to_remnant_delay_ms: 120, roll_remnant_alt: true,
       roll_remnant_double_tap: true, roll_remnant_double_tap_delay_ms: 60,
       require_roll_ready: true,
+      auto_petrify_on_danger: true, petrify_key: "f",
+      petrify_hp_threshold_percent: 22, petrify_trigger_cooldown_ms: 5000,
+      petrify_alt: true, petrify_double_tap: true,
+      petrify_double_tap_delay_ms: 60,
+      petrify_smash_enabled: true, smash_key: "q",
+      petrify_to_smash_delay_ms: 250,
     },
     ember_spirit: {
       enabled: true, remnant_key: "r",

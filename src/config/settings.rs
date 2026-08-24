@@ -424,6 +424,45 @@ pub struct EarthSpiritConfig {
     /// castable.
     #[serde(default = "default_earth_spirit_require_roll_ready")]
     pub require_roll_ready: bool,
+    /// Self-cast Enchant Remnant (scepter) when the danger detector fires and
+    /// HP is at or below the threshold below. Independent of `enabled`, which
+    /// only gates the two keyboard combos.
+    #[serde(default = "default_earth_spirit_auto_petrify_on_danger")]
+    pub auto_petrify_on_danger: bool,
+    /// Enchant Remnant key — the scepter ability slot, not one of the four
+    /// base abilities.
+    #[serde(default = "default_earth_spirit_petrify_key")]
+    pub petrify_key: char,
+    /// Only self-petrify at or below this health percentage.
+    #[serde(default = "default_earth_spirit_petrify_hp_threshold_percent")]
+    pub petrify_hp_threshold_percent: u32,
+    /// Minimum gap between two auto-casts (ms), so one burst of GSI payloads
+    /// cannot spam the key.
+    #[serde(default = "default_earth_spirit_petrify_trigger_cooldown_ms")]
+    pub petrify_trigger_cooldown_ms: u64,
+    /// Hold ALT across the Enchant Remnant press — Dota's self-cast modifier.
+    #[serde(default = "default_earth_spirit_petrify_alt")]
+    pub petrify_alt: bool,
+    /// Double-tap the Enchant Remnant key, Dota's other route to self-cast.
+    /// Independent of the ALT route so either can be dropped.
+    #[serde(default = "default_earth_spirit_petrify_double_tap")]
+    pub petrify_double_tap: bool,
+    /// Gap between the two Enchant Remnant presses (ms). Ignored when
+    /// `petrify_double_tap` is off.
+    #[serde(default = "default_earth_spirit_petrify_double_tap_delay_ms")]
+    pub petrify_double_tap_delay_ms: u64,
+    /// Follow the self-petrify with a Boulder Smash, kicking the remnant —
+    /// which is Earth Spirit himself — away from whatever is killing him.
+    #[serde(default = "default_earth_spirit_petrify_smash_enabled")]
+    pub petrify_smash_enabled: bool,
+    /// Boulder Smash key, pressed once by the escape. Never intercepted.
+    #[serde(default = "default_earth_spirit_smash_key")]
+    pub smash_key: char,
+    /// Gap between the Enchant Remnant press and the Boulder Smash press (ms).
+    /// The petrify has to resolve server-side first: there is no remnant to
+    /// kick until it does.
+    #[serde(default = "default_earth_spirit_petrify_to_smash_delay_ms")]
+    pub petrify_to_smash_delay_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1768,6 +1807,56 @@ fn default_earth_spirit_roll_double_tap_delay_ms() -> u64 {
 fn default_earth_spirit_require_roll_ready() -> bool {
     true
 }
+fn default_earth_spirit_auto_petrify_on_danger() -> bool {
+    true
+}
+/// Enchant Remnant sits in the scepter slot, which is `F` on the default
+/// bindings — the slot after Stone Remnant's `D`.
+fn default_earth_spirit_petrify_key() -> char {
+    'f'
+}
+/// Unlike Ember's Flame Guard, which wants to be up *before* the burst, this is
+/// a panic button: it takes Earth Spirit out of the fight entirely and spends
+/// the scepter ability doing it. Fire it late, when the alternative is dying.
+fn default_earth_spirit_petrify_hp_threshold_percent() -> u32 {
+    22
+}
+/// Longer than Ember's 2s Flame Guard retry: Earth Spirit is petrified for
+/// several seconds after a successful cast, and GSI keeps reporting the low HP
+/// that triggered it the whole time.
+fn default_earth_spirit_petrify_trigger_cooldown_ms() -> u64 {
+    5000
+}
+/// Hold ALT across the Enchant Remnant press.
+///
+/// Same pair of self-cast routes as the roll combo's remnant, and for the same
+/// reason: which one works depends on the operator's Dota settings. ALT is the
+/// route that survives quickcast.
+fn default_earth_spirit_petrify_alt() -> bool {
+    true
+}
+/// Double-tap the Enchant Remnant key — Dota's default self-cast binding, for a
+/// scepter key left on normal cast.
+fn default_earth_spirit_petrify_double_tap() -> bool {
+    true
+}
+fn default_earth_spirit_petrify_double_tap_delay_ms() -> u64 {
+    60
+}
+fn default_earth_spirit_petrify_smash_enabled() -> bool {
+    true
+}
+fn default_earth_spirit_smash_key() -> char {
+    'q'
+}
+/// Gap between the petrify and the kick.
+///
+/// Longer than the combo delays above because this one waits on a *cast*
+/// resolving, not just on a key press clearing: Boulder Smash has nothing to
+/// kick until the petrify has actually turned Earth Spirit into a remnant.
+fn default_earth_spirit_petrify_to_smash_delay_ms() -> u64 {
+    250
+}
 fn default_slark_enabled() -> bool {
     true
 }
@@ -2773,6 +2862,16 @@ impl Default for EarthSpiritConfig {
             roll_remnant_double_tap_delay_ms:
                 default_earth_spirit_roll_remnant_double_tap_delay_ms(),
             require_roll_ready: default_earth_spirit_require_roll_ready(),
+            auto_petrify_on_danger: default_earth_spirit_auto_petrify_on_danger(),
+            petrify_key: default_earth_spirit_petrify_key(),
+            petrify_hp_threshold_percent: default_earth_spirit_petrify_hp_threshold_percent(),
+            petrify_trigger_cooldown_ms: default_earth_spirit_petrify_trigger_cooldown_ms(),
+            petrify_alt: default_earth_spirit_petrify_alt(),
+            petrify_double_tap: default_earth_spirit_petrify_double_tap(),
+            petrify_double_tap_delay_ms: default_earth_spirit_petrify_double_tap_delay_ms(),
+            petrify_smash_enabled: default_earth_spirit_petrify_smash_enabled(),
+            smash_key: default_earth_spirit_smash_key(),
+            petrify_to_smash_delay_ms: default_earth_spirit_petrify_to_smash_delay_ms(),
         }
     }
 }
@@ -3376,6 +3475,71 @@ mod tests {
         assert!(cfg.roll_remnant_double_tap);
         assert_eq!(cfg.roll_remnant_double_tap_delay_ms, 60);
         assert!(cfg.require_roll_ready);
+    }
+
+    #[test]
+    fn earth_spirit_config_defaults_arm_the_scepter_escape() {
+        let cfg = EarthSpiritConfig::default();
+        assert!(cfg.auto_petrify_on_danger);
+        assert_eq!(cfg.petrify_key, 'f');
+        assert_eq!(cfg.petrify_hp_threshold_percent, 22);
+        assert_eq!(cfg.petrify_trigger_cooldown_ms, 5000);
+        assert!(cfg.petrify_smash_enabled);
+        assert_eq!(cfg.smash_key, 'q');
+        assert_eq!(cfg.petrify_to_smash_delay_ms, 250);
+    }
+
+    /// The shipped values all equal the Rust defaults, so a dropped — or
+    /// misspelled — field in the template would deserialize silently and every
+    /// other assertion would still pass. Check the field names are there.
+    #[test]
+    fn the_embedded_config_template_ships_the_scepter_escape_fields() {
+        for field in [
+            "auto_petrify_on_danger",
+            "petrify_key",
+            "petrify_hp_threshold_percent",
+            "petrify_trigger_cooldown_ms",
+            "petrify_alt",
+            "petrify_double_tap",
+            "petrify_double_tap_delay_ms",
+            "petrify_smash_enabled",
+            "smash_key",
+            "petrify_to_smash_delay_ms",
+        ] {
+            assert!(
+                EMBEDDED_CONFIG_TEMPLATE.contains(field),
+                "config/config.toml is missing {field}"
+            );
+        }
+    }
+
+    /// The escape only works because the remnant it kicks is Earth Spirit
+    /// himself, and only a self-cast puts him there. Losing both routes is a
+    /// silent regression: the petrify would still fire, at whatever the cursor
+    /// happened to be over.
+    #[test]
+    fn the_scepter_escape_keeps_a_self_cast_route() {
+        let cfg = EarthSpiritConfig::default();
+        assert!(
+            cfg.petrify_alt || cfg.petrify_double_tap,
+            "at least one self-cast route must ship on, or Enchant Remnant \
+             lands on the cursor instead of on Earth Spirit"
+        );
+    }
+
+    /// The petrify fires below the HP threshold the danger detector itself
+    /// uses, not above it: it is a last resort that removes Earth Spirit from
+    /// the fight, so it must not pre-empt the cheaper defensive items.
+    #[test]
+    fn the_petrify_threshold_sits_under_the_danger_threshold() {
+        let cfg = EarthSpiritConfig::default();
+        let danger = DangerDetectionConfig::default();
+        assert!(
+            cfg.petrify_hp_threshold_percent < danger.hp_threshold_percent,
+            "petrify at {}% must stay below the {}% danger threshold",
+            cfg.petrify_hp_threshold_percent,
+            danger.hp_threshold_percent
+        );
     }
 
     /// Every press of the roll combo has to land inside Rolling Boulder's

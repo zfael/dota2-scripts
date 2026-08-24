@@ -582,6 +582,16 @@ See `docs/heroes/mirana.md` and `docs/features/keyboard-interception.md`.
 | `roll_remnant_double_tap` | `true` | `true` | Press the remnant key twice — Dota's default self-cast binding. |
 | `roll_remnant_double_tap_delay_ms` | `60` | `60` | Gap between the two remnant presses. Ignored when `roll_remnant_double_tap` is `false`. |
 | `require_roll_ready` | `true` | `true` | Only intercept when `earth_spirit_rolling_boulder` is levelled and castable. |
+| `auto_petrify_on_danger` | `true` | `true` | Self-cast Enchant Remnant (scepter) when the danger detector fires below the HP threshold. Fires off GSI, not off a key, and is **not** gated by `enabled`. |
+| `petrify_key` | `"f"` | `"f"` | Enchant Remnant key — the scepter ability slot. |
+| `petrify_hp_threshold_percent` | `22` | `22` | Only fire at or below this health percentage. Kept well under `[danger_detection] hp_threshold_percent` so the escape never pre-empts the defensive items. |
+| `petrify_trigger_cooldown_ms` | `5000` | `5000` | Minimum gap between two escapes. Longer than the other auto-casts: the petrify's own duration keeps reporting the HP that triggered it. |
+| `petrify_alt` | `true` | `true` | Hold ALT across the Enchant Remnant press — Dota's self-cast modifier, and the route that survives quickcast. |
+| `petrify_double_tap` | `true` | `true` | Press the Enchant Remnant key twice — Dota's default self-cast binding. |
+| `petrify_double_tap_delay_ms` | `60` | `60` | Gap between the two Enchant Remnant presses. Ignored when `petrify_double_tap` is `false`. |
+| `petrify_smash_enabled` | `true` | `true` | Follow the petrify with a Boulder Smash, kicking the remnant — Earth Spirit himself — clear. Off, he petrifies in place. |
+| `smash_key` | `"q"` | `"q"` | Boulder Smash key. Pressed once, plain: not self-cast and not aimed. Never intercepted. |
+| `petrify_to_smash_delay_ms` | `250` | `250` | Gap between the petrify and the kick. Waits on a *cast* resolving, not on a key press clearing — there is no remnant to kick until it does. |
 
 The two combos order the same pair of abilities opposite ways. Geomagnetic Grip
 resolves on the press, so the silence must place its remnant first, and
@@ -606,7 +616,17 @@ Neither readiness gate checks Stone Remnant. It is charge-based, and GSI's
 Mirana's Leap above — so gating on it would kill both combos while remnants are
 visibly banked.
 
-All twelve fields are exposed in the React UI under **Heroes → Earth Spirit**.
+The scepter escape is the one thing this hero does off GSI. Self-casting Enchant
+Remnant turns Earth Spirit himself into a Stone Remnant — untargetable, which is
+the save — and a remnant is a legal Boulder Smash target, so the kick that
+follows launches him clear. It needs no scepter check of its own: without an
+Aghanim's Scepter the ability is absent from the payload, so the readiness gate
+already answers the question. `petrify_alt` and `petrify_double_tap` are the
+same two self-cast routes as the roll's remnant; turning both off does not
+disable the escape, it petrifies whoever the cursor was over instead.
+
+All twenty-three fields are exposed in the React UI under **Heroes → Earth
+Spirit**.
 
 See `docs/heroes/earth_spirit.md` and `docs/features/keyboard-interception.md`.
 

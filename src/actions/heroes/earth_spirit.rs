@@ -1,20 +1,26 @@
 use crate::actions::common::SurvivabilityActions;
 use crate::actions::executor::ActionExecutor;
 use crate::actions::heroes::HeroScript;
+use crate::config::settings::EarthSpiritConfig;
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Hero};
 use lazy_static::lazy_static;
 use std::sync::{mpsc, Arc, LazyLock, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tracing::{info, warn};
 
 const GEOMAGNETIC_GRIP_ABILITY_NAME: &str = "earth_spirit_geomagnetic_grip";
 const ROLLING_BOULDER_ABILITY_NAME: &str = "earth_spirit_rolling_boulder";
+/// Enchant Remnant, the ability an Aghanim's Scepter adds. Absent from the
+/// payload entirely without one, which is why the escape needs no separate
+/// scepter check: the readiness gate cannot find what is not there.
+const ENCHANT_REMNANT_ABILITY_NAME: &str = "earth_spirit_petrify";
 
 lazy_static! {
     static ref EARTH_SPIRIT_LAST_EVENT: Arc<Mutex<Option<GsiWebhookEvent>>> =
         Arc::new(Mutex::new(None));
+    static ref LAST_PETRIFY_TRIGGER: Mutex<Option<Instant>> = Mutex::new(None);
 }
 
 /// Work item for the dedicated Earth Spirit worker thread.
@@ -36,6 +42,18 @@ enum EarthSpiritRequest {
         remnant_alt: bool,
         remnant_double_tap: bool,
         remnant_double_tap_delay_ms: u64,
+    },
+    /// Scepter panic button: self-cast Enchant Remnant, then kick the remnant
+    /// — which is now Earth Spirit himself — away.
+    ScepterEscape {
+        petrify_key: char,
+        petrify_alt: bool,
+        petrify_double_tap: bool,
+        petrify_double_tap_delay_ms: u64,
+        /// `None` when the smash follow-up is off, so a disabled kick cannot be
+        /// confused with a key that happens to be unset.
+        smash_key: Option<char>,
+        petrify_to_smash_delay_ms: u64,
     },
 }
 
@@ -71,6 +89,19 @@ fn build_roll_combo_request(
         remnant_alt,
         remnant_double_tap,
         remnant_double_tap_delay_ms,
+    }
+}
+
+/// The escape takes every field from config, so it is built from the config
+/// rather than from eleven positional arguments.
+fn build_scepter_escape_request(config: &EarthSpiritConfig) -> EarthSpiritRequest {
+    EarthSpiritRequest::ScepterEscape {
+        petrify_key: config.petrify_key,
+        petrify_alt: config.petrify_alt,
+        petrify_double_tap: config.petrify_double_tap,
+        petrify_double_tap_delay_ms: config.petrify_double_tap_delay_ms,
+        smash_key: config.petrify_smash_enabled.then_some(config.smash_key),
+        petrify_to_smash_delay_ms: config.petrify_to_smash_delay_ms,
     }
 }
 
@@ -116,6 +147,21 @@ fn run_earth_spirit_request(request: EarthSpiritRequest) {
             remnant_alt,
             remnant_double_tap,
             remnant_double_tap_delay_ms,
+        ),
+        EarthSpiritRequest::ScepterEscape {
+            petrify_key,
+            petrify_alt,
+            petrify_double_tap,
+            petrify_double_tap_delay_ms,
+            smash_key,
+            petrify_to_smash_delay_ms,
+        } => run_scepter_escape_request(
+            petrify_key,
+            petrify_alt,
+            petrify_double_tap,
+            petrify_double_tap_delay_ms,
+            smash_key,
+            petrify_to_smash_delay_ms,
         ),
     }
 }
@@ -222,6 +268,106 @@ fn run_roll_combo_request(
     }
 }
 
+/// Scepter escape: self-cast Enchant Remnant, then kick the result away.
+///
+/// Enchant Remnant is the ability an Aghanim's Scepter adds, and self-casting it
+/// turns Earth Spirit into a Stone Remnant — untargetable for the duration,
+/// which is the save. The kick is what turns that from a pause into an escape:
+/// a remnant is a legal Boulder Smash target, and the remnant standing there is
+/// him, so the smash launches him out of whatever he was standing in.
+///
+/// **The petrify is self-cast**, by the same two independent routes the roll
+/// combo uses for its remnant — `petrify_alt` holds ALT across the press,
+/// `petrify_double_tap` presses twice. Which one works depends on the
+/// operator's Dota settings, so both ship on and either can be dropped. With
+/// both off the petrify lands on whatever the cursor is over, which is a
+/// different spell entirely: it petrifies *that* hero, not Earth Spirit.
+///
+/// **The smash is a single plain press.** It is not self-cast and not aimed:
+/// Boulder Smash kicks the remnant it finds, and after the petrify the nearest
+/// remnant is Earth Spirit himself.
+///
+/// `petrify_to_smash_delay_ms` is longer than the combo delays for a different
+/// reason than they are: it waits on a *cast resolving* rather than on a key
+/// press clearing. There is nothing to kick until the petrify has actually
+/// turned him to stone.
+fn run_scepter_escape_request(
+    petrify_key: char,
+    petrify_alt: bool,
+    petrify_double_tap: bool,
+    petrify_double_tap_delay_ms: u64,
+    smash_key: Option<char>,
+    petrify_to_smash_delay_ms: u64,
+) {
+    // ALT is held across *both* taps rather than pulsed per press, for the same
+    // reason as the roll combo's remnant: Dota reads the modifier when the cast
+    // resolves, so releasing between taps would leave the second one unmodified.
+    if petrify_alt {
+        crate::input::simulation::alt_down();
+    }
+
+    crate::input::simulation::press_key(petrify_key);
+
+    if petrify_double_tap {
+        if petrify_double_tap_delay_ms > 0 {
+            thread::sleep(Duration::from_millis(petrify_double_tap_delay_ms));
+        }
+        crate::input::simulation::press_key(petrify_key);
+    }
+
+    if petrify_alt {
+        crate::input::simulation::alt_up();
+    }
+
+    let Some(smash_key) = smash_key else {
+        return;
+    };
+
+    if petrify_to_smash_delay_ms > 0 {
+        thread::sleep(Duration::from_millis(petrify_to_smash_delay_ms));
+    }
+    crate::input::simulation::press_key(smash_key);
+}
+
+/// Whether this payload should fire the scepter escape.
+///
+/// No scepter check of its own: without an Aghanim's Scepter, Enchant Remnant is
+/// not in the payload at all, so the readiness gate already answers the
+/// question.
+fn should_trigger_petrify(
+    event: &GsiWebhookEvent,
+    config: &EarthSpiritConfig,
+    in_danger: bool,
+    now: Instant,
+    last_trigger: Option<Instant>,
+) -> bool {
+    if !config.auto_petrify_on_danger || !in_danger {
+        return false;
+    }
+
+    if !event.hero.alive || event.hero.stunned || event.hero.silenced || event.hero.hexed {
+        return false;
+    }
+
+    if event.hero.health_percent > config.petrify_hp_threshold_percent {
+        return false;
+    }
+
+    if !ability_is_ready(event, ENCHANT_REMNANT_ABILITY_NAME) {
+        return false;
+    }
+
+    if let Some(last_trigger) = last_trigger {
+        if now.duration_since(last_trigger)
+            < Duration::from_millis(config.petrify_trigger_cooldown_ms)
+        {
+            return false;
+        }
+    }
+
+    true
+}
+
 fn spawn_earth_spirit_fallback(request: EarthSpiritRequest) {
     thread::spawn(move || {
         run_earth_spirit_request(request);
@@ -326,6 +472,13 @@ impl EarthSpiritState {
             remnant_double_tap_delay_ms,
         ));
     }
+
+    /// Run the scepter escape: self-cast Enchant Remnant, then — unless the
+    /// follow-up is off — wait `petrify_to_smash_delay_ms` and kick the
+    /// resulting remnant, which is Earth Spirit himself, with Boulder Smash.
+    pub fn execute_scepter_escape(config: &EarthSpiritConfig) {
+        enqueue_earth_spirit_request(build_scepter_escape_request(config));
+    }
 }
 
 /// Earth Spirit script.
@@ -348,8 +501,12 @@ impl EarthSpiritState {
 ///      puts it on Earth Spirit, where the roll starts, so the boulder passes
 ///      through it without any aiming. See `run_roll_combo_request`.
 ///
-/// Off GSI this hero does nothing of its own beyond stashing the payload for
-/// the readiness gates; the shared survivability pipeline handles the rest.
+/// Off GSI this hero stashes the payload for the readiness gates and runs one
+/// auto-cast of its own — the scepter escape, which self-casts Enchant Remnant
+/// and kicks the resulting remnant (Earth Spirit himself) clear with Boulder
+/// Smash once the danger detector fires below the panic HP line. See
+/// `run_scepter_escape_request`. The shared survivability pipeline handles the
+/// rest.
 pub struct EarthSpiritScript {
     settings: Arc<Mutex<Settings>>,
     executor: Arc<ActionExecutor>,
@@ -358,6 +515,38 @@ pub struct EarthSpiritScript {
 impl EarthSpiritScript {
     pub fn new(settings: Arc<Mutex<Settings>>, executor: Arc<ActionExecutor>) -> Self {
         Self { settings, executor }
+    }
+
+    /// Fire the scepter escape when the danger detector says Earth Spirit is
+    /// under fire and HP has dropped past the panic line.
+    ///
+    /// The sequence runs on the hero's own worker rather than the shared
+    /// executor, because it sleeps between presses — same as both combos.
+    fn maybe_trigger_petrify(
+        &self,
+        event: &GsiWebhookEvent,
+        config: &EarthSpiritConfig,
+        in_danger: bool,
+    ) {
+        let now = Instant::now();
+        let mut last_trigger = LAST_PETRIFY_TRIGGER.lock().unwrap();
+
+        if !should_trigger_petrify(event, config, in_danger, now, *last_trigger) {
+            return;
+        }
+
+        *last_trigger = Some(now);
+        info!(
+            "🗿 Earth Spirit self-casting Enchant Remnant on danger at {}% HP ({}{})",
+            event.hero.health_percent,
+            config.petrify_key,
+            if config.petrify_smash_enabled {
+                format!(" → smash {}", config.smash_key)
+            } else {
+                String::new()
+            }
+        );
+        EarthSpiritState::execute_scepter_escape(config);
     }
 }
 
@@ -370,9 +559,11 @@ impl HeroScript for EarthSpiritScript {
 
         let settings = self.settings.lock().unwrap();
 
-        // Shared survivability only — both combos are keyboard-driven.
+        // Both combos are keyboard-driven; the scepter escape is the only thing
+        // this hero does off GSI, on top of shared survivability.
         let survivability = SurvivabilityActions::new(self.settings.clone(), self.executor.clone());
         let in_danger = crate::actions::danger_detector::update(event, &settings.danger_detection);
+        self.maybe_trigger_petrify(event, &settings.heroes.earth_spirit, in_danger);
         drop(settings);
         survivability.check_and_use_healing_items_with_danger(event, in_danger);
         survivability.use_defensive_items_if_danger_with_snapshot(event, in_danger);
@@ -538,6 +729,215 @@ mod tests {
             }
             other => panic!("expected a roll combo, got {other:?}"),
         }
+    }
+
+    /// The shipped fixture has no scepter, so Enchant Remnant is absent from it
+    /// exactly as it is absent in a real payload before the item is bought.
+    /// This is the scepter'd version, hurt enough to be worth saving.
+    fn scepter_fixture() -> GsiWebhookEvent {
+        let mut event = earth_spirit_fixture();
+        event.hero.aghanims_scepter = true;
+        event.hero.health_percent = EarthSpiritConfig::default().petrify_hp_threshold_percent;
+        // Slot 5 is where the scepter ability lands here; the readiness gate
+        // matches by name, so the slot itself carries no meaning.
+        event.abilities.ability5.name = ENCHANT_REMNANT_ABILITY_NAME.to_string();
+        event.abilities.ability5.level = 1;
+        event.abilities.ability5.can_cast = true;
+        event.abilities.ability5.ability_active = true;
+        event
+    }
+
+    #[test]
+    fn build_scepter_escape_request_carries_the_self_cast_and_the_kick() {
+        let request = build_scepter_escape_request(&EarthSpiritConfig::default());
+        assert_eq!(
+            request,
+            EarthSpiritRequest::ScepterEscape {
+                petrify_key: 'f',
+                petrify_alt: true,
+                petrify_double_tap: true,
+                petrify_double_tap_delay_ms: 60,
+                smash_key: Some('q'),
+                petrify_to_smash_delay_ms: 250,
+            }
+        );
+    }
+
+    /// The kick is a toggle, and off it has to leave *no* smash press behind —
+    /// a stray Q while petrified would come out the moment Earth Spirit is
+    /// solid again.
+    #[test]
+    fn the_smash_toggle_off_leaves_no_key_to_press() {
+        let mut config = EarthSpiritConfig::default();
+        config.petrify_smash_enabled = false;
+
+        match build_scepter_escape_request(&config) {
+            EarthSpiritRequest::ScepterEscape { smash_key, .. } => assert_eq!(smash_key, None),
+            other => panic!("expected a scepter escape, got {other:?}"),
+        }
+    }
+
+    /// Both self-cast routes are there to be A/B'd in a live game, so they have
+    /// to survive into the request rather than being resolved away at build
+    /// time. Losing both is the silent regression: the petrify still fires and
+    /// lands on whoever the cursor was over.
+    #[test]
+    fn the_petrify_self_cast_toggles_reach_the_request() {
+        let mut config = EarthSpiritConfig::default();
+        config.petrify_alt = false;
+        config.petrify_double_tap = false;
+
+        match build_scepter_escape_request(&config) {
+            EarthSpiritRequest::ScepterEscape {
+                petrify_alt,
+                petrify_double_tap,
+                ..
+            } => {
+                assert!(!petrify_alt);
+                assert!(!petrify_double_tap);
+            }
+            other => panic!("expected a scepter escape, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn petrify_fires_in_danger_below_the_threshold() {
+        let event = scepter_fixture();
+        assert!(should_trigger_petrify(
+            &event,
+            &EarthSpiritConfig::default(),
+            true,
+            Instant::now(),
+            None
+        ));
+    }
+
+    #[test]
+    fn petrify_holds_when_not_in_danger() {
+        let event = scepter_fixture();
+        assert!(!should_trigger_petrify(
+            &event,
+            &EarthSpiritConfig::default(),
+            false,
+            Instant::now(),
+            None
+        ));
+    }
+
+    #[test]
+    fn petrify_holds_above_the_hp_threshold() {
+        let config = EarthSpiritConfig::default();
+        let mut event = scepter_fixture();
+        event.hero.health_percent = config.petrify_hp_threshold_percent + 1;
+
+        assert!(!should_trigger_petrify(
+            &event,
+            &config,
+            true,
+            Instant::now(),
+            None
+        ));
+    }
+
+    /// Without a scepter Enchant Remnant is simply not in the payload, so the
+    /// escape must stay silent rather than pressing an empty ability slot.
+    #[test]
+    fn petrify_holds_without_the_scepter_ability() {
+        let event = {
+            let mut event = earth_spirit_fixture();
+            event.hero.health_percent = 5;
+            event
+        };
+
+        assert!(!should_trigger_petrify(
+            &event,
+            &EarthSpiritConfig::default(),
+            true,
+            Instant::now(),
+            None
+        ));
+    }
+
+    #[test]
+    fn petrify_holds_while_earth_spirit_cannot_act() {
+        let config = EarthSpiritConfig::default();
+
+        for break_state in [
+            |event: &mut GsiWebhookEvent| event.hero.alive = false,
+            |event: &mut GsiWebhookEvent| event.hero.stunned = true,
+            |event: &mut GsiWebhookEvent| event.hero.silenced = true,
+            |event: &mut GsiWebhookEvent| event.hero.hexed = true,
+        ] {
+            let mut event = scepter_fixture();
+            break_state(&mut event);
+
+            assert!(!should_trigger_petrify(
+                &event,
+                &config,
+                true,
+                Instant::now(),
+                None
+            ));
+        }
+    }
+
+    /// A successful petrify keeps Earth Spirit at the HP that triggered it for
+    /// several seconds, so without this the detector would re-fire the whole
+    /// escape on every payload of the petrify's own duration.
+    #[test]
+    fn petrify_respects_its_own_retry_cooldown() {
+        let event = scepter_fixture();
+        let config = EarthSpiritConfig::default();
+        let now = Instant::now();
+
+        assert!(!should_trigger_petrify(
+            &event,
+            &config,
+            true,
+            now,
+            Some(now - Duration::from_millis(config.petrify_trigger_cooldown_ms - 1))
+        ));
+        assert!(should_trigger_petrify(
+            &event,
+            &config,
+            true,
+            now,
+            Some(now - Duration::from_millis(config.petrify_trigger_cooldown_ms))
+        ));
+    }
+
+    #[test]
+    fn petrify_holds_when_the_auto_cast_is_disabled() {
+        let event = scepter_fixture();
+        let mut config = EarthSpiritConfig::default();
+        config.auto_petrify_on_danger = false;
+
+        assert!(!should_trigger_petrify(
+            &event,
+            &config,
+            true,
+            Instant::now(),
+            None
+        ));
+    }
+
+    /// The escape is a survivability feature, not a combo one: turning the
+    /// keyboard remaps off must not disarm the panic button.
+    #[test]
+    fn petrify_is_not_gated_by_the_combo_toggles() {
+        let event = scepter_fixture();
+        let mut config = EarthSpiritConfig::default();
+        config.enabled = false;
+        config.silence_combo_enabled = false;
+        config.roll_combo_enabled = false;
+
+        assert!(should_trigger_petrify(
+            &event,
+            &config,
+            true,
+            Instant::now(),
+            None
+        ));
     }
 
     #[test]

@@ -4,8 +4,9 @@
 
 Earth Spirit's two signature plays each cost two keys and both open with the
 same one. This remaps each play onto its *second* key, so one press does both.
+With a scepter it also gets a panic button that fires by itself.
 **Read this when:** changing the Earth Spirit keys, either combo's timing, the
-roll double-tap, or the readiness gates.
+roll double-tap, the scepter escape, or the readiness gates.
 
 ## Feature Summary
 
@@ -23,11 +24,18 @@ roll double-tap, or the readiness gates.
   Self-cast puts the stone on Earth Spirit, and the roll starts from Earth
   Spirit, so the boulder passes through it every time regardless of the cursor.
   Only the silence still needs aiming.
-- Both are intercepted only while Earth Spirit is the active hero.
+- **With an Aghanim's Scepter, a scepter escape fires by itself**: self-cast
+  Enchant Remnant, then Boulder Smash. Self-casting the petrify turns *Earth
+  Spirit* into a Stone Remnant — untargetable, which is the save — and a remnant
+  is a legal smash target, so the kick launches him out of whatever is killing
+  him. Runs off GSI when the danger detector trips below
+  `petrify_hp_threshold_percent`, not off a key.
+- Both combos are intercepted only while Earth Spirit is the active hero.
 - **Gated on GSI**: each key is only swallowed when *its own* ability is levelled
   and castable. On cooldown it passes straight through, so a dead press never
   spends a remnant charge.
-- Boulder Smash and Magnetize are **not** intercepted.
+- Boulder Smash and Magnetize are **not** intercepted. The escape *presses*
+  Boulder Smash, but that key is never swallowed.
 
 Same two-press worker shape as [Ember Spirit's remnant chase](ember_spirit.md),
 and the same readiness-gate shape as [Mirana's Leap](mirana.md). It is
@@ -55,6 +63,16 @@ Earth Spirit abilities take a point and neither cares where he is facing.
 | `roll_remnant_double_tap` | bool | `true` | Press the remnant key twice — Dota's default self-cast binding. |
 | `roll_remnant_double_tap_delay_ms` | u64 | `60` | Gap between the two remnant presses. Ignored when the toggle is off. |
 | `require_roll_ready` | bool | `true` | Pass the roll key through when Rolling Boulder is unlevelled or on cooldown. |
+| `auto_petrify_on_danger` | bool | `true` | Self-cast Enchant Remnant when the danger detector fires below the HP threshold. Not gated by `enabled`. |
+| `petrify_key` | char | `"f"` | Enchant Remnant key — the scepter ability slot. |
+| `petrify_hp_threshold_percent` | u32 | `22` | Only fire at or below this health percentage. |
+| `petrify_trigger_cooldown_ms` | u64 | `5000` | Minimum gap between two escapes. |
+| `petrify_alt` | bool | `true` | Hold ALT across the Enchant Remnant press — Dota's self-cast modifier. |
+| `petrify_double_tap` | bool | `true` | Press the Enchant Remnant key twice — Dota's default self-cast binding. |
+| `petrify_double_tap_delay_ms` | u64 | `60` | Gap between the two Enchant Remnant presses. Ignored when the toggle is off. |
+| `petrify_smash_enabled` | bool | `true` | Kick the resulting remnant — Earth Spirit himself — with Boulder Smash. |
+| `smash_key` | char | `"q"` | Boulder Smash key. Pressed once, plain; never intercepted. |
+| `petrify_to_smash_delay_ms` | u64 | `250` | Gap between the petrify and the kick. Waits on the cast resolving, not on the key clearing. |
 
 ```toml
 [heroes.earth_spirit]
@@ -73,6 +91,16 @@ roll_remnant_alt = true
 roll_remnant_double_tap = true
 roll_remnant_double_tap_delay_ms = 60
 require_roll_ready = true
+auto_petrify_on_danger = true
+petrify_key = "f"
+petrify_hp_threshold_percent = 22
+petrify_trigger_cooldown_ms = 5000
+petrify_alt = true
+petrify_double_tap = true
+petrify_double_tap_delay_ms = 60
+petrify_smash_enabled = true
+smash_key = "q"
+petrify_to_smash_delay_ms = 250
 ```
 
 Every field is exposed in the React UI under **Heroes → Earth Spirit**.
@@ -115,6 +143,47 @@ Turning **both** off puts the remnant back at the cursor, which then does need
 aiming time — raise `roll_to_remnant_delay_ms` to ~300ms in that case. A unit
 test asserts at least one route stays on by default, because losing both is a
 silent regression: the roll still fires and just quietly stops extending.
+
+### The scepter escape
+
+The only thing this hero does off GSI. An Aghanim's Scepter adds Enchant Remnant
+(`earth_spirit_petrify`), and **self-cast it turns Earth Spirit himself into a
+Stone Remnant** — untargetable for the duration, which is the save. A remnant is
+a legal Boulder Smash target, and after the petrify the remnant standing there is
+him, so the kick that follows launches him out of whatever he was standing in.
+
+Sequence, on the hero's own worker (it sleeps between presses, like both combos):
+
+```
+alt_down()
+  → press_key(petrify)
+  → sleep(petrify_double_tap_delay_ms) → press_key(petrify)
+  → alt_up()
+  → sleep(petrify_to_smash_delay_ms)
+  → press_key(smash)
+```
+
+The ALT pair is omitted when `petrify_alt = false`, the second petrify press and
+its sleep when `petrify_double_tap = false`, and the whole tail — sleep included
+— when `petrify_smash_enabled = false`. The request carries `smash_key:
+Option<char>`, so a disabled kick is unrepresentable rather than a stray press
+waiting to come out when Earth Spirit is solid again.
+
+Firing conditions, all of them (`should_trigger_petrify`):
+
+| Gate | Why |
+|---|---|
+| `auto_petrify_on_danger` and the danger detector | Separate from the combo toggles: turning the key remaps off leaves the panic button armed. |
+| `health_percent <= petrify_hp_threshold_percent` | 22% by default, deliberately far under the 70% danger threshold — the escape removes Earth Spirit from the fight, so it must not pre-empt the cheaper defensive items. A unit test asserts it stays below. |
+| alive, not stunned / silenced / hexed | Same act-check as Ember's Flame Guard. |
+| `earth_spirit_petrify` levelled and castable | Also the scepter check: without a scepter the ability is not in the payload at all. |
+| `petrify_trigger_cooldown_ms` since the last one | 5s, longer than Ember's 2s: the petrify's own duration keeps GSI reporting the HP that triggered it. |
+
+**The smash is a plain single press** — not self-cast, not aimed. Boulder Smash
+kicks the remnant it finds, and the nearest one is Earth Spirit. Its delay is
+longer than any combo delay because it waits on a *cast resolving* rather than on
+a key press clearing: there is no remnant to kick until the petrify has actually
+turned him to stone.
 
 ### The windup is a shared budget
 
@@ -266,19 +335,37 @@ but does **not** consult the readiness gate.
   Mirana, OD, and Slark branches. Grip costs 75 mana and Rolling Boulder 50, so
   both would otherwise qualify. The synthetic Stone Remnant press is a non-issue:
   it costs 0 mana, and Soul Ring no longer triggers on free abilities.
+- **The scepter escape's self-cast is assumed, not verified.** It takes on trust
+  that Enchant Remnant self-casts on ALT (or on a double-tap) the same way Stone
+  Remnant does, and that the petrified Earth Spirit is what Boulder Smash then
+  picks up. If the self-cast route misbehaves the failure is loud in a bad way:
+  the petrify lands on whoever the cursor was over, which is a completely
+  different spell. Turn `petrify_alt` off if your client alt-pings, and record
+  what worked here.
+- **`petrify_to_smash_delay_ms` is a guess.** 250ms is sized for "the cast has
+  resolved", not measured. Too short and the smash finds no remnant; too long
+  and the kick arrives after the danger has closed in. Adjust against a live
+  game and record the answer.
+- **The escape cannot see whether the petrify actually landed.** GSI exposes no
+  modifiers, so the smash is sent on a timer regardless. If the petrify was
+  interrupted, the smash goes out at whatever remnant happens to be nearby.
 - **Added latency.** Each combo inserts its remnant delay in front of the cast.
   On an escape roll that delay is real.
 - **The keys must match your in-game bindings.** The app does not read Dota's
   keybindings; it presses what you configure.
-- **No Boulder Smash or Magnetize automation.** A smashed remnant travels *away*
-  from Earth Spirit, so a fixed cursor rule misfires often enough to be worse
-  than casting it by hand; and Magnetize's value depends on where enemies are
-  standing relative to remnants, which GSI does not expose.
+- **No general Boulder Smash or Magnetize automation.** A smashed remnant travels
+  *away* from Earth Spirit, so a fixed cursor rule misfires often enough to be
+  worse than casting it by hand; and Magnetize's value depends on where enemies
+  are standing relative to remnants, which GSI does not expose. The scepter
+  escape is the one exception, and it works precisely because the remnant it
+  kicks *is* Earth Spirit: travelling away from where he stands is the point.
 
 ## Logging
 
 Look for `🗿 Earth Spirit` log lines (grip/roll presses, skipped intercepts with
-the reason, worker start/exit, queue fallback).
+the reason, worker start/exit, queue fallback). The scepter escape logs one line
+per firing with the HP that triggered it and the keys it is about to press —
+`self-casting Enchant Remnant on danger at 18% HP (f → smash q)`.
 
 ---
 
@@ -292,6 +379,11 @@ When editing this hero's code, update this doc:
 - [ ] Confirmed the double-tap in a live game? → Record the answer under Limitations
 - [ ] Confirmed whether ALT self-casts or pings in your client? → Record it and set the default accordingly
 - [ ] Confirmed a roll picks up a remnant at its own origin? → Drop that caveat
+- [ ] Changed the scepter escape's sequence or gates? → Update The scepter escape
+- [ ] Confirmed Enchant Remnant self-casts, and that the smash kicks the
+      petrified you? → Record it under Limitations and set the defaults
+- [ ] Measured how long the petrify takes to resolve? → Update
+      `petrify_to_smash_delay_ms` and drop that caveat
 - [ ] Measured Rolling Boulder's real windup? → Update `ROLLING_BOULDER_WINDUP_MS` and drop that caveat
 - [ ] Captured a real GSI payload? → Drop the fixture caveat under Limitations
 - [ ] New logging statements? → Update Logging

@@ -560,6 +560,50 @@ roll_remnant_double_tap_delay_ms = 60
 # no effect.
 # Only intercept when Rolling Boulder is levelled and off cooldown.
 require_roll_ready = true
+# --- Scepter escape (Enchant Remnant + Boulder Smash) ---
+# With an Aghanim's Scepter, Earth Spirit gains Enchant Remnant. Self-cast, it
+# turns HIM into a Stone Remnant -- untargetable, which is the save -- and a
+# remnant is a legal Boulder Smash target, so the kick that follows launches him
+# out of whatever was killing him.
+#
+# This is a survivability feature, not a combo: it is NOT gated by `enabled`
+# above, and it fires off GSI rather than off a key. Without a scepter, Enchant
+# Remnant is not in the payload at all and nothing here ever runs.
+auto_petrify_on_danger = true
+# Enchant Remnant key -- the scepter ability slot, not one of the four base
+# abilities.
+petrify_key = "f"
+# Only fire at or below this health percentage. Deliberately well under the
+# [danger_detection] hp_threshold_percent: this is the last resort, and it takes
+# Earth Spirit out of the fight entirely, so it must not pre-empt the cheaper
+# defensive items.
+petrify_hp_threshold_percent = 22
+# Minimum gap between two escapes (ms). Longer than the other auto-casts on
+# purpose: Earth Spirit stays petrified for several seconds after a successful
+# cast, and GSI keeps reporting the low HP that triggered it the whole time.
+petrify_trigger_cooldown_ms = 5000
+# Self-casting the petrify is what makes the remnant BE Earth Spirit. Same two
+# independent routes as the roll combo's remnant, for the same reason: which one
+# works depends on your Dota settings. Turning BOTH off does not disable the
+# escape -- it petrifies whoever your cursor was over instead, which is a
+# completely different spell.
+petrify_alt = true
+petrify_double_tap = true
+# Gap between the two Enchant Remnant presses (ms). Ignored when the above is
+# false.
+petrify_double_tap_delay_ms = 60
+# Follow the petrify with a Boulder Smash to kick the remnant -- you -- clear.
+# Turn this off to petrify in place and just wait the duration out.
+petrify_smash_enabled = true
+# Boulder Smash key. Pressed once, plain: not self-cast and not aimed, because
+# the nearest remnant after the petrify is Earth Spirit himself. This key is
+# never intercepted.
+smash_key = "q"
+# Gap between the petrify and the kick (ms). Longer than the combo delays for a
+# different reason than they are: this one waits on a CAST resolving, not on a
+# key press clearing. There is nothing to kick until the petrify has actually
+# turned him to stone.
+petrify_to_smash_delay_ms = 250
 
 [heroes.invoker]
 quas_key = "q"

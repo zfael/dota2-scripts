@@ -274,6 +274,16 @@ export interface EarthSpiritConfig {
   roll_remnant_double_tap: boolean;
   roll_remnant_double_tap_delay_ms: number;
   require_roll_ready: boolean;
+  auto_petrify_on_danger: boolean;
+  petrify_key: string;
+  petrify_hp_threshold_percent: number;
+  petrify_trigger_cooldown_ms: number;
+  petrify_alt: boolean;
+  petrify_double_tap: boolean;
+  petrify_double_tap_delay_ms: number;
+  petrify_smash_enabled: boolean;
+  smash_key: string;
+  petrify_to_smash_delay_ms: number;
 }
 
 export interface MiranaConfig {
