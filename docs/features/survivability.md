@@ -202,15 +202,16 @@ Current activation order:
 1. `item_black_king_bar`
 2. `item_satanic`
 3. `item_blade_mail`
-4. `item_glimmer_cape`
-5. `item_ghost`
-6. `item_shivas_guard`
+4. `item_mjollnir`
+5. `item_glimmer_cape`
+6. `item_ghost`
+7. `item_shivas_guard`
 
 Details:
 
 - each item is independently enabled/disabled in `[danger_detection]`
-- Glimmer is self-cast by double-tapping the bound key
-- when Glimmer appears in the shared defensive-item sequence, `common.rs` queues the Glimmer self-cast tail on the shared `ActionExecutor`, so the synchronous GSI lane does not sleep for the 50ms follow-up timing and later defensive items still stay behind Glimmer's second tap
+- Mjollnir (Static Charge) and Glimmer are unit-targeted, so both are self-cast by double-tapping the bound key — `defensive_item_needs_self_cast()` in `common.rs` is the single list
+- from the first self-cast item onwards, `common.rs` queues the rest of the sequence on the shared `ActionExecutor`, so the synchronous GSI lane does not sleep for the 50ms follow-up timing and later defensive items still stay behind that item's second tap
 - Satanic has a separate HP gate: `satanic_hp_threshold`
 
 For the heuristics that decide when this path runs, see `docs/features/danger-detection.md`.
@@ -379,7 +380,7 @@ across three config sections rather than mirroring one:
 |---|---|---|
 | Healing Items | `[common]`, `[danger_detection]` | `survivability_hp_threshold`, `healing_threshold_in_danger`, `max_healing_items_per_danger` |
 | Lane Phase | `[common]` | `lane_phase_duration_seconds`, `lane_phase_healing_threshold` |
-| Defensive Items | `[danger_detection]` | `auto_bkb`, `auto_satanic`, `satanic_hp_threshold`, `auto_blade_mail`, `auto_glimmer_cape`, `auto_ghost_scepter`, `auto_shivas_guard` |
+| Defensive Items | `[danger_detection]` | `auto_bkb`, `auto_satanic`, `satanic_hp_threshold`, `auto_blade_mail`, `auto_mjollnir`, `auto_glimmer_cape`, `auto_ghost_scepter`, `auto_shivas_guard` |
 | Dispels | `[danger_detection]` | `auto_manta_on_silence`, `auto_lotus_on_silence` |
 | Neutral Items | `[neutral_items]` | `enabled`, `use_in_danger`, `hp_threshold`, `self_cast_key`, `allowed_items` |
 | Invisibility | `[invisibility]` | `suppress_automation` |
@@ -407,7 +408,7 @@ Deliberately **not** on that page:
 | `[common]` | `survivability_hp_threshold`, `lane_phase_duration_seconds`, `lane_phase_healing_threshold` |
 | `[armlet]` | `enabled`, `cast_modifier`, `toggle_threshold`, `predictive_offset`, `toggle_cooldown_ms` |
 | `[armlet.roshan]` | `enabled`, `toggle_key`, `emergency_margin_hp`, `learning_window_ms`, `min_confidence_hits`, `min_sample_damage`, `stale_reset_ms` |
-| `[danger_detection]` | `enabled`, `healing_threshold_in_danger`, `max_healing_items_per_danger`, `auto_bkb`, `auto_satanic`, `satanic_hp_threshold`, `auto_blade_mail`, `auto_glimmer_cape`, `auto_ghost_scepter`, `auto_shivas_guard`, `auto_manta_on_silence`, `auto_lotus_on_silence` |
+| `[danger_detection]` | `enabled`, `healing_threshold_in_danger`, `max_healing_items_per_danger`, `auto_bkb`, `auto_satanic`, `satanic_hp_threshold`, `auto_blade_mail`, `auto_mjollnir`, `auto_glimmer_cape`, `auto_ghost_scepter`, `auto_shivas_guard`, `auto_manta_on_silence`, `auto_lotus_on_silence` |
 | `[heroes.<hero>.armlet]` | optional per-hero `enabled`, `toggle_threshold`, `predictive_offset`, `toggle_cooldown_ms` overrides |
 | `[neutral_items]` | `enabled`, `self_cast_key`, `use_in_danger`, `hp_threshold`, `allowed_items` |
 | `[mana_automation]` | `enabled`, `mana_threshold_percent`, `excluded_heroes`, `allowed_items` |

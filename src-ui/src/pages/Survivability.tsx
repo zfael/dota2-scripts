@@ -197,6 +197,11 @@ export default function Survivability() {
               onChange={(v) => updateDanger({ auto_blade_mail: v })}
             />
             <Toggle
+              label="Mjollnir"
+              checked={danger.auto_mjollnir}
+              onChange={(v) => updateDanger({ auto_mjollnir: v })}
+            />
+            <Toggle
               label="Glimmer Cape"
               checked={danger.auto_glimmer_cape}
               onChange={(v) => updateDanger({ auto_glimmer_cape: v })}

@@ -41,8 +41,14 @@ impl PlannedKeyPress {
     }
 }
 
+/// Defensive items that target a unit, so the key has to be double-tapped to
+/// land on ourselves instead of waiting for a cursor click.
+fn defensive_item_needs_self_cast(item_name: &str) -> bool {
+    matches!(item_name, "item_glimmer_cape" | "item_mjollnir")
+}
+
 fn plan_item_key_sequence(item_name: &str, key: char) -> Vec<PlannedKeyPress> {
-    if item_name == "item_glimmer_cape" {
+    if defensive_item_needs_self_cast(item_name) {
         vec![
             PlannedKeyPress::new(key, SELF_CAST_DELAY_MS),
             PlannedKeyPress::new(key, 0),
@@ -591,6 +597,7 @@ impl SurvivabilityActions {
                 ("item_black_king_bar", current_config.auto_bkb),
                 ("item_satanic", current_config.auto_satanic),
                 ("item_blade_mail", current_config.auto_blade_mail),
+                ("item_mjollnir", current_config.auto_mjollnir),
                 ("item_glimmer_cape", current_config.auto_glimmer_cape),
                 ("item_ghost", current_config.auto_ghost_scepter),
                 ("item_shivas_guard", current_config.auto_shivas_guard),
@@ -657,15 +664,15 @@ impl SurvivabilityActions {
             return;
         }
 
-        if let Some(glimmer_index) = ready_items
+        if let Some(self_cast_index) = ready_items
             .iter()
-            .position(|(item_name, _)| item_name == "item_glimmer_cape")
+            .position(|(item_name, _)| defensive_item_needs_self_cast(item_name))
         {
-            for (_item_name, key) in &ready_items[..glimmer_index] {
+            for (_item_name, key) in &ready_items[..self_cast_index] {
                 crate::input::press_key(*key);
             }
 
-            let sequence = plan_defensive_item_key_sequence(&ready_items[glimmer_index..]);
+            let sequence = plan_defensive_item_key_sequence(&ready_items[self_cast_index..]);
             self.executor
                 .enqueue("common-defensive-self-cast-tail", move || {
                     execute_key_sequence(sequence);
@@ -976,6 +983,37 @@ mod tests {
             vec![
                 PlannedKeyPress::new('4', SELF_CAST_DELAY_MS),
                 PlannedKeyPress::new('4', 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn mjollnir_plan_double_taps_for_self_cast() {
+        assert_eq!(
+            plan_item_key_sequence("item_mjollnir", '2'),
+            vec![
+                PlannedKeyPress::new('2', SELF_CAST_DELAY_MS),
+                PlannedKeyPress::new('2', 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn defensive_item_plan_double_taps_every_self_cast_item() {
+        let items = vec![
+            ("item_mjollnir".to_string(), '2'),
+            ("item_glimmer_cape".to_string(), '4'),
+            ("item_ghost".to_string(), '5'),
+        ];
+
+        assert_eq!(
+            plan_defensive_item_key_sequence(&items),
+            vec![
+                PlannedKeyPress::new('2', SELF_CAST_DELAY_MS),
+                PlannedKeyPress::new('2', 0),
+                PlannedKeyPress::new('4', SELF_CAST_DELAY_MS),
+                PlannedKeyPress::new('4', 0),
+                PlannedKeyPress::new('5', 0),
             ]
         );
     }

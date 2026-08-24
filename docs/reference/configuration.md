@@ -115,6 +115,7 @@ See `docs/features/survivability.md` and `docs/features/keyboard-interception.md
 | `auto_satanic` | `true` | `true` | Shared defensive-item toggle. |
 | `satanic_hp_threshold` | `40` | `40` | Additional HP gate for Satanic. |
 | `auto_blade_mail` | `true` | `true` | Shared defensive-item toggle. |
+| `auto_mjollnir` | `true` | `true` | Shared defensive-item toggle; Static Charge is self-cast by double-tapping the slot key. |
 | `auto_glimmer_cape` | `true` | `true` | Shared defensive-item toggle. |
 | `auto_ghost_scepter` | `true` | `true` | Shared defensive-item toggle. |
 | `auto_shivas_guard` | `true` | `true` | Shared defensive-item toggle. |

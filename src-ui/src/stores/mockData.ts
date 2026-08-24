@@ -283,7 +283,7 @@ export const mockConfig: Settings = {
     time_window_ms: 500, clear_delay_seconds: 3,
     healing_threshold_in_danger: 50, max_healing_items_per_danger: 3,
     auto_bkb: true, auto_satanic: true, satanic_hp_threshold: 40,
-    auto_blade_mail: true, auto_glimmer_cape: true,
+    auto_blade_mail: true, auto_mjollnir: true, auto_glimmer_cape: true,
     auto_ghost_scepter: true, auto_shivas_guard: true,
     auto_manta_on_silence: true, auto_lotus_on_silence: true,
   },

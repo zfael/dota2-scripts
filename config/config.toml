@@ -222,6 +222,8 @@ auto_bkb = false
 auto_satanic = true
 satanic_hp_threshold = 40
 auto_blade_mail = true
+# Static Charge, self-cast by double-tapping the slot key
+auto_mjollnir = true
 auto_glimmer_cape = true
 auto_ghost_scepter = true
 auto_shivas_guard = true
