@@ -1,4 +1,5 @@
 pub mod broodmother;
+pub mod earth_spirit;
 pub mod ember_spirit;
 pub mod huskar;
 pub mod invoker;
@@ -17,6 +18,7 @@ pub mod tiny;
 pub mod traits;
 
 pub use broodmother::BroodmotherScript;
+pub use earth_spirit::EarthSpiritScript;
 pub use ember_spirit::EmberSpiritScript;
 pub use huskar::HuskarScript;
 pub use invoker::InvokerScript;

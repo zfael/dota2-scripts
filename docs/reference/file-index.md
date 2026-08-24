@@ -78,6 +78,7 @@
 | `src/actions/heroes/meepo.rs` | Meepo standalone combo, GSI-driven Dig / MegaMeepo, and survivability wiring | `docs/heroes/meepo.md` |
 | `src/actions/heroes/meepo_state.rs` | Read-only Meepo observed-state derivation and cache | `docs/heroes/meepo.md`, `docs/reference/gsi-schema-and-usage.md` |
 | `src/actions/heroes/mirana.rs` | Mirana directional Leap automation (Leap-key intercept + GSI readiness gate) | `docs/heroes/mirana.md`, `docs/features/keyboard-interception.md` |
+| `src/actions/heroes/earth_spirit.rs` | Earth Spirit remnant combos: grip key remapped to Stone Remnant then Geomagnetic Grip (the silence), roll key to Rolling Boulder then Stone Remnant, dropped into the path during the windup | `docs/heroes/earth_spirit.md`, `docs/features/keyboard-interception.md` |
 | `src/actions/heroes/ember_spirit.rs` | Ember Spirit remnant chase (Fire Remnant then Activate Fire Remnant) and GSI-driven Flame Guard auto-cast on danger | `docs/heroes/ember_spirit.md`, `docs/features/danger-detection.md` |
 | `src/actions/heroes/outworld_destroyer.rs` | Outworld Destroyer barrier, combo worker, ultimate interception support, and self-Astral helper | `docs/heroes/outworld_destroyer.md`, `docs/features/keyboard-interception.md` |
 | `src/actions/heroes/slark.rs` | Slark directional Pounce automation (Pounce-key intercept + GSI readiness gate), GSI-driven Dark Pact debuff cleanse, and the low-HP Shadow Dance escape with shard fallback | `docs/heroes/slark.md`, `docs/features/keyboard-interception.md`, `docs/features/hud-anchors.md` |
@@ -137,6 +138,7 @@
 | `src-ui/src/lib/overlay.ts` | Overlay-window detection and pre-paint body style stripping | `docs/features/wave-tracker.md` |
 | `src-ui/src/components/heroes/configs/MagnusConfig.tsx` | Magnus directional-ultimate config panel: intercept toggle, ultimate key, turn delay, readiness gate, camera recentre | `docs/heroes/magnus.md` |
 | `src-ui/src/components/heroes/configs/MiranaConfig.tsx` | Mirana directional-leap config panel: intercept toggle, Leap key, turn delay, readiness gate | `docs/heroes/mirana.md` |
+| `src-ui/src/components/heroes/configs/EarthSpiritConfig.tsx` | Earth Spirit config panel: both remnant combos' keys and delays, the roll double-tap toggle, and the two readiness gates | `docs/heroes/earth_spirit.md` |
 | `src-ui/src/components/heroes/configs/EmberSpiritConfig.tsx` | Ember Spirit config panel: remnant-chase keys and delay, plus Flame Guard auto-cast toggle, key, HP threshold, and retry cooldown | `docs/heroes/ember_spirit.md` |
 | `src-ui/src/components/heroes/configs/SlarkConfig.tsx` | Slark config panel: Pounce intercept toggle, Pounce key, turn delay, readiness gate, and auto Dark Pact cleanse | `docs/heroes/slark.md` |
 | `src-ui/src/components/heroes/configs/SnapfireConfig.tsx` | Snapfire directional-cookie config panel: intercept toggle, trigger key, turn delay, cookie key | `docs/heroes/snapfire.md` |
@@ -200,7 +202,7 @@
 | File | Purpose | Linked Doc |
 |---|---|---|
 | `tests/gsi_handler_tests.rs` | Fixture-backed GSI deserialization smoke tests | `docs/workflows/testing-and-debugging.md`, `docs/reference/gsi-schema-and-usage.md` |
-| `tests/fixtures/` | Sample JSON payloads for Huskar, Invoker, Magnus, Meepo, Mirana, Outworld Destroyer, Slark, and Tiny | `docs/workflows/testing-and-debugging.md`, `docs/reference/gsi-schema-and-usage.md` |
+| `tests/fixtures/` | Sample JSON payloads for Earth Spirit, Ember Spirit, Huskar, Invoker, Magnus, Meepo, Mirana, Outworld Destroyer, Slark, and Tiny | `docs/workflows/testing-and-debugging.md`, `docs/reference/gsi-schema-and-usage.md` |
 | `tests/minimap_capture_tests.rs` | Minimap capture integration tests | `docs/reference/configuration.md` |
 | `tests/minimap_analysis_tests.rs` | Tests for zone mapping, color analysis, clustering, baseline, detection | `docs/superpowers/specs/2026-03-31-minimap-hero-detection-design.md` |
 
@@ -237,6 +239,7 @@
 | `docs/heroes/magnus.md` | Magnus automation doc: directional Reverse Polarity |
 | `docs/heroes/meepo.md` | Meepo automation doc |
 | `docs/heroes/mirana.md` | Mirana automation doc: directional Leap |
+| `docs/heroes/earth_spirit.md` | Earth Spirit automation doc: silence combo, enhanced roll |
 | `docs/heroes/ember_spirit.md` | Ember Spirit automation doc: remnant chase, Flame Guard auto-cast |
 | `docs/heroes/outworld_destroyer.md` | Outworld Destroyer automation doc |
 | `docs/heroes/shadow_fiend.md` | Shadow Fiend automation doc |

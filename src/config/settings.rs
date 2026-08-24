@@ -362,6 +362,57 @@ pub struct MiranaConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EarthSpiritConfig {
+    /// Master toggle for both Earth Spirit combos.
+    #[serde(default = "default_earth_spirit_enabled")]
+    pub enabled: bool,
+    /// Stone Remnant key, pressed first by both combos. Assumes quickcast: a
+    /// point-target press without it only arms the cursor, and the second key
+    /// then cancels the targeting instead of resolving it.
+    #[serde(default = "default_earth_spirit_remnant_key")]
+    pub remnant_key: char,
+    /// Remap the grip key into remnant-then-grip.
+    #[serde(default = "default_earth_spirit_silence_combo_enabled")]
+    pub silence_combo_enabled: bool,
+    /// Geomagnetic Grip key. This is also the key the hook intercepts.
+    #[serde(default = "default_earth_spirit_grip_key")]
+    pub grip_key: char,
+    /// Delay between the remnant press and the grip press (ms).
+    #[serde(default = "default_earth_spirit_silence_remnant_delay_ms")]
+    pub silence_remnant_delay_ms: u64,
+    /// Pass the grip key through untouched when Geomagnetic Grip is not
+    /// castable, so a cooldown press never spends a remnant charge for nothing.
+    #[serde(default = "default_earth_spirit_require_grip_ready")]
+    pub require_grip_ready: bool,
+    /// Remap the roll key into remnant-then-roll.
+    #[serde(default = "default_earth_spirit_roll_combo_enabled")]
+    pub roll_combo_enabled: bool,
+    /// Rolling Boulder key. This is also the key the hook intercepts.
+    #[serde(default = "default_earth_spirit_roll_key")]
+    pub roll_key: char,
+    /// Press the roll key twice. Rolling Boulder is the one key commonly left
+    /// off quickcast, where the first press only arms the cursor. Turn this off
+    /// if quickcast is on for it, or if the second tap cancels the targeting
+    /// instead of firing.
+    #[serde(default = "default_earth_spirit_roll_double_tap")]
+    pub roll_double_tap: bool,
+    /// Gap between the two roll presses (ms). Ignored when `roll_double_tap` is
+    /// off.
+    #[serde(default = "default_earth_spirit_roll_double_tap_delay_ms")]
+    pub roll_double_tap_delay_ms: u64,
+    /// Gap between the roll press and the remnant press (ms) — the operator's
+    /// window to aim the remnant into the roll's path. Measured from the press
+    /// that actually fires the roll, so from the second tap when
+    /// `roll_double_tap` is on. Must stay under `ROLLING_BOULDER_WINDUP_MS`.
+    #[serde(default = "default_earth_spirit_roll_to_remnant_delay_ms")]
+    pub roll_to_remnant_delay_ms: u64,
+    /// Pass the roll key through untouched when Rolling Boulder is not
+    /// castable.
+    #[serde(default = "default_earth_spirit_require_roll_ready")]
+    pub require_roll_ready: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SlarkConfig {
     /// Master toggle for the directional Pounce intercept.
     #[serde(default = "default_slark_enabled")]
@@ -717,6 +768,8 @@ pub struct HeroesConfig {
     pub mirana: MiranaConfig,
     #[serde(default)]
     pub ember_spirit: EmberSpiritConfig,
+    #[serde(default)]
+    pub earth_spirit: EarthSpiritConfig,
     #[serde(default)]
     pub slark: SlarkConfig,
 }
@@ -1623,6 +1676,55 @@ fn default_mirana_turn_delay_ms() -> u64 {
     200
 }
 fn default_mirana_require_ability_ready() -> bool {
+    true
+}
+fn default_earth_spirit_enabled() -> bool {
+    true
+}
+fn default_earth_spirit_remnant_key() -> char {
+    'd'
+}
+fn default_earth_spirit_silence_combo_enabled() -> bool {
+    true
+}
+fn default_earth_spirit_grip_key() -> char {
+    'e'
+}
+/// The grip resolves the moment it is pressed, so this is only the window the
+/// remnant needs to register server-side. Ember's remnant chase settled on
+/// 150ms for the same problem with a travelling remnant; Stone Remnant is
+/// placed instantly, so it wants less.
+fn default_earth_spirit_silence_remnant_delay_ms() -> u64 {
+    120
+}
+fn default_earth_spirit_require_grip_ready() -> bool {
+    true
+}
+fn default_earth_spirit_roll_combo_enabled() -> bool {
+    true
+}
+fn default_earth_spirit_roll_key() -> char {
+    'w'
+}
+/// The operator's aiming window, so it is sized for a human, not for the
+/// server: long enough to flick the cursor to where the boulder will pass,
+/// short enough to stay comfortably inside Rolling Boulder's ~600ms windup.
+/// Past the windup the roll is already moving and a remnant dropped behind it
+/// does nothing.
+fn default_earth_spirit_roll_to_remnant_delay_ms() -> u64 {
+    300
+}
+/// Rolling Boulder's windup, and therefore the hard ceiling on the aiming
+/// window above. Not configurable: it is a property of the ability, not a
+/// preference.
+pub const ROLLING_BOULDER_WINDUP_MS: u64 = 600;
+fn default_earth_spirit_roll_double_tap() -> bool {
+    true
+}
+fn default_earth_spirit_roll_double_tap_delay_ms() -> u64 {
+    60
+}
+fn default_earth_spirit_require_roll_ready() -> bool {
     true
 }
 fn default_slark_enabled() -> bool {
@@ -2608,6 +2710,25 @@ impl Default for MiranaConfig {
     }
 }
 
+impl Default for EarthSpiritConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_earth_spirit_enabled(),
+            remnant_key: default_earth_spirit_remnant_key(),
+            silence_combo_enabled: default_earth_spirit_silence_combo_enabled(),
+            grip_key: default_earth_spirit_grip_key(),
+            silence_remnant_delay_ms: default_earth_spirit_silence_remnant_delay_ms(),
+            require_grip_ready: default_earth_spirit_require_grip_ready(),
+            roll_combo_enabled: default_earth_spirit_roll_combo_enabled(),
+            roll_key: default_earth_spirit_roll_key(),
+            roll_double_tap: default_earth_spirit_roll_double_tap(),
+            roll_double_tap_delay_ms: default_earth_spirit_roll_double_tap_delay_ms(),
+            roll_to_remnant_delay_ms: default_earth_spirit_roll_to_remnant_delay_ms(),
+            require_roll_ready: default_earth_spirit_require_roll_ready(),
+        }
+    }
+}
+
 impl Default for SlarkConfig {
     fn default() -> Self {
         Self {
@@ -2782,6 +2903,7 @@ impl Default for HeroesConfig {
             magnus: MagnusConfig::default(),
             mirana: MiranaConfig::default(),
             ember_spirit: EmberSpiritConfig::default(),
+            earth_spirit: EarthSpiritConfig::default(),
             slark: SlarkConfig::default(),
         }
     }
@@ -3183,6 +3305,48 @@ mod tests {
         assert_eq!(cfg.leap_key, 'e');
         assert_eq!(cfg.turn_delay_ms, 200);
         assert!(cfg.require_ability_ready);
+    }
+
+    #[test]
+    fn earth_spirit_config_defaults_arm_both_remnant_combos() {
+        let cfg = EarthSpiritConfig::default();
+        assert!(cfg.enabled);
+        assert_eq!(cfg.remnant_key, 'd');
+
+        assert!(cfg.silence_combo_enabled);
+        assert_eq!(cfg.grip_key, 'e');
+        assert_eq!(cfg.silence_remnant_delay_ms, 120);
+        assert!(cfg.require_grip_ready);
+
+        assert!(cfg.roll_combo_enabled);
+        assert_eq!(cfg.roll_key, 'w');
+        assert!(cfg.roll_double_tap);
+        assert_eq!(cfg.roll_double_tap_delay_ms, 60);
+        assert_eq!(cfg.roll_to_remnant_delay_ms, 300);
+        assert!(cfg.require_roll_ready);
+    }
+
+    /// The whole point of casting the roll first is that its windup is an
+    /// aiming window. A default that runs past the windup would place the
+    /// remnant behind a boulder already in motion — the combo would look like
+    /// it fired and silently do nothing.
+    #[test]
+    fn the_roll_aiming_window_fits_inside_the_windup() {
+        let cfg = EarthSpiritConfig::default();
+        let total = cfg.roll_to_remnant_delay_ms + cfg.roll_double_tap_delay_ms;
+        assert!(
+            total < ROLLING_BOULDER_WINDUP_MS,
+            "aiming window {total}ms must stay inside the {ROLLING_BOULDER_WINDUP_MS}ms windup"
+        );
+    }
+
+    /// It also has to be long enough for a person to actually move the mouse.
+    /// A window sized like a server-timing delay would leave the remnant
+    /// wherever the cursor happened to already be.
+    #[test]
+    fn the_roll_aiming_window_is_sized_for_a_human_not_the_server() {
+        let cfg = EarthSpiritConfig::default();
+        assert!(cfg.roll_to_remnant_delay_ms > cfg.silence_remnant_delay_ms);
     }
 
     #[test]

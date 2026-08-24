@@ -174,6 +174,9 @@ async fn main() {
                         }
                         Some(hero_type) => {
                             let hero_name = match hero_type {
+                                state::HeroType::EarthSpirit => {
+                                    models::Hero::EarthSpirit.to_game_name()
+                                }
                                 state::HeroType::EmberSpirit => {
                                     models::Hero::EmberSpirit.to_game_name()
                                 }

@@ -15,6 +15,7 @@ use crate::actions::heroes::outworld_destroyer::{
 };
 use crate::actions::heroes::shadow_fiend::ShadowFiendState;
 use crate::actions::heroes::magnus::MagnusState;
+use crate::actions::heroes::earth_spirit::EarthSpiritState;
 use crate::actions::heroes::mirana::MiranaState;
 use crate::actions::heroes::slark::SlarkState;
 use crate::actions::heroes::snapfire::SnapfireState;
@@ -543,6 +544,65 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                     }
                 }
 
+                // Handle Earth Spirit's two remnant combos.
+                //
+                // Both pair a Stone Remnant with one more ability, but in
+                // opposite order, because the two abilities offer different
+                // aiming windows:
+                //   grip key -> remnant, then grip  (the silence; grip resolves
+                //               on the press, so the remnant must already exist)
+                //   roll key -> roll, then remnant  (the 1600-unit roll; the
+                //               ~0.6s windup is spent aiming the remnant into
+                //               the path the roll already committed to)
+                //
+                // Neither gate reads Stone Remnant. It is charge-based, and
+                // GSI's can_cast is unreliable for charge abilities, so gating
+                // on it would kill the intercept while remnants are banked.
+                if snapshot.earth_spirit_enabled && snapshot.earth_spirit.enabled {
+                    if snapshot.earth_spirit.silence_combo_enabled {
+                        if let Some(grip_key) = snapshot.earth_spirit.grip_key {
+                            if key == grip_key {
+                                // Falling through leaves the key unblocked, so a
+                                // cooldown press never spends a remnant charge on
+                                // a grip that cannot fire.
+                                if !snapshot.earth_spirit.require_grip_ready
+                                    || EarthSpiritState::can_intercept_grip()
+                                {
+                                    info!("🗿 Earth Spirit grip pressed - remnant then grip");
+                                    EarthSpiritState::execute_silence_combo(
+                                        snapshot.earth_spirit.remnant_char,
+                                        snapshot.earth_spirit.grip_char,
+                                        snapshot.earth_spirit.silence_remnant_delay_ms,
+                                    );
+                                    // Block original key (combo re-presses it).
+                                    return None;
+                                }
+                            }
+                        }
+                    }
+
+                    if snapshot.earth_spirit.roll_combo_enabled {
+                        if let Some(roll_key) = snapshot.earth_spirit.roll_key {
+                            if key == roll_key {
+                                if !snapshot.earth_spirit.require_roll_ready
+                                    || EarthSpiritState::can_intercept_roll()
+                                {
+                                    info!("🗿 Earth Spirit roll pressed - roll then remnant");
+                                    EarthSpiritState::execute_roll_combo(
+                                        snapshot.earth_spirit.roll_char,
+                                        snapshot.earth_spirit.roll_double_tap,
+                                        snapshot.earth_spirit.roll_double_tap_delay_ms,
+                                        snapshot.earth_spirit.remnant_char,
+                                        snapshot.earth_spirit.roll_to_remnant_delay_ms,
+                                    );
+                                    // Block original key (combo re-presses it).
+                                    return None;
+                                }
+                            }
+                        }
+                    }
+                }
+
                 if snapshot.od_enabled {
                     if snapshot.outworld_destroyer.ultimate_intercept_enabled && key == Key::KeyR {
                         if OutworldDestroyerState::can_intercept_ultimate() {
@@ -732,6 +792,34 @@ pub struct MiranaKeyboardSnapshot {
     pub require_ability_ready: bool,
 }
 
+/// Snapshot of the Earth Spirit keyboard-relevant config.
+///
+/// Both combos open with the same Stone Remnant press, so `remnant_char` is
+/// shared; everything downstream of it is per-combo.
+#[derive(Debug, Clone)]
+pub struct EarthSpiritKeyboardSnapshot {
+    pub enabled: bool,
+    /// Stone Remnant key, pressed first by both combos.
+    pub remnant_char: char,
+    pub silence_combo_enabled: bool,
+    /// Pre-parsed Geomagnetic Grip key, used to match the intercepted press.
+    pub grip_key: Option<Key>,
+    /// The same key as a char, used to press it after the remnant.
+    pub grip_char: char,
+    pub silence_remnant_delay_ms: u64,
+    pub require_grip_ready: bool,
+    pub roll_combo_enabled: bool,
+    /// Pre-parsed Rolling Boulder key, used to match the intercepted press.
+    pub roll_key: Option<Key>,
+    /// The same key as a char, used to press it after the remnant.
+    pub roll_char: char,
+    pub roll_double_tap: bool,
+    pub roll_double_tap_delay_ms: u64,
+    /// Operator's window to aim the remnant into the roll's path.
+    pub roll_to_remnant_delay_ms: u64,
+    pub require_roll_ready: bool,
+}
+
 /// Snapshot of the Magnus keyboard-relevant config.
 #[derive(Debug, Clone)]
 pub struct MagnusKeyboardSnapshot {
@@ -821,6 +909,9 @@ pub struct KeyboardSnapshot {
     /// Whether Mirana is the active hero (drives the Leap intercept).
     pub mirana_enabled: bool,
     pub mirana: MiranaKeyboardSnapshot,
+    /// Whether Earth Spirit is the active hero (drives both remnant combos).
+    pub earth_spirit_enabled: bool,
+    pub earth_spirit: EarthSpiritKeyboardSnapshot,
     /// Static Soul Ring keyboard config (thresholds, key sets, delays).
     pub soul_ring: SoulRingKeyboardConfig,
     pub invoker_profiles: Vec<InvokerHotkeyProfileSnapshot>,
@@ -956,6 +1047,7 @@ impl KeyboardSnapshot {
         let mg = &settings.heroes.magnus;
         let sk = &settings.heroes.slark;
         let mi = &settings.heroes.mirana;
+        let es = &settings.heroes.earth_spirit;
 
         Self {
             selected_hero: state.selected_hero.clone(),
@@ -1045,6 +1137,23 @@ impl KeyboardSnapshot {
                 turn_delay_ms: mi.turn_delay_ms,
                 require_ability_ready: mi.require_ability_ready,
             },
+            earth_spirit_enabled: state.selected_hero == Some(crate::state::HeroType::EarthSpirit),
+            earth_spirit: EarthSpiritKeyboardSnapshot {
+                enabled: es.enabled,
+                remnant_char: es.remnant_key,
+                silence_combo_enabled: es.silence_combo_enabled,
+                grip_key: char_to_key(es.grip_key),
+                grip_char: es.grip_key,
+                silence_remnant_delay_ms: es.silence_remnant_delay_ms,
+                require_grip_ready: es.require_grip_ready,
+                roll_combo_enabled: es.roll_combo_enabled,
+                roll_key: char_to_key(es.roll_key),
+                roll_char: es.roll_key,
+                roll_double_tap: es.roll_double_tap,
+                roll_double_tap_delay_ms: es.roll_double_tap_delay_ms,
+                roll_to_remnant_delay_ms: es.roll_to_remnant_delay_ms,
+                require_roll_ready: es.require_roll_ready,
+            },
             soul_ring: SoulRingKeyboardConfig::from_settings(settings),
             invoker_profiles: settings
                 .heroes
@@ -1129,6 +1238,23 @@ impl Default for KeyboardSnapshot {
                 leap_char: 'e',
                 turn_delay_ms: 0,
                 require_ability_ready: true,
+            },
+            earth_spirit_enabled: false,
+            earth_spirit: EarthSpiritKeyboardSnapshot {
+                enabled: false,
+                remnant_char: 'd',
+                silence_combo_enabled: false,
+                grip_key: None,
+                grip_char: 'e',
+                silence_remnant_delay_ms: 0,
+                require_grip_ready: true,
+                roll_combo_enabled: false,
+                roll_key: None,
+                roll_char: 'w',
+                roll_double_tap: true,
+                roll_double_tap_delay_ms: 0,
+                roll_to_remnant_delay_ms: 0,
+                require_roll_ready: true,
             },
             soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
             invoker_profiles: vec![],
@@ -1329,6 +1455,23 @@ mod tests {
                 turn_delay_ms: 0,
                 require_ability_ready: true,
             },
+            earth_spirit_enabled: false,
+            earth_spirit: EarthSpiritKeyboardSnapshot {
+                enabled: false,
+                remnant_char: 'd',
+                silence_combo_enabled: false,
+                grip_key: None,
+                grip_char: 'e',
+                silence_remnant_delay_ms: 0,
+                require_grip_ready: true,
+                roll_combo_enabled: false,
+                roll_key: None,
+                roll_char: 'w',
+                roll_double_tap: true,
+                roll_double_tap_delay_ms: 0,
+                roll_to_remnant_delay_ms: 0,
+                require_roll_ready: true,
+            },
             soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
             invoker_profiles: vec![],
         }
@@ -1485,6 +1628,34 @@ mod tests {
 
         let other = KeyboardSnapshot::from_runtime(&Settings::default(), &AppState::default());
         assert!(!other.mirana_enabled);
+    }
+
+    #[test]
+    fn keyboard_snapshot_populates_earth_spirit_fields_for_earth_spirit() {
+        let mut state = AppState::default();
+        state.selected_hero = Some(HeroType::EarthSpirit);
+        let snapshot = KeyboardSnapshot::from_runtime(&Settings::default(), &state);
+
+        assert!(snapshot.earth_spirit_enabled);
+        assert!(snapshot.earth_spirit.enabled);
+        assert_eq!(snapshot.earth_spirit.remnant_char, 'd');
+
+        assert!(snapshot.earth_spirit.silence_combo_enabled);
+        assert_eq!(snapshot.earth_spirit.grip_key, Some(Key::KeyE));
+        assert_eq!(snapshot.earth_spirit.grip_char, 'e');
+        assert_eq!(snapshot.earth_spirit.silence_remnant_delay_ms, 120);
+        assert!(snapshot.earth_spirit.require_grip_ready);
+
+        assert!(snapshot.earth_spirit.roll_combo_enabled);
+        assert_eq!(snapshot.earth_spirit.roll_key, Some(Key::KeyW));
+        assert_eq!(snapshot.earth_spirit.roll_char, 'w');
+        assert!(snapshot.earth_spirit.roll_double_tap);
+        assert_eq!(snapshot.earth_spirit.roll_double_tap_delay_ms, 60);
+        assert_eq!(snapshot.earth_spirit.roll_to_remnant_delay_ms, 300);
+        assert!(snapshot.earth_spirit.require_roll_ready);
+
+        let other = KeyboardSnapshot::from_runtime(&Settings::default(), &AppState::default());
+        assert!(!other.earth_spirit_enabled);
     }
 
     #[test]

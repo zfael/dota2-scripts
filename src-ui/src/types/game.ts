@@ -1,5 +1,6 @@
 export type HeroType =
   | "broodmother"
+  | "earth_spirit"
   | "ember_spirit"
   | "huskar"
   | "invoker"
@@ -24,6 +25,7 @@ export interface HeroInfo {
 
 export const HEROES: HeroInfo[] = [
   { id: "broodmother", displayName: "Broodmother", internalName: "npc_dota_hero_broodmother", icon: "🕷️", role: "Pusher / Carry" },
+  { id: "earth_spirit", displayName: "Earth Spirit", internalName: "npc_dota_hero_earth_spirit", icon: "🗿", role: "Support / Disabler" },
   { id: "ember_spirit", displayName: "Ember Spirit", internalName: "npc_dota_hero_ember_spirit", icon: "🌋", role: "Carry / Escape" },
   { id: "huskar", displayName: "Huskar", internalName: "npc_dota_hero_huskar", icon: "🔥", role: "Carry / Durable" },
   { id: "invoker", displayName: "Invoker", internalName: "npc_dota_hero_invoker", icon: "🔮", role: "Carry / Nuker" },

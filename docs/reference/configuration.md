@@ -562,6 +562,41 @@ All four fields are exposed in the React UI under **Heroes → Mirana**.
 
 See `docs/heroes/mirana.md` and `docs/features/keyboard-interception.md`.
 
+## `[heroes.earth_spirit]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `enabled` | `true` | `true` | Master toggle for both remnant combos. |
+| `remnant_key` | `"d"` | `"d"` | Stone Remnant key, pressed first by both combos. Assumes quickcast. |
+| `silence_combo_enabled` | `true` | `true` | Remap the grip key to Stone Remnant then Geomagnetic Grip. |
+| `grip_key` | `"e"` | `"e"` | Geomagnetic Grip key. This is also the key intercepted. Intercept is gated on Earth Spirit being the active hero. |
+| `silence_remnant_delay_ms` | `120` | `120` | Gap between the remnant press and the grip press. The remnant must exist server-side before the grip resolves. |
+| `require_grip_ready` | `true` | `true` | Only intercept when `earth_spirit_geomagnetic_grip` is levelled and castable, so a cooldown press never spends a remnant charge. |
+| `roll_combo_enabled` | `true` | `true` | Remap the roll key to Rolling Boulder then Stone Remnant — the reverse of the silence, see below. |
+| `roll_key` | `"w"` | `"w"` | Rolling Boulder key. This is also the key intercepted. |
+| `roll_double_tap` | `true` | `true` | Press the roll key twice. Rolling Boulder is commonly left off quickcast, where the first press only arms the cursor. Off sends a single press. |
+| `roll_double_tap_delay_ms` | `60` | `60` | Gap between the two roll presses. Ignored when `roll_double_tap` is `false`. |
+| `roll_to_remnant_delay_ms` | `300` | `300` | Aiming window between the roll firing and the remnant press, measured from the press that casts the roll. Sized for a human hand, not for the server. |
+| `require_roll_ready` | `true` | `true` | Only intercept when `earth_spirit_rolling_boulder` is levelled and castable. |
+
+The two combos order the same pair of abilities opposite ways. Geomagnetic Grip
+resolves on the press, so the silence must place its remnant first, and
+`silence_remnant_delay_ms` is only the window the server needs to register it.
+Rolling Boulder has a ~600ms windup, and a remnant dropped into the path during
+it still counts — so the roll fires first and that windup becomes the operator's
+aiming window. `roll_to_remnant_delay_ms + roll_double_tap_delay_ms` must stay
+under `ROLLING_BOULDER_WINDUP_MS` (600, in `src/config/settings.rs`); a unit test
+asserts it for the shipped defaults.
+
+Neither readiness gate checks Stone Remnant. It is charge-based, and GSI's
+`can_cast` is unreliable for charge abilities — the same caveat noted for
+Mirana's Leap above — so gating on it would kill both combos while remnants are
+visibly banked.
+
+All twelve fields are exposed in the React UI under **Heroes → Earth Spirit**.
+
+See `docs/heroes/earth_spirit.md` and `docs/features/keyboard-interception.md`.
+
 ## `[heroes.ember_spirit]`
 
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |

@@ -15,7 +15,11 @@
 | `src/config/settings.rs` | Adds `<Hero>Config`, defaults, and `HeroesConfig` field |
 | `config/config.toml` | Adds `[heroes.<hero>]` checked-in config |
 | `src/state/app_state.rs` | Adds `HeroType` if the hero participates in the generic UI/manual-override flow |
-| `src/ui/app.rs` | Manual override buttons, keybinding display, selected-hero behavior |
+| `src-ui/src/types/game.ts` | `HeroType` union + `HEROES` entry (display name, internal name, icon, role) |
+| `src-ui/src/types/config.ts` | TS mirror of the new `<Hero>Config` struct + the `HeroesConfig` field |
+| `src-ui/src/components/heroes/configs/<Hero>Config.tsx` | Hero config panel, registered in that directory's `index.ts` |
+| `src-ui/src/stores/mockData.ts` | Mock config block so non-Tauri browser runs render the page |
+| `src-tauri/src/lib.rs`, `src-tauri/src/commands/state.rs` | `HeroType` → internal-name and display-name → internal-name matches |
 | `src/main.rs` | Generic standalone combo routing and any special `HotkeyEvent` handling |
 | `src/input/keyboard.rs` | Needed when the hero uses direct key or mouse interception |
 | `docs/heroes/<hero>.md` | Required hero doc |
@@ -121,9 +125,10 @@ Update:
   - add `HeroType::<Hero>`
   - extend `HeroType::from_hero_name(...)`
   - extend `to_display_name()`
-- `src/ui/app.rs`
-   - add the hero to the Manual Override buttons
-   - add any hero-specific keybinding text if needed
+- `src-ui/src/types/game.ts`
+   - add the hero to the `HeroType` union and the `HEROES` list
+- `src-tauri/src/lib.rs` and `src-tauri/src/commands/state.rs`
+   - extend the `HeroType` → internal-name and display-name → internal-name matches
 - `src/config/settings.rs`
    - update `Settings::get_standalone_key(...)` if this hero should expose a hero-specific manual trigger in the UI/runtime
 - `src/main.rs`

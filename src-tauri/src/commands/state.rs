@@ -100,6 +100,7 @@ pub fn select_hero(
         Some(name) => {
             let game_name = match name.as_str() {
                 "Broodmother" => "npc_dota_hero_broodmother",
+                "Earth Spirit" => "npc_dota_hero_earth_spirit",
                 "Ember Spirit" => "npc_dota_hero_ember_spirit",
                 "Huskar" => "npc_dota_hero_huskar",
                 "Invoker" => "npc_dota_hero_invoker",

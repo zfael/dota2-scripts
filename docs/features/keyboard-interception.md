@@ -15,6 +15,7 @@
 | `src/actions/heroes/magnus.rs` | Magnus directional ultimate planning, GSI readiness gate, and dedicated request worker |
 | `src/actions/heroes/slark.rs` | Slark directional Pounce planning, GSI readiness gate, and dedicated request worker |
 | `src/actions/heroes/mirana.rs` | Mirana directional Leap planning, GSI readiness gate, and dedicated request worker |
+| `src/actions/heroes/earth_spirit.rs` | Earth Spirit remnant-combo planning, two GSI readiness gates, and dedicated request worker |
 | `src/actions/heroes/invoker.rs` | Invoker combo profiles, invoke planning, dedicated request worker (panic Ghost Walk, prep pairs, primary combo) |
 | `src/input/simulation.rs` | High-level synthetic keys/mouse emission + `SIMULATING_KEYS` guard |
 | `src/gsi/handler.rs` | Rebuilds the shared `KeyboardSnapshot` when GSI detection changes the hero |
@@ -63,7 +64,7 @@ so these are the rebuild triggers:
 The GSI rebuild is what makes hero intercepts go live without any UI
 interaction. It is gated on `AppState::update_from_gsi` reporting a hero change,
 so it costs nothing on the steady-state event stream. Without it, picking a hero
-in-game leaves Shadow Fiend / Magnus / Slark / Mirana / Snapfire intercepts inert until an
+in-game leaves Shadow Fiend / Magnus / Slark / Mirana / Earth Spirit / Snapfire intercepts inert until an
 unrelated UI toggle happens to refresh the cache — the failure mode covered by
 `process_gsi_events_rebuilds_the_keyboard_snapshot_on_hero_detection`.
 
@@ -76,6 +77,7 @@ The snapshot holds only static keyboard-facing facts:
 - Magnus intercept flags, pre-parsed ultimate key, and turn delay
 - Slark intercept flags, pre-parsed Pounce key, and turn delay
 - Mirana intercept flags, pre-parsed Leap key, and turn delay
+- Earth Spirit intercept flags, pre-parsed grip and roll keys, the shared remnant key, the silence remnant delay, and the roll's double-tap plus aiming-window settings
 - Soul Ring thresholds, ability keys, and item-slot keys
 - Armlet Roshan toggle key when `[armlet.roshan].enabled = true`
 - HUD portrait capture key from `[hud]`
@@ -144,27 +146,42 @@ Current callback order on key/button input:
     - enqueue the `ALT down -> right-click (face cursor) -> ALT up -> wait -> press E`
       sequence onto the dedicated Mirana worker
     - on a failed readiness check the branch falls through and `E` reaches Dota
-13. **Outworld Destroyer intercepts**
+13. **Earth Spirit remnant intercepts**
+    - if `snapshot.earth_spirit_enabled` and `snapshot.earth_spirit.enabled`
+    - block the configured grip key (default `E`) when
+      `EarthSpiritState::can_intercept_grip()` passes, or when
+      `require_grip_ready = false`, and enqueue
+      `press remnant -> wait -> press grip`
+    - block the configured roll key (default `W`) when
+      `EarthSpiritState::can_intercept_roll()` passes, or when
+      `require_roll_ready = false`, and enqueue
+      `press roll [-> wait -> press roll] -> wait -> press remnant`
+    - **the two combos press the remnant on opposite sides**: the grip resolves
+      on the press so its remnant must already exist, while the roll's ~600ms
+      windup is spent aiming a remnant into the path it already committed to
+    - each combo has its own toggle, key, delay, and gate; a failed readiness
+      check falls through and that key reaches Dota
+14. **Outworld Destroyer intercepts**
     - if `snapshot.od_enabled` and `heroes.outworld_destroyer.ultimate_intercept_enabled`
     - block `R` only when `Sanity's Eclipse` is ready
     - enqueue `BKB -> Objurgation -> R` onto the dedicated OD worker
     - optionally block the configured self-Astral panic hotkey and double-tap Astral on self
-14. **Armlet Roshan toggle**
+15. **Armlet Roshan toggle**
     - if `[armlet.roshan].enabled = true` and the configured hotkey matches
     - emit `HotkeyEvent::ArmletRoshanToggle`
     - block the original key so it does not also reach Dota 2
-15. **HUD portrait capture**
+16. **HUD portrait capture**
     - if `[hud] capture_portrait_key` matches (default `F9`)
     - emit `HotkeyEvent::CaptureHudPortrait`
     - block the original key: it is ours while calibrating
     - planned alongside the other global hotkeys in `plan_global_hotkey_press_event`
-16. **Largo / generic ability-key path**
+17. **Largo / generic ability-key path**
     - emit `HotkeyEvent::LargoQ/W/E/R`
     - if Soul Ring should trigger, block and replay
     - otherwise pass through
-17. **Item-slot Soul Ring interception**
+18. **Item-slot Soul Ring interception**
      - blocks configured item keys when the item is mana-using and Soul Ring should fire first
-18. **Standalone combo key**
+19. **Standalone combo key**
      - sends `HotkeyEvent::ComboTrigger`
      - does not block the original key
 
@@ -429,6 +446,19 @@ These are still part of the interception surface even though this page centers o
 - **Leap is charge-based**, and how GSI reports `can_cast` for a banked charge is unverified against a live payload. If the gate proves wrong in-game the symptom is a silently inert feature; `require_ability_ready = false` is the escape hatch
 - Sacred Arrow, Starstorm, and Moonlight Shadow are never intercepted
 
+### Earth Spirit
+
+- activation is gated on `snapshot.earth_spirit_enabled`, derived from `selected_hero == Some(HeroType::EarthSpirit)`
+- **two independent intercepts, not one.** Both of Earth Spirit's signature plays are a Stone Remnant plus one more ability aimed at the same cursor position, so each is remapped onto its second key:
+  - the grip key (default `E`) enqueues `press remnant -> wait -> press grip`. That is the silence: Geomagnetic Grip pulls the remnant back through whoever stands between the cursor and Earth Spirit
+  - the roll key (default `W`) enqueues `press roll -> wait -> press remnant`, optionally pressing the roll key a second time to fire it. A roll through a remnant travels 1600 units instead of 800
+- **the roll is the one combo that casts before placing.** Rolling Boulder has a ~600ms windup, and a remnant dropped into the path during it still counts, so casting first locks the direction in and leaves the windup free for the operator to aim the remnant. `roll_to_remnant_delay_ms` is that window, and it plus `roll_double_tap_delay_ms` must stay under `ROLLING_BOULDER_WINDUP_MS`
+- unlike the Magnus / Slark / Mirana combos there is **no right-click**: both abilities take a point, and neither cares which way Earth Spirit is facing
+- each intercept is **gated on GSI** against its own ability: `can_intercept_grip()` requires `earth_spirit_geomagnetic_grip`, `can_intercept_roll()` requires `earth_spirit_rolling_boulder`, both with `level > 0 && can_cast`. A failed check leaves that key unblocked
+- **neither gate reads Stone Remnant.** It is charge-based, and GSI's `can_cast` is unreliable for charge abilities — the same trap flagged for Mirana's Leap above. Gating on it would leave both combos inert while remnants are visibly banked; the trade is that a zero-charge press still fires the combo
+- `roll_double_tap` exists because Rolling Boulder is commonly left off quickcast, where the first press only arms the cursor. With it off the combo sends a single press and the double-tap delay is skipped entirely
+- Boulder Smash and Magnetize are never intercepted
+
 ### Broodmother
 
 - Broodmother callback actions now queue to one dedicated worker instead of spawning raw threads from the callback
@@ -459,6 +489,7 @@ These are still part of the interception surface even though this page centers o
 | Magnus | `config/config.toml` -> `[heroes.magnus]` | `enabled`, `ultimate_key`, `turn_delay_ms`, `require_ability_ready`, `center_camera_on_ultimate`, `camera_center_key`, `camera_center_delay_ms` |
 | Slark | `config/config.toml` -> `[heroes.slark]` | `enabled`, `pounce_key`, `turn_delay_ms`, `require_ability_ready` |
 | Mirana | `config/config.toml` -> `[heroes.mirana]` | `enabled`, `leap_key`, `turn_delay_ms`, `require_ability_ready` |
+| Earth Spirit | `config/config.toml` -> `[heroes.earth_spirit]` | `enabled`, `remnant_key`, `silence_combo_enabled`, `grip_key`, `silence_remnant_delay_ms`, `require_grip_ready`, `roll_combo_enabled`, `roll_key`, `roll_double_tap`, `roll_double_tap_delay_ms`, `roll_to_remnant_delay_ms`, `require_roll_ready` |
 | HUD anchors | `config/config.toml` -> `[hud]` | `capture_portrait_key` (blocked from reaching Dota), plus the stored portrait fractions |
 | Global hotkey | `config/config.toml` -> `[keybindings]` | slot key mappings; the live standalone trigger is read from `AppState.trigger_key` and cached as a parsed `snapshot.trigger_key` |
 
@@ -481,5 +512,6 @@ Related docs:
 - `docs/heroes/magnus.md`
 - `docs/heroes/slark.md`
 - `docs/heroes/mirana.md`
+- `docs/heroes/earth_spirit.md`
 - `docs/features/hud-anchors.md`
 - `docs/architecture/runtime-flow.md`

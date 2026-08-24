@@ -258,6 +258,21 @@ export interface EmberSpiritConfig {
   flame_guard_trigger_cooldown_ms: number;
 }
 
+export interface EarthSpiritConfig {
+  enabled: boolean;
+  remnant_key: string;
+  silence_combo_enabled: boolean;
+  grip_key: string;
+  silence_remnant_delay_ms: number;
+  require_grip_ready: boolean;
+  roll_combo_enabled: boolean;
+  roll_key: string;
+  roll_double_tap: boolean;
+  roll_double_tap_delay_ms: number;
+  roll_to_remnant_delay_ms: number;
+  require_roll_ready: boolean;
+}
+
 export interface MiranaConfig {
   enabled: boolean;
   leap_key: string;
@@ -298,6 +313,7 @@ export interface HeroesConfig {
   magnus: MagnusConfig;
   mirana: MiranaConfig;
   ember_spirit: EmberSpiritConfig;
+  earth_spirit: EarthSpiritConfig;
   shadow_fiend: ShadowFiendConfig;
   slark: SlarkConfig;
   snapfire: SnapfireConfig;

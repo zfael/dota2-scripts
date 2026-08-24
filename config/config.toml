@@ -477,6 +477,67 @@ shard_fallback_enabled = true
 # order rather than key order (the shard ability sits ahead of the ultimate).
 shard_key = "d"
 
+[heroes.earth_spirit]
+# Earth Spirit has no silence button and no long roll button. Both are a Stone
+# Remnant plus one more ability aimed at the same cursor position, so each is
+# remapped onto its second key: press the grip key and you get remnant-then-grip,
+# press the roll key and you get remnant-then-roll.
+enabled = true
+# Stone Remnant key, pressed first by both combos. This assumes quickcast is ON
+# for it: without quickcast the press only arms the cursor, and the second key
+# cancels the targeting instead of placing the remnant.
+remnant_key = "d"
+# --- Silence combo (Geomagnetic Grip) ---
+# Grip pulls the remnant back toward Earth Spirit and silences everything it
+# passes through. Aim PAST the target, not at it — the silence lands on whoever
+# stands between your cursor and you.
+silence_combo_enabled = true
+# Geomagnetic Grip key. This is also the key that gets intercepted. Assumes
+# quickcast, same as the remnant key.
+grip_key = "e"
+# Delay between the remnant press and the grip press (ms). The remnant has to
+# exist server-side before the grip resolves. Raise it if the grip reaches for
+# an older remnant, or for nothing at all.
+silence_remnant_delay_ms = 120
+# Only intercept when Geomagnetic Grip is levelled and off cooldown. Leave true:
+# it stops a cooldown press from spending a remnant charge on a grip that cannot
+# fire. Deliberately does not check Stone Remnant — that ability is charge-based
+# and GSI's can_cast is unreliable for charges, so gating on it would kill the
+# intercept while remnants are visibly banked.
+require_grip_ready = true
+# --- Roll combo (Rolling Boulder) ---
+# A roll that passes through a remnant travels 1600 units instead of 800 and
+# moves much faster, so the good roll is always the two-key one.
+#
+# This combo fires the ROLL FIRST, then the remnant -- the opposite order to the
+# silence above. Rolling Boulder has a ~600ms windup before Earth Spirit starts
+# moving, and a remnant dropped into the path during that window still counts.
+# Casting the roll first locks in the direction, which frees the windup for you
+# to move the cursor and put the remnant exactly where the boulder will pass.
+roll_combo_enabled = true
+# Rolling Boulder key. This is also the key that gets intercepted.
+roll_key = "w"
+# Press the roll key twice. Rolling Boulder is the one ability commonly left off
+# quickcast, where the first press only arms the cursor and a second press fires
+# it. Turn this off if you enable quickcast for the roll key, or if the second
+# tap cancels the targeting instead of casting.
+roll_double_tap = true
+# Gap between the two roll presses (ms). Ignored when roll_double_tap is false.
+roll_double_tap_delay_ms = 60
+# Your window to aim the remnant, in ms: the gap between the roll firing and the
+# remnant being placed at wherever your cursor is by then. Measured from the
+# press that actually casts the roll, so from the second tap when
+# roll_double_tap is on.
+#
+# This is a human-sized delay, not a server-timing one. Raise it if you cannot
+# move the cursor in time, but keep the total (this plus the double-tap gap)
+# under the ~600ms windup -- past that the boulder is already rolling and a
+# remnant placed behind it does nothing, which looks exactly like the combo
+# firing and having no effect.
+roll_to_remnant_delay_ms = 300
+# Only intercept when Rolling Boulder is levelled and off cooldown.
+require_roll_ready = true
+
 [heroes.invoker]
 quas_key = "q"
 wex_key = "w"

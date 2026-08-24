@@ -4,6 +4,7 @@ import type { ComponentType } from "react";
 const configs: Record<HeroType, () => Promise<{ default: ComponentType }>> = {
   meepo: () => import("./MeepoConfig"),
   broodmother: () => import("./BroodmotherConfig"),
+  earth_spirit: () => import("./EarthSpiritConfig"),
   ember_spirit: () => import("./EmberSpiritConfig"),
   huskar: () => import("./HuskarConfig"),
   invoker: () => import("./InvokerConfig"),

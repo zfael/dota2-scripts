@@ -12,6 +12,7 @@ const GSI_ACTIVITY_TIMEOUT: Duration = Duration::from_secs(35);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HeroType {
+    EarthSpirit,
     EmberSpirit,
     Huskar,
     Invoker,
@@ -50,6 +51,7 @@ pub enum UpdateCheckState {
 impl HeroType {
     pub fn from_hero_name(name: &str) -> Option<Self> {
         match name {
+            name if name == Hero::EarthSpirit.to_game_name() => Some(HeroType::EarthSpirit),
             name if name == Hero::EmberSpirit.to_game_name() => Some(HeroType::EmberSpirit),
             name if name == Hero::Huskar.to_game_name() => Some(HeroType::Huskar),
             name if name == Hero::Invoker.to_game_name() => Some(HeroType::Invoker),
@@ -71,6 +73,7 @@ impl HeroType {
 
     pub fn to_display_name(&self) -> &'static str {
         match self {
+            HeroType::EarthSpirit => "Earth Spirit",
             HeroType::EmberSpirit => "Ember Spirit",
             HeroType::Huskar => "Huskar",
             HeroType::Invoker => "Invoker",

@@ -187,6 +187,14 @@ export const mockConfig: Settings = {
       enabled: true, leap_key: "e",
       turn_delay_ms: 200, require_ability_ready: true,
     },
+    earth_spirit: {
+      enabled: true, remnant_key: "d",
+      silence_combo_enabled: true, grip_key: "e",
+      silence_remnant_delay_ms: 120, require_grip_ready: true,
+      roll_combo_enabled: true, roll_key: "w",
+      roll_double_tap: true, roll_double_tap_delay_ms: 60,
+      roll_to_remnant_delay_ms: 300, require_roll_ready: true,
+    },
     ember_spirit: {
       enabled: true, remnant_key: "r",
       activate_key: "d", activate_delay_ms: 150,
