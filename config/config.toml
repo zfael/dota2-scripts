@@ -512,8 +512,11 @@ require_grip_ready = true
 # This combo fires the ROLL FIRST, then the remnant -- the opposite order to the
 # silence above. Rolling Boulder has a ~600ms windup before Earth Spirit starts
 # moving, and a remnant dropped into the path during that window still counts.
-# Casting the roll first locks in the direction, which frees the windup for you
-# to move the cursor and put the remnant exactly where the boulder will pass.
+#
+# The remnant is SELF-CAST, which is what makes this combo need no aiming at
+# all: self-cast drops the stone on Earth Spirit, and the roll starts from Earth
+# Spirit, so the boulder passes through it every time no matter where your
+# cursor is. Cast the roll to pick the direction; the stone takes care of itself.
 roll_combo_enabled = true
 # Rolling Boulder key. This is also the key that gets intercepted.
 roll_key = "w"
@@ -524,17 +527,35 @@ roll_key = "w"
 roll_double_tap = true
 # Gap between the two roll presses (ms). Ignored when roll_double_tap is false.
 roll_double_tap_delay_ms = 60
-# Your window to aim the remnant, in ms: the gap between the roll firing and the
-# remnant being placed at wherever your cursor is by then. Measured from the
+# Gap between the roll firing and the remnant press (ms). Measured from the
 # press that actually casts the roll, so from the second tap when
-# roll_double_tap is on.
+# roll_double_tap is on. With the remnant self-cast there is nothing to aim, so
+# this only has to clear the roll press -- sooner is better, since the stone
+# wants to exist before the boulder leaves its own starting position.
+roll_to_remnant_delay_ms = 120
+# --- Self-casting the remnant ---
+# Two independent routes to self-cast, because which one works depends on your
+# Dota settings. Both ship on; leave both on unless one misbehaves.
 #
-# This is a human-sized delay, not a server-timing one. Raise it if you cannot
-# move the cursor in time, but keep the total (this plus the double-tap gap)
-# under the ~600ms windup -- past that the boulder is already rolling and a
-# remnant placed behind it does nothing, which looks exactly like the combo
-# firing and having no effect.
-roll_to_remnant_delay_ms = 300
+# Hold ALT across the remnant press. This is Dota's self-cast modifier, and it
+# is the route that still works when the remnant key is on quickcast (quickcast
+# fires on key-down, so a plain double-tap just places two stones at the cursor).
+#
+# NOTE: if your Dota is set to alt-ping abilities rather than self-cast them,
+# this will PING Stone Remnant to your team instead of placing it. If you see a
+# ping, turn this off and rely on the double-tap below.
+roll_remnant_alt = true
+# Press the remnant key twice -- Dota's default self-cast binding.
+roll_remnant_double_tap = true
+# Gap between the two remnant presses (ms). Ignored when the above is false.
+roll_remnant_double_tap_delay_ms = 60
+# Turning BOTH self-cast options off puts the remnant back at your cursor, which
+# then needs real aiming time: raise roll_to_remnant_delay_ms to ~300 if you do.
+#
+# Whatever you set, keep the delays in this section summing to well under the
+# ~600ms windup. Past it the boulder is already rolling and a remnant placed
+# behind it does nothing, which looks exactly like the combo firing and having
+# no effect.
 # Only intercept when Rolling Boulder is levelled and off cooldown.
 require_roll_ready = true
 

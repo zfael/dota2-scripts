@@ -400,12 +400,26 @@ pub struct EarthSpiritConfig {
     /// off.
     #[serde(default = "default_earth_spirit_roll_double_tap_delay_ms")]
     pub roll_double_tap_delay_ms: u64,
-    /// Gap between the roll press and the remnant press (ms) — the operator's
-    /// window to aim the remnant into the roll's path. Measured from the press
-    /// that actually fires the roll, so from the second tap when
-    /// `roll_double_tap` is on. Must stay under `ROLLING_BOULDER_WINDUP_MS`.
+    /// Gap between the roll press and the remnant press (ms). Measured from the
+    /// press that actually fires the roll, so from the second tap when
+    /// `roll_double_tap` is on. The whole remnant sequence must finish inside
+    /// `ROLLING_BOULDER_WINDUP_MS`.
     #[serde(default = "default_earth_spirit_roll_to_remnant_delay_ms")]
     pub roll_to_remnant_delay_ms: u64,
+    /// Hold ALT across the remnant press — Dota's self-cast modifier, needed to
+    /// self-cast a point-target ability that is on quickcast.
+    #[serde(default = "default_earth_spirit_roll_remnant_alt")]
+    pub roll_remnant_alt: bool,
+    /// Double-tap the remnant key, Dota's other route to self-cast. Self-cast
+    /// drops the stone on Earth Spirit, and the roll starts from Earth Spirit,
+    /// so the boulder passes through it without any aiming. Turn this off to go
+    /// back to placing the remnant at the cursor.
+    #[serde(default = "default_earth_spirit_roll_remnant_double_tap")]
+    pub roll_remnant_double_tap: bool,
+    /// Gap between the two remnant presses (ms). Ignored when
+    /// `roll_remnant_double_tap` is off.
+    #[serde(default = "default_earth_spirit_roll_remnant_double_tap_delay_ms")]
+    pub roll_remnant_double_tap_delay_ms: u64,
     /// Pass the roll key through untouched when Rolling Boulder is not
     /// castable.
     #[serde(default = "default_earth_spirit_require_roll_ready")]
@@ -1706,13 +1720,38 @@ fn default_earth_spirit_roll_combo_enabled() -> bool {
 fn default_earth_spirit_roll_key() -> char {
     'w'
 }
-/// The operator's aiming window, so it is sized for a human, not for the
-/// server: long enough to flick the cursor to where the boulder will pass,
-/// short enough to stay comfortably inside Rolling Boulder's ~600ms windup.
-/// Past the windup the roll is already moving and a remnant dropped behind it
-/// does nothing.
+/// Gap between the roll firing and the remnant press.
+///
+/// With the remnant self-cast (the default), this is no longer an aiming
+/// window — the remnant lands on Earth Spirit regardless of the cursor, so
+/// there is nothing for a human to do here and the delay only has to clear the
+/// roll press and land inside the ~600ms windup. Sooner is better: the remnant
+/// wants to exist before the boulder leaves its own starting position.
+///
+/// Turn `roll_remnant_double_tap` off and the remnant goes back to the cursor,
+/// which *does* need aiming time — raise this to ~300ms if you do that.
 fn default_earth_spirit_roll_to_remnant_delay_ms() -> u64 {
-    300
+    120
+}
+/// Hold ALT across the remnant press.
+///
+/// Dota's self-cast modifier, which is what makes a quickcast point-target
+/// ability land on the hero instead of the cursor. Paired with the double-tap
+/// below so either route to self-cast works.
+fn default_earth_spirit_roll_remnant_alt() -> bool {
+    true
+}
+/// Double-tap the remnant key, which self-casts it in Dota's default binding.
+///
+/// This is the whole point of the roll combo's remnant: self-cast puts the
+/// stone on Earth Spirit himself, and the roll starts from Earth Spirit — so
+/// the boulder passes through it every time and the 1600-unit roll needs no
+/// aiming at all.
+fn default_earth_spirit_roll_remnant_double_tap() -> bool {
+    true
+}
+fn default_earth_spirit_roll_remnant_double_tap_delay_ms() -> u64 {
+    60
 }
 /// Rolling Boulder's windup, and therefore the hard ceiling on the aiming
 /// window above. Not configurable: it is a property of the ability, not a
@@ -2724,6 +2763,10 @@ impl Default for EarthSpiritConfig {
             roll_double_tap: default_earth_spirit_roll_double_tap(),
             roll_double_tap_delay_ms: default_earth_spirit_roll_double_tap_delay_ms(),
             roll_to_remnant_delay_ms: default_earth_spirit_roll_to_remnant_delay_ms(),
+            roll_remnant_alt: default_earth_spirit_roll_remnant_alt(),
+            roll_remnant_double_tap: default_earth_spirit_roll_remnant_double_tap(),
+            roll_remnant_double_tap_delay_ms:
+                default_earth_spirit_roll_remnant_double_tap_delay_ms(),
             require_roll_ready: default_earth_spirit_require_roll_ready(),
         }
     }
@@ -3322,31 +3365,41 @@ mod tests {
         assert_eq!(cfg.roll_key, 'w');
         assert!(cfg.roll_double_tap);
         assert_eq!(cfg.roll_double_tap_delay_ms, 60);
-        assert_eq!(cfg.roll_to_remnant_delay_ms, 300);
+        assert_eq!(cfg.roll_to_remnant_delay_ms, 120);
+        assert!(cfg.roll_remnant_alt);
+        assert!(cfg.roll_remnant_double_tap);
+        assert_eq!(cfg.roll_remnant_double_tap_delay_ms, 60);
         assert!(cfg.require_roll_ready);
     }
 
-    /// The whole point of casting the roll first is that its windup is an
-    /// aiming window. A default that runs past the windup would place the
-    /// remnant behind a boulder already in motion — the combo would look like
-    /// it fired and silently do nothing.
+    /// Every press of the roll combo has to land inside Rolling Boulder's
+    /// windup. Past it the boulder is already moving and a remnant dropped
+    /// behind it does nothing — the combo would look like it fired and
+    /// silently have no effect.
+    ///
+    /// This budgets the *whole* sequence, not one delay, because the combo now
+    /// has four gaps that stack: the roll double-tap, the wait to the remnant,
+    /// and the remnant's own double-tap.
     #[test]
-    fn the_roll_aiming_window_fits_inside_the_windup() {
+    fn the_whole_roll_combo_fits_inside_the_windup() {
         let cfg = EarthSpiritConfig::default();
-        let total = cfg.roll_to_remnant_delay_ms + cfg.roll_double_tap_delay_ms;
+        let total = cfg.roll_double_tap_delay_ms
+            + cfg.roll_to_remnant_delay_ms
+            + cfg.roll_remnant_double_tap_delay_ms;
         assert!(
             total < ROLLING_BOULDER_WINDUP_MS,
-            "aiming window {total}ms must stay inside the {ROLLING_BOULDER_WINDUP_MS}ms windup"
+            "roll combo spans {total}ms, which must stay inside the \
+             {ROLLING_BOULDER_WINDUP_MS}ms windup"
         );
     }
 
-    /// It also has to be long enough for a person to actually move the mouse.
-    /// A window sized like a server-timing delay would leave the remnant
-    /// wherever the cursor happened to already be.
+    /// Self-cast is what removes the aiming step, so both routes to it ship on
+    /// by default. If these ever default off, the remnant silently goes back to
+    /// the cursor and the roll stops extending unless the operator aims.
     #[test]
-    fn the_roll_aiming_window_is_sized_for_a_human_not_the_server() {
+    fn the_roll_remnant_self_casts_by_default() {
         let cfg = EarthSpiritConfig::default();
-        assert!(cfg.roll_to_remnant_delay_ms > cfg.silence_remnant_delay_ms);
+        assert!(cfg.roll_remnant_alt || cfg.roll_remnant_double_tap);
     }
 
     #[test]

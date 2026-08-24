@@ -270,6 +270,9 @@ export interface EarthSpiritConfig {
   roll_double_tap: boolean;
   roll_double_tap_delay_ms: number;
   roll_to_remnant_delay_ms: number;
+  roll_remnant_alt: boolean;
+  roll_remnant_double_tap: boolean;
+  roll_remnant_double_tap_delay_ms: number;
   require_roll_ready: boolean;
 }
 

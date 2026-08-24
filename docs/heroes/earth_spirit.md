@@ -12,13 +12,17 @@ roll double-tap, or the readiness gates.
 - The grip key (default **E**) is remapped to `Stone Remnant → Geomagnetic Grip`.
   That is Earth Spirit's silence: he has no silence button, only a grip that
   silences everything the remnant passes through on its way back to him.
-- The roll key (default **W**) is remapped to `Rolling Boulder → Stone Remnant`.
-  A roll through a remnant travels **1600 units instead of 800** and moves much
-  faster, so the good roll is always the two-key one.
+- The roll key (default **W**) is remapped to `Rolling Boulder → self-cast Stone
+  Remnant`. A roll through a remnant travels **1600 units instead of 800** and
+  moves much faster, so the good roll is always the two-key one.
 - **The two combos order the same pair of abilities opposite ways**, on purpose.
   The grip resolves on the press, so its remnant has to already be standing. The
   roll has a ~600ms windup, and a remnant dropped into the path during it still
-  counts — so the roll goes first and the windup becomes an aiming window.
+  counts — so the roll goes first.
+- **The roll's remnant is self-cast, so the roll combo needs no aiming at all.**
+  Self-cast puts the stone on Earth Spirit, and the roll starts from Earth
+  Spirit, so the boulder passes through it every time regardless of the cursor.
+  Only the silence still needs aiming.
 - Both are intercepted only while Earth Spirit is the active hero.
 - **Gated on GSI**: each key is only swallowed when *its own* ability is levelled
   and castable. On cooldown it passes straight through, so a dead press never
@@ -46,7 +50,10 @@ Earth Spirit abilities take a point and neither cares where he is facing.
 | `roll_key` | char | `"w"` | Rolling Boulder key; also the key intercepted. |
 | `roll_double_tap` | bool | `true` | Press the roll key twice, for a roll key left off quickcast. |
 | `roll_double_tap_delay_ms` | u64 | `60` | Gap between the two roll presses. Ignored when the toggle is off. |
-| `roll_to_remnant_delay_ms` | u64 | `300` | Aiming window: gap between the roll firing and the remnant press. Measured from the press that casts the roll, so from the second tap when double-tap is on. |
+| `roll_to_remnant_delay_ms` | u64 | `120` | Gap between the roll firing and the remnant press. Measured from the press that casts the roll, so from the second tap when double-tap is on. |
+| `roll_remnant_alt` | bool | `true` | Hold ALT across the remnant press — Dota's self-cast modifier, and the route that survives quickcast. |
+| `roll_remnant_double_tap` | bool | `true` | Press the remnant key twice — Dota's default self-cast binding. |
+| `roll_remnant_double_tap_delay_ms` | u64 | `60` | Gap between the two remnant presses. Ignored when the toggle is off. |
 | `require_roll_ready` | bool | `true` | Pass the roll key through when Rolling Boulder is unlevelled or on cooldown. |
 
 ```toml
@@ -61,7 +68,10 @@ roll_combo_enabled = true
 roll_key = "w"
 roll_double_tap = true
 roll_double_tap_delay_ms = 60
-roll_to_remnant_delay_ms = 300
+roll_to_remnant_delay_ms = 120
+roll_remnant_alt = true
+roll_remnant_double_tap = true
+roll_remnant_double_tap_delay_ms = 60
 require_roll_ready = true
 ```
 
@@ -83,17 +93,37 @@ that windup still counts — this is the documented technique, not a trick:
 > Remnant and then casting Rolling Boulder."
 > — [Dota 2 Wiki, Earth Spirit guide](https://dota2.fandom.com/wiki/Earth_Spirit/Guide)
 
-Casting the roll first locks in the direction, which frees the windup for
-aiming. `roll_to_remnant_delay_ms` is that aiming window, and it is sized for a
-**person** — 300ms, enough to flick the cursor to where the boulder will pass.
-That is why it is longer than the silence delay rather than shorter: the two
-numbers are measuring completely different things.
+Casting the roll first locks in the direction before the remnant is placed.
 
-The ceiling is the windup. `roll_to_remnant_delay_ms + roll_double_tap_delay_ms`
-must stay under ~600ms (`ROLLING_BOULDER_WINDUP_MS` in `settings.rs`, asserted
-by a unit test). Past it the boulder is already rolling and a remnant placed
-behind it does nothing — which looks exactly like the combo firing and having no
-effect.
+### Why the roll's remnant is self-cast
+
+The roll combo does not aim its remnant at all — it **self-casts** it, which
+drops the stone on Earth Spirit himself. Rolling Boulder also starts from Earth
+Spirit, so the boulder passes through the stone every single time, whatever the
+cursor is doing. The operator picks a direction with the roll and gets the
+1600-unit version for free.
+
+Two independent routes to self-cast ship on, because which one works depends on
+the operator's Dota settings:
+
+| Route | Config | Why it exists |
+|---|---|---|
+| ALT modifier | `roll_remnant_alt` | Dota's self-cast modifier. The route that survives **quickcast** on the remnant key — quickcast fires on key-down, so a plain double-tap just places two stones at the cursor. |
+| Double-tap | `roll_remnant_double_tap` | Dota's default self-cast binding, for a remnant key left on normal cast. |
+
+Turning **both** off puts the remnant back at the cursor, which then does need
+aiming time — raise `roll_to_remnant_delay_ms` to ~300ms in that case. A unit
+test asserts at least one route stays on by default, because losing both is a
+silent regression: the roll still fires and just quietly stops extending.
+
+### The windup is a shared budget
+
+Every press in the roll combo has to land inside the ~600ms windup, so all three
+of its delays — `roll_double_tap_delay_ms`, `roll_to_remnant_delay_ms` and
+`roll_remnant_double_tap_delay_ms` — sum against one ceiling
+(`ROLLING_BOULDER_WINDUP_MS` in `settings.rs`, asserted by a unit test). Past it
+the boulder is already rolling and a remnant placed behind it does nothing —
+which looks exactly like the combo firing and having no effect.
 
 ## Related Files
 
@@ -147,12 +177,22 @@ Magnus, and Slark.
 
 ```
 press_key(roll) → sleep(roll_double_tap_delay_ms) → press_key(roll)
-                → sleep(roll_to_remnant_delay_ms) → press_key(remnant)
+                → sleep(roll_to_remnant_delay_ms)
+                → alt_down()
+                → press_key(remnant)
+                → sleep(roll_remnant_double_tap_delay_ms) → press_key(remnant)
+                → alt_up()
 ```
 
 The second roll press and its sleep are skipped entirely when
-`roll_double_tap = false`; nothing stray is sent, and the aiming window is then
-measured from the single press.
+`roll_double_tap = false`; nothing stray is sent, and the wait to the remnant is
+then measured from the single press. Likewise the `alt_down`/`alt_up` pair is
+omitted when `roll_remnant_alt = false`, and the second remnant press and its
+sleep when `roll_remnant_double_tap = false`.
+
+ALT is held across **both** remnant taps rather than pulsed per press: Dota
+reads the modifier when the cast resolves, so releasing between taps would leave
+the second one unmodified.
 
 A configured delay of `0` skips its sleep rather than sleeping for nothing.
 `SIMULATING_KEYS` guards every synthetic press so the global hook does not
@@ -198,14 +238,21 @@ but does **not** consult the readiness gate.
 - **Aiming stays manual, and the silence aims backwards from where you might
   expect.** Grip pulls the remnant *toward* Earth Spirit, so the silence lands on
   whoever stands between the cursor and him. Aim past the target, not at it.
-- **The roll's aiming window is open-loop.** Nothing checks that the cursor
-  actually moved before the remnant is placed; the delay just elapses and the
-  remnant lands wherever the cursor is by then. Leave the cursor still and the
-  remnant drops on the roll's origin, which usually misses the path entirely.
+- **`roll_remnant_alt` may ping instead of self-casting.** Dota can be
+  configured so ALT over an ability pings it to the team rather than self-casting
+  it — this repo's Mirana and Snapfire combos both release ALT before their
+  ability press for exactly that reason. If Stone Remnant gets pinged instead of
+  placed, turn `roll_remnant_alt` off and rely on the double-tap. The two routes
+  are independent toggles precisely so either can be dropped.
+- **Self-cast placement is assumed, not verified.** The combo takes it on trust
+  that a remnant on Earth Spirit's own position is detected by a roll starting
+  from that same position. If the roll turns out not to pick up a stone at its
+  exact origin, the extension silently never happens; fall back to turning both
+  self-cast toggles off and aiming with a raised `roll_to_remnant_delay_ms`.
 - **`ROLLING_BOULDER_WINDUP_MS` is a documented figure, not a measured one.** If
   the windup turns out to be shorter than 600ms in the live client, the shipped
-  300ms window may already run past it; the symptom is a roll that never
-  extends. Lower `roll_to_remnant_delay_ms` and update the constant.
+  delays may already run past it; the symptom is a roll that never extends.
+  Lower `roll_to_remnant_delay_ms` and update the constant.
 - **The readiness gate cannot see remnant charges.** With zero charges banked the
   combo still fires: Dota ignores the remnant press and the grip reaches for
   whatever is already on the map, or nothing. This is the deliberate trade
@@ -243,6 +290,8 @@ When editing this hero's code, update this doc:
 - [ ] Changed either combo sequence? → Update the input sequences
 - [ ] Modified a readiness gate? → Update Readiness gates
 - [ ] Confirmed the double-tap in a live game? → Record the answer under Limitations
+- [ ] Confirmed whether ALT self-casts or pings in your client? → Record it and set the default accordingly
+- [ ] Confirmed a roll picks up a remnant at its own origin? → Drop that caveat
 - [ ] Measured Rolling Boulder's real windup? → Update `ROLLING_BOULDER_WINDUP_MS` and drop that caveat
 - [ ] Captured a real GSI payload? → Drop the fixture caveat under Limitations
 - [ ] New logging statements? → Update Logging

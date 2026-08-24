@@ -193,7 +193,9 @@ export const mockConfig: Settings = {
       silence_remnant_delay_ms: 120, require_grip_ready: true,
       roll_combo_enabled: true, roll_key: "w",
       roll_double_tap: true, roll_double_tap_delay_ms: 60,
-      roll_to_remnant_delay_ms: 300, require_roll_ready: true,
+      roll_to_remnant_delay_ms: 120, roll_remnant_alt: true,
+      roll_remnant_double_tap: true, roll_remnant_double_tap_delay_ms: 60,
+      require_roll_ready: true,
     },
     ember_spirit: {
       enabled: true, remnant_key: "r",

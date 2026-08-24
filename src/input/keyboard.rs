@@ -551,9 +551,10 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                 // aiming windows:
                 //   grip key -> remnant, then grip  (the silence; grip resolves
                 //               on the press, so the remnant must already exist)
-                //   roll key -> roll, then remnant  (the 1600-unit roll; the
-                //               ~0.6s windup is spent aiming the remnant into
-                //               the path the roll already committed to)
+                //   roll key -> roll, then a self-cast remnant (the 1600-unit
+                //               roll; the ~0.6s windup is long enough to drop
+                //               the stone on Earth Spirit himself, which is
+                //               where the roll starts, so it needs no aiming)
                 //
                 // Neither gate reads Stone Remnant. It is charge-based, and
                 // GSI's can_cast is unreliable for charge abilities, so gating
@@ -594,6 +595,9 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                                         snapshot.earth_spirit.roll_double_tap_delay_ms,
                                         snapshot.earth_spirit.remnant_char,
                                         snapshot.earth_spirit.roll_to_remnant_delay_ms,
+                                        snapshot.earth_spirit.roll_remnant_alt,
+                                        snapshot.earth_spirit.roll_remnant_double_tap,
+                                        snapshot.earth_spirit.roll_remnant_double_tap_delay_ms,
                                     );
                                     // Block original key (combo re-presses it).
                                     return None;
@@ -815,8 +819,13 @@ pub struct EarthSpiritKeyboardSnapshot {
     pub roll_char: char,
     pub roll_double_tap: bool,
     pub roll_double_tap_delay_ms: u64,
-    /// Operator's window to aim the remnant into the roll's path.
+    /// Gap between the roll firing and the remnant press.
     pub roll_to_remnant_delay_ms: u64,
+    /// Hold ALT across the remnant press (Dota's self-cast modifier).
+    pub roll_remnant_alt: bool,
+    /// Press the remnant key twice (Dota's default self-cast binding).
+    pub roll_remnant_double_tap: bool,
+    pub roll_remnant_double_tap_delay_ms: u64,
     pub require_roll_ready: bool,
 }
 
@@ -1152,6 +1161,9 @@ impl KeyboardSnapshot {
                 roll_double_tap: es.roll_double_tap,
                 roll_double_tap_delay_ms: es.roll_double_tap_delay_ms,
                 roll_to_remnant_delay_ms: es.roll_to_remnant_delay_ms,
+                roll_remnant_alt: es.roll_remnant_alt,
+                roll_remnant_double_tap: es.roll_remnant_double_tap,
+                roll_remnant_double_tap_delay_ms: es.roll_remnant_double_tap_delay_ms,
                 require_roll_ready: es.require_roll_ready,
             },
             soul_ring: SoulRingKeyboardConfig::from_settings(settings),
@@ -1254,6 +1266,9 @@ impl Default for KeyboardSnapshot {
                 roll_double_tap: true,
                 roll_double_tap_delay_ms: 0,
                 roll_to_remnant_delay_ms: 0,
+                roll_remnant_alt: false,
+                roll_remnant_double_tap: true,
+                roll_remnant_double_tap_delay_ms: 0,
                 require_roll_ready: true,
             },
             soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
@@ -1470,6 +1485,9 @@ mod tests {
                 roll_double_tap: true,
                 roll_double_tap_delay_ms: 0,
                 roll_to_remnant_delay_ms: 0,
+                roll_remnant_alt: false,
+                roll_remnant_double_tap: true,
+                roll_remnant_double_tap_delay_ms: 0,
                 require_roll_ready: true,
             },
             soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
@@ -1651,7 +1669,10 @@ mod tests {
         assert_eq!(snapshot.earth_spirit.roll_char, 'w');
         assert!(snapshot.earth_spirit.roll_double_tap);
         assert_eq!(snapshot.earth_spirit.roll_double_tap_delay_ms, 60);
-        assert_eq!(snapshot.earth_spirit.roll_to_remnant_delay_ms, 300);
+        assert_eq!(snapshot.earth_spirit.roll_to_remnant_delay_ms, 120);
+        assert!(snapshot.earth_spirit.roll_remnant_alt);
+        assert!(snapshot.earth_spirit.roll_remnant_double_tap);
+        assert_eq!(snapshot.earth_spirit.roll_remnant_double_tap_delay_ms, 60);
         assert!(snapshot.earth_spirit.require_roll_ready);
 
         let other = KeyboardSnapshot::from_runtime(&Settings::default(), &AppState::default());

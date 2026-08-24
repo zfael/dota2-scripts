@@ -77,7 +77,7 @@ The snapshot holds only static keyboard-facing facts:
 - Magnus intercept flags, pre-parsed ultimate key, and turn delay
 - Slark intercept flags, pre-parsed Pounce key, and turn delay
 - Mirana intercept flags, pre-parsed Leap key, and turn delay
-- Earth Spirit intercept flags, pre-parsed grip and roll keys, the shared remnant key, the silence remnant delay, and the roll's double-tap plus aiming-window settings
+- Earth Spirit intercept flags, pre-parsed grip and roll keys, the shared remnant key, the silence remnant delay, and the roll's double-tap, delay, and remnant self-cast settings
 - Soul Ring thresholds, ability keys, and item-slot keys
 - Armlet Roshan toggle key when `[armlet.roshan].enabled = true`
 - HUD portrait capture key from `[hud]`
@@ -155,7 +155,7 @@ Current callback order on key/button input:
     - block the configured roll key (default `W`) when
       `EarthSpiritState::can_intercept_roll()` passes, or when
       `require_roll_ready = false`, and enqueue
-      `press roll [-> wait -> press roll] -> wait -> press remnant`
+      `press roll [-> wait -> press roll] -> wait -> self-cast remnant`
     - **the two combos press the remnant on opposite sides**: the grip resolves
       on the press so its remnant must already exist, while the roll's ~600ms
       windup is spent aiming a remnant into the path it already committed to
@@ -451,8 +451,10 @@ These are still part of the interception surface even though this page centers o
 - activation is gated on `snapshot.earth_spirit_enabled`, derived from `selected_hero == Some(HeroType::EarthSpirit)`
 - **two independent intercepts, not one.** Both of Earth Spirit's signature plays are a Stone Remnant plus one more ability aimed at the same cursor position, so each is remapped onto its second key:
   - the grip key (default `E`) enqueues `press remnant -> wait -> press grip`. That is the silence: Geomagnetic Grip pulls the remnant back through whoever stands between the cursor and Earth Spirit
-  - the roll key (default `W`) enqueues `press roll -> wait -> press remnant`, optionally pressing the roll key a second time to fire it. A roll through a remnant travels 1600 units instead of 800
-- **the roll is the one combo that casts before placing.** Rolling Boulder has a ~600ms windup, and a remnant dropped into the path during it still counts, so casting first locks the direction in and leaves the windup free for the operator to aim the remnant. `roll_to_remnant_delay_ms` is that window, and it plus `roll_double_tap_delay_ms` must stay under `ROLLING_BOULDER_WINDUP_MS`
+  - the roll key (default `W`) enqueues `press roll -> wait -> self-cast remnant`, optionally pressing the roll key a second time to fire it. A roll through a remnant travels 1600 units instead of 800
+- **the roll is the one combo that casts before placing.** Rolling Boulder has a ~600ms windup, and a remnant dropped into the path during it still counts, so casting first locks the direction in
+- **the roll's remnant is self-cast**, via ALT held across the press (`roll_remnant_alt`), a double-tap (`roll_remnant_double_tap`), or both. Self-cast puts the stone on Earth Spirit, where the roll starts, so the boulder passes through it with no aiming. ALT is held across both taps rather than pulsed, since Dota reads the modifier when the cast resolves
+- all three roll delays share one ceiling: their sum must stay under `ROLLING_BOULDER_WINDUP_MS`
 - unlike the Magnus / Slark / Mirana combos there is **no right-click**: both abilities take a point, and neither cares which way Earth Spirit is facing
 - each intercept is **gated on GSI** against its own ability: `can_intercept_grip()` requires `earth_spirit_geomagnetic_grip`, `can_intercept_roll()` requires `earth_spirit_rolling_boulder`, both with `level > 0 && can_cast`. A failed check leaves that key unblocked
 - **neither gate reads Stone Remnant.** It is charge-based, and GSI's `can_cast` is unreliable for charge abilities — the same trap flagged for Mirana's Leap above. Gating on it would leave both combos inert while remnants are visibly banked; the trade is that a zero-charge press still fires the combo
@@ -489,7 +491,7 @@ These are still part of the interception surface even though this page centers o
 | Magnus | `config/config.toml` -> `[heroes.magnus]` | `enabled`, `ultimate_key`, `turn_delay_ms`, `require_ability_ready`, `center_camera_on_ultimate`, `camera_center_key`, `camera_center_delay_ms` |
 | Slark | `config/config.toml` -> `[heroes.slark]` | `enabled`, `pounce_key`, `turn_delay_ms`, `require_ability_ready` |
 | Mirana | `config/config.toml` -> `[heroes.mirana]` | `enabled`, `leap_key`, `turn_delay_ms`, `require_ability_ready` |
-| Earth Spirit | `config/config.toml` -> `[heroes.earth_spirit]` | `enabled`, `remnant_key`, `silence_combo_enabled`, `grip_key`, `silence_remnant_delay_ms`, `require_grip_ready`, `roll_combo_enabled`, `roll_key`, `roll_double_tap`, `roll_double_tap_delay_ms`, `roll_to_remnant_delay_ms`, `require_roll_ready` |
+| Earth Spirit | `config/config.toml` -> `[heroes.earth_spirit]` | `enabled`, `remnant_key`, `silence_combo_enabled`, `grip_key`, `silence_remnant_delay_ms`, `require_grip_ready`, `roll_combo_enabled`, `roll_key`, `roll_double_tap`, `roll_double_tap_delay_ms`, `roll_to_remnant_delay_ms`, `roll_remnant_alt`, `roll_remnant_double_tap`, `roll_remnant_double_tap_delay_ms`, `require_roll_ready` |
 | HUD anchors | `config/config.toml` -> `[hud]` | `capture_portrait_key` (blocked from reaching Dota), plus the stored portrait fractions |
 | Global hotkey | `config/config.toml` -> `[keybindings]` | slot key mappings; the live standalone trigger is read from `AppState.trigger_key` and cached as a parsed `snapshot.trigger_key` |
 

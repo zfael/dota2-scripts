@@ -43,37 +43,54 @@ export default function EarthSpiritConfig() {
           <KeyInput label="Rolling Boulder Key" value={config.roll_key} onChange={(v) => set({ roll_key: v })} />
           <Toggle label="Double-Tap Roll Key" checked={config.roll_double_tap} onChange={(v) => set({ roll_double_tap: v })} />
           <NumberInput label="Double-Tap Delay" value={config.roll_double_tap_delay_ms} onChange={(v) => set({ roll_double_tap_delay_ms: v })} suffix="ms" />
-          <NumberInput label="Aim Window Before Remnant" value={config.roll_to_remnant_delay_ms} onChange={(v) => set({ roll_to_remnant_delay_ms: v })} suffix="ms" />
+          <NumberInput label="Delay Before Remnant" value={config.roll_to_remnant_delay_ms} onChange={(v) => set({ roll_to_remnant_delay_ms: v })} suffix="ms" />
+          <Toggle label="Hold ALT For Remnant (Self-Cast)" checked={config.roll_remnant_alt} onChange={(v) => set({ roll_remnant_alt: v })} />
+          <Toggle label="Double-Tap Remnant Key (Self-Cast)" checked={config.roll_remnant_double_tap} onChange={(v) => set({ roll_remnant_double_tap: v })} />
+          <NumberInput label="Remnant Double-Tap Delay" value={config.roll_remnant_double_tap_delay_ms} onChange={(v) => set({ roll_remnant_double_tap_delay_ms: v })} suffix="ms" />
           <p className="text-xs text-muted">
             A roll that passes through a remnant travels 1600 units instead of
             800 and moves much faster, so the good roll is always the two-key
             one.
           </p>
           <p className="text-xs text-muted">
-            <strong>This one rolls first, then places the remnant</strong> — the
-            opposite order to the silence above. Rolling Boulder has a ~600ms
-            windup before Earth Spirit starts moving, and a remnant dropped into
-            the path during that window still counts. Casting the roll first
-            locks in the direction, so the windup is yours to move the cursor
-            and put the remnant exactly where the boulder will pass.
+            <strong>This one rolls first, then self-casts the remnant</strong> —
+            the opposite order to the silence above. Rolling Boulder has a
+            ~600ms windup before Earth Spirit starts moving, and a remnant
+            dropped into the path during that window still counts.
           </p>
           <p className="text-xs text-muted">
-            <strong>Aim window</strong> is how long you get between the roll
-            firing and the remnant landing at your cursor. It is a human-sized
-            delay, not a server-timing one. Raise it if you cannot move the
-            cursor in time — but keep it plus the double-tap delay under ~600ms,
-            or the boulder is already rolling and a remnant placed behind it
+            <strong>Self-cast is what removes the aiming.</strong> It drops the
+            stone on Earth Spirit himself, and the roll starts from Earth
+            Spirit — so the boulder passes through it every time, wherever your
+            cursor happens to be. Cast the roll to pick the direction; the stone
+            takes care of itself.
+          </p>
+          <p className="text-xs text-muted">
+            Two routes to self-cast, because which one works depends on your
+            Dota settings, and both ship on. <strong>ALT</strong> is Dota's
+            self-cast modifier and is the route that still works with quickcast
+            on the remnant key — with quickcast, a plain double-tap just places
+            two stones at the cursor. If your Dota alt-pings abilities instead,
+            this will ping Stone Remnant to your team; turn it off and rely on
+            the double-tap.
+          </p>
+          <p className="text-xs text-muted">
+            Turning <em>both</em> self-cast options off puts the remnant back at
+            your cursor, which then needs real aiming time — raise the delay
+            above to ~300ms if you do that.
+          </p>
+          <p className="text-xs text-muted">
+            <strong>The roll's own double-tap is separate.</strong> Rolling
+            Boulder is commonly left off quickcast, where the first press only
+            arms the cursor and a second press fires it. Turn it off if you
+            enable quickcast for the roll, or if the second tap cancels the
+            targeting instead of casting.
+          </p>
+          <p className="text-xs text-muted">
+            Keep all the delays in this card summing to well under ~600ms. Past
+            that the boulder is already rolling and a remnant placed behind it
             does nothing, which looks exactly like the combo firing with no
             effect.
-          </p>
-          <p className="text-xs text-muted">
-            <strong>Double-tap is the setting to try both ways.</strong> Rolling
-            Boulder is the one ability commonly left off quickcast, where the
-            first press only arms the cursor and a second press fires it. Leave
-            it on for a normal-cast roll key; turn it off if you enable
-            quickcast for the roll, or if the second tap cancels the targeting
-            instead of casting. With it off the combo sends a single press, and
-            the aim window is measured from that press instead.
           </p>
         </Card>
       </div>

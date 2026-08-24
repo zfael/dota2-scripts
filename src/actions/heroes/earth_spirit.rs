@@ -33,6 +33,9 @@ enum EarthSpiritRequest {
         double_tap_delay_ms: u64,
         remnant_key: char,
         roll_to_remnant_delay_ms: u64,
+        remnant_alt: bool,
+        remnant_double_tap: bool,
+        remnant_double_tap_delay_ms: u64,
     },
 }
 
@@ -48,12 +51,16 @@ fn build_silence_combo_request(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_roll_combo_request(
     roll_key: char,
     double_tap: bool,
     double_tap_delay_ms: u64,
     remnant_key: char,
     roll_to_remnant_delay_ms: u64,
+    remnant_alt: bool,
+    remnant_double_tap: bool,
+    remnant_double_tap_delay_ms: u64,
 ) -> EarthSpiritRequest {
     EarthSpiritRequest::RollCombo {
         roll_key,
@@ -61,6 +68,9 @@ fn build_roll_combo_request(
         double_tap_delay_ms,
         remnant_key,
         roll_to_remnant_delay_ms,
+        remnant_alt,
+        remnant_double_tap,
+        remnant_double_tap_delay_ms,
     }
 }
 
@@ -94,12 +104,18 @@ fn run_earth_spirit_request(request: EarthSpiritRequest) {
             double_tap_delay_ms,
             remnant_key,
             roll_to_remnant_delay_ms,
+            remnant_alt,
+            remnant_double_tap,
+            remnant_double_tap_delay_ms,
         } => run_roll_combo_request(
             roll_key,
             double_tap,
             double_tap_delay_ms,
             remnant_key,
             roll_to_remnant_delay_ms,
+            remnant_alt,
+            remnant_double_tap,
+            remnant_double_tap_delay_ms,
         ),
     }
 }
@@ -136,28 +152,41 @@ fn run_silence_combo_request(remnant_key: char, grip_key: char, remnant_delay_ms
 /// **The roll goes first.** Rolling Boulder has a ~0.6s windup before Earth
 /// Spirit actually starts moving, and a remnant placed into the path during
 /// that window still counts. Casting the roll first is the documented
-/// technique, and it is strictly better than placing the remnant up front: the
-/// roll direction is already locked in, so the operator spends the windup
-/// moving the cursor to put the remnant exactly where the boulder will pass —
-/// aiming the two halves separately instead of committing both to one cursor
-/// position.
+/// technique: the roll direction is locked in before the remnant is placed.
 ///
-/// `roll_to_remnant_delay_ms` is that aiming window. It must stay comfortably
-/// inside the windup: too long and the roll is already under way when the
-/// remnant lands, which does nothing.
+/// **The remnant is self-cast**, which is what removes aiming from this combo
+/// entirely. Self-cast drops the stone on Earth Spirit himself, and the roll
+/// starts from Earth Spirit — so the boulder passes through it every time, no
+/// matter where the cursor is. Two independent routes to self-cast, because
+/// which one works depends on the operator's Dota settings:
+///
+/// - `remnant_alt` holds ALT across the press (Dota's self-cast modifier, the
+///   route that still works when the remnant key is on quickcast).
+/// - `remnant_double_tap` presses the key twice (Dota's default self-cast
+///   binding).
+///
+/// Both default on. Turning both off puts the remnant back at the cursor, which
+/// then needs a real aiming window — raise `roll_to_remnant_delay_ms` if so.
+///
+/// Every press has to land inside the windup, so all three delays here are one
+/// shared budget against `ROLLING_BOULDER_WINDUP_MS`.
 ///
 /// Rolling Boulder is the one key the operator does **not** run on quickcast,
 /// so the first press only arms the cursor and a second press is what fires it.
 /// `double_tap` is the switch for that: off, this sends a single press, which
-/// is what quickcast on the roll key would want. The aiming window is measured
-/// from the press that actually fires the roll, so it starts after the second
-/// tap.
+/// is what quickcast on the roll key would want. The wait to the remnant is
+/// measured from the press that actually fires the roll, so it starts after the
+/// second tap.
+#[allow(clippy::too_many_arguments)]
 fn run_roll_combo_request(
     roll_key: char,
     double_tap: bool,
     double_tap_delay_ms: u64,
     remnant_key: char,
     roll_to_remnant_delay_ms: u64,
+    remnant_alt: bool,
+    remnant_double_tap: bool,
+    remnant_double_tap_delay_ms: u64,
 ) {
     crate::input::simulation::press_key(roll_key);
 
@@ -171,7 +200,26 @@ fn run_roll_combo_request(
     if roll_to_remnant_delay_ms > 0 {
         thread::sleep(Duration::from_millis(roll_to_remnant_delay_ms));
     }
+
+    // ALT is held across *both* taps rather than pulsed per press: Dota reads
+    // the modifier at the moment the cast resolves, and releasing between the
+    // taps would leave the second one unmodified.
+    if remnant_alt {
+        crate::input::simulation::alt_down();
+    }
+
     crate::input::simulation::press_key(remnant_key);
+
+    if remnant_double_tap {
+        if remnant_double_tap_delay_ms > 0 {
+            thread::sleep(Duration::from_millis(remnant_double_tap_delay_ms));
+        }
+        crate::input::simulation::press_key(remnant_key);
+    }
+
+    if remnant_alt {
+        crate::input::simulation::alt_up();
+    }
 }
 
 fn spawn_earth_spirit_fallback(request: EarthSpiritRequest) {
@@ -254,14 +302,18 @@ impl EarthSpiritState {
     }
 
     /// Run the roll combo: press the roll key — twice when `double_tap` is on —
-    /// then wait `roll_to_remnant_delay_ms` and press the remnant key, dropping
-    /// it into the roll's path during the windup.
+    /// then wait `roll_to_remnant_delay_ms` and self-cast the remnant into the
+    /// roll's path during the windup.
+    #[allow(clippy::too_many_arguments)]
     pub fn execute_roll_combo(
         roll_key: char,
         double_tap: bool,
         double_tap_delay_ms: u64,
         remnant_key: char,
         roll_to_remnant_delay_ms: u64,
+        remnant_alt: bool,
+        remnant_double_tap: bool,
+        remnant_double_tap_delay_ms: u64,
     ) {
         enqueue_earth_spirit_request(build_roll_combo_request(
             roll_key,
@@ -269,6 +321,9 @@ impl EarthSpiritState {
             double_tap_delay_ms,
             remnant_key,
             roll_to_remnant_delay_ms,
+            remnant_alt,
+            remnant_double_tap,
+            remnant_double_tap_delay_ms,
         ));
     }
 }
@@ -287,10 +342,11 @@ impl EarthSpiritState {
 ///    - **silence**: remnant first, then grip. Grip resolves on the press, so
 ///      the remnant has to already be there. Both land on one cursor position.
 ///      See `run_silence_combo_request`.
-///    - **roll**: roll first, then remnant. Rolling Boulder has a ~0.6s windup,
-///      and a remnant dropped into the path during it still counts — so the
-///      roll direction is locked in first and the operator spends the windup
-///      aiming the remnant separately. See `run_roll_combo_request`.
+///    - **roll**: roll first, then a self-cast remnant. Rolling Boulder has a
+///      ~0.6s windup and a remnant dropped into the path during it still
+///      counts, so the direction is locked in first; self-casting the remnant
+///      puts it on Earth Spirit, where the roll starts, so the boulder passes
+///      through it without any aiming. See `run_roll_combo_request`.
 ///
 /// Off GSI this hero does nothing of its own beyond stashing the payload for
 /// the readiness gates; the shared survivability pipeline handles the rest.
@@ -382,7 +438,7 @@ mod tests {
 
     #[test]
     fn build_roll_combo_request_preserves_keys_delays_and_double_tap() {
-        let request = build_roll_combo_request('w', true, 60, 'd', 300);
+        let request = build_roll_combo_request('w', true, 60, 'd', 120, true, true, 60);
         assert_eq!(
             request,
             EarthSpiritRequest::RollCombo {
@@ -390,16 +446,19 @@ mod tests {
                 double_tap: true,
                 double_tap_delay_ms: 60,
                 remnant_key: 'd',
-                roll_to_remnant_delay_ms: 300,
+                roll_to_remnant_delay_ms: 120,
+                remnant_alt: true,
+                remnant_double_tap: true,
+                remnant_double_tap_delay_ms: 60,
             }
         );
     }
 
-    /// The double-tap toggle is there to be A/B'd in a live game, so it has to
+    /// Both toggles are there to be A/B'd in a live game, so they have to
     /// survive into the request rather than being resolved away at build time.
     #[test]
-    fn the_double_tap_toggle_reaches_the_request() {
-        let request = build_roll_combo_request('w', false, 60, 'd', 300);
+    fn the_double_tap_toggles_reach_the_request() {
+        let request = build_roll_combo_request('w', false, 60, 'd', 120, false, false, 60);
         assert_eq!(
             request,
             EarthSpiritRequest::RollCombo {
@@ -407,9 +466,38 @@ mod tests {
                 double_tap: false,
                 double_tap_delay_ms: 60,
                 remnant_key: 'd',
-                roll_to_remnant_delay_ms: 300,
+                roll_to_remnant_delay_ms: 120,
+                remnant_alt: false,
+                remnant_double_tap: false,
+                remnant_double_tap_delay_ms: 60,
             }
         );
+    }
+
+    /// The roll's remnant is self-cast and the silence's is not, and they are
+    /// both the same key — so nothing but these flags distinguishes "on Earth
+    /// Spirit" from "at the cursor". Losing them is a silent gameplay
+    /// regression: the roll would still fire and just stop extending.
+    #[test]
+    fn only_the_roll_combo_carries_the_self_cast_flags() {
+        let roll = build_roll_combo_request('w', true, 60, 'd', 120, true, true, 60);
+
+        match roll {
+            EarthSpiritRequest::RollCombo {
+                remnant_alt,
+                remnant_double_tap,
+                ..
+            } => {
+                assert!(remnant_alt);
+                assert!(remnant_double_tap);
+            }
+            other => panic!("expected a roll combo, got {other:?}"),
+        }
+
+        // The silence deliberately has no self-cast route: gripping a remnant
+        // standing on top of Earth Spirit would silence nobody.
+        let silence = build_silence_combo_request('d', 'e', 120);
+        assert!(matches!(silence, EarthSpiritRequest::SilenceCombo { .. }));
     }
 
     /// The two combos deliberately order the same pair of abilities the other
@@ -421,7 +509,7 @@ mod tests {
     #[test]
     fn the_two_combos_order_the_remnant_on_opposite_sides() {
         let silence = build_silence_combo_request('d', 'e', 120);
-        let roll = build_roll_combo_request('w', true, 60, 'd', 300);
+        let roll = build_roll_combo_request('w', true, 60, 'd', 120, true, true, 60);
 
         // Silence: remnant is named first, and its delay precedes the grip.
         match silence {
