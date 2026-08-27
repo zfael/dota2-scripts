@@ -724,7 +724,7 @@ mod tests {
                 stash5: GsiItem::default(),
                 teleport0: GsiItem::default(),
             },
-            map: Map { clock_time: 0 },
+            map: Map { clock_time: 0, ..Default::default() },
             player: None,
         }
     }

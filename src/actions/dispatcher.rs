@@ -527,7 +527,7 @@ mod tests {
                 stash5: Item::default(),
                 teleport0: Item::default(),
             },
-            map: Map { clock_time: 0 },
+            map: Map { clock_time: 0, ..Default::default() },
             player: None,
         };
 
@@ -634,7 +634,7 @@ mod tests {
                 stash5: Item::default(),
                 teleport0: Item::default(),
             },
-            map: Map { clock_time: 0 },
+            map: Map { clock_time: 0, ..Default::default() },
             player: None,
         };
 

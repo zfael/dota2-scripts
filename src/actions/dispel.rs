@@ -275,7 +275,7 @@ mod tests {
             hero,
             abilities: Abilities::default(),
             items,
-            map: Map { clock_time: 600 },
+            map: Map { clock_time: 600, ..Default::default() },
             player: None,
         }
     }

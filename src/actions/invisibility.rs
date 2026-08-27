@@ -331,7 +331,7 @@ mod tests {
                 slot1: item("item_phase_boots", phase_cooldown),
                 ..Items::default()
             },
-            map: Map { clock_time: 600 },
+            map: Map { clock_time: 600, ..Default::default() },
             player: None,
         }
     }

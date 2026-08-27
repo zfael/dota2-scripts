@@ -971,7 +971,7 @@ mod tests {
                 ability5: empty_ability(),
             },
             items,
-            map: Map { clock_time: 0 },
+            map: Map { clock_time: 0, ..Default::default() },
             player: None,
         }
     }
@@ -1205,7 +1205,7 @@ mod snapshot_tests {
             hero,
             abilities: empty_abilities(),
             items,
-            map: Map { clock_time: 0 },
+            map: Map { clock_time: 0, ..Default::default() },
             player: None,
         }
     }

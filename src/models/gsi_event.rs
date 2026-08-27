@@ -169,6 +169,30 @@ impl Hero {
 #[serde(default)]
 pub struct Map {
     pub clock_time: i32,
+    /// `DOTA_GAMERULES_STATE_*`. Confirmed on the wire to reach a *player*, not
+    /// just a spectator — this is what gates the draft reader, because the
+    /// vision side cannot tell a draft screen from a menu (it once confidently
+    /// read three heroes off the main menu). At the main menu Dota sends no
+    /// `map` block at all, so `#[serde(default)]` leaves this empty there.
+    pub game_state: String,
+    /// Scopes a draft session: votes must never carry across games. Dota has
+    /// sent this as both a string and a bare number across builds, hence the
+    /// custom deserializer.
+    #[serde(deserialize_with = "string_or_number", default)]
+    pub matchid: String,
+}
+
+/// Accepts `"123"`, `123`, or absence, normalising all three to a `String`.
+fn string_or_number<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(match value {
+        serde_json::Value::String(s) => s,
+        serde_json::Value::Number(n) => n.to_string(),
+        _ => String::new(),
+    })
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -193,5 +217,39 @@ impl GsiWebhookEvent {
     /// for automation to act on.
     pub fn has_hero(&self) -> bool {
         !self.hero.name.is_empty() && self.hero.name != "empty"
+    }
+}
+
+#[cfg(test)]
+mod map_tests {
+    use super::*;
+
+    #[test]
+    fn matchid_accepts_string_and_number_and_absence() {
+        let m: Map = serde_json::from_str(r#"{"matchid":"812345"}"#).unwrap();
+        assert_eq!(m.matchid, "812345");
+
+        let m: Map = serde_json::from_str(r#"{"matchid":812345}"#).unwrap();
+        assert_eq!(m.matchid, "812345");
+
+        let m: Map = serde_json::from_str("{}").unwrap();
+        assert_eq!(m.matchid, "");
+    }
+
+    #[test]
+    fn game_state_defaults_empty_when_map_block_absent() {
+        // The main menu sends no `map` block at all; the event must still parse
+        // and the gate field must read as "not in any game state".
+        let e: GsiWebhookEvent = serde_json::from_str(r#"{"provider":{}}"#).unwrap();
+        assert_eq!(e.map.game_state, "");
+    }
+
+    #[test]
+    fn game_state_carries_hero_selection() {
+        let e: GsiWebhookEvent = serde_json::from_str(
+            r#"{"map":{"game_state":"DOTA_GAMERULES_STATE_HERO_SELECTION","clock_time":0}}"#,
+        )
+        .unwrap();
+        assert_eq!(e.map.game_state, "DOTA_GAMERULES_STATE_HERO_SELECTION");
     }
 }
