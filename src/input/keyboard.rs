@@ -1512,6 +1512,8 @@ mod tests {
             invoker_active_combo_profile_id: None,
             rune_alerts: None,
             minimap_capture: None,
+            draft: None,
+            draft_corrections: Vec::new(),
         };
 
         let snapshot = KeyboardSnapshot::from_runtime(&settings, &state);
@@ -1539,6 +1541,8 @@ mod tests {
             invoker_active_combo_profile_id: None,
             rune_alerts: None,
             minimap_capture: None,
+            draft: None,
+            draft_corrections: Vec::new(),
         };
 
         let snapshot = KeyboardSnapshot::from_runtime(&settings, &state);

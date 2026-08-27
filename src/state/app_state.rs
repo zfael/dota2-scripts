@@ -123,6 +123,11 @@ pub struct AppState {
     pub invoker_active_combo_profile_id: Option<String>,
     pub rune_alerts: Option<RuneAlertSnapshot>,
     pub minimap_capture: Option<MinimapCaptureStatusSnapshot>,
+    /// Live draft identification, published by the draft reader worker.
+    pub draft: Option<crate::observability::draft_reader::DraftStatusSnapshot>,
+    /// User corrections (slot index, actual hero) queued for the draft reader
+    /// to harvest as labelled exemplars; drained every capture frame.
+    pub draft_corrections: Vec<(usize, String)>,
 }
 
 impl Default for AppState {
@@ -141,6 +146,8 @@ impl Default for AppState {
             invoker_active_combo_profile_id: None,
             rune_alerts: None,
             minimap_capture: None,
+            draft: None,
+            draft_corrections: Vec::new(),
         }
     }
 }

@@ -129,6 +129,18 @@ async fn main() {
         );
     });
 
+    // Draft reader: identifies drafted heroes from the screen while GSI
+    // reports hero selection. Idles at ~2Hz config polls unless [draft]
+    // enabled = true.
+    let draft_settings = settings.clone();
+    let draft_state = app_state.clone();
+    std::thread::spawn(move || {
+        crate::observability::draft_reader::start_draft_reader_worker(
+            draft_settings,
+            draft_state,
+        );
+    });
+
     // Start hotkey event handler in background
     let app_state_clone2 = app_state.clone();
     let dispatcher_clone2 = dispatcher.clone();

@@ -967,6 +967,75 @@ pub struct GsiLoggingConfig {
     pub output_dir: String,
 }
 
+/// Draft-phase hero identification (the draft helper's data source).
+///
+/// Off by default: it spawns a capture thread that reads the screen once a
+/// second during hero selection, and nothing else in the app depends on it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DraftConfig {
+    #[serde(default = "default_draft_enabled")]
+    pub enabled: bool,
+    /// Capture cadence while the draft gate is open.
+    #[serde(default = "default_draft_poll_ms")]
+    pub poll_ms: u64,
+    /// Save strip captures + per-frame read logs for offline evaluation.
+    #[serde(default = "default_draft_telemetry_enabled")]
+    pub telemetry_enabled: bool,
+    /// Session logs land here, one subdirectory per draft. Relative values
+    /// resolve against the app data dir, like `[gsi_logging].output_dir`.
+    #[serde(default = "default_draft_telemetry_dir")]
+    pub telemetry_dir: String,
+    /// Every Nth frame's PNG is kept (the JSONL logs every frame regardless).
+    /// A ranked draft at 1Hz is several hundred frames; at ~144KB a strip,
+    /// keeping them all would be tens of MB per game.
+    #[serde(default = "default_draft_telemetry_save_every_n")]
+    pub telemetry_save_every_n: u32,
+    /// Save portraits the matcher cannot identify (arcanas, personas) as new
+    /// exemplars, labelled by GSI. They join the reference pool on the next
+    /// draft and can be baked into the shipped pack later.
+    #[serde(default = "default_draft_harvest_enabled")]
+    pub harvest_enabled: bool,
+    /// Harvested exemplars land here. Relative resolves against app data dir.
+    #[serde(default = "default_draft_exemplar_dir")]
+    pub exemplar_dir: String,
+}
+
+fn default_draft_enabled() -> bool {
+    false
+}
+fn default_draft_poll_ms() -> u64 {
+    1000
+}
+fn default_draft_telemetry_enabled() -> bool {
+    true
+}
+fn default_draft_telemetry_dir() -> String {
+    "logs/draft_telemetry".to_string()
+}
+fn default_draft_telemetry_save_every_n() -> u32 {
+    5
+}
+fn default_draft_harvest_enabled() -> bool {
+    true
+}
+fn default_draft_exemplar_dir() -> String {
+    "draft_exemplars".to_string()
+}
+
+impl Default for DraftConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_draft_enabled(),
+            poll_ms: default_draft_poll_ms(),
+            telemetry_enabled: default_draft_telemetry_enabled(),
+            telemetry_dir: default_draft_telemetry_dir(),
+            telemetry_save_every_n: default_draft_telemetry_save_every_n(),
+            harvest_enabled: default_draft_harvest_enabled(),
+            exemplar_dir: default_draft_exemplar_dir(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuneAlertConfig {
     #[serde(default = "default_rune_alerts_enabled")]
@@ -1492,6 +1561,8 @@ pub struct Settings {
     pub updates: UpdateConfig,
     #[serde(default)]
     pub rune_alerts: RuneAlertConfig,
+    #[serde(default)]
+    pub draft: DraftConfig,
     #[serde(default)]
     pub minimap_capture: MinimapCaptureConfig,
     #[serde(default)]
@@ -3140,6 +3211,7 @@ impl Default for Settings {
             gsi_logging: GsiLoggingConfig::default(),
             updates: UpdateConfig::default(),
             rune_alerts: RuneAlertConfig::default(),
+            draft: DraftConfig::default(),
             minimap_capture: MinimapCaptureConfig::default(),
             minimap_analysis: MinimapAnalysisConfig::default(),
             wave_tracker: WaveTrackerConfig::default(),

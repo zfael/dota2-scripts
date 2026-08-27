@@ -1,3 +1,4 @@
+pub mod draft_reader;
 pub mod draft_vision;
 #[allow(dead_code)]
 pub mod hud_anchors;

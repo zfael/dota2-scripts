@@ -121,6 +121,25 @@ map_scale_y = 0.929
 # Draws the map-space box and forces the lane lines on while aligning.
 calibrating = false
 
+# Draft-phase hero identification. Reads the pick strip off the screen while
+# GSI reports hero selection, and feeds the Draft page. Capture happens ONLY
+# during DOTA_GAMERULES_STATE_HERO_SELECTION / STRATEGY_TIME — verified to stay
+# silent in menus and in-game.
+[draft]
+enabled = false
+# Capture cadence while a draft is on screen. A strip capture costs ~14ms.
+poll_ms = 1000
+# Save strip PNGs + per-frame read logs, one directory per draft, for offline
+# evaluation. This is what turns ranked games into test data.
+telemetry_enabled = true
+telemetry_dir = "logs/draft_telemetry"
+# Keep every Nth frame's PNG (the JSONL records every frame regardless).
+telemetry_save_every_n = 5
+# Save portraits the matcher cannot identify (arcanas, personas) as exemplars,
+# labelled by GSI. They join the reference pool from the next draft on.
+harvest_enabled = true
+exemplar_dir = "draft_exemplars"
+
 [minimap_capture]
 enabled = false
 minimap_x = 2
