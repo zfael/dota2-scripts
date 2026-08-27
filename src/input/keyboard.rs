@@ -1514,6 +1514,8 @@ mod tests {
             minimap_capture: None,
             draft: None,
             draft_corrections: Vec::new(),
+            stratz_dataset: None,
+            stratz_status: None,
         };
 
         let snapshot = KeyboardSnapshot::from_runtime(&settings, &state);
@@ -1543,6 +1545,8 @@ mod tests {
             minimap_capture: None,
             draft: None,
             draft_corrections: Vec::new(),
+            stratz_dataset: None,
+            stratz_status: None,
         };
 
         let snapshot = KeyboardSnapshot::from_runtime(&settings, &state);

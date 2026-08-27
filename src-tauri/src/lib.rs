@@ -143,6 +143,15 @@ pub fn run() {
         );
     });
 
+    // STRATZ dataset: keeps the cached matchup data fresh for draft advice.
+    // Idles at 1Hz config polls unless [stratz] enabled = true, and a draft
+    // never waits on it — advice is additive to identification.
+    let stratz_settings = settings.clone();
+    let stratz_state = app_state.clone();
+    std::thread::spawn(move || {
+        dota2_scripts::stratz::start_stratz_worker(stratz_settings, stratz_state);
+    });
+
     // Start hotkey event handler in background
     let hotkey_app_state = app_state.clone();
     let hotkey_dispatcher = dispatcher.clone();

@@ -9,6 +9,7 @@ mod logging;
 mod models;
 mod observability;
 mod state;
+mod stratz;
 
 mod update;
 
@@ -139,6 +140,15 @@ async fn main() {
             draft_settings,
             draft_state,
         );
+    });
+
+    // STRATZ dataset: keeps the cached matchup data fresh for draft advice.
+    // Idles at 1Hz config polls unless [stratz] enabled = true, and a draft
+    // never waits on it — advice is additive to identification.
+    let stratz_settings = settings.clone();
+    let stratz_state = app_state.clone();
+    std::thread::spawn(move || {
+        crate::stratz::start_stratz_worker(stratz_settings, stratz_state);
     });
 
     // Start hotkey event handler in background

@@ -7,4 +7,5 @@ pub mod logging;
 pub mod models;
 pub mod observability;
 pub mod state;
+pub mod stratz;
 pub mod update;

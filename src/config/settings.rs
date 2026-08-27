@@ -1000,6 +1000,90 @@ pub struct DraftConfig {
     pub exemplar_dir: String,
 }
 
+/// STRATZ-backed draft advice: counters, synergy and position fit.
+///
+/// Separate from `[draft]` because identification and advice fail
+/// independently — the reader is useful with no API token, and the advice
+/// would still be wanted if the reader were replaced.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StratzConfig {
+    #[serde(default = "default_stratz_enabled")]
+    pub enabled: bool,
+    /// STRATZ API token. Leave empty and set `STRATZ_TOKEN` in the
+    /// environment instead to keep the secret off disk entirely.
+    #[serde(default)]
+    pub api_token: String,
+    /// Rank bracket the statistics describe: `DIVINE_IMMORTAL`,
+    /// `LEGEND_ANCIENT`, `CRUSADER_ARCHON`, `HERALD_GUARDIAN`.
+    #[serde(default = "default_stratz_bracket")]
+    pub bracket: String,
+    /// Cached dataset path. Relative resolves against the app data dir.
+    #[serde(default = "default_stratz_cache_path")]
+    pub cache_path: String,
+    /// How long a cached dataset is reused before a background refresh.
+    /// Matchup data is a per-patch aggregate, so a day is generous.
+    #[serde(default = "default_stratz_cache_ttl_hours")]
+    pub cache_ttl_hours: u64,
+    /// Position 1-5 currently being queued for; advice is filtered to it.
+    /// 0 means "no position filter".
+    #[serde(default)]
+    pub position: u8,
+    /// Matchup sample size trusted at half weight. Lower trusts small
+    /// samples more; see `advisor::DEFAULT_SHRINK_K`.
+    #[serde(default = "default_stratz_shrink_k")]
+    pub shrink_k: f32,
+    /// Weight of a hero's own strength relative to matchup effects.
+    #[serde(default = "default_stratz_base_weight")]
+    pub base_weight: f32,
+    #[serde(default = "default_stratz_synergy_weight")]
+    pub synergy_weight: f32,
+    /// How many suggestions to surface.
+    #[serde(default = "default_stratz_suggestion_count")]
+    pub suggestion_count: usize,
+}
+
+fn default_stratz_enabled() -> bool {
+    false
+}
+fn default_stratz_bracket() -> String {
+    "DIVINE_IMMORTAL".to_string()
+}
+fn default_stratz_cache_path() -> String {
+    "stratz/dataset.bin".to_string()
+}
+fn default_stratz_cache_ttl_hours() -> u64 {
+    24
+}
+fn default_stratz_shrink_k() -> f32 {
+    50.0
+}
+fn default_stratz_base_weight() -> f32 {
+    0.4
+}
+fn default_stratz_synergy_weight() -> f32 {
+    1.0
+}
+fn default_stratz_suggestion_count() -> usize {
+    12
+}
+
+impl Default for StratzConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_stratz_enabled(),
+            api_token: String::new(),
+            bracket: default_stratz_bracket(),
+            cache_path: default_stratz_cache_path(),
+            cache_ttl_hours: default_stratz_cache_ttl_hours(),
+            position: 0,
+            shrink_k: default_stratz_shrink_k(),
+            base_weight: default_stratz_base_weight(),
+            synergy_weight: default_stratz_synergy_weight(),
+            suggestion_count: default_stratz_suggestion_count(),
+        }
+    }
+}
+
 fn default_draft_enabled() -> bool {
     false
 }
@@ -1563,6 +1647,8 @@ pub struct Settings {
     pub rune_alerts: RuneAlertConfig,
     #[serde(default)]
     pub draft: DraftConfig,
+    #[serde(default)]
+    pub stratz: StratzConfig,
     #[serde(default)]
     pub minimap_capture: MinimapCaptureConfig,
     #[serde(default)]
@@ -3212,6 +3298,7 @@ impl Default for Settings {
             updates: UpdateConfig::default(),
             rune_alerts: RuneAlertConfig::default(),
             draft: DraftConfig::default(),
+            stratz: StratzConfig::default(),
             minimap_capture: MinimapCaptureConfig::default(),
             minimap_analysis: MinimapAnalysisConfig::default(),
             wave_tracker: WaveTrackerConfig::default(),

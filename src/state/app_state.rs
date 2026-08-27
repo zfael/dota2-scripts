@@ -128,6 +128,13 @@ pub struct AppState {
     /// User corrections (slot index, actual hero) queued for the draft reader
     /// to harvest as labelled exemplars; drained every capture frame.
     pub draft_corrections: Vec<(usize, String)>,
+    /// Cached STRATZ matchup data backing draft advice. Behind an `Arc` so a
+    /// suggestion can be computed without holding the AppState lock across
+    /// ~16k matrix reads.
+    pub stratz_dataset: Option<Arc<crate::stratz::StratzDataset>>,
+    /// What the UI shows about that dataset: freshness, refresh progress, and
+    /// why advice is unavailable when it is.
+    pub stratz_status: Option<crate::stratz::StratzStatusSnapshot>,
 }
 
 impl Default for AppState {
@@ -148,6 +155,8 @@ impl Default for AppState {
             minimap_capture: None,
             draft: None,
             draft_corrections: Vec::new(),
+            stratz_dataset: None,
+            stratz_status: None,
         }
     }
 }
