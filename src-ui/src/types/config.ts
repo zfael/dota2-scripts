@@ -520,6 +520,8 @@ export interface StratzConfig {
   cache_ttl_hours: number;
   /** Position 1-5 being queued for; 0 means no role filter. */
   position: number;
+  /** Suggest only commonly picked heroes. */
+  meta_only: boolean;
   shrink_k: number;
   base_weight: number;
   synergy_weight: number;

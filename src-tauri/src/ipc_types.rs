@@ -220,6 +220,8 @@ pub struct StratzStatusDto {
     pub has_token: bool,
     /// Position 1-5 being queued for; 0 means no filter.
     pub position: u8,
+    /// Suggestions are restricted to commonly picked heroes.
+    pub meta_only: bool,
     pub ready: bool,
     pub refreshing: bool,
     pub progress: u8,
@@ -232,6 +234,19 @@ pub struct StratzStatusDto {
     pub last_error: Option<String>,
 }
 
+/// How one suggestion relates to one hero already in the draft.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatchupDetailDto {
+    pub slug: String,
+    pub display_name: String,
+    /// Win-rate offset over this pick's own baseline, as a fraction.
+    pub offset: f32,
+    pub matches: u32,
+    /// The shrunk value that actually entered the score.
+    pub contribution: f32,
+}
+
 /// One ranked pick.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -242,7 +257,13 @@ pub struct SuggestionDto {
     pub counter: f32,
     pub synergy: f32,
     pub position_win_rate: Option<f32>,
+    /// Share of matches this hero is picked in; `None` where unknown.
+    pub pick_rate: Option<f32>,
     pub best_against: Option<String>,
+    /// Every enemy in draft order, so the panel can show where a pick is weak
+    /// as well as where it is strong.
+    pub vs_enemies: Vec<MatchupDetailDto>,
+    pub with_allies: Vec<MatchupDetailDto>,
     pub counter_samples: u32,
 }
 

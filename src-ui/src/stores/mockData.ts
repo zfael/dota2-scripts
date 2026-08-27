@@ -355,7 +355,7 @@ export const mockConfig: Settings = {
   stratz: {
     enabled: false, api_token: "", bracket: "DIVINE_IMMORTAL",
     cache_path: "stratz/dataset.bin", cache_ttl_hours: 24,
-    position: 0, shrink_k: 50, base_weight: 0.4,
+    position: 0, meta_only: false, shrink_k: 50, base_weight: 0.4,
     synergy_weight: 1.0, suggestion_count: 12,
   },
   minimap_capture: {

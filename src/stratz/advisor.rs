@@ -34,6 +34,16 @@ pub const DEFAULT_SYNERGY_WEIGHT: f32 = 1.0;
 /// off-role games and means nothing.
 pub const MIN_POSITION_SHARE: f32 = 0.05;
 
+/// "Meta" means picked at least this multiple of the average hero's rate.
+///
+/// Relative rather than absolute so the same rule survives a role filter,
+/// where every rate is roughly a fifth of the overall one. Measured against
+/// the live Divine+Immortal cache (`examples/stratz_meta_probe`), 1.5x keeps
+/// 25 of 127 heroes overall and 23-31 per position — the size of a tier
+/// list's top tiers. 1.0x keeps 50, which filters nothing a drafter cares
+/// about; 2.0x keeps 12, which throws away real picks.
+pub const META_PICK_RATE_MULTIPLE: f32 = 1.5;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AdviceWeights {
     pub shrink_k: f32,
@@ -59,6 +69,27 @@ pub struct DraftContext {
     pub enemies: Vec<usize>,
     /// Position 1-5 as 0-4. `None` ranks without any position filter.
     pub position: Option<usize>,
+    /// Restrict candidates to commonly picked heroes. Off by default: the
+    /// sharpest counter is often an unpopular hero, and hiding it by default
+    /// would defeat the point of the tool.
+    pub meta_only: bool,
+}
+
+/// One hero's relationship with one already-picked hero.
+///
+/// Carried per suggestion so the UI can show *which* enemies a pick beats
+/// rather than a single summed number the user has to take on trust.
+#[derive(Debug, Clone)]
+pub struct MatchupDetail {
+    pub slug: String,
+    pub display_name: String,
+    /// Win-rate offset against (or alongside) this hero, over the pick's own
+    /// baseline. +0.05 is "five points better than this hero's average".
+    pub offset: f32,
+    /// Games behind the offset.
+    pub matches: u32,
+    /// What actually entered the score: `offset` after sample shrinkage.
+    pub contribution: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -74,8 +105,17 @@ pub struct Suggestion {
     pub synergy: f32,
     /// Win rate in the requested position, where measured.
     pub position_win_rate: Option<f32>,
+    /// Share of matches this hero is picked in — the popularity the meta
+    /// filter reads, and worth showing either way. `None` where the refresh
+    /// never fetched the hero.
+    pub pick_rate: Option<f32>,
     /// The single enemy this pick most counters, for explaining the pick.
     pub best_against: Option<(String, f32)>,
+    /// Every enemy, in draft order, so the UI can show the whole picture
+    /// instead of only the best case.
+    pub vs_enemies: Vec<MatchupDetail>,
+    /// Same for our own picks.
+    pub with_allies: Vec<MatchupDetail>,
     /// Total matchup sample behind the counter term, so the UI can show how
     /// much the number is worth trusting.
     pub counter_samples: u32,
@@ -116,11 +156,31 @@ pub fn recommend(
             .unwrap_or_else(|| dataset.base_win_rate.get(hero).copied().unwrap_or(0.5))
     };
 
+    // Popularity, for the meta filter and for display. Computed over the
+    // whole roster rather than the survivors, so the bar for "meta" does not
+    // move as heroes are picked.
+    let pick_rates = dataset.pick_rates(context.position);
+    let cut = meta_cut(&pick_rates);
+    let is_meta = |hero: usize| -> bool {
+        // Unknown popularity means an unfetched hero, not an unpopular one.
+        pick_rates.get(hero).copied().flatten().is_none_or(|r| r >= cut)
+    };
+
+    let plays_the_role =
+        |hero: usize| !taken[hero] && eligible_for_position(dataset, hero, context.position);
+
+    let mut contenders: Vec<usize> = (0..n)
+        .filter(|&h| plays_the_role(h) && (!context.meta_only || is_meta(h)))
+        .collect();
+    if contenders.is_empty() && context.meta_only {
+        // A meta filter that leaves nothing has told the user nothing. Fall
+        // back to the unfiltered list, the same judgement the position gate
+        // makes for heroes with no positional data.
+        contenders = (0..n).filter(|&h| plays_the_role(h)).collect();
+    }
+
     // Centre over the heroes actually in contention, so the base term shifts
     // ranking rather than adding a constant to everyone.
-    let contenders: Vec<usize> = (0..n)
-        .filter(|&h| !taken[h] && eligible_for_position(dataset, h, context.position))
-        .collect();
     let mean_base = if contenders.is_empty() {
         0.5
     } else {
@@ -129,17 +189,11 @@ pub fn recommend(
 
     let mut out: Vec<Suggestion> = Vec::new();
 
-    for (hero, &is_taken) in taken.iter().enumerate() {
-        if is_taken {
-            continue;
-        }
-        if !eligible_for_position(dataset, hero, context.position) {
-            continue;
-        }
-
+    for hero in contenders {
         let mut counter = 0.0f32;
         let mut counter_samples = 0u32;
         let mut best_against: Option<(usize, f32)> = None;
+        let mut vs_enemies = Vec::with_capacity(context.enemies.len());
 
         for &enemy in &context.enemies {
             if enemy >= n {
@@ -152,15 +206,19 @@ pub fn recommend(
             if best_against.is_none_or(|(_, best)| contribution > best) {
                 best_against = Some((enemy, contribution));
             }
+            vs_enemies.push(detail(dataset, enemy, offset, matches, contribution));
         }
 
         let mut synergy = 0.0f32;
+        let mut with_allies = Vec::with_capacity(context.allies.len());
         for &ally in &context.allies {
             if ally >= n {
                 continue;
             }
             let (offset, matches) = dataset.synergy_of(hero, ally);
-            synergy += offset * reliability(matches, weights.shrink_k);
+            let contribution = offset * reliability(matches, weights.shrink_k);
+            synergy += contribution;
+            with_allies.push(detail(dataset, ally, offset, matches, contribution));
         }
 
         let base = strength(hero) - mean_base;
@@ -177,9 +235,12 @@ pub fn recommend(
             position_win_rate: context
                 .position
                 .and_then(|p| dataset.position_win_rate_of(hero, p)),
+            pick_rate: pick_rates.get(hero).copied().flatten(),
             best_against: best_against
                 .filter(|(_, c)| *c > 0.0)
                 .and_then(|(i, c)| dataset.hero(i).map(|h| (h.display_name.clone(), c))),
+            vs_enemies,
+            with_allies,
             counter_samples,
         });
     }
@@ -205,6 +266,36 @@ fn reliability(matches: u32, shrink_k: f32) -> f32 {
     }
     let m = matches as f32;
     m / (m + shrink_k.max(0.0))
+}
+
+/// The pick rate a hero must reach to count as meta.
+///
+/// Measured against the mean of the heroes we have data for, so the rule
+/// holds whether the rates are overall or restricted to one role.
+fn meta_cut(pick_rates: &[Option<f32>]) -> f32 {
+    let known: Vec<f32> = pick_rates.iter().flatten().copied().collect();
+    if known.is_empty() {
+        // No popularity data at all: the filter must not empty the list.
+        return 0.0;
+    }
+    known.iter().sum::<f32>() / known.len() as f32 * META_PICK_RATE_MULTIPLE
+}
+
+fn detail(
+    dataset: &StratzDataset,
+    hero: usize,
+    offset: f32,
+    matches: u32,
+    contribution: f32,
+) -> MatchupDetail {
+    let entry = dataset.hero(hero);
+    MatchupDetail {
+        slug: entry.map(|h| h.slug.clone()).unwrap_or_default(),
+        display_name: entry.map(|h| h.display_name.clone()).unwrap_or_default(),
+        offset,
+        matches,
+        contribution,
+    }
 }
 
 /// Whether a hero is genuinely played in the requested position.
@@ -342,6 +433,7 @@ mod tests {
             allies: vec![0],
             enemies: vec![1, 2],
             position: None,
+            meta_only: false,
         };
         let picks = recommend(&d, &ctx, &AdviceWeights::default(), 10);
 
@@ -430,6 +522,166 @@ mod tests {
         assert!(picks.is_empty());
     }
 
+    /// Gives `hero` a matchup row heavy enough to imply `games` popularity.
+    fn set_popularity(d: &mut StratzDataset, hero: usize, games: u32) {
+        let n = d.len();
+        for j in 0..n {
+            if j != hero {
+                d.vs_matches[hero * n + j] = games;
+            }
+        }
+    }
+
+    #[test]
+    fn the_meta_filter_keeps_commonly_picked_heroes_only() {
+        // Three heroes far above average and two far below: the toggle has to
+        // drop the two, and leave the ranking among the rest untouched.
+        let mut d = sample_dataset(&["staple_a", "staple_b", "staple_c", "niche_a", "niche_b"]);
+        for h in 0..3 {
+            set_popularity(&mut d, h, 10_000);
+        }
+        set_popularity(&mut d, 3, 100);
+        set_popularity(&mut d, 4, 100);
+
+        let all = recommend(&d, &DraftContext::default(), &AdviceWeights::default(), 10);
+        assert_eq!(all.len(), 5);
+
+        let meta = recommend(
+            &d,
+            &DraftContext { meta_only: true, ..Default::default() },
+            &AdviceWeights::default(),
+            10,
+        );
+        let names: Vec<&str> = meta.iter().map(|s| s.slug.as_str()).collect();
+        assert_eq!(names, vec!["staple_a", "staple_b", "staple_c"]);
+    }
+
+    #[test]
+    fn a_hero_with_no_popularity_data_survives_the_meta_filter() {
+        // An unfetched hero is missing information, not an unpopular pick.
+        // Dropping it would quietly hide heroes because STRATZ 503'd.
+        let mut d = sample_dataset(&["staple", "unfetched", "niche"]);
+        set_popularity(&mut d, 0, 10_000);
+        set_popularity(&mut d, 2, 50);
+
+        let meta = recommend(
+            &d,
+            &DraftContext { meta_only: true, ..Default::default() },
+            &AdviceWeights::default(),
+            10,
+        );
+        let names: Vec<&str> = meta.iter().map(|s| s.slug.as_str()).collect();
+        assert!(names.contains(&"unfetched"), "{names:?}");
+        assert!(!names.contains(&"niche"), "{names:?}");
+    }
+
+    #[test]
+    fn the_meta_filter_is_role_aware() {
+        // Equally popular overall, but only one of them is actually played as
+        // a position 5 — so "meta support" must mean the support.
+        let mut d = sample_dataset(&["carry", "support", "filler_a", "filler_b"]);
+        set_popularity(&mut d, 0, 10_000);
+        set_popularity(&mut d, 1, 10_000);
+        set_popularity(&mut d, 2, 2_000);
+        set_popularity(&mut d, 3, 2_000);
+        set_position(&mut d, 0, 0, 0.95, 0.52);
+        set_position(&mut d, 0, 4, 0.05, 0.50);
+        set_position(&mut d, 1, 4, 0.95, 0.52);
+        set_position(&mut d, 2, 4, 0.30, 0.50);
+        set_position(&mut d, 3, 4, 0.30, 0.50);
+
+        let meta = recommend(
+            &d,
+            &DraftContext { position: Some(4), meta_only: true, ..Default::default() },
+            &AdviceWeights::default(),
+            10,
+        );
+        let names: Vec<&str> = meta.iter().map(|s| s.slug.as_str()).collect();
+        assert_eq!(names, vec!["support"]);
+    }
+
+    #[test]
+    fn a_meta_filter_that_would_leave_nothing_falls_back_to_the_full_list() {
+        // Every hero equally popular: nobody clears 1.5x the mean, and an
+        // empty advice panel mid-draft is worse than an unfiltered one.
+        let mut d = sample_dataset(&["a", "b", "c"]);
+        for h in 0..3 {
+            set_popularity(&mut d, h, 5_000);
+        }
+        let meta = recommend(
+            &d,
+            &DraftContext { meta_only: true, ..Default::default() },
+            &AdviceWeights::default(),
+            10,
+        );
+        assert_eq!(meta.len(), 3);
+    }
+
+    #[test]
+    fn an_empty_meta_rule_never_empties_the_list() {
+        // With no matchup data at all every rate is unknown; the toggle must
+        // degrade to "no filter" rather than to "no suggestions".
+        let d = sample_dataset(&["a", "b", "c"]);
+        let meta = recommend(
+            &d,
+            &DraftContext { meta_only: true, ..Default::default() },
+            &AdviceWeights::default(),
+            10,
+        );
+        assert_eq!(meta.len(), 3);
+    }
+
+    #[test]
+    fn every_enemy_is_reported_not_just_the_best_one() {
+        // The UI showed one "best vs" line per row and it named the same
+        // enemy for nine of twelve picks. The whole row is carried so the
+        // panel can show where a pick is weak as well as where it is strong.
+        let d = with_matchup(
+            &["pick", "enemy_soft", "enemy_hard"],
+            &[(0, 1, 0.60, 5_000), (0, 2, 0.42, 5_000)],
+        );
+        let ctx = DraftContext { enemies: vec![1, 2], ..Default::default() };
+        let picks = recommend(&d, &ctx, &AdviceWeights::default(), 10);
+        let top = picks.iter().find(|p| p.slug == "pick").unwrap();
+
+        assert_eq!(top.vs_enemies.len(), 2);
+        assert_eq!(top.vs_enemies[0].display_name, "ENEMY_SOFT");
+        assert!((top.vs_enemies[0].offset - 0.10).abs() < 1e-6);
+        assert_eq!(top.vs_enemies[0].matches, 5_000);
+        // The bad matchup is reported too, rather than hidden behind the sum.
+        assert!(top.vs_enemies[1].offset < 0.0);
+        // Contributions are the shrunk values that actually entered the score.
+        let summed: f32 = top.vs_enemies.iter().map(|d| d.contribution).sum();
+        assert!((summed - top.counter).abs() < 1e-6);
+    }
+
+    #[test]
+    fn ally_synergy_is_reported_per_ally() {
+        let mut d = sample_dataset(&["pick", "ally"]);
+        d.synergy[1] = 0.08;
+        d.with_matches[1] = 4_000;
+        let ctx = DraftContext { allies: vec![1], ..Default::default() };
+        let picks = recommend(&d, &ctx, &AdviceWeights::default(), 10);
+        let top = picks.iter().find(|p| p.slug == "pick").unwrap();
+
+        assert_eq!(top.with_allies.len(), 1);
+        assert_eq!(top.with_allies[0].slug, "ally");
+        assert!((top.with_allies[0].offset - 0.08).abs() < 1e-6);
+    }
+
+    #[test]
+    fn pick_rate_is_reported_even_with_the_filter_off() {
+        // Popularity is worth showing whether or not it is being filtered on:
+        // it is the fastest way to tell a comfort pick from a pocket one.
+        let mut d = sample_dataset(&["popular", "niche"]);
+        set_popularity(&mut d, 0, 9_000);
+        set_popularity(&mut d, 1, 1_000);
+        let picks = recommend(&d, &DraftContext::default(), &AdviceWeights::default(), 10);
+        let popular = picks.iter().find(|p| p.slug == "popular").unwrap();
+        let niche = picks.iter().find(|p| p.slug == "niche").unwrap();
+        assert!(popular.pick_rate.unwrap() > niche.pick_rate.unwrap());
+    }
+
     #[test]
     fn ordering_is_stable_for_equal_scores() {
         // Equal-scoring picks must not reshuffle between polls, or the list
@@ -458,6 +710,7 @@ mod tests {
             allies: vec![99],
             enemies: vec![100],
             position: None,
+            meta_only: false,
         };
         let picks = recommend(&d, &ctx, &AdviceWeights::default(), 10);
         assert_eq!(picks.len(), 2);

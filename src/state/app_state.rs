@@ -135,6 +135,10 @@ pub struct AppState {
     /// What the UI shows about that dataset: freshness, refresh progress, and
     /// why advice is unavailable when it is.
     pub stratz_status: Option<crate::stratz::StratzStatusSnapshot>,
+    /// A refresh the user asked for, overriding both the cache TTL and the
+    /// post-failure backoff. Set by the UI, taken by the worker — so refreshes
+    /// still have exactly one owner and two cannot run at once.
+    pub stratz_refresh_requested: bool,
 }
 
 impl Default for AppState {
@@ -157,6 +161,7 @@ impl Default for AppState {
             draft_corrections: Vec::new(),
             stratz_dataset: None,
             stratz_status: None,
+            stratz_refresh_requested: false,
         }
     }
 }

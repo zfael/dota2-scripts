@@ -68,6 +68,7 @@ pub fn advise(
         position: position_index(config.position),
         allies,
         enemies,
+        meta_only: config.meta_only,
     };
 
     DraftAdvice {
@@ -180,6 +181,28 @@ mod tests {
 
         let huge = StratzConfig { suggestion_count: 9_999, ..Default::default() };
         assert_eq!(advise(&d, &[], &huge).suggestions.len(), 4);
+    }
+
+    #[test]
+    fn the_meta_toggle_is_carried_from_config() {
+        // One staple and four niche heroes, by matchup volume.
+        let mut d = sample_dataset(&["staple", "niche_a", "niche_b", "niche_c", "niche_d"]);
+        let n = 5;
+        for (hero, games) in [(0usize, 10_000u32), (1, 250), (2, 250), (3, 250), (4, 250)] {
+            for j in 0..n {
+                if j != hero {
+                    d.vs_matches[hero * n + j] = games;
+                }
+            }
+        }
+
+        let off = StratzConfig::default();
+        assert_eq!(advise(&d, &[], &off).suggestions.len(), 5);
+
+        let on = StratzConfig { meta_only: true, ..Default::default() };
+        let filtered = advise(&d, &[], &on);
+        let slugs: Vec<&str> = filtered.suggestions.iter().map(|s| s.slug.as_str()).collect();
+        assert_eq!(slugs, vec!["staple"]);
     }
 
     #[test]

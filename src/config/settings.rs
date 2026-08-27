@@ -1028,6 +1028,12 @@ pub struct StratzConfig {
     /// 0 means "no position filter".
     #[serde(default)]
     pub position: u8,
+    /// Restrict suggestions to commonly picked heroes. Off by default — the
+    /// sharpest counter to a lineup is often an unpopular hero, and hiding it
+    /// by default would defeat the point. Normally toggled from the Draft
+    /// page. See `advisor::META_PICK_RATE_MULTIPLE` for what counts as meta.
+    #[serde(default)]
+    pub meta_only: bool,
     /// Matchup sample size trusted at half weight. Lower trusts small
     /// samples more; see `advisor::DEFAULT_SHRINK_K`.
     #[serde(default = "default_stratz_shrink_k")]
@@ -1076,6 +1082,7 @@ impl Default for StratzConfig {
             cache_path: default_stratz_cache_path(),
             cache_ttl_hours: default_stratz_cache_ttl_hours(),
             position: 0,
+            meta_only: false,
             shrink_k: default_stratz_shrink_k(),
             base_weight: default_stratz_base_weight(),
             synergy_weight: default_stratz_synergy_weight(),

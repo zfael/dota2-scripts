@@ -65,6 +65,15 @@ pub fn start_stratz_worker(settings: Arc<Mutex<Settings>>, app_state: Arc<Mutex<
             guard.stratz.clone()
         };
 
+        // Taken, not read: a request is consumed by whichever pass sees it, so
+        // one click cannot queue a second rebuild behind the first. Taking it
+        // even while disabled keeps a stale request from firing when advice is
+        // switched back on.
+        let forced = {
+            let mut state = app_state.lock().unwrap();
+            std::mem::take(&mut state.stratz_refresh_requested)
+        };
+
         if !config.enabled {
             publish(&app_state, |s| {
                 *s = StratzStatusSnapshot { enabled: false, ..Default::default() };
@@ -136,9 +145,12 @@ pub fn start_stratz_worker(settings: Arc<Mutex<Settings>>, app_state: Arc<Mutex<
             s.built_at = built_at;
         });
 
-        if needs_refresh && !token.is_empty() {
-            // Back off after a failure rather than hammering the API.
-            let ready_to_retry = last_attempt.is_none_or(|t| t.elapsed() > Duration::from_secs(300));
+        if (needs_refresh || forced) && !token.is_empty() {
+            // Back off after a failure rather than hammering the API — unless
+            // the user asked, in which case they are owed the attempt they
+            // clicked for and can see the failure themselves.
+            let ready_to_retry = forced
+                || last_attempt.is_none_or(|t| t.elapsed() > Duration::from_secs(300));
             if ready_to_retry {
                 last_attempt = Some(std::time::Instant::now());
                 match refresh(&app_state, &token, &bracket) {
@@ -171,7 +183,24 @@ pub fn start_stratz_worker(settings: Arc<Mutex<Settings>>, app_state: Arc<Mutex<
             });
         }
 
-        std::thread::sleep(Duration::from_secs(30));
+        idle(&app_state, Duration::from_secs(30));
+    }
+}
+
+/// Wait between passes, waking early when the user asks for a refresh.
+///
+/// Plain `sleep(30s)` would leave a refresh button looking dead for up to
+/// half a minute after it was pressed.
+fn idle(app_state: &Arc<Mutex<AppState>>, total: Duration) {
+    const SLICE: Duration = Duration::from_millis(500);
+    let mut waited = Duration::ZERO;
+    while waited < total {
+        std::thread::sleep(SLICE);
+        waited += SLICE;
+        // Peek only; the request is consumed at the top of the next pass.
+        if app_state.lock().is_ok_and(|s| s.stratz_refresh_requested) {
+            return;
+        }
     }
 }
 
@@ -243,6 +272,28 @@ mod tests {
         assert!(snapshot.enabled);
         assert_eq!(snapshot.hero_count, 127);
         assert!(snapshot.refreshing);
+    }
+
+    #[test]
+    fn a_requested_refresh_ends_the_wait_early() {
+        let state = AppState::new();
+        state.lock().unwrap().stratz_refresh_requested = true;
+
+        let started = std::time::Instant::now();
+        idle(&state, Duration::from_secs(30));
+
+        // The button must not appear dead for the rest of the poll interval.
+        assert!(started.elapsed() < Duration::from_secs(3), "{:?}", started.elapsed());
+        // Peeked, not consumed: the next pass is what acts on it.
+        assert!(state.lock().unwrap().stratz_refresh_requested);
+    }
+
+    #[test]
+    fn an_idle_wait_runs_its_full_course() {
+        let state = AppState::new();
+        let started = std::time::Instant::now();
+        idle(&state, Duration::from_millis(1_500));
+        assert!(started.elapsed() >= Duration::from_millis(1_400), "{:?}", started.elapsed());
     }
 
     #[test]

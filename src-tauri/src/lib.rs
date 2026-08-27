@@ -227,6 +227,7 @@ pub fn run() {
             commands::stratz::set_stratz_token,
             commands::stratz::clear_stratz_token,
             commands::stratz::get_draft_advice,
+            commands::stratz::refresh_stratz_dataset,
             commands::waves::get_wave_lane_paths,
             commands::waves::get_wave_snapshot,
             commands::overlay::show_wave_overlay,

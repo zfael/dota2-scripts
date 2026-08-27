@@ -160,6 +160,11 @@ cache_ttl_hours = 24
 # Position 1-5 you are queuing for; 0 applies no role filter. Normally set
 # from the Draft page rather than here.
 position = 0
+# Suggest only commonly picked heroes: those picked at least 1.5x as often as
+# the average hero, which is about 25 of 127 overall and 23-31 per role. Off by
+# default — the sharpest counter to a lineup is often an unpopular hero.
+# Normally toggled from the Draft page.
+meta_only = false
 # Matchup sample size trusted at half weight: a matchup contributes
 # matches/(matches+shrink_k). Without this a 3-game 100% matchup outranks a
 # 4000-game 54% one.

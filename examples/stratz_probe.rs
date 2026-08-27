@@ -175,6 +175,7 @@ fn advise_sample(d: &StratzDataset) {
             allies: Vec::new(),
             enemies: enemies.clone(),
             position: Some(position),
+            meta_only: false,
         };
         let picks = recommend(d, &ctx, &AdviceWeights::default(), 8);
         println!("\n-- as position {} --", position + 1);

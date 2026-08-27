@@ -11,6 +11,8 @@ export interface StratzStatus {
   hasToken: boolean;
   /** Position 1-5 being queued for; 0 means no role filter. */
   position: number;
+  /** Suggestions are restricted to commonly picked heroes. */
+  metaOnly: boolean;
   /** A usable dataset is loaded. */
   ready: boolean;
   refreshing: boolean;
@@ -29,6 +31,20 @@ export interface StratzStatus {
   lastError: string | null;
 }
 
+/** How a suggestion relates to one hero already in the draft. */
+export interface MatchupDetail {
+  slug: string;
+  displayName: string;
+  /**
+   * Win-rate offset over this pick's own baseline, as a fraction: +0.05 means
+   * five points better than the hero's average.
+   */
+  offset: number;
+  matches: number;
+  /** The sample-shrunk value that actually entered the score. */
+  contribution: number;
+}
+
 export interface Suggestion {
   slug: string;
   displayName: string;
@@ -39,8 +55,16 @@ export interface Suggestion {
   synergy: number;
   /** Win rate in the selected role, where measured. */
   positionWinRate: number | null;
+  /**
+   * Share of matches this hero is picked in — restricted to the selected role
+   * when there is one. `null` where the refresh never fetched the hero.
+   */
+  pickRate: number | null;
   /** The enemy this pick most counters. */
   bestAgainst: string | null;
+  /** Every enemy in draft order, so weak matchups are visible too. */
+  vsEnemies: MatchupDetail[];
+  withAllies: MatchupDetail[];
   /** Games behind the counter term, so the UI can show its weight. */
   counterSamples: number;
 }
@@ -61,6 +85,7 @@ export const EMPTY_STRATZ_STATUS: StratzStatus = {
   enabled: false,
   hasToken: false,
   position: 0,
+  metaOnly: false,
   ready: false,
   refreshing: false,
   progress: 0,
@@ -76,6 +101,15 @@ export const EMPTY_DRAFT_ADVICE: DraftAdvice = {
   unresolved: [],
   alliesUsed: 0,
   enemiesUsed: 0,
+};
+
+/** Role names on their own, for inline prose like "54% win as Mid". */
+export const POSITION_SHORT: Record<number, string> = {
+  1: "Carry",
+  2: "Mid",
+  3: "Offlane",
+  4: "Soft support",
+  5: "Hard support",
 };
 
 export const POSITION_LABELS: Record<number, string> = {

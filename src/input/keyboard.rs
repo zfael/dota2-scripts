@@ -1516,6 +1516,7 @@ mod tests {
             draft_corrections: Vec::new(),
             stratz_dataset: None,
             stratz_status: None,
+            stratz_refresh_requested: false,
         };
 
         let snapshot = KeyboardSnapshot::from_runtime(&settings, &state);
@@ -1547,6 +1548,7 @@ mod tests {
             draft_corrections: Vec::new(),
             stratz_dataset: None,
             stratz_status: None,
+            stratz_refresh_requested: false,
         };
 
         let snapshot = KeyboardSnapshot::from_runtime(&settings, &state);

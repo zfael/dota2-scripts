@@ -16,6 +16,16 @@ interface StratzStore {
   saveToken: (token: string) => Promise<boolean>;
   clearToken: () => Promise<void>;
   setPosition: (position: number) => Promise<void>;
+  setMetaOnly: (metaOnly: boolean) => Promise<void>;
+  /** Rebuild the dataset now, without waiting for the cache to expire. */
+  refreshDataset: () => Promise<void>;
+  /**
+   * True between the click and the worker reporting `refreshing`. The worker
+   * picks the request up within a second, and a button that does nothing for
+   * that second reads as broken.
+   */
+  requestingRefresh: boolean;
+  refreshError: string | null;
 }
 
 // Matches the reader's capture cadence; the dataset itself changes at most
@@ -27,12 +37,19 @@ export const useStratzStore = create<StratzStore>((set, get) => ({
   advice: EMPTY_DRAFT_ADVICE,
   savingToken: false,
   tokenError: null,
+  requestingRefresh: false,
+  refreshError: null,
 
   fetchStatus: async () => {
     if (!isTauri()) return;
     try {
       const { invoke } = await import("@tauri-apps/api/core");
-      set({ status: await invoke<StratzStatus>("get_stratz_status") });
+      const status = await invoke<StratzStatus>("get_stratz_status");
+      set((s) => ({
+        status,
+        // The worker has taken the request; its own flag drives the UI now.
+        requestingRefresh: s.requestingRefresh && !status.refreshing,
+      }));
     } catch (e) {
       console.error("Failed to fetch STRATZ status:", e);
     }
@@ -94,6 +111,36 @@ export const useStratzStore = create<StratzStore>((set, get) => ({
       await get().fetchAdvice();
     } catch (e) {
       console.error("Failed to set draft position:", e);
+    }
+  },
+
+  setMetaOnly: async (metaOnly) => {
+    if (!isTauri()) return;
+    // Optimistic for the same reason as the role selector: the list has to
+    // change the instant the toggle moves.
+    set((s) => ({ status: { ...s.status, metaOnly } }));
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("update_config", {
+        section: "stratz",
+        updates: { meta_only: metaOnly },
+      });
+      await get().fetchAdvice();
+    } catch (e) {
+      console.error("Failed to set the meta filter:", e);
+    }
+  },
+
+  refreshDataset: async () => {
+    if (!isTauri()) return;
+    set({ requestingRefresh: true, refreshError: null });
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("refresh_stratz_dataset");
+      await get().fetchStatus();
+    } catch (e) {
+      // Refused before it started — no token, or one already running.
+      set({ requestingRefresh: false, refreshError: String(e) });
     }
   },
 }));

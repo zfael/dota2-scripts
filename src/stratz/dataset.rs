@@ -117,6 +117,50 @@ impl StratzDataset {
         self.position_share[hero * NUM_POSITIONS + position]
     }
 
+    /// How often each hero is picked, as a share of matches.
+    ///
+    /// Derived rather than fetched: `matchUp` returns one `vs` row per
+    /// opponent, so a hero's row sums to five times the games it played (five
+    /// enemies per game). Across ten heroes per match that makes
+    /// `10 * rowsum / total_rowsum` the share of matches the hero appears in —
+    /// no extra request and no change to the cache format. Measured against
+    /// the live cache the rates sum to exactly 10.000 and the top of the list
+    /// is Pudge, Shadow Fiend, Rubick, Lina, Invoker, which is the meta a
+    /// Divine player would describe.
+    ///
+    /// `position` restricts the rate to one role, scaling by the share of the
+    /// hero's own games played there.
+    ///
+    /// `None` marks a hero the refresh could not fetch. That is missing
+    /// information, not an unpopular hero, and must never be filtered out as
+    /// though it were off-meta.
+    ///
+    /// O(n²) over a 127x127 matrix of `u32` — microseconds, and computed once
+    /// per ranking rather than stored, so no cached dataset has to be rebuilt.
+    pub fn pick_rates(&self, position: Option<usize>) -> Vec<Option<f32>> {
+        let n = self.len();
+        let rowsum: Vec<f64> = (0..n)
+            .map(|i| self.vs_matches[i * n..(i + 1) * n].iter().map(|&m| m as f64).sum())
+            .collect();
+        let total: f64 = rowsum.iter().sum();
+        if total <= 0.0 {
+            return vec![None; n];
+        }
+        rowsum
+            .iter()
+            .enumerate()
+            .map(|(i, &s)| {
+                (s > 0.0).then(|| {
+                    let overall = (10.0 * s / total) as f32;
+                    match position {
+                        Some(p) => overall * self.position_share_of(i, p),
+                        None => overall,
+                    }
+                })
+            })
+            .collect()
+    }
+
     /// Heroes with no matchup data at all.
     ///
     /// Derived rather than stored: an all-zero `vs` row means the fetch never
@@ -458,6 +502,62 @@ mod tests {
         // A complete dataset reports nothing.
         d.vs_matches[n] = 42;
         assert!(d.heroes_without_matchups().is_empty());
+    }
+
+    #[test]
+    fn pick_rates_sum_to_ten_heroes_per_match() {
+        // The invariant that proves the derivation is real arithmetic and not
+        // a plausible-looking ratio: ten heroes appear in every match.
+        let mut d = sample_dataset(&["popular", "rare", "middling"]);
+        let n = 3;
+        for (hero, games) in [(0usize, 4_000u32), (1, 500), (2, 1_500)] {
+            for j in 0..n {
+                if j != hero {
+                    d.vs_matches[hero * n + j] = games;
+                }
+            }
+        }
+        let rates = d.pick_rates(None);
+        let sum: f32 = rates.iter().flatten().sum();
+        assert!((sum - 10.0).abs() < 1e-4, "{sum}");
+        // Ordering follows the sample: 4000 : 1500 : 500.
+        assert!(rates[0].unwrap() > rates[2].unwrap());
+        assert!(rates[2].unwrap() > rates[1].unwrap());
+    }
+
+    #[test]
+    fn a_hero_with_no_matchups_has_no_pick_rate_rather_than_zero() {
+        // Zero would read as "nobody plays this hero" and get it filtered out
+        // of a meta list, when the truth is the refresh never fetched it.
+        let mut d = sample_dataset(&["fetched", "missing"]);
+        d.vs_matches[1] = 900;
+        let rates = d.pick_rates(None);
+        assert!(rates[0].is_some());
+        assert_eq!(rates[1], None);
+    }
+
+    #[test]
+    fn role_pick_rate_scales_by_the_share_played_there() {
+        let mut d = sample_dataset(&["flex", "specialist"]);
+        let n = 2;
+        d.vs_matches[1] = 1_000;
+        d.vs_matches[n] = 1_000;
+        // Same popularity overall; the flex hero plays position 1 half the
+        // time, the specialist almost always.
+        d.position_share[0] = 0.5;
+        d.position_share[NUM_POSITIONS] = 0.9;
+
+        let overall = d.pick_rates(None);
+        assert_eq!(overall[0], overall[1]);
+        let as_carry = d.pick_rates(Some(0));
+        assert!((as_carry[0].unwrap() / as_carry[1].unwrap() - 0.5 / 0.9).abs() < 1e-5);
+    }
+
+    #[test]
+    fn pick_rates_on_an_empty_dataset_are_all_unknown() {
+        assert!(StratzDataset::default().pick_rates(None).is_empty());
+        let d = sample_dataset(&["a", "b"]);
+        assert_eq!(d.pick_rates(None), vec![None, None]);
     }
 
     #[test]

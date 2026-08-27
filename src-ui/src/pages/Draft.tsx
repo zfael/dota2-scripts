@@ -1,18 +1,51 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "../components/common/Card";
 import { Toggle } from "../components/common/Toggle";
+import { heroName, heroPortraitUrl } from "../lib/heroes";
 import { useConfigStore } from "../stores/configStore";
 import { useDraftStore } from "../stores/draftStore";
 import { useStratzStore } from "../stores/stratzStore";
 import type { DraftSlot } from "../types/draft";
-import { POSITION_LABELS } from "../types/stratz";
+import type { MatchupDetail, Suggestion } from "../types/stratz";
+import { POSITION_LABELS, POSITION_SHORT } from "../types/stratz";
 
-/** `skeleton_king` -> `Skeleton King`, for display only. */
-function heroDisplayName(slug: string): string {
-  return slug
-    .split("_")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
+/**
+ * Valve's portrait for a hero, falling back to the name if it cannot load.
+ *
+ * The art is fetched from Steam's CDN rather than bundled, so an offline
+ * client — or a hero too new for the CDN — has to degrade to something
+ * readable instead of a broken image.
+ */
+function HeroPortrait({
+  slug,
+  className = "h-8 w-[57px]",
+}: {
+  slug: string;
+  className?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return (
+      <div
+        className={`${className} flex shrink-0 items-center justify-center rounded border border-border bg-elevated text-[9px] font-medium uppercase text-muted`}
+        title={heroName(slug)}
+      >
+        {heroName(slug).slice(0, 3)}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={heroPortraitUrl(slug)}
+      alt={heroName(slug)}
+      title={heroName(slug)}
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className={`${className} shrink-0 rounded border border-border object-cover`}
+    />
+  );
 }
 
 function StatusBar() {
@@ -48,10 +81,7 @@ function StatusBar() {
         <>
           <span className="text-border">|</span>
           <span className="text-subtle">
-            You:{" "}
-            <span className="font-medium text-gold">
-              {heroDisplayName(status.ownHero.replace("npc_dota_hero_", ""))}
-            </span>
+            You: <span className="font-medium text-gold">{heroName(status.ownHero)}</span>
           </span>
         </>
       )}
@@ -79,13 +109,16 @@ function SlotRow({ slot }: { slot: DraftSlot }) {
         {(slot.index % 5) + 1}
       </span>
 
+      {slot.hero && <HeroPortrait slug={slot.hero} className="h-7 w-[50px]" />}
+
       <div className="min-w-0 flex-1">
         {slot.hero ? (
           <div>
-            <span className="text-sm font-medium text-content">
-              {heroDisplayName(slot.hero)}
-            </span>
-            <span className="ml-2 font-mono text-[10px] text-muted">
+            <span className="text-sm font-medium text-content">{heroName(slot.hero)}</span>
+            <span
+              className="ml-2 font-mono text-[10px] text-muted"
+              title="How consistently the frames agreed on this hero"
+            >
               {Math.round(slot.agreement * 100)}%
             </span>
           </div>
@@ -295,24 +328,284 @@ function RoleSelector() {
   );
 }
 
+/** A signed win-rate offset, coloured by which way it points. */
+function MatchupCell({ detail, kind }: { detail: MatchupDetail; kind: "vs" | "with" }) {
+  if (detail.matches === 0) {
+    return (
+      <span
+        className="text-center font-mono text-[11px] text-muted"
+        title={`No recorded games ${kind === "vs" ? "against" : "alongside"} ${detail.displayName}`}
+      >
+        —
+      </span>
+    );
+  }
+
+  const points = detail.offset * 100;
+  const good = points >= 0;
+  return (
+    <span
+      className={`text-center font-mono text-[11px] ${good ? "text-green-400" : "text-red-400"}`}
+      title={
+        `${good ? "+" : ""}${points.toFixed(1)} points ${
+          kind === "vs" ? "better than its own average into" : "better than its own average with"
+        } ${detail.displayName}, over ${detail.matches.toLocaleString()} games. ` +
+        `Counts as ${detail.contribution >= 0 ? "+" : ""}${(detail.contribution * 100).toFixed(
+          1,
+        )} after weighting for that sample.`
+      }
+    >
+      {good ? "+" : ""}
+      {points.toFixed(1)}
+    </span>
+  );
+}
+
+/**
+ * One ranked pick as a row of the matchup table.
+ *
+ * The previous panel gave three summed numbers per hero and one "best vs"
+ * line — which named the same enemy for nine of twelve picks, so it carried
+ * nothing. Here every enemy gets its own column: the ranking is visible as
+ * evidence rather than asserted.
+ */
+function SuggestionRow({
+  rank,
+  suggestion,
+  topScore,
+  columns,
+  position,
+}: {
+  rank: number;
+  suggestion: Suggestion;
+  topScore: number;
+  columns: string;
+  position: number;
+}) {
+  const s = suggestion;
+  // The bar is relative to the best pick on offer; the raw score is a sum of
+  // win-rate offsets and means nothing on its own.
+  const fit = topScore > 0 ? Math.max(0.04, Math.min(1, s.score / topScore)) : 0;
+  const role = POSITION_SHORT[position];
+
+  return (
+    <div
+      className="grid items-center gap-x-2 rounded-md border border-border bg-elevated px-2 py-1.5"
+      style={{ gridTemplateColumns: columns }}
+    >
+      <span className="text-center font-mono text-xs text-muted">{rank}</span>
+      <HeroPortrait slug={s.slug} className="h-7 w-[50px]" />
+      <span className="truncate text-sm font-medium text-content" title={s.displayName}>
+        {s.displayName}
+      </span>
+
+      <span
+        className="text-right font-mono text-[11px] text-subtle"
+        title={
+          s.positionWinRate === null
+            ? "No measured win rate for this role"
+            : `Win rate${role ? ` as ${role}` : ""} in this bracket`
+        }
+      >
+        {s.positionWinRate === null ? "—" : `${(s.positionWinRate * 100).toFixed(1)}%`}
+      </span>
+
+      <span
+        className="text-right font-mono text-[11px] text-subtle"
+        title={
+          s.pickRate === null
+            ? "Popularity unknown — STRATZ never returned this hero's matchups"
+            : `Picked in ${(s.pickRate * 100).toFixed(1)}% of matches${
+                role ? ` as ${role}` : ""
+              }`
+        }
+      >
+        {s.pickRate === null ? "—" : `${(s.pickRate * 100).toFixed(1)}%`}
+      </span>
+
+      <span
+        className="flex items-center"
+        title={
+          `Fit relative to the best pick on offer. Counters ${
+            s.counter >= 0 ? "+" : ""
+          }${(s.counter * 100).toFixed(1)}, synergy ${s.synergy >= 0 ? "+" : ""}${(
+            s.synergy * 100
+          ).toFixed(1)}, over ${s.counterSamples.toLocaleString()} matchup games.`
+        }
+      >
+        <span className="h-1.5 w-full overflow-hidden rounded-full bg-surface">
+          <span
+            className="block h-full rounded-full bg-gold"
+            style={{ width: `${fit * 100}%` }}
+          />
+        </span>
+      </span>
+
+      {s.vsEnemies.map((d) => (
+        <MatchupCell key={`vs-${d.slug}`} detail={d} kind="vs" />
+      ))}
+      {s.withAllies.map((d) => (
+        <MatchupCell key={`with-${d.slug}`} detail={d} kind="with" />
+      ))}
+    </div>
+  );
+}
+
+/** Column headings: the enemies and allies each column is measured against. */
+function SuggestionHeader({
+  sample,
+  columns,
+}: {
+  sample: Suggestion;
+  columns: string;
+}) {
+  const vsSpan = sample.vsEnemies.length;
+  const withSpan = sample.withAllies.length;
+
+  return (
+    <div className="space-y-1">
+      {(vsSpan > 0 || withSpan > 0) && (
+        <div className="grid gap-x-2 px-2" style={{ gridTemplateColumns: columns }}>
+          <span className="col-span-6" />
+          {vsSpan > 0 && (
+            <span
+              className="text-center text-[10px] uppercase tracking-wider text-red-400/80"
+              style={{ gridColumn: `span ${vsSpan}` }}
+            >
+              against
+            </span>
+          )}
+          {withSpan > 0 && (
+            <span
+              className="text-center text-[10px] uppercase tracking-wider text-blue-300/80"
+              style={{ gridColumn: `span ${withSpan}` }}
+            >
+              with
+            </span>
+          )}
+        </div>
+      )}
+
+      <div
+        className="grid items-end gap-x-2 px-2 pb-1"
+        style={{ gridTemplateColumns: columns }}
+      >
+        <span />
+        <span />
+        <span className="text-[10px] uppercase tracking-wider text-muted">hero</span>
+        <span className="text-right text-[10px] uppercase tracking-wider text-muted">win</span>
+        <span className="text-right text-[10px] uppercase tracking-wider text-muted">picked</span>
+        <span className="text-[10px] uppercase tracking-wider text-muted">fit</span>
+        {[...sample.vsEnemies, ...sample.withAllies].map((d, i) => (
+          <span key={`${d.slug}-${i}`} className="flex justify-center">
+            <HeroPortrait slug={d.slug} className="h-6 w-[42px]" />
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AdviceList({ suggestions, position }: { suggestions: Suggestion[]; position: number }) {
+  const sample = suggestions[0];
+  const cells = sample.vsEnemies.length + sample.withAllies.length;
+  // `repeat(0, ...)` is not valid CSS, and the first suggestions arrive before
+  // any hero is identified — an invalid template would drop the whole grid.
+  const columns =
+    "1.25rem 3.25rem minmax(7rem, 1fr) 3.5rem 3.5rem 4rem" +
+    (cells > 0 ? ` repeat(${cells}, 3.25rem)` : "");
+  const topScore = sample.score;
+  // A wide draft (five enemies and four allies) exceeds a narrow window;
+  // scroll the table rather than crushing the hero names.
+  const minWidth = 420 + cells * 60;
+
+  return (
+    <div className="overflow-x-auto">
+      <div style={{ minWidth }}>
+        <SuggestionHeader sample={sample} columns={columns} />
+        <div className="space-y-1">
+          {suggestions.map((s, i) => (
+            <SuggestionRow
+              key={s.slug}
+              rank={i + 1}
+              suggestion={s}
+              topScore={topScore}
+              columns={columns}
+              position={position}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** "3 hours ago" — the form that answers "is this stale?" at a glance. */
+function timeAgo(unixSeconds: number): string {
+  const minutes = Math.max(0, Math.round((Date.now() / 1000 - unixSeconds) / 60));
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  return `${Math.round(hours / 24)} days ago`;
+}
+
+/** Progress of a rebuild, as a strip that does not displace the advice. */
+function RefreshProgress({ progress }: { progress: number }) {
+  return (
+    <div className="space-y-1 rounded-md border border-gold/30 bg-gold/5 px-3 py-2">
+      <p className="text-xs text-gold">
+        Rebuilding the matchup dataset — about a minute at the free rate limit.
+      </p>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-elevated">
+        <div
+          className="h-full rounded-full bg-gold transition-all"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** Manual rebuild, for when the 24h cache has not expired but a patch landed. */
+function RefreshButton() {
+  const status = useStratzStore((s) => s.status);
+  const requesting = useStratzStore((s) => s.requestingRefresh);
+  const refreshDataset = useStratzStore((s) => s.refreshDataset);
+  const busy = requesting || status.refreshing;
+
+  return (
+    <button
+      onClick={() => refreshDataset()}
+      disabled={busy}
+      title={
+        busy
+          ? "A rebuild is already running"
+          : "Fetch the current matchup data from STRATZ now — about a minute"
+      }
+      className="rounded border border-border px-2 py-0.5 text-[11px] text-subtle transition-colors hover:border-gold/50 hover:text-gold disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      {busy ? "Refreshing…" : "Refresh now"}
+    </button>
+  );
+}
+
 function AdvicePanel() {
   const status = useStratzStore((s) => s.status);
   const advice = useStratzStore((s) => s.advice);
+  const setMetaOnly = useStratzStore((s) => s.setMetaOnly);
+  const refreshError = useStratzStore((s) => s.refreshError);
   const draft = useDraftStore((s) => s.status);
 
-  if (status.refreshing) {
+  // Only when there is nothing to show. A rebuild started mid-draft used to
+  // replace the whole panel for a minute, taking the advice off screen at the
+  // exact moment it is needed — with a dataset loaded, the old numbers stay
+  // up and the progress strip goes above them.
+  if (status.refreshing && !status.ready) {
     return (
       <Card title="Draft advice">
         <div className="space-y-2">
-          <p className="text-sm text-subtle">
-            Building the matchup dataset — about a minute, once a day.
-          </p>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-elevated">
-            <div
-              className="h-full rounded-full bg-gold transition-all"
-              style={{ width: `${status.progress}%` }}
-            />
-          </div>
+          <RefreshProgress progress={status.progress} />
           <p className="text-xs text-muted">
             Suggestions then come from the local cache, with no network call
             during a draft.
@@ -335,6 +628,10 @@ function AdvicePanel() {
               below keeps working regardless.
             </p>
           )}
+          <div className="flex items-center gap-2">
+            <RefreshButton />
+            {refreshError && <span className="text-[11px] text-red-400">{refreshError}</span>}
+          </div>
         </div>
       </Card>
     );
@@ -347,7 +644,26 @@ function AdvicePanel() {
   return (
     <Card title="Draft advice">
       <div className="space-y-3">
-        <RoleSelector />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <RoleSelector />
+          <div
+            title={
+              "Only heroes picked at least 1.5x as often as the average hero — about 25 of 127, " +
+              "or roughly two dozen per role. Leave it off to see the sharpest counter to this " +
+              "lineup, which is often a hero nobody plays."
+            }
+          >
+            <Toggle
+              label="Meta picks only"
+              checked={status.metaOnly}
+              onChange={(v) => setMetaOnly(v)}
+            />
+          </div>
+        </div>
+
+        {/* Kept above the list rather than replacing it: a rebuild started
+            mid-draft must not take the advice off screen. */}
+        {status.refreshing && <RefreshProgress progress={status.progress} />}
 
         {advice.suggestions.length === 0 ? (
           <p className="text-sm text-muted">
@@ -356,58 +672,25 @@ function AdvicePanel() {
               : "Suggestions appear as heroes are identified."}
           </p>
         ) : (
-          <div className="space-y-1">
-            {advice.suggestions.map((s, i) => (
-              <div
-                key={s.slug}
-                className="flex items-center gap-3 rounded-md border border-border bg-elevated px-3 py-2"
-              >
-                <span className="w-5 shrink-0 font-mono text-xs text-muted">
-                  {i + 1}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-sm font-medium text-content">
-                  {s.displayName}
-                </span>
-                {s.positionWinRate !== null && (
-                  <span className="shrink-0 font-mono text-[11px] text-subtle">
-                    {(s.positionWinRate * 100).toFixed(1)}% wr
-                  </span>
-                )}
-                {/* Counter and synergy are shown split rather than as one
-                    number, so it is clear whether a pick is being suggested
-                    against the enemy or alongside your own team. */}
-                <span
-                  className="shrink-0 font-mono text-[11px] text-green-400"
-                  title={`Countering the enemy lineup${
-                    s.counterSamples ? ` — ${s.counterSamples.toLocaleString()} games` : ""
-                  }`}
-                >
-                  vs {s.counter >= 0 ? "+" : ""}
-                  {(s.counter * 100).toFixed(1)}
-                </span>
-                {advice.alliesUsed > 0 && (
-                  <span
-                    className="shrink-0 font-mono text-[11px] text-blue-300"
-                    title="Synergy with your existing picks"
-                  >
-                    with {s.synergy >= 0 ? "+" : ""}
-                    {(s.synergy * 100).toFixed(1)}
-                  </span>
-                )}
-                {s.bestAgainst && (
-                  <span className="hidden shrink-0 text-[11px] text-muted lg:inline">
-                    best vs {s.bestAgainst}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
+          <>
+            <AdviceList suggestions={advice.suggestions} position={status.position} />
+            {/* The one sentence that makes the numbers readable. Without it
+                a column of "+10.3" is just a number the user has to trust. */}
+            <p className="text-[11px] text-muted">
+              Each column is one hero already in the draft.{" "}
+              <span className="text-green-400">+10.3</span> means this pick wins 10.3 points
+              more often than its own average when that hero is on the other side;{" "}
+              <span className="text-red-400">-2.6</span> means the reverse. Hover any number
+              for the sample behind it. <span className="text-gold">Fit</span> combines those
+              matchups with synergy and the hero&rsquo;s win rate in your role.
+            </p>
+          </>
         )}
 
         {advice.unresolved.length > 0 && (
           <p className="text-xs text-amber-400">
-            Not in the dataset: {advice.unresolved.join(", ")} — the cache
-            predates a patch, so these picks are missing from the advice.
+            Not in the dataset: {advice.unresolved.map(heroName).join(", ")} — the
+            cache predates a patch, so these picks are missing from the advice.
           </p>
         )}
 
@@ -429,11 +712,18 @@ function AdvicePanel() {
           </p>
         )}
 
-        <p className="text-[11px] text-muted">
-          {status.heroCount} heroes · {status.bracket.replace("_", " + ")} ·
-          built {built} · {advice.enemiesUsed} enemy and {advice.alliesUsed}{" "}
-          ally picks counted
-        </p>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <p className="text-[11px] text-muted">
+            {status.metaOnly ? "Meta picks only · " : ""}
+            {status.heroCount} heroes · {status.bracket.replace("_", " + ")} ·{" "}
+            <span title={`Dataset built ${built}`}>
+              built {status.builtAt ? timeAgo(status.builtAt) : "unknown"}
+            </span>{" "}
+            · {advice.enemiesUsed} enemy and {advice.alliesUsed} ally picks counted
+          </p>
+          <RefreshButton />
+          {refreshError && <span className="text-[11px] text-red-400">{refreshError}</span>}
+        </div>
       </div>
     </Card>
   );
@@ -464,7 +754,7 @@ export default function Draft() {
 
   useEffect(() => {
     if (stratz.ready) fetchAdvice();
-  }, [lineupSignature, stratz.ready, stratz.position, fetchAdvice]);
+  }, [lineupSignature, stratz.ready, stratz.position, stratz.metaOnly, fetchAdvice]);
 
   const allies = status.slots.filter((s) => s.isAlly);
   const enemies = status.slots.filter((s) => !s.isAlly);

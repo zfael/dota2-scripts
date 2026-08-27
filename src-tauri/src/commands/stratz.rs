@@ -3,9 +3,10 @@
 //! The token never travels back to the UI. `get_stratz_status` reports only
 //! *whether* one is set; `get_config` blanks it (see `config::redacted`).
 
-use crate::ipc_types::{DraftAdviceDto, StratzStatusDto, SuggestionDto};
+use crate::ipc_types::{DraftAdviceDto, MatchupDetailDto, StratzStatusDto, SuggestionDto};
 use crate::TauriAppState;
 use dota2_scripts::stratz::advice::advise;
+use dota2_scripts::stratz::advisor::MatchupDetail;
 use dota2_scripts::stratz::client::{StratzClient, StratzError};
 use tauri::{AppHandle, Emitter};
 use tracing::warn;
@@ -22,6 +23,7 @@ pub fn get_stratz_status(state: tauri::State<'_, TauriAppState>) -> Result<Strat
     let has_token = !StratzClient::resolve_token(&settings.stratz.api_token).is_empty();
     let enabled = settings.stratz.enabled;
     let position = settings.stratz.position;
+    let meta_only = settings.stratz.meta_only;
     drop(settings);
 
     let app = state
@@ -34,6 +36,7 @@ pub fn get_stratz_status(state: tauri::State<'_, TauriAppState>) -> Result<Strat
         enabled,
         has_token,
         position,
+        meta_only,
         ready: snapshot.ready,
         refreshing: snapshot.refreshing,
         progress: snapshot.progress,
@@ -114,6 +117,37 @@ pub fn clear_stratz_token(
     Ok(())
 }
 
+/// Ask the background worker to rebuild the dataset now.
+///
+/// The refresh itself stays with the worker rather than running here: it is a
+/// minute of throttled requests, and two of them racing would have both
+/// writing the same cache file. This only raises the flag the worker takes on
+/// its next pass, which is within a second.
+#[tauri::command]
+pub fn refresh_stratz_dataset(state: tauri::State<'_, TauriAppState>) -> Result<(), String> {
+    let has_token = {
+        let settings = state
+            .settings
+            .lock()
+            .map_err(|e| format!("Failed to lock settings: {}", e))?;
+        !StratzClient::resolve_token(&settings.stratz.api_token).is_empty()
+    };
+    if !has_token {
+        return Err("Connect a STRATZ token first".to_string());
+    }
+
+    let mut app = state
+        .app_state
+        .lock()
+        .map_err(|e| format!("Failed to lock app state: {}", e))?;
+    // Clicking twice must not queue a second rebuild behind the first.
+    if app.stratz_status.as_ref().is_some_and(|s| s.refreshing) {
+        return Err("A refresh is already running".to_string());
+    }
+    app.stratz_refresh_requested = true;
+    Ok(())
+}
+
 /// Rank picks for the draft currently on screen.
 ///
 /// Reads the live lineup from the draft reader, so the UI does not have to
@@ -157,7 +191,10 @@ pub fn get_draft_advice(state: tauri::State<'_, TauriAppState>) -> Result<DraftA
                 counter: s.counter,
                 synergy: s.synergy,
                 position_win_rate: s.position_win_rate,
+                pick_rate: s.pick_rate,
                 best_against: s.best_against.as_ref().map(|(name, _)| name.clone()),
+                vs_enemies: s.vs_enemies.iter().map(detail).collect(),
+                with_allies: s.with_allies.iter().map(detail).collect(),
                 counter_samples: s.counter_samples,
             })
             .collect(),
@@ -165,4 +202,14 @@ pub fn get_draft_advice(state: tauri::State<'_, TauriAppState>) -> Result<DraftA
         allies_used: advice.allies_used,
         enemies_used: advice.enemies_used,
     })
+}
+
+fn detail(d: &MatchupDetail) -> MatchupDetailDto {
+    MatchupDetailDto {
+        slug: d.slug.clone(),
+        display_name: d.display_name.clone(),
+        offset: d.offset,
+        matches: d.matches,
+        contribution: d.contribution,
+    }
 }
