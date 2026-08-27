@@ -19,10 +19,19 @@ const ENDPOINT: &str = "https://api.stratz.com/graphql";
 /// STRATZ requires this exact user agent.
 const USER_AGENT: &str = "STRATZ_API";
 
-/// Free-tier limits are 20/sec, 250/min, 2000/hour. The minute limit binds
-/// first for a bulk refresh, so requests are spaced to stay under it with
-/// margin (250/min would be 240ms; 300ms leaves room for retries).
-const MIN_REQUEST_INTERVAL: Duration = Duration::from_millis(300);
+/// Published limits for a STRATZ Default Token, as `(window_ms, max_calls)`.
+///
+/// All four are enforced together by [`RateLimiter`]. Enforcing them as
+/// *sliding* windows is strictly stricter than the fixed windows a server
+/// typically uses — never exceeding N in any sliding window implies never
+/// exceeding N in any fixed one — so matching the published numbers exactly
+/// is safe rather than borderline.
+const RATE_LIMITS: [(u64, usize); 4] = [
+    (1_000, 20),         // 20 / second
+    (60_000, 250),       // 250 / minute
+    (3_600_000, 2_000),  // 2,000 / hour
+    (86_400_000, 10_000) // 10,000 / day
+];
 
 /// STRATZ returns 503 in bursts under load — measured at roughly half of all
 /// requests during one such spell, hitting the cheapest query as readily as
@@ -30,6 +39,11 @@ const MIN_REQUEST_INTERVAL: Duration = Duration::from_millis(300);
 /// seconds. It is their instability, not our pacing, so the only useful
 /// response is to keep trying for a while.
 const MAX_RETRIES: u32 = 6;
+
+/// Attempts for a request the whole refresh depends on. At an observed 80%
+/// failure rate, six attempts lose everything 26% of the time; sixteen brings
+/// that under 3%, spread across roughly two minutes of backoff.
+const PERSISTENT_RETRIES: u32 = 16;
 
 /// First backoff step; doubles each attempt, so six attempts span ~15s.
 const INITIAL_BACKOFF: Duration = Duration::from_millis(500);
@@ -83,10 +97,85 @@ impl fmt::Display for StratzError {
 
 impl std::error::Error for StratzError {}
 
+/// Sliding-window limiter enforcing every published tier at once.
+///
+/// Every outbound request passes through this, **including retries** — a
+/// retry is an API call and counts against the same budget. The previous
+/// fixed 300ms spacing did not account for them, so a burst of 503s could
+/// quietly multiply the real call rate by six.
+#[derive(Debug, Default)]
+struct RateLimiter {
+    /// Millisecond timestamps of recent calls, oldest first.
+    history: std::collections::VecDeque<u64>,
+}
+
+impl RateLimiter {
+    /// How long to wait before a call at `now_ms` would be within every
+    /// window. Pure, so the policy is testable without sleeping.
+    fn delay_ms(history: &std::collections::VecDeque<u64>, now_ms: u64) -> u64 {
+        let mut wait = 0u64;
+        for (window, max) in RATE_LIMITS {
+            // Measured as age rather than against a `now - window` cutoff:
+            // that form saturates at the clock's origin, where it silently
+            // treats the calls already made as having aged out.
+            let in_window = history
+                .iter()
+                .rev()
+                .take_while(|&&t| now_ms.saturating_sub(t) < window)
+                .count();
+            if in_window < max {
+                continue;
+            }
+            // The oldest call inside this window has to age out before
+            // another is allowed.
+            let nth_newest = history.len().saturating_sub(max);
+            if let Some(&oldest) = history.get(nth_newest) {
+                wait = wait.max((oldest + window).saturating_sub(now_ms));
+            }
+        }
+        wait
+    }
+
+    /// Block until a call is permitted, then record it.
+    fn acquire(&mut self, started: Instant) {
+        loop {
+            let now = started.elapsed().as_millis() as u64;
+            self.prune(now);
+            let wait = Self::delay_ms(&self.history, now);
+            if wait == 0 {
+                self.history.push_back(now);
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(wait.min(60_000)));
+        }
+    }
+
+    /// Drop calls older than the longest window, bounding memory at the
+    /// daily cap.
+    ///
+    /// Age-based for the same reason as [`Self::delay_ms`]: a `now - window`
+    /// cutoff saturates at zero, and since the clock restarts with every
+    /// client, that is where a refresh actually runs. In that form the second
+    /// call of every refresh discarded the first, and so on — the limiter
+    /// would have tracked almost nothing.
+    fn prune(&mut self, now_ms: u64) {
+        let longest = RATE_LIMITS.iter().map(|(w, _)| *w).max().unwrap_or(0);
+        while self
+            .history
+            .front()
+            .is_some_and(|&t| now_ms.saturating_sub(t) >= longest)
+        {
+            self.history.pop_front();
+        }
+    }
+}
+
 pub struct StratzClient {
     http: reqwest::blocking::Client,
     token: String,
-    last_request: Option<Instant>,
+    limiter: RateLimiter,
+    /// Monotonic origin for the limiter's timestamps.
+    started: Instant,
 }
 
 // Hand-written so the token cannot escape through a derived Debug anywhere up
@@ -117,7 +206,8 @@ impl StratzClient {
                 .build()
                 .unwrap_or_default(),
             token: token.into(),
-            last_request: None,
+            limiter: RateLimiter::default(),
+            started: Instant::now(),
         }
     }
 
@@ -141,6 +231,29 @@ impl StratzClient {
         query: &str,
         variables: serde_json::Value,
     ) -> Result<serde_json::Value, StratzError> {
+        self.query_with_retries(query, variables, MAX_RETRIES)
+    }
+
+    /// Like [`Self::query`], but keeps trying for much longer.
+    ///
+    /// For the one request everything else depends on. During a spell where
+    /// STRATZ failed 80% of requests, the standard six attempts had a 26%
+    /// chance of losing all six — and losing the hero list aborts the whole
+    /// refresh, where losing any single hero's matchups costs only that hero.
+    pub fn query_persistent(
+        &mut self,
+        query: &str,
+        variables: serde_json::Value,
+    ) -> Result<serde_json::Value, StratzError> {
+        self.query_with_retries(query, variables, PERSISTENT_RETRIES)
+    }
+
+    fn query_with_retries(
+        &mut self,
+        query: &str,
+        variables: serde_json::Value,
+        max_retries: u32,
+    ) -> Result<serde_json::Value, StratzError> {
         if self.token.is_empty() {
             return Err(StratzError::MissingToken);
         }
@@ -148,7 +261,7 @@ impl StratzClient {
         let body = serde_json::json!({ "query": query, "variables": variables });
         let mut backoff = INITIAL_BACKOFF;
 
-        for attempt in 0..MAX_RETRIES {
+        for attempt in 0..max_retries {
             self.throttle();
 
             let response = self
@@ -174,15 +287,18 @@ impl StratzClient {
                         return Err(StratzError::Unauthorized(summarise(&detail)));
                     }
                     if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                        if attempt + 1 == MAX_RETRIES {
+                        if attempt + 1 == max_retries {
                             return Err(StratzError::RateLimited);
                         }
-                        std::thread::sleep(jittered(backoff));
+                        // The server knows when the window reopens; prefer
+                        // its answer to guessing with a backoff curve.
+                        let wait = retry_after(resp.headers()).unwrap_or_else(|| jittered(backoff));
+                        std::thread::sleep(wait.min(MAX_RETRY_AFTER));
                         backoff = (backoff * 2).min(MAX_BACKOFF);
                         continue;
                     }
                     if status.is_server_error() {
-                        if attempt + 1 == MAX_RETRIES {
+                        if attempt + 1 == max_retries {
                             return Err(StratzError::Unavailable(status.as_u16()));
                         }
                         std::thread::sleep(jittered(backoff));
@@ -199,7 +315,7 @@ impl StratzClient {
                     return extract_data(value);
                 }
                 Err(e) => {
-                    if attempt + 1 == MAX_RETRIES {
+                    if attempt + 1 == max_retries {
                         // Deliberately not `{e:?}` — a reqwest error's Debug
                         // can include the request URL and headers.
                         return Err(StratzError::Http(e.to_string()));
@@ -214,14 +330,24 @@ impl StratzClient {
     }
 
     fn throttle(&mut self) {
-        if let Some(last) = self.last_request {
-            let elapsed = last.elapsed();
-            if elapsed < MIN_REQUEST_INTERVAL {
-                std::thread::sleep(MIN_REQUEST_INTERVAL - elapsed);
-            }
-        }
-        self.last_request = Some(Instant::now());
+        self.limiter.acquire(self.started);
     }
+}
+
+/// Cap on an honoured `Retry-After`, so a wildly long value cannot park a
+/// refresh for an hour.
+const MAX_RETRY_AFTER: Duration = Duration::from_secs(60);
+
+/// `Retry-After` as a delay, when the server sends one in delta-seconds form.
+fn retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
+    headers
+        .get(reqwest::header::RETRY_AFTER)?
+        .to_str()
+        .ok()?
+        .trim()
+        .parse::<u64>()
+        .ok()
+        .map(Duration::from_secs)
 }
 
 /// Spread retries over a window instead of hammering in lockstep.
@@ -289,6 +415,143 @@ fn extract_data(value: serde_json::Value) -> Result<serde_json::Value, StratzErr
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Replay `count` calls through the limiter's policy starting at
+    /// `start_ms`, returning the timestamp of each. Pure — no sleeping.
+    fn simulate(count: usize, start_ms: u64) -> Vec<u64> {
+        let mut history = std::collections::VecDeque::new();
+        let mut now = start_ms;
+        let mut out = Vec::with_capacity(count);
+        for _ in 0..count {
+            now += RateLimiter::delay_ms(&history, now);
+            history.push_back(now);
+            out.push(now);
+            // Assume requests return instantly, the worst case for rate.
+        }
+        out
+    }
+
+    /// Highest number of calls found in any sliding window of `window` ms.
+    fn peak_in_window(times: &[u64], window: u64) -> usize {
+        times
+            .iter()
+            .map(|&t| times.iter().filter(|&&o| o > t.saturating_sub(window) && o <= t).count())
+            .max()
+            .unwrap_or(0)
+    }
+
+    #[test]
+    fn every_published_limit_is_respected() {
+        // A day's worth of calls, checked against all four tiers at once.
+        let times = simulate(3_000, 0);
+        for (window, max) in RATE_LIMITS {
+            let peak = peak_in_window(&times, window);
+            assert!(
+                peak <= max,
+                "{peak} calls in a {window}ms window exceeds the limit of {max}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_full_refresh_is_not_slowed_more_than_necessary() {
+        // ~132 requests is one dataset refresh. The minute tier binds first
+        // (250/min = 240ms apart), so it should take about half a minute --
+        // if this regresses to minutes, the limiter is over-throttling.
+        let times = simulate(132, 0);
+        let elapsed = times.last().copied().unwrap_or(0);
+        assert!(elapsed < 45_000, "a refresh took {elapsed}ms");
+        assert!(peak_in_window(&times, 1_000) <= 20);
+    }
+
+    #[test]
+    fn the_per_second_burst_is_capped() {
+        // 20/second is the tightest tier and the easiest to breach, since a
+        // fresh limiter will happily fire the first calls back to back.
+        let times = simulate(25, 0);
+        assert!(peak_in_window(&times, 1_000) <= 20);
+        // The 21st call must wait for the first to age out of the window.
+        assert!(times[20] >= 1_000, "21st call at {}ms", times[20]);
+    }
+
+    #[test]
+    fn retries_count_against_the_budget() {
+        // The bug this replaces: retries went through a fixed 300ms sleep
+        // that tracked nothing, so a burst of 503s could multiply the real
+        // call rate several-fold while appearing to be throttled.
+        let mut history = std::collections::VecDeque::new();
+        let mut now = 0u64;
+        for _ in 0..20 {
+            now += RateLimiter::delay_ms(&history, now);
+            history.push_back(now);
+        }
+        // Twenty calls used the whole second; a retry is a call like any
+        // other and must wait rather than slipping through.
+        assert!(RateLimiter::delay_ms(&history, now) > 0);
+    }
+
+    #[test]
+    fn pruning_bounds_memory_at_the_daily_window() {
+        let mut limiter = RateLimiter::default();
+        limiter.history.extend([0u64, 1, 2, 3]);
+        // A day and a bit later, none of those calls still count.
+        limiter.prune(86_400_000 + 10);
+        assert!(limiter.history.is_empty());
+    }
+
+    #[test]
+    fn pruning_keeps_recent_calls_near_the_clock_origin() {
+        // The limiter's clock restarts with every client, so a refresh runs
+        // near zero. A `now - window` cutoff saturates there and prunes the
+        // calls just recorded, leaving the limiter tracking nothing.
+        let mut limiter = RateLimiter::default();
+        limiter.history.extend([0u64, 50, 100]);
+        limiter.prune(150);
+        assert_eq!(limiter.history.len(), 3, "recent calls were pruned away");
+    }
+
+    #[test]
+    fn a_fresh_client_still_enforces_the_burst_limit() {
+        // End-to-end over the real acquire path, which prunes then decides.
+        // This is the shape of every refresh: a brand new client, clock at
+        // zero, firing requests as fast as it is allowed.
+        let mut limiter = RateLimiter::default();
+        for _ in 0..20 {
+            limiter.prune(0);
+            limiter.history.push_back(0);
+        }
+        limiter.prune(0);
+        assert_eq!(limiter.history.len(), 20);
+        assert!(
+            RateLimiter::delay_ms(&limiter.history, 0) >= 1_000,
+            "the 21st call in the first second was allowed through"
+        );
+    }
+
+    #[test]
+    fn an_idle_client_never_waits() {
+        assert_eq!(RateLimiter::delay_ms(&Default::default(), 0), 0);
+        let mut history = std::collections::VecDeque::new();
+        history.push_back(0u64);
+        // Well past every window: no reason to hold the next call.
+        assert_eq!(RateLimiter::delay_ms(&history, 90_000_000), 0);
+    }
+
+    #[test]
+    fn retry_after_is_read_when_the_server_sends_one() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(reqwest::header::RETRY_AFTER, "30".parse().unwrap());
+        assert_eq!(retry_after(&headers), Some(Duration::from_secs(30)));
+
+        // HTTP-date form is valid but not parsed; falling back to our own
+        // backoff is correct, and must not panic.
+        headers.insert(
+            reqwest::header::RETRY_AFTER,
+            "Wed, 21 Oct 2026 07:28:00 GMT".parse().unwrap(),
+        );
+        assert_eq!(retry_after(&headers), None);
+        assert_eq!(retry_after(&reqwest::header::HeaderMap::new()), None);
+    }
 
     #[test]
     fn graphql_errors_are_failures_even_on_http_200() {

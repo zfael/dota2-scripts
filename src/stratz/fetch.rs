@@ -346,7 +346,9 @@ fn absorb_matchups(
 }
 
 fn fetch_heroes(client: &mut StratzClient) -> Result<Vec<HeroEntry>, StratzError> {
-    let data = client.query(HEROES_QUERY, serde_json::Value::Null)?;
+    // Everything downstream is keyed by hero id, so this one is worth waiting
+    // for: losing it aborts the refresh entirely.
+    let data = client.query_persistent(HEROES_QUERY, serde_json::Value::Null)?;
     Ok(parse_heroes(&data))
 }
 
