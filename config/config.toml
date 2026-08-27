@@ -140,6 +140,36 @@ telemetry_save_every_n = 5
 harvest_enabled = true
 exemplar_dir = "draft_exemplars"
 
+# STRATZ-backed draft advice: counters, synergy and position fit for the role
+# you are queuing. Set up from the Draft page — enable the reader, then paste
+# your own token.
+[stratz]
+enabled = false
+# Leave empty and set the STRATZ_TOKEN environment variable instead to keep the
+# credential off disk. Get one free at stratz.com/api (Steam login -> My
+# Tokens). The token is bound to your account and rate-limited per token, so
+# each user needs their own.
+api_token = ""
+# Rank bracket the statistics describe: DIVINE_IMMORTAL, LEGEND_ANCIENT,
+# CRUSADER_ARCHON, HERALD_GUARDIAN.
+bracket = "DIVINE_IMMORTAL"
+cache_path = "stratz/dataset.bin"
+# Matchup data is a per-patch aggregate; a day between refreshes is generous.
+# A refresh is ~132 requests and takes about a minute at the free rate limit.
+cache_ttl_hours = 24
+# Position 1-5 you are queuing for; 0 applies no role filter. Normally set
+# from the Draft page rather than here.
+position = 0
+# Matchup sample size trusted at half weight: a matchup contributes
+# matches/(matches+shrink_k). Without this a 3-game 100% matchup outranks a
+# 4000-game 54% one.
+shrink_k = 50.0
+# How much a hero's own strength counts next to matchup effects. Kept low on
+# purpose — the point is the matchup, not the tier list.
+base_weight = 0.4
+synergy_weight = 1.0
+suggestion_count = 12
+
 [minimap_capture]
 enabled = false
 minimap_x = 2

@@ -352,6 +352,12 @@ export const mockConfig: Settings = {
     telemetry_save_every_n: 5,
     harvest_enabled: true, exemplar_dir: "draft_exemplars",
   },
+  stratz: {
+    enabled: false, api_token: "", bracket: "DIVINE_IMMORTAL",
+    cache_path: "stratz/dataset.bin", cache_ttl_hours: 24,
+    position: 0, shrink_k: 50, base_weight: 0.4,
+    synergy_weight: 1.0, suggestion_count: 12,
+  },
   minimap_capture: {
     enabled: false, minimap_x: 0, minimap_y: 0,
     minimap_width: 256, minimap_height: 256,

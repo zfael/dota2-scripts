@@ -485,6 +485,7 @@ export interface Settings {
   updates: UpdateConfig;
   rune_alerts: RuneAlertConfig;
   draft: DraftConfig;
+  stratz: StratzConfig;
   minimap_capture: MinimapCaptureConfig;
   minimap_analysis: MinimapAnalysisConfig;
   wave_tracker: WaveTrackerConfig;
@@ -503,6 +504,26 @@ export interface DraftConfig {
   telemetry_save_every_n: number;
   harvest_enabled: boolean;
   exemplar_dir: string;
+}
+
+/// STRATZ-backed draft advice: counters, synergy and position fit.
+export interface StratzConfig {
+  enabled: boolean;
+  /**
+   * Always empty here. The backend redacts the token before sending settings
+   * to any window (see `config::redacted`); use `get_stratz_status().hasToken`
+   * to tell whether one is set, and `set_stratz_token` to change it.
+   */
+  api_token: string;
+  bracket: string;
+  cache_path: string;
+  cache_ttl_hours: number;
+  /** Position 1-5 being queued for; 0 means no role filter. */
+  position: number;
+  shrink_k: number;
+  base_weight: number;
+  synergy_weight: number;
+  suggestion_count: number;
 }
 
 /// Points on Dota's own HUD that automation needs to click. Positions are
