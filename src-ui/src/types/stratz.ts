@@ -17,6 +17,12 @@ export interface StratzStatus {
   /** 0-100 while refreshing. */
   progress: number;
   heroCount: number;
+  /**
+   * Heroes whose matchups the refresh could not fetch — STRATZ failing
+   * requests during the build. They still appear as suggestions but carry no
+   * counter or synergy signal, so this is shown rather than hidden.
+   */
+  incompleteHeroes: number;
   bracket: string;
   /** Unix seconds the dataset was built. */
   builtAt: number;
@@ -59,6 +65,7 @@ export const EMPTY_STRATZ_STATUS: StratzStatus = {
   refreshing: false,
   progress: 0,
   heroCount: 0,
+  incompleteHeroes: 0,
   bracket: "",
   builtAt: 0,
   lastError: null,

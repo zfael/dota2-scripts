@@ -17,6 +17,12 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tracing::{info, warn};
 
+/// How soon to re-attempt a dataset that came back with gaps, regardless of
+/// the configured TTL. Short enough that a refresh caught during a bad spell
+/// at STRATZ heals within the hour; long enough not to add load to a service
+/// that is already failing.
+const PARTIAL_RETRY_HOURS: u64 = 1;
+
 /// What the UI shows about the dataset behind the advice.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct StratzStatusSnapshot {
@@ -29,6 +35,10 @@ pub struct StratzStatusSnapshot {
     pub refreshing: bool,
     pub progress: u8,
     pub hero_count: usize,
+    /// Heroes the refresh could not fetch matchups for. They still appear as
+    /// suggestions but carry no counter or synergy signal, so the UI says so
+    /// rather than presenting the advice as complete.
+    pub incomplete_heroes: usize,
     pub bracket: String,
     /// Unix seconds the loaded dataset was built.
     pub built_at: u64,
@@ -93,16 +103,26 @@ pub fn start_stratz_worker(settings: Arc<Mutex<Settings>>, app_state: Arc<Mutex<
         }
 
         // --- decide whether to refresh ------------------------------------
-        let (needs_refresh, hero_count, built_at, bracket_name) = {
+        let (needs_refresh, hero_count, built_at, bracket_name, incomplete) = {
             let state = app_state.lock().unwrap();
             match &state.stratz_dataset {
                 Some(d) => {
+                    let gaps = d.heroes_without_matchups().len();
+                    // A partial dataset was built during a bad spell at
+                    // STRATZ's end. Retry it well before the normal TTL so
+                    // the gaps fill in once the service recovers, but not so
+                    // eagerly that we hammer a service already struggling.
+                    let ttl = if gaps > 0 {
+                        config.cache_ttl_hours.min(PARTIAL_RETRY_HOURS)
+                    } else {
+                        config.cache_ttl_hours
+                    };
                     // A bracket change invalidates the data even if it is fresh.
-                    let stale = !d.is_fresh(config.cache_ttl_hours, unix_now())
-                        || loaded_bracket != bracket.basic;
-                    (stale, d.len(), d.built_at, d.bracket.clone())
+                    let stale =
+                        !d.is_fresh(ttl, unix_now()) || loaded_bracket != bracket.basic;
+                    (stale, d.len(), d.built_at, d.bracket.clone(), gaps)
                 }
-                None => (true, 0, 0, String::new()),
+                None => (true, 0, 0, String::new(), 0),
             }
         };
 
@@ -111,6 +131,7 @@ pub fn start_stratz_worker(settings: Arc<Mutex<Settings>>, app_state: Arc<Mutex<
             s.has_token = !token.is_empty();
             s.ready = hero_count > 0;
             s.hero_count = hero_count;
+            s.incomplete_heroes = incomplete;
             s.bracket = bracket_name.clone();
             s.built_at = built_at;
         });

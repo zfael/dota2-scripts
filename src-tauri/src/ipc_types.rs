@@ -224,6 +224,9 @@ pub struct StratzStatusDto {
     pub refreshing: bool,
     pub progress: u8,
     pub hero_count: usize,
+    /// Heroes whose matchups the refresh could not fetch. They still appear
+    /// as suggestions but carry no counter or synergy signal.
+    pub incomplete_heroes: usize,
     pub bracket: String,
     pub built_at: u64,
     pub last_error: Option<String>,

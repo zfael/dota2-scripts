@@ -117,6 +117,19 @@ impl StratzDataset {
         self.position_share[hero * NUM_POSITIONS + position]
     }
 
+    /// Heroes with no matchup data at all.
+    ///
+    /// Derived rather than stored: an all-zero `vs` row means the fetch never
+    /// got that hero's matchups. They still appear as suggestions, carrying
+    /// no counter or synergy signal, so the gap has to be visible.
+    pub fn heroes_without_matchups(&self) -> Vec<&str> {
+        let n = self.len();
+        (0..n)
+            .filter(|&i| self.vs_matches[i * n..(i + 1) * n].iter().all(|&m| m == 0))
+            .filter_map(|i| self.heroes.get(i).map(|h| h.slug.as_str()))
+            .collect()
+    }
+
     /// Whether the cache is younger than `ttl_hours`.
     pub fn is_fresh(&self, ttl_hours: u64, now_unix: u64) -> bool {
         if self.built_at == 0 || self.is_empty() {
@@ -427,6 +440,30 @@ mod tests {
         assert_eq!(d.index_of_slug("SkeletonKing"), Some(1));
         assert_eq!(d.index_of_slug("nevermore"), Some(2));
         assert_eq!(d.index_of_slug("not_a_hero"), None);
+    }
+
+    #[test]
+    fn heroes_missing_matchups_are_identifiable() {
+        // A refresh interrupted by STRATZ 503s leaves gaps. Those heroes are
+        // still suggestible but carry no counter signal, so they have to be
+        // reportable rather than silently blending in.
+        let mut d = sample_dataset(&["fetched", "missing", "also_fetched"]);
+        let n = 3;
+        d.vs_matches[1] = 500; // hero 0 has data
+        d.vs_matches[2 * n] = 900; // hero 2 has data
+        // hero 1's whole row stays zero.
+
+        assert_eq!(d.heroes_without_matchups(), vec!["missing"]);
+
+        // A complete dataset reports nothing.
+        d.vs_matches[n] = 42;
+        assert!(d.heroes_without_matchups().is_empty());
+    }
+
+    #[test]
+    fn an_entirely_unfetched_dataset_reports_every_hero() {
+        let d = sample_dataset(&["a", "b"]);
+        assert_eq!(d.heroes_without_matchups(), vec!["a", "b"]);
     }
 
     #[test]

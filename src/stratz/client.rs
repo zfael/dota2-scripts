@@ -12,7 +12,7 @@
 //! `{:?}` on some enclosing struct.
 
 use std::fmt;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const ENDPOINT: &str = "https://api.stratz.com/graphql";
 
@@ -24,7 +24,18 @@ const USER_AGENT: &str = "STRATZ_API";
 /// margin (250/min would be 240ms; 300ms leaves room for retries).
 const MIN_REQUEST_INTERVAL: Duration = Duration::from_millis(300);
 
-const MAX_RETRIES: u32 = 4;
+/// STRATZ returns 503 in bursts under load — measured at roughly half of all
+/// requests during one such spell, hitting the cheapest query as readily as
+/// the most expensive, and unaffected by slowing to one request every three
+/// seconds. It is their instability, not our pacing, so the only useful
+/// response is to keep trying for a while.
+const MAX_RETRIES: u32 = 6;
+
+/// First backoff step; doubles each attempt, so six attempts span ~15s.
+const INITIAL_BACKOFF: Duration = Duration::from_millis(500);
+
+/// Ceiling on a single backoff wait, so a refresh cannot stall for minutes.
+const MAX_BACKOFF: Duration = Duration::from_secs(8);
 
 #[derive(Debug)]
 pub enum StratzError {
@@ -36,6 +47,10 @@ pub enum StratzError {
     Unauthorized(String),
     /// Rate limited even after backing off.
     RateLimited,
+    /// STRATZ itself is failing (5xx) after every retry. Their problem, not
+    /// the caller's — worth saying so plainly, because the natural assumption
+    /// on seeing an error here is that the token or the query is wrong.
+    Unavailable(u16),
     Http(String),
     /// The API answered with a GraphQL `errors` array.
     Graphql(String),
@@ -54,6 +69,11 @@ impl fmt::Display for StratzError {
             }
             Self::Unauthorized(msg) => write!(f, "STRATZ rejected the API token: {msg}"),
             Self::RateLimited => write!(f, "STRATZ rate limit reached; try again later"),
+            Self::Unavailable(code) => write!(
+                f,
+                "STRATZ is temporarily unavailable ({code}). Nothing is wrong with your token — \
+                 their service is failing requests. Retrying automatically."
+            ),
             Self::Http(e) => write!(f, "STRATZ request failed: {e}"),
             Self::Graphql(e) => write!(f, "STRATZ returned errors: {e}"),
             Self::Decode(e) => write!(f, "STRATZ response did not match the expected shape: {e}"),
@@ -126,7 +146,7 @@ impl StratzClient {
         }
 
         let body = serde_json::json!({ "query": query, "variables": variables });
-        let mut backoff = Duration::from_millis(500);
+        let mut backoff = INITIAL_BACKOFF;
 
         for attempt in 0..MAX_RETRIES {
             self.throttle();
@@ -157,16 +177,16 @@ impl StratzClient {
                         if attempt + 1 == MAX_RETRIES {
                             return Err(StratzError::RateLimited);
                         }
-                        std::thread::sleep(backoff);
-                        backoff *= 2;
+                        std::thread::sleep(jittered(backoff));
+                        backoff = (backoff * 2).min(MAX_BACKOFF);
                         continue;
                     }
                     if status.is_server_error() {
                         if attempt + 1 == MAX_RETRIES {
-                            return Err(StratzError::Http(format!("server error {status}")));
+                            return Err(StratzError::Unavailable(status.as_u16()));
                         }
-                        std::thread::sleep(backoff);
-                        backoff *= 2;
+                        std::thread::sleep(jittered(backoff));
+                        backoff = (backoff * 2).min(MAX_BACKOFF);
                         continue;
                     }
                     if !status.is_success() {
@@ -202,6 +222,27 @@ impl StratzClient {
         }
         self.last_request = Some(Instant::now());
     }
+}
+
+/// Spread retries over a window instead of hammering in lockstep.
+///
+/// A bulk refresh is a long series of requests against a service that is
+/// already struggling; retrying every one of them on the same schedule turns
+/// a wobble into a thundering herd.
+fn jittered(backoff: Duration) -> Duration {
+    let millis = backoff.as_millis() as u64;
+    // Cheap, dependency-free spread over [75%, 125%] of the interval.
+    let spread = millis / 4;
+    let nudge = if spread == 0 {
+        0
+    } else {
+        (SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.subsec_nanos() as u64)
+            .unwrap_or(0))
+            % (spread * 2)
+    };
+    Duration::from_millis(millis.saturating_sub(spread) + nudge)
 }
 
 /// Reduce an error body to a short single-line message.

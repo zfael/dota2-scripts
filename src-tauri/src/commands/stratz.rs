@@ -6,8 +6,9 @@
 use crate::ipc_types::{DraftAdviceDto, StratzStatusDto, SuggestionDto};
 use crate::TauriAppState;
 use dota2_scripts::stratz::advice::advise;
-use dota2_scripts::stratz::client::StratzClient;
+use dota2_scripts::stratz::client::{StratzClient, StratzError};
 use tauri::{AppHandle, Emitter};
+use tracing::warn;
 
 /// Dataset and token state behind the advice panel.
 #[tauri::command]
@@ -37,6 +38,7 @@ pub fn get_stratz_status(state: tauri::State<'_, TauriAppState>) -> Result<Strat
         refreshing: snapshot.refreshing,
         progress: snapshot.progress,
         hero_count: snapshot.hero_count,
+        incomplete_heroes: snapshot.incomplete_heroes,
         bracket: snapshot.bracket,
         built_at: snapshot.built_at,
         last_error: snapshot.last_error,
@@ -59,10 +61,18 @@ pub fn set_stratz_token(
     }
 
     // One cheap query proves the token works before it is written to disk.
+    //
+    // Only an outright rejection blocks the save. STRATZ goes through spells
+    // of failing most requests with 503, and refusing a perfectly good token
+    // because their service is down would make setup impossible exactly when
+    // the user is trying to do it. Anything that is not a rejection is
+    // accepted, and the background worker retries the refresh.
     let mut client = StratzClient::new(token.clone());
-    client
-        .query("query { constants { heroes { id } } }", serde_json::Value::Null)
-        .map_err(|e| e.to_string())?;
+    match client.query("query { constants { heroes { id } } }", serde_json::Value::Null) {
+        Ok(_) => {}
+        Err(e @ StratzError::Unauthorized(_)) => return Err(e.to_string()),
+        Err(e) => warn!("STRATZ: could not verify token now ({e}); saving it anyway"),
+    }
 
     let mut settings = state
         .settings

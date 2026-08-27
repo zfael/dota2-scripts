@@ -325,9 +325,17 @@ function AdvicePanel() {
   if (!status.ready) {
     return (
       <Card title="Draft advice">
-        <p className="text-sm text-muted">
-          {status.lastError ?? "Waiting for the matchup dataset."}
-        </p>
+        <div className="space-y-2">
+          <p className="text-sm text-subtle">
+            {status.lastError ?? "Waiting for the matchup dataset."}
+          </p>
+          {status.lastError && (
+            <p className="text-xs text-muted">
+              Retrying in the background — nothing to do. Hero identification
+              below keeps working regardless.
+            </p>
+          )}
+        </div>
       </Card>
     );
   }
@@ -400,6 +408,24 @@ function AdvicePanel() {
           <p className="text-xs text-amber-400">
             Not in the dataset: {advice.unresolved.join(", ")} — the cache
             predates a patch, so these picks are missing from the advice.
+          </p>
+        )}
+
+        {status.incompleteHeroes > 0 && (
+          <p className="text-xs text-amber-400">
+            {status.incompleteHeroes} hero
+            {status.incompleteHeroes === 1 ? "" : "es"} missing matchup data —
+            STRATZ failed those requests while building the cache. They can
+            still be suggested, but with no counter or synergy signal. A
+            refresh is retried within the hour.
+          </p>
+        )}
+
+        {/* A cached dataset keeps working while STRATZ is down; say so rather
+            than leaving a stale-looking panel with no explanation. */}
+        {status.lastError && (
+          <p className="text-xs text-amber-400">
+            Using the cached dataset — {status.lastError}
           </p>
         )}
 

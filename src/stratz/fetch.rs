@@ -17,6 +17,7 @@
 
 use super::client::{StratzClient, StratzError};
 use super::dataset::{HeroEntry, StratzDataset, NUM_POSITIONS, POSITIONS};
+use tracing::{info, warn};
 
 const HEROES_QUERY: &str = r#"
 query {
@@ -52,6 +53,18 @@ query($positionIds:[MatchPlayerPositionType!], $bracketIds:[RankBracket!]) {
 /// five ways, so a single week is thin for the rarer roles; four weeks keeps
 /// the sample usable without reaching back through several patches.
 const POSITION_WEEKS: usize = 4;
+
+/// How many times to sweep the hero list, retrying whatever failed.
+const MATCHUP_PASSES: usize = 3;
+
+/// Pause between sweeps, to let a burst of 503s pass rather than retrying
+/// into the same bad spell.
+const RETRY_PASS_DELAY: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// Refuse a dataset missing more than this share of heroes. A few gaps cost
+/// only those heroes' matchup signal; a mostly-empty matrix produces advice
+/// that is confidently wrong rather than obviously broken.
+const MAX_MISSING_PERCENT: usize = 15;
 
 const MATCHUP_QUERY: &str = r#"
 query($heroId:Short, $bracketIds:[RankBracketBasicEnum!]) {
@@ -127,13 +140,23 @@ pub fn build_dataset(
 
     for (p, position) in POSITIONS.iter().enumerate() {
         progress(p, NUM_POSITIONS, "positions");
-        let data = client.query(
+        // Position data only filters and labels suggestions; it never enters
+        // the score. Losing one position to a 503 is worth continuing for,
+        // where losing the matchups would not be.
+        let data = match client.query(
             WIN_WEEK_QUERY,
             serde_json::json!({
                 "positionIds": [position],
                 "bracketIds": bracket.detailed,
             }),
-        )?;
+        ) {
+            Ok(d) => d,
+            Err(e @ (StratzError::Unauthorized(_) | StratzError::MissingToken)) => return Err(e),
+            Err(e) => {
+                warn!("STRATZ: {position} stats unavailable ({e}); continuing without them");
+                continue;
+            }
+        };
         let all: Vec<&serde_json::Value> = rows(&data["heroStats"]["winWeek"]).collect();
         let keep = recent_weeks(&all, POSITION_WEEKS);
         for row in all {
@@ -178,47 +201,83 @@ pub fn build_dataset(
     let mut synergy = vec![0f32; n * n];
     let mut with_matches = vec![0u32; n * n];
 
-    for (done, hero) in heroes.iter().enumerate() {
-        progress(done, n, "matchups");
-        let data = client.query(
-            MATCHUP_QUERY,
-            serde_json::json!({ "heroId": hero.id, "bracketIds": [bracket.basic] }),
-        )?;
+    // A hero whose request fails is skipped and retried at the end, rather
+    // than aborting the whole build. STRATZ returns 503 in bursts, and
+    // discarding 126 good responses because the 127th failed means a refresh
+    // can never complete during one of those spells.
+    let mut pending: Vec<usize> = (0..n).collect();
+    let mut failures: Vec<usize> = Vec::new();
 
-        // matchUp returns a list with a single entry for the queried hero.
-        let entry = match data["heroStats"]["matchUp"].as_array().and_then(|a| a.first()) {
-            Some(e) => e.clone(),
-            None => continue,
-        };
-        let i = done;
-
-        // The hero's baseline over exactly the matchup population: every game
-        // in the `vs` rows is one this hero played. Self-consistent, so the
-        // offsets below measure only the matchup effect.
-        base_win_rate[i] = implied_win_rate(&entry["vs"]).unwrap_or(0.5);
-
-        for row in rows(&entry["vs"]) {
-            let Some(&j) = row_hero_id(row, "heroId2").and_then(|id| id_to_index.get(&id)) else {
-                continue;
+    for pass in 0..MATCHUP_PASSES {
+        failures.clear();
+        let total = pending.len();
+        for (done, &i) in pending.iter().enumerate() {
+            progress(done, total, "matchups");
+            let hero = &heroes[i];
+            let data = match client.query(
+                MATCHUP_QUERY,
+                serde_json::json!({ "heroId": hero.id, "bracketIds": [bracket.basic] }),
+            ) {
+                Ok(d) => d,
+                // A rejected token or exhausted quota will not improve on
+                // retry; anything else is worth another pass.
+                Err(e @ (StratzError::Unauthorized(_) | StratzError::MissingToken)) => {
+                    return Err(e)
+                }
+                Err(e) => {
+                    warn!("STRATZ: {} matchups failed ({e}); will retry", hero.slug);
+                    failures.push(i);
+                    continue;
+                }
             };
-            let matches = count(row, "matchCount");
-            if matches <= 0.0 || i == j {
-                continue;
-            }
-            advantage[i * n + j] = count(row, "winCount") / matches - base_win_rate[i];
-            vs_matches[i * n + j] = matches as u32;
+            absorb_matchups(
+                &data,
+                i,
+                n,
+                &id_to_index,
+                &mut base_win_rate,
+                &mut advantage,
+                &mut vs_matches,
+                &mut synergy,
+                &mut with_matches,
+            );
         }
-        for row in rows(&entry["with"]) {
-            let Some(&j) = row_hero_id(row, "heroId2").and_then(|id| id_to_index.get(&id)) else {
-                continue;
-            };
-            let matches = count(row, "matchCount");
-            if matches <= 0.0 || i == j {
-                continue;
-            }
-            synergy[i * n + j] = count(row, "winCount") / matches - base_win_rate[i];
-            with_matches[i * n + j] = matches as u32;
+
+        if failures.is_empty() {
+            break;
         }
+        if pass + 1 < MATCHUP_PASSES {
+            info!(
+                "STRATZ: retrying {} heroes that failed (pass {}/{})",
+                failures.len(),
+                pass + 2,
+                MATCHUP_PASSES
+            );
+            // Let a bad spell pass before trying again.
+            std::thread::sleep(RETRY_PASS_DELAY);
+        }
+        pending = failures.clone();
+    }
+
+    // Advice built on a mostly-empty matrix is confidently wrong rather than
+    // obviously broken, so refuse it outright. A handful of gaps is fine —
+    // those heroes simply contribute no matchup signal.
+    let missing = failures.len();
+    if missing * 100 > n * MAX_MISSING_PERCENT {
+        return Err(StratzError::Http(format!(
+            "only {}/{n} heroes fetched; STRATZ is failing too many requests right now",
+            n - missing
+        )));
+    }
+    if missing > 0 {
+        warn!(
+            "STRATZ: dataset built without matchups for {missing} hero(es): {}",
+            failures
+                .iter()
+                .filter_map(|&i| heroes.get(i).map(|h| h.slug.as_str()))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     }
 
     progress(n, n, "done");
@@ -234,6 +293,56 @@ pub fn build_dataset(
         built_at: now_unix,
         bracket: bracket.basic.clone(),
     })
+}
+
+/// Fold one hero's `matchUp` response into the matrices.
+///
+/// Split out of the fetch loop so the loop can concern itself only with
+/// which requests succeeded.
+#[allow(clippy::too_many_arguments)]
+fn absorb_matchups(
+    data: &serde_json::Value,
+    i: usize,
+    n: usize,
+    id_to_index: &std::collections::HashMap<i16, usize>,
+    base_win_rate: &mut [f32],
+    advantage: &mut [f32],
+    vs_matches: &mut [u32],
+    synergy: &mut [f32],
+    with_matches: &mut [u32],
+) {
+    // matchUp returns a list with a single entry for the queried hero.
+    let Some(entry) = data["heroStats"]["matchUp"].as_array().and_then(|a| a.first()) else {
+        return;
+    };
+
+    // The hero's baseline over exactly the matchup population: every game in
+    // the `vs` rows is one this hero played. Self-consistent, so the offsets
+    // below measure only the matchup effect.
+    base_win_rate[i] = implied_win_rate(&entry["vs"]).unwrap_or(0.5);
+
+    for row in rows(&entry["vs"]) {
+        let Some(&j) = row_hero_id(row, "heroId2").and_then(|id| id_to_index.get(&id)) else {
+            continue;
+        };
+        let matches = count(row, "matchCount");
+        if matches <= 0.0 || i == j {
+            continue;
+        }
+        advantage[i * n + j] = count(row, "winCount") / matches - base_win_rate[i];
+        vs_matches[i * n + j] = matches as u32;
+    }
+    for row in rows(&entry["with"]) {
+        let Some(&j) = row_hero_id(row, "heroId2").and_then(|id| id_to_index.get(&id)) else {
+            continue;
+        };
+        let matches = count(row, "matchCount");
+        if matches <= 0.0 || i == j {
+            continue;
+        }
+        synergy[i * n + j] = count(row, "winCount") / matches - base_win_rate[i];
+        with_matches[i * n + j] = matches as u32;
+    }
 }
 
 fn fetch_heroes(client: &mut StratzClient) -> Result<Vec<HeroEntry>, StratzError> {
@@ -399,6 +508,83 @@ mod tests {
     }
 
     #[test]
+    fn a_partial_dataset_is_rejected_only_past_the_threshold() {
+        // The judgement this encodes: a few missing heroes cost only those
+        // heroes' matchup signal, but a mostly-empty matrix yields advice
+        // that is confidently wrong rather than obviously broken.
+        let n = 127;
+        let tolerable = n * MAX_MISSING_PERCENT / 100;
+        assert!(tolerable * 100 <= n * MAX_MISSING_PERCENT);
+        assert!((tolerable + 1) * 100 > n * MAX_MISSING_PERCENT);
+        // Sanity: the threshold admits a handful, not a third of the roster.
+        assert!((5..=25).contains(&tolerable), "tolerable = {tolerable}");
+    }
+
+    #[test]
+    fn absorb_matchups_fills_one_heros_row_and_leaves_others_alone() {
+        let n = 3;
+        let mut base = vec![0.5f32; n];
+        let mut advantage = vec![0f32; n * n];
+        let mut vs = vec![0u32; n * n];
+        let mut synergy = vec![0f32; n * n];
+        let mut with = vec![0u32; n * n];
+        let id_to_index: std::collections::HashMap<i16, usize> =
+            [(1i16, 0usize), (2, 1), (3, 2)].into_iter().collect();
+
+        let data = serde_json::json!({ "heroStats": { "matchUp": [{
+            "vs": [
+                { "heroId2": 2, "winCount": 60, "matchCount": 100 },
+                { "heroId2": 3, "winCount": 40, "matchCount": 100 },
+            ],
+            "with": [{ "heroId2": 2, "winCount": 55, "matchCount": 100 }],
+        }]}});
+
+        absorb_matchups(
+            &data, 0, n, &id_to_index, &mut base, &mut advantage, &mut vs,
+            &mut synergy, &mut with,
+        );
+
+        // Baseline is this hero's own record across the vs rows: 100/200.
+        assert_eq!(base[0], 0.5);
+        assert!((advantage[1] - 0.10).abs() < 1e-6); // 60% vs a 50% baseline
+        assert!((advantage[2] + 0.10).abs() < 1e-6);
+        assert_eq!(vs[1], 100);
+        assert!((synergy[1] - 0.05).abs() < 1e-6);
+        // Rows for the other heroes are untouched, so one hero's failure
+        // cannot corrupt another's data.
+        assert!(advantage[n..].iter().all(|&v| v == 0.0));
+        assert_eq!(base[1], 0.5);
+    }
+
+    #[test]
+    fn absorb_matchups_ignores_a_response_with_no_entry() {
+        // What a 200-with-empty-body looks like: must leave the matrices
+        // untouched rather than writing a baseline of 0.5 over real data.
+        let n = 2;
+        let mut base = vec![0.42f32; n];
+        let mut advantage = vec![1f32; n * n];
+        let mut vs = vec![7u32; n * n];
+        let mut synergy = vec![0f32; n * n];
+        let mut with = vec![0u32; n * n];
+        let id_to_index = std::collections::HashMap::new();
+
+        for empty in [
+            serde_json::json!({ "heroStats": { "matchUp": [] } }),
+            serde_json::json!({ "heroStats": {} }),
+            serde_json::json!({}),
+        ] {
+            absorb_matchups(
+                &empty, 0, n, &id_to_index, &mut base, &mut advantage, &mut vs,
+                &mut synergy, &mut with,
+            );
+        }
+
+        assert_eq!(base[0], 0.42);
+        assert!(advantage.iter().all(|&v| v == 1.0));
+        assert!(vs.iter().all(|&v| v == 7));
+    }
+
+    #[test]
     fn week_stamps_survive_full_precision() {
         // Unix seconds are past 2^24, where f32 stops representing every
         // integer. Routed through the f32 `count` helper, adjacent weeks can
@@ -414,7 +600,7 @@ mod tests {
     fn recency_filter_keeps_only_the_newest_weeks() {
         // winWeek returns 20 weeks per hero, newest first; keeping all of
         // them would average five months across several patches.
-        let raw = vec![
+        let raw = [
             serde_json::json!({ "week": 1787184000i64 }),
             serde_json::json!({ "week": 1786579200i64 }),
             serde_json::json!({ "week": 1785974400i64 }),
