@@ -209,6 +209,39 @@ pub struct MeepoStateDto {
     pub combo_items: Vec<String>,
 }
 
+/// One draft slot as identified so far.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DraftSlotDto {
+    /// 0-9 in strip order: left team first, each side inner-to-outer as drawn.
+    pub index: usize,
+    pub is_ally: bool,
+    /// Present only when the read is trustworthy; `None` + `unknown` means the
+    /// slot is occupied by a portrait we cannot match (someone's arcana).
+    pub hero: Option<String>,
+    pub unknown: bool,
+    pub agreement: f32,
+    pub best_score: f32,
+}
+
+/// Live draft identification status for the Draft page.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DraftStatusDto {
+    pub enabled: bool,
+    pub active: bool,
+    pub game_state: String,
+    /// Identity of the current draft; changes on every new one. The UI resets
+    /// its per-slot verdicts when this changes — `matchid` cannot serve here,
+    /// bot matches report it as `"0"` for every game.
+    pub session_id: String,
+    pub matchid: String,
+    pub team_name: String,
+    pub own_hero: String,
+    pub frames: u32,
+    pub slots: Vec<DraftSlotDto>,
+}
+
 /// Minimap capture status for frontend display
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -225,6 +258,41 @@ pub struct MinimapStatusDto {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn draft_status_dto_serializes_camel_case() {
+        let dto = DraftStatusDto {
+            enabled: true,
+            active: true,
+            game_state: "DOTA_GAMERULES_STATE_HERO_SELECTION".to_string(),
+            session_id: "1787782500_0".to_string(),
+            matchid: "812345".to_string(),
+            team_name: "dire".to_string(),
+            own_hero: "npc_dota_hero_nevermore".to_string(),
+            frames: 12,
+            slots: vec![DraftSlotDto {
+                index: 0,
+                is_ally: false,
+                hero: Some("skeleton_king".to_string()),
+                unknown: false,
+                agreement: 0.75,
+                // Exactly representable in f32, so the JSON number compares
+                // cleanly against an f64 literal.
+                best_score: 0.5,
+            }],
+        };
+        let json = serde_json::to_value(&dto).unwrap();
+        assert_eq!(json["gameState"], "DOTA_GAMERULES_STATE_HERO_SELECTION");
+        // The UI resets its per-slot verdicts when this changes, so the
+        // camelCase spelling is load-bearing: a mismatch here reads as "the
+        // draft never changed" and the previous game's votes stick.
+        assert_eq!(json["sessionId"], "1787782500_0");
+        assert_eq!(json["ownHero"], "npc_dota_hero_nevermore");
+        assert_eq!(json["teamName"], "dire");
+        assert_eq!(json["slots"][0]["isAlly"], false);
+        assert_eq!(json["slots"][0]["bestScore"], 0.5);
+        assert_eq!(json["slots"][0]["hero"], "skeleton_king");
+    }
 
     #[test]
     fn game_state_dto_serializes_camel_case() {

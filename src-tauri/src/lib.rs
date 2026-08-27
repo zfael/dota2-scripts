@@ -131,6 +131,18 @@ pub fn run() {
         );
     });
 
+    // Draft reader: identifies drafted heroes from the screen while GSI
+    // reports hero selection. Idles at ~2Hz config polls unless [draft]
+    // enabled = true.
+    let draft_settings = settings.clone();
+    let draft_state = app_state.clone();
+    std::thread::spawn(move || {
+        dota2_scripts::observability::draft_reader::start_draft_reader_worker(
+            draft_settings,
+            draft_state,
+        );
+    });
+
     // Start hotkey event handler in background
     let hotkey_app_state = app_state.clone();
     let hotkey_dispatcher = dispatcher.clone();
@@ -200,6 +212,8 @@ pub fn run() {
             commands::updates::dismiss_update,
             commands::meepo::get_meepo_state,
             commands::minimap::get_minimap_status,
+            commands::draft::get_draft_status,
+            commands::draft::submit_draft_feedback,
             commands::waves::get_wave_lane_paths,
             commands::waves::get_wave_snapshot,
             commands::overlay::show_wave_overlay,

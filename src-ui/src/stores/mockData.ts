@@ -346,6 +346,12 @@ export const mockConfig: Settings = {
     neutral_item: { enabled: true, lead_seconds: 10, volume: 1.0, sound_file: "" },
     stack: { enabled: false, lead_seconds: 5, volume: 1.0, sound_file: "" },
   },
+  draft: {
+    enabled: false, poll_ms: 1000,
+    telemetry_enabled: true, telemetry_dir: "logs/draft_telemetry",
+    telemetry_save_every_n: 5,
+    harvest_enabled: true, exemplar_dir: "draft_exemplars",
+  },
   minimap_capture: {
     enabled: false, minimap_x: 0, minimap_y: 0,
     minimap_width: 256, minimap_height: 256,

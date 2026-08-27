@@ -484,12 +484,25 @@ export interface Settings {
   soul_ring: SoulRingConfig;
   updates: UpdateConfig;
   rune_alerts: RuneAlertConfig;
+  draft: DraftConfig;
   minimap_capture: MinimapCaptureConfig;
   minimap_analysis: MinimapAnalysisConfig;
   wave_tracker: WaveTrackerConfig;
   wave_overlay: WaveOverlayConfig;
   alerts: AlertsConfig;
   hud: HudConfig;
+}
+
+/// Draft-phase hero identification. Reads the pick strip off the screen while
+/// GSI reports hero selection; capture never happens outside the draft gate.
+export interface DraftConfig {
+  enabled: boolean;
+  poll_ms: number;
+  telemetry_enabled: boolean;
+  telemetry_dir: string;
+  telemetry_save_every_n: number;
+  harvest_enabled: boolean;
+  exemplar_dir: string;
 }
 
 /// Points on Dota's own HUD that automation needs to click. Positions are

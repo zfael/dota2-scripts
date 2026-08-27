@@ -21,6 +21,7 @@ import ActivityLog from "./pages/ActivityLog";
 import Diagnostics from "./pages/Diagnostics";
 import Settings from "./pages/Settings";
 import MinimapIntelligence from "./pages/MinimapIntelligence";
+import Draft from "./pages/Draft";
 import WaveTracker from "./pages/WaveTracker";
 import Alerts from "./pages/Alerts";
 
@@ -105,6 +106,7 @@ export default function App() {
               <Route path="/armlet" element={<Armlet />} />
               <Route path="/boots" element={<Boots />} />
               <Route path="/activity" element={<ActivityLog />} />
+              <Route path="/draft" element={<Draft />} />
               <Route path="/minimap" element={<MinimapIntelligence />} />
               <Route path="/waves" element={<WaveTracker />} />
               <Route path="/alerts" element={<Alerts />} />
