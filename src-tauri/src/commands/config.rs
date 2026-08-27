@@ -15,9 +15,25 @@ pub const CONFIG_UPDATED_EVENT: &str = "config_updated";
 /// one. The window that made the edit already holds the same values and drops its
 /// own echo while it still has debounced writes outstanding — see `configStore.ts`.
 fn broadcast_config(app: &AppHandle, settings: &Settings) {
-    if let Err(e) = app.emit(CONFIG_UPDATED_EVENT, settings) {
+    if let Err(e) = app.emit(CONFIG_UPDATED_EVENT, redacted(settings)) {
         warn!("Failed to broadcast config update: {}", e);
     }
+}
+
+/// A copy of the settings safe to hand to a window.
+///
+/// The STRATZ token is a credential and the UI never needs its value — only
+/// whether one is set, which `get_stratz_status` reports. Blanking it here
+/// keeps it out of the webview's memory, out of devtools, and out of any
+/// config dump a user might paste into a bug report.
+///
+/// The counterpart is in [`update_config`]: an empty `api_token` in an update
+/// never overwrites a stored one, so a window echoing this redacted copy back
+/// cannot erase the real token.
+pub(crate) fn redacted(settings: &Settings) -> Settings {
+    let mut safe = settings.clone();
+    safe.stratz.api_token = String::new();
+    safe
 }
 
 fn validate_settings(settings: &Settings) -> Result<(), String> {
@@ -63,7 +79,7 @@ pub fn get_config(state: tauri::State<'_, TauriAppState>) -> Result<Settings, St
         .settings
         .lock()
         .map_err(|e| format!("Failed to lock settings: {}", e))?;
-    Ok(settings.clone())
+    Ok(redacted(&settings))
 }
 
 /// Updates a config section and persists to config.toml
@@ -87,6 +103,17 @@ pub fn update_config(
             (section_value.as_object_mut(), updates.as_object())
         {
             for (key, value) in update_obj {
+                // Windows receive the settings with the STRATZ token blanked
+                // (see `redacted`). Without this guard, any window echoing
+                // its copy back — a toggle on the Draft page is enough —
+                // would silently erase the stored credential. Setting it goes
+                // through `set_stratz_token`.
+                if section == "stratz"
+                    && key == "api_token"
+                    && value.as_str().is_none_or(str::is_empty)
+                {
+                    continue;
+                }
                 existing_obj.insert(key.clone(), value.clone());
             }
         }
@@ -241,6 +268,28 @@ mod tests {
     };
     use dota2_scripts::state::app_state::AppState;
     use std::sync::{Arc, Mutex, RwLock};
+
+    #[test]
+    fn redacted_settings_never_carry_the_stratz_token() {
+        let mut settings = Settings::default();
+        settings.stratz.api_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.secret".to_string();
+        settings.stratz.enabled = true;
+        settings.stratz.bracket = "DIVINE_IMMORTAL".to_string();
+
+        let safe = redacted(&settings);
+
+        assert_eq!(safe.stratz.api_token, "");
+        // Everything else the UI needs must survive.
+        assert!(safe.stratz.enabled);
+        assert_eq!(safe.stratz.bracket, "DIVINE_IMMORTAL");
+        // And it must not appear anywhere in the serialised payload, which is
+        // what actually crosses into the webview.
+        let json = serde_json::to_string(&safe).unwrap();
+        assert!(!json.contains("secret"), "token leaked into the IPC payload");
+
+        // The original is untouched: redaction is for transport only.
+        assert!(settings.stratz.api_token.contains("secret"));
+    }
 
     fn make_test_profile(id: &str, enabled: bool, mode: InvokerProfileMode) -> InvokerProfile {
         InvokerProfile {

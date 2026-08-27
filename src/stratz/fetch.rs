@@ -31,10 +31,15 @@ query {
 }
 "#;
 
+/// `winWeek` returns one row per hero **per week** — 127 heroes x 20 weeks =
+/// 2540 rows — so `take` must cover all of them or heroes fall off the end
+/// entirely. Only the most recent [`POSITION_WEEKS`] are kept, so position
+/// data reflects the current patch rather than five months of history.
 const WIN_WEEK_QUERY: &str = r#"
-query($heroIds:[Short!], $positionIds:[MatchPlayerPositionType!], $bracketIds:[RankBracket!]) {
+query($positionIds:[MatchPlayerPositionType!], $bracketIds:[RankBracket!]) {
   heroStats {
-    winWeek(heroIds:$heroIds, positionIds:$positionIds, bracketIds:$bracketIds, take:200) {
+    winWeek(positionIds:$positionIds, bracketIds:$bracketIds, take:5000) {
+      week
       heroId
       matchCount
       winCount
@@ -42,6 +47,11 @@ query($heroIds:[Short!], $positionIds:[MatchPlayerPositionType!], $bracketIds:[R
   }
 }
 "#;
+
+/// Weeks of position history to keep. Position splits divide a hero's games
+/// five ways, so a single week is thin for the rarer roles; four weeks keeps
+/// the sample usable without reaching back through several patches.
+const POSITION_WEEKS: usize = 4;
 
 const MATCHUP_QUERY: &str = r#"
 query($heroId:Short, $bracketIds:[RankBracketBasicEnum!]) {
@@ -110,7 +120,6 @@ pub fn build_dataset(
 
     let id_to_index: std::collections::HashMap<i16, usize> =
         heroes.iter().enumerate().map(|(i, h)| (h.id, i)).collect();
-    let ids: Vec<i16> = heroes.iter().map(|h| h.id).collect();
 
     // --- positions -------------------------------------------------------
     let mut position_games = vec![0f32; n * NUM_POSITIONS];
@@ -121,31 +130,31 @@ pub fn build_dataset(
         let data = client.query(
             WIN_WEEK_QUERY,
             serde_json::json!({
-                "heroIds": ids,
                 "positionIds": [position],
                 "bracketIds": bracket.detailed,
             }),
         )?;
-        for row in rows(&data["heroStats"]["winWeek"]) {
+        let all: Vec<&serde_json::Value> = rows(&data["heroStats"]["winWeek"]).collect();
+        let keep = recent_weeks(&all, POSITION_WEEKS);
+        for row in all {
             let Some(&i) = row_hero_id(row, "heroId").and_then(|id| id_to_index.get(&id)) else {
                 continue;
             };
+            if !keep.contains(&row_i64(row, "week")) {
+                continue;
+            }
             position_games[i * NUM_POSITIONS + p] += count(row, "matchCount");
             position_wins[i * NUM_POSITIONS + p] += count(row, "winCount");
         }
     }
 
-    // Overall win rate, summed across positions. This is the baseline every
-    // matchup offset is measured against, so it must come from the same
-    // population as the matchups themselves.
+    // Baseline win rates come from the matchup data itself (below), not from
+    // winWeek. The two cover different windows -- measured on Shadow Fiend,
+    // matchUp implied 0.4874 while winWeek gave 0.4825 over one week and
+    // 0.4790 over four. Subtracting one population's baseline from another's
+    // matchups biases every offset by that gap, which is a sizeable fraction
+    // of a real matchup signal (typically +/-0.05).
     let mut base_win_rate = vec![0.5f32; n];
-    for i in 0..n {
-        let games: f32 = (0..NUM_POSITIONS).map(|p| position_games[i * NUM_POSITIONS + p]).sum();
-        let wins: f32 = (0..NUM_POSITIONS).map(|p| position_wins[i * NUM_POSITIONS + p]).sum();
-        if games > 0.0 {
-            base_win_rate[i] = wins / games;
-        }
-    }
 
     let mut position_share = vec![0f32; n * NUM_POSITIONS];
     let mut position_win_rate = vec![-1f32; n * NUM_POSITIONS];
@@ -182,6 +191,11 @@ pub fn build_dataset(
             None => continue,
         };
         let i = done;
+
+        // The hero's baseline over exactly the matchup population: every game
+        // in the `vs` rows is one this hero played. Self-consistent, so the
+        // offsets below measure only the matchup effect.
+        base_win_rate[i] = implied_win_rate(&entry["vs"]).unwrap_or(0.5);
 
         for row in rows(&entry["vs"]) {
             let Some(&j) = row_hero_id(row, "heroId2").and_then(|id| id_to_index.get(&id)) else {
@@ -261,6 +275,32 @@ fn rows(value: &serde_json::Value) -> impl Iterator<Item = &serde_json::Value> {
     value.as_array().map(|a| a.as_slice()).unwrap_or(&[]).iter()
 }
 
+/// A hero's overall win rate implied by its own matchup rows.
+///
+/// Each `vs` row counts games this hero played against one opponent, so the
+/// totals are that hero's record over the same window the matchups describe.
+fn implied_win_rate(vs: &serde_json::Value) -> Option<f32> {
+    let mut wins = 0f64;
+    let mut games = 0f64;
+    for row in rows(vs) {
+        games += count(row, "matchCount") as f64;
+        wins += count(row, "winCount") as f64;
+    }
+    (games > 0.0).then(|| (wins / games) as f32)
+}
+
+/// The most recent `n` distinct week stamps present in the rows.
+fn recent_weeks(rows: &[&serde_json::Value], n: usize) -> std::collections::HashSet<i64> {
+    let mut weeks: Vec<i64> = rows
+        .iter()
+        .map(|r| row_i64(r, "week"))
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
+    weeks.sort_unstable_by(|a, b| b.cmp(a));
+    weeks.into_iter().take(n).collect()
+}
+
 /// Hero ids arrive as JSON numbers; be tolerant of a string encoding too,
 /// since GraphQL `Short` has been seen serialised both ways.
 fn row_hero_id(row: &serde_json::Value, key: &str) -> Option<i16> {
@@ -274,6 +314,16 @@ fn count(row: &serde_json::Value, key: &str) -> f32 {
     row.get(key)
         .and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
         .unwrap_or(0.0) as f32
+}
+
+/// Read an integer field at full width.
+///
+/// Week stamps are unix seconds (~1.79e9), well past the 2^24 where f32 stops
+/// representing consecutive integers, so they must never go through [`count`].
+fn row_i64(row: &serde_json::Value, key: &str) -> i64 {
+    row.get(key)
+        .and_then(|v| v.as_i64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+        .unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -346,6 +396,73 @@ mod tests {
         assert_eq!(count(&row, "matchCount"), 1234.0);
         assert_eq!(count(&row, "winCount"), 0.0);
         assert_eq!(count(&row, "absent"), 0.0);
+    }
+
+    #[test]
+    fn week_stamps_survive_full_precision() {
+        // Unix seconds are past 2^24, where f32 stops representing every
+        // integer. Routed through the f32 `count` helper, adjacent weeks can
+        // collapse onto the same value and the recency filter silently keeps
+        // the wrong set.
+        let row = serde_json::json!({ "week": 1787184000i64, "s": "1786579200" });
+        assert_eq!(row_i64(&row, "week"), 1787184000);
+        assert_eq!(row_i64(&row, "s"), 1786579200);
+        assert_eq!(row_i64(&row, "missing"), 0);
+    }
+
+    #[test]
+    fn recency_filter_keeps_only_the_newest_weeks() {
+        // winWeek returns 20 weeks per hero, newest first; keeping all of
+        // them would average five months across several patches.
+        let raw = vec![
+            serde_json::json!({ "week": 1787184000i64 }),
+            serde_json::json!({ "week": 1786579200i64 }),
+            serde_json::json!({ "week": 1785974400i64 }),
+            serde_json::json!({ "week": 1785369600i64 }),
+            // Same weeks again, as they arrive for other heroes.
+            serde_json::json!({ "week": 1787184000i64 }),
+        ];
+        let refs: Vec<&serde_json::Value> = raw.iter().collect();
+
+        let keep = recent_weeks(&refs, 2);
+        assert_eq!(keep.len(), 2);
+        assert!(keep.contains(&1787184000));
+        assert!(keep.contains(&1786579200));
+        assert!(!keep.contains(&1785974400));
+
+        // Asking for more weeks than exist keeps everything present.
+        assert_eq!(recent_weeks(&refs, 99).len(), 4);
+    }
+
+    #[test]
+    fn baseline_comes_from_the_matchup_rows_themselves() {
+        // Measured on Shadow Fiend: matchUp implies 0.4874 while winWeek
+        // gives 0.4790-0.4825 depending on window. Mixing the two biases
+        // every offset, so the baseline is derived from `vs` directly.
+        let vs = serde_json::json!([
+            { "heroId2": 1, "winCount": 60, "matchCount": 100 },
+            { "heroId2": 2, "winCount": 40, "matchCount": 100 },
+        ]);
+        assert_eq!(implied_win_rate(&vs), Some(0.5));
+
+        // A hero with no matchup rows has no implied rate to offset against.
+        assert_eq!(implied_win_rate(&serde_json::json!([])), None);
+        assert_eq!(implied_win_rate(&serde_json::Value::Null), None);
+        // Rows with no games must not produce a division by zero.
+        let empty = serde_json::json!([{ "heroId2": 1, "winCount": 0, "matchCount": 0 }]);
+        assert_eq!(implied_win_rate(&empty), None);
+    }
+
+    #[test]
+    fn implied_baseline_is_weighted_by_sample_not_averaged() {
+        // A rarely-faced opponent must not swing the baseline as hard as a
+        // common one.
+        let vs = serde_json::json!([
+            { "winCount": 5_000, "matchCount": 10_000 }, // 50% over 10k
+            { "winCount": 10, "matchCount": 10 },        // 100% over 10
+        ]);
+        let wr = implied_win_rate(&vs).unwrap();
+        assert!((wr - 0.5005).abs() < 1e-4, "{wr}");
     }
 
     #[test]

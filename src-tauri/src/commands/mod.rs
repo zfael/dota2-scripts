@@ -8,5 +8,6 @@ pub mod meepo;
 pub mod minimap;
 pub mod overlay;
 pub mod state;
+pub mod stratz;
 pub mod updates;
 pub mod waves;

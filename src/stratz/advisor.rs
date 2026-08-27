@@ -106,10 +106,25 @@ pub fn recommend(
         t
     };
 
-    let mean_base = if n > 0 {
-        dataset.base_win_rate.iter().sum::<f32>() / n as f32
-    } else {
+    // When a position is chosen, "how good is this hero" means "in my role",
+    // not overall — a hero can be strong on average and poor as a 4. Fall
+    // back to the overall rate where a position has no measurement.
+    let strength = |hero: usize| -> f32 {
+        context
+            .position
+            .and_then(|p| dataset.position_win_rate_of(hero, p))
+            .unwrap_or_else(|| dataset.base_win_rate.get(hero).copied().unwrap_or(0.5))
+    };
+
+    // Centre over the heroes actually in contention, so the base term shifts
+    // ranking rather than adding a constant to everyone.
+    let contenders: Vec<usize> = (0..n)
+        .filter(|&h| !taken[h] && eligible_for_position(dataset, h, context.position))
+        .collect();
+    let mean_base = if contenders.is_empty() {
         0.5
+    } else {
+        contenders.iter().map(|&h| strength(h)).sum::<f32>() / contenders.len() as f32
     };
 
     let mut out: Vec<Suggestion> = Vec::new();
@@ -148,8 +163,7 @@ pub fn recommend(
             synergy += offset * reliability(matches, weights.shrink_k);
         }
 
-        // Centre the base term so it shifts ranking, not absolute magnitude.
-        let base = dataset.base_win_rate.get(hero).copied().unwrap_or(0.5) - mean_base;
+        let base = strength(hero) - mean_base;
         let score = weights.base_weight * base + counter + weights.synergy_weight * synergy;
 
         let entry = dataset.hero(hero);
@@ -360,6 +374,30 @@ mod tests {
         );
         assert_eq!(pos5.len(), 1);
         assert_eq!(pos5[0].slug, "hard_support");
+    }
+
+    #[test]
+    fn strength_is_judged_in_the_chosen_role_not_overall() {
+        // The reason the role is asked for at all: a hero can be strong on
+        // average and mediocre in the position being queued.
+        let mut d = sample_dataset(&["great_overall_poor_4", "made_for_4"]);
+        d.base_win_rate[0] = 0.56;
+        d.base_win_rate[1] = 0.48;
+        // Both are played as position 4, but the second one wins there.
+        set_position(&mut d, 0, 3, 0.5, 0.47);
+        set_position(&mut d, 1, 3, 0.5, 0.55);
+
+        let as_four = recommend(
+            &d,
+            &DraftContext { position: Some(3), ..Default::default() },
+            &AdviceWeights::default(),
+            10,
+        );
+        assert_eq!(as_four[0].slug, "made_for_4");
+
+        // With no role selected, overall strength decides instead.
+        let anywhere = recommend(&d, &DraftContext::default(), &AdviceWeights::default(), 10);
+        assert_eq!(anywhere[0].slug, "great_overall_poor_4");
     }
 
     #[test]

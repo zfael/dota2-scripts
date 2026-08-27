@@ -209,6 +209,51 @@ pub struct MeepoStateDto {
     pub combo_items: Vec<String>,
 }
 
+/// STRATZ dataset and token state behind the advice panel.
+///
+/// Deliberately carries no token — only whether one is set. The value never
+/// leaves the backend.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StratzStatusDto {
+    pub enabled: bool,
+    pub has_token: bool,
+    /// Position 1-5 being queued for; 0 means no filter.
+    pub position: u8,
+    pub ready: bool,
+    pub refreshing: bool,
+    pub progress: u8,
+    pub hero_count: usize,
+    pub bracket: String,
+    pub built_at: u64,
+    pub last_error: Option<String>,
+}
+
+/// One ranked pick.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SuggestionDto {
+    pub slug: String,
+    pub display_name: String,
+    pub score: f32,
+    pub counter: f32,
+    pub synergy: f32,
+    pub position_win_rate: Option<f32>,
+    pub best_against: Option<String>,
+    pub counter_samples: u32,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DraftAdviceDto {
+    pub suggestions: Vec<SuggestionDto>,
+    /// Identified heroes the dataset did not recognise — a cache older than
+    /// the current patch. Surfaced so the UI can say the advice is partial.
+    pub unresolved: Vec<String>,
+    pub allies_used: usize,
+    pub enemies_used: usize,
+}
+
 /// One draft slot as identified so far.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

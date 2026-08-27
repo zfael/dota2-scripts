@@ -31,8 +31,9 @@ pub enum StratzError {
     /// No token configured — the caller should tell the user to set one
     /// rather than retry.
     MissingToken,
-    /// Token rejected. Not retryable.
-    Unauthorized,
+    /// Token rejected. Not retryable. Carries STRATZ's own explanation,
+    /// which distinguishes a bad token from a token used from a different IP.
+    Unauthorized(String),
     /// Rate limited even after backing off.
     RateLimited,
     Http(String),
@@ -48,7 +49,10 @@ impl fmt::Display for StratzError {
                 f,
                 "no STRATZ API token configured (set [stratz] api_token, or the STRATZ_TOKEN environment variable)"
             ),
-            Self::Unauthorized => write!(f, "STRATZ rejected the API token"),
+            Self::Unauthorized(msg) if msg.is_empty() => {
+                write!(f, "STRATZ rejected the API token")
+            }
+            Self::Unauthorized(msg) => write!(f, "STRATZ rejected the API token: {msg}"),
             Self::RateLimited => write!(f, "STRATZ rate limit reached; try again later"),
             Self::Http(e) => write!(f, "STRATZ request failed: {e}"),
             Self::Graphql(e) => write!(f, "STRATZ returned errors: {e}"),
@@ -82,6 +86,14 @@ impl StratzClient {
         Self {
             http: reqwest::blocking::Client::builder()
                 .timeout(Duration::from_secs(45))
+                // STRATZ binds a token to the IP that uses it and rejects
+                // requests from a different one ("You cannot use different IP
+                // Addresses when using the API"). On a dual-stack machine the
+                // v4 and v6 addresses are different public IPs, so letting
+                // the resolver choose per-connection makes the token work or
+                // fail depending on which family won the race. Pinning to
+                // IPv4 makes it deterministic.
+                .local_address(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED))
                 .build()
                 .unwrap_or_default(),
             token: token.into(),
@@ -133,7 +145,13 @@ impl StratzClient {
                     if status == reqwest::StatusCode::UNAUTHORIZED
                         || status == reqwest::StatusCode::FORBIDDEN
                     {
-                        return Err(StratzError::Unauthorized);
+                        // The body says *why*, and the reasons are very
+                        // different: a bad token, versus a valid token used
+                        // from a different IP than it was bound to. Reporting
+                        // only "rejected" sends the user hunting for a new
+                        // token when the token was fine.
+                        let detail = resp.text().unwrap_or_default();
+                        return Err(StratzError::Unauthorized(summarise(&detail)));
                     }
                     if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
                         if attempt + 1 == MAX_RETRIES {
@@ -183,6 +201,23 @@ impl StratzClient {
             }
         }
         self.last_request = Some(Instant::now());
+    }
+}
+
+/// Reduce an error body to a short single-line message.
+///
+/// STRATZ answers with `{"message":"..."}`; anything else is truncated rather
+/// than pasted wholesale into a log line.
+fn summarise(body: &str) -> String {
+    let text = serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|v| v.get("message").and_then(|m| m.as_str()).map(str::to_string))
+        .unwrap_or_else(|| body.to_string());
+    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if text.len() > 200 {
+        format!("{}…", &text[..200])
+    } else {
+        text
     }
 }
 
