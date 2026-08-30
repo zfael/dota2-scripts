@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="_ds/core-00591b48-d458-4a09-9fde-7a48b40fbd9e/css/tokens.css">
+<link rel="stylesheet" href="_ds/core-00591b48-d458-4a09-9fde-7a48b40fbd9e/css/base.css">
+<link rel="stylesheet" href="_ds/core-00591b48-d458-4a09-9fde-7a48b40fbd9e/css/components.css">
+<link rel="stylesheet" href="_ds/core-00591b48-d458-4a09-9fde-7a48b40fbd9e/styles.css">
+<script src="_ds/core-00591b48-d458-4a09-9fde-7a48b40fbd9e/_ds_bundle.js"></script>
+<style>
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  a { color: var(--core-accent-text); text-decoration: none; }
+  a:hover { color: var(--core-accent); text-decoration: underline; }
+  input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; border-radius: 999px; background: var(--core-surface-3); outline: none; cursor: pointer; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--core-accent); border: 2px solid var(--core-bg); }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--core-surface-3); border-radius: 999px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  /* collapsed sidebar: rail of icons only */
+  [data-collapsed="1"] .c-sidebar { width: 64px; }
+  [data-collapsed="1"] .c-sidebar__name,
+  [data-collapsed="1"] .c-sidebar__grouplabel,
+  [data-collapsed="1"] .c-navitem__trail,
+  [data-collapsed="1"] .c-navitem > span:not(.c-navitem__icon),
+  [data-collapsed="1"] [data-sidebar-version] { display: none; }
+  [data-collapsed="1"] .c-navitem { justify-content: center; }
+  [data-collapsed="1"] .c-sidebar__brand { justify-content: center; padding-left: 0; padding-right: 0; }
+  [data-collapsed="1"] [data-sidebar-footer] { justify-content: center; }
+</style>
+</helmet>
+
+<div data-theme="{{ theme }}" data-collapsed="{{ collapsedAttr }}" style="display: flex; height: 100vh; overflow: hidden; background: var(--core-bg); color: var(--core-text); font-family: var(--core-font-sans); font-size: var(--core-fs-sm)">
+
+  <x-import component-from-global-scope="Core_00591b.Sidebar" brand="D2 Scripts" mark="D2" hint-size="236px,100%">
+    <div style="display: flex; flex: 1; min-height: 0; flex-direction: column; gap: var(--core-s-5); overflow-y: auto">
+    <x-import component-from-global-scope="Core_00591b.NavGroup" label="Live" hint-size="100%,120px">
+      <x-import component-from-global-scope="Core_00591b.NavItem" icon="{{ icons.dashboard }}" active="{{ nav.dashboard }}" onClick="{{ onNav }}" data-page="dashboard" hint-size="100%,34px">Dashboard</x-import>
+      <x-import component-from-global-scope="Core_00591b.NavItem" icon="{{ icons.heroes }}" active="{{ nav.heroes }}" onClick="{{ onNav }}" data-page="heroes" trailing="{{ counts.heroes }}" hint-size="100%,34px">Heroes</x-import>
+    </x-import>
+    <x-import component-from-global-scope="Core_00591b.NavGroup" label="Automation" hint-size="100%,200px">
+      <x-import component-from-global-scope="Core_00591b.NavItem" icon="{{ icons.surv }}" active="{{ nav.surv }}" onClick="{{ onNav }}" data-page="surv" hint-size="100%,34px">Survivability</x-import>
+      <x-import component-from-global-scope="Core_00591b.NavItem" icon="{{ icons.danger }}" active="{{ nav.danger }}" onClick="{{ onNav }}" data-page="danger" hint-size="100%,34px">Danger</x-import>
+      <x-import component-from-global-scope="Core_00591b.NavItem" icon="{{ icons.soul }}" active="{{ nav.soul }}" onClick="{{ onNav }}" data-page="soul" hint-size="100%,34px">Soul Ring</x-import>
+      <x-import component-from-global-scope="Core_00591b.NavItem" icon="{{ icons.armlet }}" active="{{ nav.armlet }}" onClick="{{ onNav }}" data-page="armlet" hint-size="100%,34px">Armlet</x-import>
+      <x-import component-from-global-scope="Core_00591b.NavItem" icon="{{ icons.boots }}" active="{{ nav.boots }}" onClick="{{ onNav }}" data-page="boots" hint-size="100%,34px">Boots</x-import>
+    </x-import>
+    <x-import component-from-global-scope="Core_00591b.NavGroup" label="Intel" hint-size="100%,130px">
+      <x-import component-from-global-scope="Core_00591b.NavItem" icon="{{ icons.minimap }}" active="{{ nav.minimap }}" onClick="{{ onNav }}" data-page="minimap" hint-size="100%,34px">Minimap</x-import>
+      <x-import component-from-global-scope="Core_00591b.NavItem" icon="{{ icons.waves }}" active="{{ nav.waves }}" onClick="{{ onNav }}" data-page="waves" hint-size="100%,34px">Waves</x-import>
+      <x-import component-from-global-scope="Core_00591b.NavItem" icon="{{ icons.alerts }}" active="{{ nav.alerts }}" onClick="{{ onNav }}" data-page="alerts" hint-size="100%,34px">Alerts</x-import>
+    </x-import>
+    <x-import component-from-global-scope="Core_00591b.NavGroup" label="System" hint-size="100%,130px">
+      <x-import component-from-global-scope="Core_00591b.NavItem" icon="{{ icons.activity }}" active="{{ nav.activity }}" onClick="{{ onNav }}" data-page="activity" hint-size="100%,34px">Activity</x-import>
+      <x-import component-from-global-scope="Core_00591b.NavItem" icon="{{ icons.diag }}" active="{{ nav.diag }}" onClick="{{ onNav }}" data-page="diag" hint-size="100%,34px">Diagnostics</x-import>
+      <x-import component-from-global-scope="Core_00591b.NavItem" icon="{{ icons.settings }}" active="{{ nav.settings }}" onClick="{{ onNav }}" data-page="settings" hint-size="100%,34px">Settings</x-import>
+    </x-import>
+    </div>
+    <div data-sidebar-footer="1" style="display: flex; align-items: center; justify-content: space-between; gap: var(--core-s-4); flex: none; padding: var(--core-s-4); border-top: 1px solid var(--core-border); font-family: var(--core-font-mono); font-size: var(--core-fs-2xs); color: var(--core-text-3)">
+      <span data-sidebar-version="1">v0.17.0-rc.17</span>
+      <button type="button" onClick="{{ onToggleSidebar }}" title="Collapse sidebar" style="display: grid; place-items: center; width: 26px; height: 26px; border: 1px solid var(--core-border); border-radius: var(--core-r-sm); background: none; color: var(--core-text-3); font-family: inherit; font-size: var(--core-fs-xs); cursor: pointer" style-hover="background: var(--core-surface-2); color: var(--core-text)">{{ collapseGlyph }}</button>
+    </div>
+  </x-import>
+
+  <div style="display: flex; flex: 1; flex-direction: column; min-width: 0">
+
+    <x-import component-from-global-scope="Core_00591b.Topbar" title="{{ pageTitle }}" hint-size="100%,56px">
+      <div style="display: flex; align-items: center; gap: var(--core-s-6)">
+        <x-import component-from-global-scope="Core_00591b.Badge" tone="{{ game.connTone }}" dot="{{ true }}" hint-size="110px,20px">{{ game.connLabel }}</x-import>
+        <sc-if value="{{ game.inGame }}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; align-items: center; gap: var(--core-s-5)">
+            <x-import component-from-global-scope="Core_00591b.Avatar" name="{{ game.heroName }}" size="sm" hint-size="28px,28px"></x-import>
+            <span style="font-weight: var(--core-fw-semibold)">{{ game.heroName }}</span>
+            <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-2xs); color: var(--core-text-3)">Lv {{ game.level }}</span>
+            <div style="width: 96px; --core-accent: var(--core-success)">
+              <x-import component-from-global-scope="Core_00591b.Progress" value="{{ game.hp }}" thin="{{ true }}" hint-size="96px,6px"></x-import>
+            </div>
+            <div style="width: 72px; --core-accent: var(--core-info)">
+              <x-import component-from-global-scope="Core_00591b.Progress" value="{{ game.mana }}" thin="{{ true }}" hint-size="72px,6px"></x-import>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </x-import>
+
+    <main style="flex: 1; overflow-y: auto; padding: var(--core-s-8)">
+
+      <sc-if value="{{ p.dashboard }}" hint-placeholder-val="{{ true }}">
+        <div style="display: flex; flex-direction: column; gap: var(--core-s-6); max-width: 1180px">
+          <div style="display: grid; grid-template-columns: 1.1fr 1fr; gap: var(--core-s-6)">
+            <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,220px">
+              <x-import component-from-global-scope="Core_00591b.CardHeader" title="Runtime" subtitle="Master switches for the two automation paths" hint-size="100%,64px"></x-import>
+              <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,150px">
+                <div style="display: flex; flex-direction: column; gap: var(--core-s-5)">
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--core-s-6)">
+                    <div>
+                      <div style="font-weight: var(--core-fw-medium)">GSI Automation</div>
+                      <div style="font-size: var(--core-fs-xs); color: var(--core-text-3)">Reacts to live game state from Dota</div>
+                    </div>
+                    <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.gsiEnabled }}" onChange="{{ onTog }}" data-key="gsiEnabled" hint-size="38px,22px"></x-import>
+                  </div>
+                  <x-import component-from-global-scope="Core_00591b.Divider" hint-size="100%,1px"></x-import>
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--core-s-6)">
+                    <div>
+                      <div style="font-weight: var(--core-fw-medium)">Standalone Script</div>
+                      <div style="font-size: var(--core-fs-xs); color: var(--core-text-3)">Keyboard combos, no game state needed</div>
+                    </div>
+                    <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.standaloneEnabled }}" onChange="{{ onTog }}" data-key="standaloneEnabled" hint-size="38px,22px"></x-import>
+                  </div>
+                </div>
+              </x-import>
+            </x-import>
+
+            <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,220px">
+              <x-import component-from-global-scope="Core_00591b.CardHeader" title="Active hero" subtitle="Detected from GSI, override if Dota reports the wrong one" hint-size="100%,64px"></x-import>
+              <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,150px">
+                <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+                  <div style="display: flex; align-items: center; gap: var(--core-s-5)">
+                    <x-import component-from-global-scope="Core_00591b.Avatar" name="{{ game.heroName }}" size="lg" status="{{ game.avatarStatus }}" hint-size="40px,40px"></x-import>
+                    <div style="flex: 1">
+                      <div style="font-size: var(--core-fs-md); font-weight: var(--core-fw-semibold)">{{ game.heroName }}</div>
+                      <div style="font-size: var(--core-fs-xs); color: var(--core-text-3)">{{ game.heroRole }}</div>
+                    </div>
+                    <x-import component-from-global-scope="Core_00591b.Button" variant="soft" size="sm" onClick="{{ onOpenActiveHero }}" hint-size="120px,32px">Open config</x-import>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: var(--core-s-5)">
+                    <span style="font-size: var(--core-fs-xs); color: var(--core-text-3); width: 84px">Manual override</span>
+                    <x-import component-from-global-scope="Core_00591b.Select" value="{{ state.hero }}" onChange="{{ onHeroSelect }}" options="{{ heroOptions }}" hint-size="100%,38px"></x-import>
+                  </div>
+                </div>
+              </x-import>
+            </x-import>
+          </div>
+
+          <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,240px">
+            <x-import component-from-global-scope="Core_00591b.CardHeader" title="Automation modules" subtitle="What is armed right now" hint-size="100%,64px"></x-import>
+            <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,170px">
+              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--core-s-5)">
+                <sc-for list="{{ modules }}" as="m" hint-placeholder-count="8">
+                  <button type="button" onClick="{{ onNav }}" data-page="{{ m.page }}" style="display: flex; flex-direction: column; align-items: flex-start; gap: var(--core-s-4); padding: var(--core-s-5); border: 1px solid var(--core-border); border-radius: var(--core-r-md); background: var(--core-surface-2); color: var(--core-text); font-family: inherit; font-size: var(--core-fs-sm); text-align: left; cursor: pointer" style-hover="border-color: var(--core-border-strong); background: var(--core-surface-3)">
+                    <span style="font-weight: var(--core-fw-medium)">{{ m.name }}</span>
+                    <x-import component-from-global-scope="Core_00591b.Badge" tone="{{ m.tone }}" dot="{{ true }}" hint-size="60px,20px">{{ m.state }}</x-import>
+                  </button>
+                </sc-for>
+              </div>
+            </x-import>
+          </x-import>
+
+          <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,240px">
+            <x-import component-from-global-scope="Core_00591b.CardHeader" title="Recent activity" hint-size="100%,56px"></x-import>
+            <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,180px">
+              <div style="display: flex; flex-direction: column; gap: var(--core-s-3); font-family: var(--core-font-mono); font-size: var(--core-fs-xs)">
+                <sc-for list="{{ recentLogs }}" as="e" hint-placeholder-count="5">
+                  <div style="display: flex; gap: var(--core-s-5)">
+                    <span style="color: var(--core-text-3)">{{ e.timestamp }}</span>
+                    <span style="width: 76px; color: var(--core-text-3)">{{ e.tag }}</span>
+                    <span style="color: {{ e.color }}">{{ e.message }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </x-import>
+            <x-import component-from-global-scope="Core_00591b.CardFooter" hint-size="100%,52px">
+              <x-import component-from-global-scope="Core_00591b.Button" variant="ghost" size="sm" onClick="{{ onNav }}" data-page="activity" hint-size="120px,32px">Full log</x-import>
+            </x-import>
+          </x-import>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ p.heroes }}">
+        <div style="display: flex; flex-direction: column; gap: var(--core-s-6); max-width: 1180px">
+          <p style="margin: 0; color: var(--core-text-2)">Select a hero to view and configure its automation settings.</p>
+          <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--core-s-5)">
+            <sc-for list="{{ heroes }}" as="h" hint-placeholder-count="15">
+              <button type="button" onClick="{{ onHero }}" data-hero="{{ h.id }}" style="display: flex; flex-direction: column; align-items: center; gap: var(--core-s-4); padding: var(--core-s-6) var(--core-s-5); border: 1px solid {{ h.border }}; border-radius: var(--core-r-lg); background: var(--core-surface); color: var(--core-text); font-family: inherit; cursor: pointer" style-hover="background: var(--core-surface-2)">
+                <x-import component-from-global-scope="Core_00591b.Avatar" name="{{ h.displayName }}" size="lg" hint-size="40px,40px"></x-import>
+                <span style="font-size: var(--core-fs-sm); font-weight: var(--core-fw-medium)">{{ h.displayName }}</span>
+                <span style="font-size: var(--core-fs-2xs); color: var(--core-text-3)">{{ h.role }}</span>
+                <sc-if value="{{ h.isActive }}">
+                  <x-import component-from-global-scope="Core_00591b.Badge" tone="accent" hint-size="56px,20px">Active</x-import>
+                </sc-if>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ p.heroDetail }}">
+        <div style="display: flex; flex-direction: column; gap: var(--core-s-6); max-width: 1180px">
+          <div style="display: flex; align-items: center; gap: var(--core-s-5)">
+            <x-import component-from-global-scope="Core_00591b.Button" variant="ghost" size="sm" onClick="{{ onNav }}" data-page="heroes" hint-size="90px,32px">Heroes</x-import>
+            <span style="color: var(--core-text-3)">/</span>
+            <x-import component-from-global-scope="Core_00591b.Avatar" name="{{ hero.displayName }}" size="sm" hint-size="28px,28px"></x-import>
+            <span style="font-size: var(--core-fs-lg); font-weight: var(--core-fw-semibold)">{{ hero.displayName }}</span>
+            <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-2xs); color: var(--core-text-3)">{{ hero.internalName }}</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--core-s-6)">
+            <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,280px">
+              <x-import component-from-global-scope="Core_00591b.CardHeader" title="Standalone combo" subtitle="Runs from the keyboard hook, no GSI required" hint-size="100%,64px"></x-import>
+              <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,210px">
+                <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+                  <div style="display: flex; align-items: center; justify-content: space-between">
+                    <span>Enable combo</span>
+                    <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.heroCombo }}" onChange="{{ onTog }}" data-key="heroCombo" hint-size="38px,22px"></x-import>
+                  </div>
+                  <x-import component-from-global-scope="Core_00591b.Field" label="Trigger key" hint="Held while the combo runs" hint-size="100%,70px">
+                    <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.heroTrigger }}" onChange="{{ onTxt }}" data-key="heroTrigger" hint-size="100%,38px"></x-import>
+                  </x-import>
+                  <x-import component-from-global-scope="Core_00591b.Field" label="Step delay" hint-size="100%,70px">
+                    <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.heroDelay }}" onChange="{{ onNum }}" data-key="heroDelay" suffix="ms" hint-size="100%,38px"></x-import>
+                  </x-import>
+                </div>
+              </x-import>
+            </x-import>
+            <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,280px">
+              <x-import component-from-global-scope="Core_00591b.CardHeader" title="Interception" subtitle="Keys this hero takes over while automation is armed" hint-size="100%,64px"></x-import>
+              <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,210px">
+                <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+                  <div style="display: flex; flex-wrap: wrap; gap: var(--core-s-4)">
+                    <sc-for list="{{ hero.keys }}" as="k" hint-placeholder-count="4">
+                      <x-import component-from-global-scope="Core_00591b.Badge" square="{{ true }}" outline="{{ true }}" hint-size="28px,28px">{{ k }}</x-import>
+                    </sc-for>
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: var(--core-s-4)">
+                    <sc-for list="{{ hero.triggers }}" as="t" hint-placeholder-count="3">
+                      <div style="display: flex; align-items: center; justify-content: space-between; padding: var(--core-s-5); border: 1px solid var(--core-border); border-radius: var(--core-r-md); background: var(--core-surface-2)">
+                        <span>{{ t.name }}</span>
+                        <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-2xs); color: var(--core-text-3)">{{ t.detail }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </x-import>
+            </x-import>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ p.surv }}">
+        <div style="display: flex; flex-direction: column; gap: var(--core-s-6); max-width: 1180px">
+          <p style="margin: 0; color: var(--core-text-2)">What the runtime does to keep you alive. When it decides you are in danger is tuned on Danger Detection; item-specific automation lives on Armlet, Boots and Soul Ring.</p>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--core-s-6); align-items: start">
+            <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+              <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,300px">
+                <x-import component-from-global-scope="Core_00591b.CardHeader" title="Healing items" hint-size="100%,56px"></x-import>
+                <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,240px">
+                  <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+                    <div>
+                      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--core-s-3)">
+                        <span style="color: var(--core-text-2)">Healing HP threshold</span>
+                        <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-xs)">{{ cfg.healHp }}%</span>
+                      </div>
+                      <input type="range" min="0" max="100" value="{{ cfg.healHp }}" onInput="{{ onNum }}" data-key="healHp">
+                      <div style="margin-top: var(--core-s-3); font-size: var(--core-fs-xs); color: var(--core-text-3)">Baseline: heals once per event below this HP.</div>
+                    </div>
+                    <div>
+                      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--core-s-3)">
+                        <span style="color: var(--core-text-2)">Healing HP threshold in danger</span>
+                        <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-xs)">{{ cfg.healHpDanger }}%</span>
+                      </div>
+                      <input type="range" min="0" max="100" value="{{ cfg.healHpDanger }}" onInput="{{ onNum }}" data-key="healHpDanger">
+                    </div>
+                    <div>
+                      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--core-s-3)">
+                        <span style="color: var(--core-text-2)">Max healing items per event</span>
+                        <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-xs)">{{ cfg.maxHealItems }}</span>
+                      </div>
+                      <input type="range" min="1" max="6" value="{{ cfg.maxHealItems }}" onInput="{{ onNum }}" data-key="maxHealItems">
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: var(--core-s-3); padding: var(--core-s-5); border-radius: var(--core-r-md); background: var(--core-bg-sunken); font-family: var(--core-font-mono); font-size: var(--core-fs-2xs); color: var(--core-text-2); line-height: var(--core-lh-relaxed)">
+                      <div><span style="color: var(--core-text-3)">normal&nbsp;&nbsp;</span>Cheese → Magic Stick → Faerie Fire → Magic Wand → Enchanted Mango → Greater Faerie Fire</div>
+                      <div><span style="color: var(--core-text-3)">danger&nbsp;&nbsp;</span>Cheese → Greater Faerie Fire → Enchanted Mango → Magic Wand → Magic Stick → Faerie Fire</div>
+                    </div>
+                  </div>
+                </x-import>
+              </x-import>
+
+              <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,260px">
+                <x-import component-from-global-scope="Core_00591b.CardHeader" title="Lane phase" subtitle="Stops the runtime burning regen on lane harass" hint-size="100%,64px"></x-import>
+                <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,190px">
+                  <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+                    <div style="display: flex; align-items: center; justify-content: space-between">
+                      <span>Use a lower threshold early</span>
+                      <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.lanePhase }}" onChange="{{ onTog }}" data-key="lanePhase" hint-size="38px,22px"></x-import>
+                    </div>
+                    <div>
+                      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--core-s-3)">
+                        <span style="color: var(--core-text-2)">Lane phase healing threshold</span>
+                        <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-xs)">{{ cfg.lanePhaseHp }}%</span>
+                      </div>
+                      <input type="range" min="0" max="60" value="{{ cfg.lanePhaseHp }}" onInput="{{ onNum }}" data-key="lanePhaseHp">
+                    </div>
+                    <x-import component-from-global-scope="Core_00591b.Field" label="Lane phase duration" hint="Measured from the horn. Pre-game clock values do not count." hint-size="100%,80px">
+                      <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.lanePhaseDuration }}" onChange="{{ onNum }}" data-key="lanePhaseDuration" suffix="s" hint-size="100%,38px"></x-import>
+                    </x-import>
+                  </div>
+                </x-import>
+              </x-import>
+
+              <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,150px">
+                <x-import component-from-global-scope="Core_00591b.CardHeader" title="Invisibility" hint-size="100%,56px"></x-import>
+                <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,100px">
+                  <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: var(--core-s-6)">
+                    <div>
+                      <div style="font-weight: var(--core-fw-medium)">Hold automation while invisible</div>
+                      <div style="font-size: var(--core-fs-xs); color: var(--core-text-3); line-height: var(--core-lh-relaxed)">Shadow Blade and Silver Edge invisibility drops the moment anything is cast. While running, this holds Dark Pact, Phase Boots, healing and item use.</div>
+                    </div>
+                    <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.holdInvis }}" onChange="{{ onTog }}" data-key="holdInvis" hint-size="38px,22px"></x-import>
+                  </div>
+                </x-import>
+              </x-import>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+              <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,340px">
+                <x-import component-from-global-scope="Core_00591b.CardHeader" title="Defensive items" subtitle="Used in priority order, only while danger detection is active" hint-size="100%,64px"></x-import>
+                <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,270px">
+                  <div style="display: flex; flex-direction: column; gap: var(--core-s-2)">
+                    <sc-for list="{{ defensiveItems }}" as="it" hint-placeholder-count="7">
+                      <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--core-s-5); padding: var(--core-s-4) 0">
+                        <span style="display: flex; align-items: center; gap: var(--core-s-4)">
+                          <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-2xs); color: var(--core-text-3)">{{ it.order }}</span>
+                          <span>{{ it.name }}</span>
+                        </span>
+                        <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ it.on }}" onChange="{{ onTog }}" data-key="{{ it.key }}" hint-size="38px,22px"></x-import>
+                      </div>
+                    </sc-for>
+                    <x-import component-from-global-scope="Core_00591b.Divider" hint-size="100%,1px"></x-import>
+                    <div style="padding-top: var(--core-s-4)">
+                      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--core-s-3)">
+                        <span style="color: var(--core-text-2)">Satanic HP threshold</span>
+                        <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-xs)">{{ cfg.satanicHp }}%</span>
+                      </div>
+                      <input type="range" min="0" max="100" value="{{ cfg.satanicHp }}" onInput="{{ onNum }}" data-key="satanicHp">
+                    </div>
+                  </div>
+                </x-import>
+              </x-import>
+
+              <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,320px">
+                <x-import component-from-global-scope="Core_00591b.CardHeader" title="Neutral items" hint-size="100%,56px"></x-import>
+                <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,260px">
+                  <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+                    <div style="display: flex; align-items: center; justify-content: space-between">
+                      <span>Enable neutral items</span>
+                      <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.neutralEnabled }}" onChange="{{ onTog }}" data-key="neutralEnabled" hint-size="38px,22px"></x-import>
+                    </div>
+                    <div style="display: flex; align-items: center; justify-content: space-between">
+                      <span>Use in danger only</span>
+                      <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.neutralDangerOnly }}" onChange="{{ onTog }}" data-key="neutralDangerOnly" hint-size="38px,22px"></x-import>
+                    </div>
+                    <div>
+                      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--core-s-3)">
+                        <span style="color: var(--core-text-2)">Neutral HP threshold</span>
+                        <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-xs)">{{ cfg.neutralHp }}%</span>
+                      </div>
+                      <input type="range" min="0" max="100" value="{{ cfg.neutralHp }}" onInput="{{ onNum }}" data-key="neutralHp">
+                    </div>
+                    <x-import component-from-global-scope="Core_00591b.Field" label="Self-cast key" hint-size="140px,66px">
+                      <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.neutralKey }}" onChange="{{ onTxt }}" data-key="neutralKey" hint-size="140px,38px"></x-import>
+                    </x-import>
+                    <div>
+                      <div style="margin-bottom: var(--core-s-4); font-size: var(--core-fs-xs); color: var(--core-text-3)">Allowed items</div>
+                      <div style="display: flex; flex-wrap: wrap; gap: var(--core-s-3)">
+                        <sc-for list="{{ neutralItems }}" as="n" hint-placeholder-count="6">
+                          <x-import component-from-global-scope="Core_00591b.Badge" outline="{{ true }}" hint-size="150px,20px">{{ n }}</x-import>
+                        </sc-for>
+                      </div>
+                    </div>
+                  </div>
+                </x-import>
+              </x-import>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ p.danger }}">
+        <div style="display: flex; flex-direction: column; gap: var(--core-s-6); max-width: 1180px">
+          <p style="margin: 0; color: var(--core-text-2)">When the runtime decides you are in danger. What it then does about it is configured on Survivability.</p>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--core-s-6); align-items: start">
+            <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,340px">
+              <x-import component-from-global-scope="Core_00591b.CardHeader" title="Core settings" hint-size="100%,56px"></x-import>
+              <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,280px">
+                <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+                  <div style="display: flex; align-items: center; justify-content: space-between">
+                    <span>Enable danger detection</span>
+                    <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.dangerEnabled }}" onChange="{{ onTog }}" data-key="dangerEnabled" hint-size="38px,22px"></x-import>
+                  </div>
+                  <div>
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--core-s-3)">
+                      <span style="color: var(--core-text-2)">HP threshold</span>
+                      <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-xs)">{{ cfg.dangerHp }}%</span>
+                    </div>
+                    <input type="range" min="30" max="90" value="{{ cfg.dangerHp }}" onInput="{{ onNum }}" data-key="dangerHp">
+                  </div>
+                  <div>
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--core-s-3)">
+                      <span style="color: var(--core-text-2)">Rapid loss threshold</span>
+                      <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-xs)">{{ cfg.rapidLoss }} HP</span>
+                    </div>
+                    <input type="range" min="50" max="300" value="{{ cfg.rapidLoss }}" onInput="{{ onNum }}" data-key="rapidLoss">
+                  </div>
+                  <div>
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--core-s-3)">
+                      <span style="color: var(--core-text-2)">Burst time window</span>
+                      <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-xs)">{{ cfg.burstWindow }} ms</span>
+                    </div>
+                    <input type="range" min="100" max="2000" value="{{ cfg.burstWindow }}" onInput="{{ onNum }}" data-key="burstWindow">
+                  </div>
+                  <div>
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--core-s-3)">
+                      <span style="color: var(--core-text-2)">Clear delay</span>
+                      <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-xs)">{{ cfg.clearDelay }} s</span>
+                    </div>
+                    <input type="range" min="1" max="10" value="{{ cfg.clearDelay }}" onInput="{{ onNum }}" data-key="clearDelay">
+                  </div>
+                </div>
+              </x-import>
+            </x-import>
+            <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,200px">
+              <x-import component-from-global-scope="Core_00591b.CardHeader" title="Responses" subtitle="Healing thresholds, defensive items, dispels and neutral items all react to the state configured here" hint-size="100%,80px"></x-import>
+              <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,110px">
+                <button type="button" onClick="{{ onNav }}" data-page="surv" style="display: flex; width: 100%; align-items: center; justify-content: space-between; padding: var(--core-s-5); border: 1px solid var(--core-border); border-radius: var(--core-r-md); background: var(--core-surface-2); color: var(--core-text); font-family: inherit; font-size: var(--core-fs-sm); cursor: pointer" style-hover="background: var(--core-surface-3)">
+                  <span>Survivability</span>
+                  <span style="color: var(--core-accent-text)">Configure →</span>
+                </button>
+              </x-import>
+            </x-import>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ p.soul }}">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--core-s-6); max-width: 1180px; align-items: start">
+          <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,380px">
+            <x-import component-from-global-scope="Core_00591b.CardHeader" title="Settings" hint-size="100%,56px"></x-import>
+            <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,320px">
+              <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+                <div style="display: flex; align-items: center; justify-content: space-between">
+                  <span>Enable Soul Ring</span>
+                  <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.soulEnabled }}" onChange="{{ onTog }}" data-key="soulEnabled" hint-size="38px,22px"></x-import>
+                </div>
+                <div>
+                  <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--core-s-3)">
+                    <span style="color: var(--core-text-2)">Min mana to trigger</span>
+                    <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-xs)">{{ cfg.soulMinMana }}%</span>
+                  </div>
+                  <input type="range" min="0" max="100" value="{{ cfg.soulMinMana }}" onInput="{{ onNum }}" data-key="soulMinMana">
+                </div>
+                <div>
+                  <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--core-s-3)">
+                    <span style="color: var(--core-text-2)">Min health safety floor</span>
+                    <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-xs)">{{ cfg.soulMinHealth }}%</span>
+                  </div>
+                  <input type="range" min="0" max="50" value="{{ cfg.soulMinHealth }}" onInput="{{ onNum }}" data-key="soulMinHealth">
+                </div>
+                <x-import component-from-global-scope="Core_00591b.Field" label="Delay before ability" hint-size="100%,66px">
+                  <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.soulDelay }}" onChange="{{ onNum }}" data-key="soulDelay" suffix="ms" hint-size="100%,38px"></x-import>
+                </x-import>
+                <x-import component-from-global-scope="Core_00591b.Field" label="Trigger cooldown" hint-size="100%,66px">
+                  <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.soulCooldown }}" onChange="{{ onNum }}" data-key="soulCooldown" suffix="ms" hint-size="100%,38px"></x-import>
+                </x-import>
+              </div>
+            </x-import>
+          </x-import>
+          <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,240px">
+            <x-import component-from-global-scope="Core_00591b.CardHeader" title="Intercepted keys" hint-size="100%,56px"></x-import>
+            <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,180px">
+              <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+                <div style="display: flex; flex-wrap: wrap; gap: var(--core-s-4)">
+                  <sc-for list="{{ soulKeys }}" as="k" hint-placeholder-count="6">
+                    <x-import component-from-global-scope="Core_00591b.Badge" square="{{ true }}" outline="{{ true }}" hint-size="28px,28px">{{ k }}</x-import>
+                  </sc-for>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between">
+                  <span>Intercept item keys</span>
+                  <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.soulInterceptItems }}" onChange="{{ onTog }}" data-key="soulInterceptItems" hint-size="38px,22px"></x-import>
+                </div>
+                <p style="margin: 0; font-size: var(--core-fs-xs); color: var(--core-text-3); line-height: var(--core-lh-relaxed)">Soul Ring pre-casts before these keys when mana is below threshold. Excludes Blink, TP, BKB, Armlet, and consumables.</p>
+              </div>
+            </x-import>
+          </x-import>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ p.armlet }}">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--core-s-6); max-width: 1180px; align-items: start">
+          <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+            <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,380px">
+              <x-import component-from-global-scope="Core_00591b.CardHeader" title="Shared settings" hint-size="100%,56px"></x-import>
+              <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,320px">
+                <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+                  <div style="display: flex; align-items: center; justify-content: space-between">
+                    <span>Enable Armlet</span>
+                    <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.armletEnabled }}" onChange="{{ onTog }}" data-key="armletEnabled" hint-size="38px,22px"></x-import>
+                  </div>
+                  <x-import component-from-global-scope="Core_00591b.Field" label="Cast modifier" hint-size="100%,66px">
+                    <x-import component-from-global-scope="Core_00591b.Select" value="{{ cfg.armletModifier }}" onChange="{{ onTxt }}" data-key="armletModifier" options="{{ modifierOptions }}" hint-size="100%,38px"></x-import>
+                  </x-import>
+                  <x-import component-from-global-scope="Core_00591b.Field" label="Toggle threshold" hint-size="100%,66px">
+                    <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.armletThreshold }}" onChange="{{ onNum }}" data-key="armletThreshold" suffix="HP" hint-size="100%,38px"></x-import>
+                  </x-import>
+                  <x-import component-from-global-scope="Core_00591b.Field" label="Predictive offset" hint-size="100%,66px">
+                    <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.armletOffset }}" onChange="{{ onNum }}" data-key="armletOffset" suffix="HP" hint-size="100%,38px"></x-import>
+                  </x-import>
+                  <x-import component-from-global-scope="Core_00591b.Field" label="Toggle cooldown" hint-size="100%,66px">
+                    <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.armletCooldown }}" onChange="{{ onNum }}" data-key="armletCooldown" suffix="ms" hint-size="100%,38px"></x-import>
+                  </x-import>
+                </div>
+              </x-import>
+            </x-import>
+            <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,300px">
+              <x-import component-from-global-scope="Core_00591b.CardHeader" title="Roshan mode" subtitle="Extra protection while tanking Roshan" hint-size="100%,64px"></x-import>
+              <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,230px">
+                <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+                  <div style="display: flex; align-items: center; justify-content: space-between">
+                    <span>Enable Roshan protection</span>
+                    <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.roshanEnabled }}" onChange="{{ onTog }}" data-key="roshanEnabled" hint-size="38px,22px"></x-import>
+                  </div>
+                  <x-import component-from-global-scope="Core_00591b.Field" label="Roshan toggle key" hint-size="100%,66px">
+                    <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.roshanKey }}" onChange="{{ onTxt }}" data-key="roshanKey" hint-size="100%,38px"></x-import>
+                  </x-import>
+                  <div style="display: flex; align-items: center; justify-content: space-between; padding: var(--core-s-5); border: 1px solid var(--core-border); border-radius: var(--core-r-md); background: var(--core-bg-sunken)">
+                    <span style="color: var(--core-text-2)">Current status</span>
+                    <x-import component-from-global-scope="Core_00591b.Badge" tone="{{ roshan.tone }}" dot="{{ true }}" hint-size="80px,20px">{{ roshan.label }}</x-import>
+                  </div>
+                  <div style="display: flex; align-items: center; justify-content: space-between">
+                    <span>Arm Roshan mode</span>
+                    <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.roshanArmed }}" onChange="{{ onTog }}" data-key="roshanArmed" hint-size="38px,22px"></x-import>
+                  </div>
+                  <x-import component-from-global-scope="Core_00591b.Field" label="Emergency margin" hint-size="100%,66px">
+                    <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.roshanMargin }}" onChange="{{ onNum }}" data-key="roshanMargin" suffix="HP" hint-size="100%,38px"></x-import>
+                  </x-import>
+                </div>
+              </x-import>
+            </x-import>
+          </div>
+          <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,520px">
+            <x-import component-from-global-scope="Core_00591b.CardHeader" title="Per-hero overrides" subtitle="Heroes that change the shared Armlet behaviour" hint-size="100%,64px"></x-import>
+            <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,450px">
+              <div style="display: flex; flex-direction: column; gap: var(--core-s-3)">
+                <sc-for list="{{ armletHeroes }}" as="h" hint-placeholder-count="9">
+                  <button type="button" onClick="{{ onHero }}" data-hero="{{ h.id }}" style="display: flex; align-items: center; gap: var(--core-s-5); padding: var(--core-s-5); border: 1px solid var(--core-border); border-radius: var(--core-r-md); background: var(--core-surface-2); color: var(--core-text); font-family: inherit; font-size: var(--core-fs-sm); cursor: pointer" style-hover="background: var(--core-surface-3)">
+                    <x-import component-from-global-scope="Core_00591b.Avatar" name="{{ h.displayName }}" size="sm" hint-size="28px,28px"></x-import>
+                    <span style="flex: 1; text-align: left">{{ h.displayName }}</span>
+                    <span style="color: var(--core-accent-text)">Configure →</span>
+                  </button>
+                </sc-for>
+              </div>
+            </x-import>
+          </x-import>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ p.boots }}">
+        <div style="max-width: 620px">
+          <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,320px">
+            <x-import component-from-global-scope="Core_00591b.CardHeader" title="Phase Boots" hint-size="100%,56px"></x-import>
+            <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,260px">
+              <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+                <div style="display: flex; align-items: center; justify-content: space-between">
+                  <span>Enable Phase Boots automation</span>
+                  <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.phaseEnabled }}" onChange="{{ onTog }}" data-key="phaseEnabled" hint-size="38px,22px"></x-import>
+                </div>
+                <x-import component-from-global-scope="Core_00591b.Field" label="Minimum movement distance" hint="Only triggers once the hero has walked at least this far during the current movement segment." hint-size="100%,84px">
+                  <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.phaseDistance }}" onChange="{{ onNum }}" data-key="phaseDistance" suffix="u" hint-size="100%,38px"></x-import>
+                </x-import>
+                <x-import component-from-global-scope="Core_00591b.Alert" tone="info" title="Breaks invisibility" hint-size="100%,90px">Activating Phase Boots breaks Shadow Blade and Silver Edge invisibility. Holding it — along with every other automation that would do the same — is a single switch on Survivability.</x-import>
+              </div>
+            </x-import>
+          </x-import>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ p.minimap }}">
+        <div style="display: flex; flex-direction: column; gap: var(--core-s-6); max-width: 1180px">
+          <div style="display: flex; align-items: center; gap: var(--core-s-8); padding: var(--core-s-5) var(--core-s-6); border: 1px solid var(--core-border); border-radius: var(--core-r-lg); background: var(--core-surface); font-family: var(--core-font-mono); font-size: var(--core-fs-xs)">
+            <span><span style="color: var(--core-text-3)">capture </span>{{ minimap.captureState }}</span>
+            <span><span style="color: var(--core-text-3)">window </span>unknown</span>
+            <span><span style="color: var(--core-text-3)">interval </span>{{ cfg.captureInterval }}ms</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--core-s-6); align-items: start">
+            <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+              <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,380px">
+                <x-import component-from-global-scope="Core_00591b.CardHeader" title="Capture settings" subtitle="Region of the screen sampled for hero dots" hint-size="100%,64px"></x-import>
+                <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,310px">
+                  <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+                    <div style="display: flex; align-items: center; justify-content: space-between">
+                      <span>Enable capture</span>
+                      <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.captureEnabled }}" onChange="{{ onTog }}" data-key="captureEnabled" hint-size="38px,22px"></x-import>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--core-s-5)">
+                      <x-import component-from-global-scope="Core_00591b.Field" label="Region X" hint-size="100%,66px">
+                        <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.regionX }}" onChange="{{ onNum }}" data-key="regionX" hint-size="100%,38px"></x-import>
+                      </x-import>
+                      <x-import component-from-global-scope="Core_00591b.Field" label="Region Y" hint-size="100%,66px">
+                        <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.regionY }}" onChange="{{ onNum }}" data-key="regionY" hint-size="100%,38px"></x-import>
+                      </x-import>
+                      <x-import component-from-global-scope="Core_00591b.Field" label="Width" hint-size="100%,66px">
+                        <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.regionW }}" onChange="{{ onNum }}" data-key="regionW" suffix="px" hint-size="100%,38px"></x-import>
+                      </x-import>
+                      <x-import component-from-global-scope="Core_00591b.Field" label="Height" hint-size="100%,66px">
+                        <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.regionH }}" onChange="{{ onNum }}" data-key="regionH" suffix="px" hint-size="100%,38px"></x-import>
+                      </x-import>
+                    </div>
+                    <div>
+                      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--core-s-3)">
+                        <span style="color: var(--core-text-2)">Capture interval</span>
+                        <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-xs)">{{ cfg.captureInterval }} ms</span>
+                      </div>
+                      <input type="range" min="100" max="3000" value="{{ cfg.captureInterval }}" onInput="{{ onNum }}" data-key="captureInterval">
+                    </div>
+                    <x-import component-from-global-scope="Core_00591b.Field" label="Sample every N pixels" hint-size="100%,66px">
+                      <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.sampleEveryN }}" onChange="{{ onNum }}" data-key="sampleEveryN" hint-size="100%,38px"></x-import>
+                    </x-import>
+                  </div>
+                </x-import>
+              </x-import>
+              <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,300px">
+                <x-import component-from-global-scope="Core_00591b.CardHeader" title="Colour thresholds" subtitle="Dire (red) detection" hint-size="100%,64px"></x-import>
+                <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,230px">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--core-s-5)">
+                    <x-import component-from-global-scope="Core_00591b.Field" label="Hue max" hint-size="100%,66px">
+                      <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.hueMax }}" onChange="{{ onNum }}" data-key="hueMax" hint-size="100%,38px"></x-import>
+                    </x-import>
+                    <x-import component-from-global-scope="Core_00591b.Field" label="Hue min wrap" hint-size="100%,66px">
+                      <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.hueMinWrap }}" onChange="{{ onNum }}" data-key="hueMinWrap" hint-size="100%,38px"></x-import>
+                    </x-import>
+                    <x-import component-from-global-scope="Core_00591b.Field" label="Min saturation" hint-size="100%,66px">
+                      <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.minSat }}" onChange="{{ onNum }}" data-key="minSat" hint-size="100%,38px"></x-import>
+                    </x-import>
+                    <x-import component-from-global-scope="Core_00591b.Field" label="Min value" hint-size="100%,66px">
+                      <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.minVal }}" onChange="{{ onNum }}" data-key="minVal" hint-size="100%,38px"></x-import>
+                    </x-import>
+                  </div>
+                </x-import>
+              </x-import>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+              <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,340px">
+                <x-import component-from-global-scope="Core_00591b.CardHeader" title="Zone activity" subtitle="Radiant / Dire dots seen per zone" hint-size="100%,64px"></x-import>
+                <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,270px">
+                  <div style="display: flex; flex-direction: column; gap: var(--core-s-2)">
+                    <sc-for list="{{ zones }}" as="z" hint-placeholder-count="7">
+                      <div style="display: flex; align-items: center; gap: var(--core-s-5); padding: var(--core-s-4) 0">
+                        <span style="flex: 1">{{ z.name }}</span>
+                        <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-xs); color: var(--core-success-text)">{{ z.radiant }}</span>
+                        <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-xs); color: var(--core-danger-text)">{{ z.dire }}</span>
+                        <x-import component-from-global-scope="Core_00591b.Badge" hint-size="56px,20px">{{ z.state }}</x-import>
+                      </div>
+                    </sc-for>
+                  </div>
+                </x-import>
+              </x-import>
+              <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,180px">
+                <x-import component-from-global-scope="Core_00591b.CardHeader" title="Event feed" hint-size="100%,56px"></x-import>
+                <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,120px">
+                  <div style="padding: var(--core-s-6); border-radius: var(--core-r-md); background: var(--core-bg-sunken); font-family: var(--core-font-mono); font-size: var(--core-fs-xs); color: var(--core-text-3)">No events detected yet…</div>
+                </x-import>
+              </x-import>
+              <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,200px">
+                <x-import component-from-global-scope="Core_00591b.CardHeader" title="Detection tuning" hint-size="100%,56px"></x-import>
+                <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,140px">
+                  <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+                    <div style="display: flex; align-items: center; justify-content: space-between">
+                      <span>Enable analysis</span>
+                      <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.analysisEnabled }}" onChange="{{ onTog }}" data-key="analysisEnabled" hint-size="38px,22px"></x-import>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--core-s-5)">
+                      <x-import component-from-global-scope="Core_00591b.Field" label="Min cluster size" hint-size="100%,66px">
+                        <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.minCluster }}" onChange="{{ onNum }}" data-key="minCluster" hint-size="100%,38px"></x-import>
+                      </x-import>
+                      <x-import component-from-global-scope="Core_00591b.Field" label="Max cluster size" hint-size="100%,66px">
+                        <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.maxCluster }}" onChange="{{ onNum }}" data-key="maxCluster" hint-size="100%,38px"></x-import>
+                      </x-import>
+                    </div>
+                  </div>
+                </x-import>
+              </x-import>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ p.waves }}">
+        <div style="display: flex; flex-direction: column; gap: var(--core-s-6); max-width: 1180px">
+          <div style="display: flex; align-items: center; gap: var(--core-s-8); padding: var(--core-s-5) var(--core-s-6); border: 1px solid var(--core-border); border-radius: var(--core-r-lg); background: var(--core-surface); font-family: var(--core-font-mono); font-size: var(--core-fs-xs)">
+            <span><span style="color: var(--core-text-3)">gsi </span>{{ game.gsiState }}</span>
+            <span><span style="color: var(--core-text-3)">clock </span>{{ game.clock }}</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--core-s-6); align-items: start">
+            <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,480px">
+              <x-import component-from-global-scope="Core_00591b.CardHeader" title="Map" subtitle="Positions are predictions, not observations" hint-size="100%,64px"></x-import>
+              <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,410px">
+                <div style="position: relative; aspect-ratio: 1; border: 1px solid var(--core-border); border-radius: var(--core-r-md); background: var(--core-bg-sunken); overflow: hidden">
+                  <div style="position: absolute; inset: 12%; border: 1px solid var(--core-border); border-radius: var(--core-r-lg); transform: rotate(45deg)"></div>
+                  <div style="position: absolute; left: 10%; top: 10%; right: 10%; bottom: 10%; border-top: 1px solid var(--core-border)"></div>
+                  <div style="position: absolute; width: 22px; height: 22px; left: 12%; bottom: 12%; border-radius: 50%; background: var(--core-success-soft); border: 1.5px solid var(--core-success)"></div>
+                  <div style="position: absolute; width: 22px; height: 22px; right: 12%; top: 12%; border-radius: 50%; background: var(--core-danger-soft); border: 1.5px solid var(--core-danger)"></div>
+                </div>
+                <p style="margin: var(--core-s-5) 0 0; font-size: var(--core-fs-xs); color: var(--core-text-3)">Waiting for GSI — start a match to see waves.</p>
+              </x-import>
+            </x-import>
+            <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+              <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,220px">
+                <x-import component-from-global-scope="Core_00591b.CardHeader" title="Lane clashes" hint-size="100%,56px"></x-import>
+                <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,160px">
+                  <div style="display: flex; flex-direction: column; gap: var(--core-s-4)">
+                    <sc-for list="{{ lanes }}" as="l" hint-placeholder-count="3">
+                      <div style="display: flex; align-items: center; gap: var(--core-s-5)">
+                        <span style="width: 68px; font-weight: var(--core-fw-medium)">{{ l.name }}</span>
+                        <span style="flex: 1; font-family: var(--core-font-mono); font-size: var(--core-fs-2xs); color: var(--core-text-3)">{{ l.matchup }}</span>
+                        <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-xs); color: var(--core-text-3)">{{ l.eta }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </x-import>
+              </x-import>
+              <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,420px">
+                <x-import component-from-global-scope="Core_00591b.CardHeader" title="Minimap overlay" subtitle="Click-through window drawn over Dota's minimap" hint-size="100%,64px"></x-import>
+                <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,350px">
+                  <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+                    <div style="display: flex; align-items: center; justify-content: space-between">
+                      <span>Enable overlay hotkey</span>
+                      <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.overlayHotkey }}" onChange="{{ onTog }}" data-key="overlayHotkey" hint-size="38px,22px"></x-import>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: var(--core-s-5)">
+                      <x-import component-from-global-scope="Core_00591b.Button" variant="secondary" size="sm" hint-size="120px,32px">Show overlay</x-import>
+                      <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-xs); color: var(--core-text-3)">Hotkey F8</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: var(--core-s-3); font-family: var(--core-font-mono); font-size: var(--core-fs-xs); color: var(--core-text-2)">
+                      <div><span style="color: var(--core-text-3)">dota window </span>Windowed</div>
+                      <div><span style="color: var(--core-text-3)">placement </span>240×245 at -31998,-31165</div>
+                    </div>
+                    <x-import component-from-global-scope="Core_00591b.Alert" tone="warning" hint-size="100%,90px">Overlays cannot draw over exclusive fullscreen. If the overlay does not appear, set Dota to Borderless or Windowed.</x-import>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--core-s-5)">
+                      <x-import component-from-global-scope="Core_00591b.Field" label="Offset X" hint-size="100%,66px">
+                        <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.offsetX }}" onChange="{{ onNum }}" data-key="offsetX" suffix="px" hint-size="100%,38px"></x-import>
+                      </x-import>
+                      <x-import component-from-global-scope="Core_00591b.Field" label="Offset Y" hint-size="100%,66px">
+                        <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.offsetY }}" onChange="{{ onNum }}" data-key="offsetY" suffix="px" hint-size="100%,38px"></x-import>
+                      </x-import>
+                    </div>
+                    <div>
+                      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--core-s-3)">
+                        <span style="color: var(--core-text-2)">Opacity</span>
+                        <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-xs)">{{ cfg.overlayOpacity }}%</span>
+                      </div>
+                      <input type="range" min="10" max="100" value="{{ cfg.overlayOpacity }}" onInput="{{ onNum }}" data-key="overlayOpacity">
+                    </div>
+                    <div style="display: flex; align-items: center; justify-content: space-between">
+                      <span>Draw lane lines</span>
+                      <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.drawLaneLines }}" onChange="{{ onTog }}" data-key="drawLaneLines" hint-size="38px,22px"></x-import>
+                    </div>
+                  </div>
+                </x-import>
+              </x-import>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ p.alerts }}">
+        <div style="display: flex; flex-direction: column; gap: var(--core-s-6); max-width: 900px">
+          <p style="margin: 0; color: var(--core-text-2)">Audio cues for runes, Tormentor, neutral drops, and stack timings.</p>
+          <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,300px">
+            <x-import component-from-global-scope="Core_00591b.CardHeader" title="Master" hint-size="100%,56px"></x-import>
+            <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,240px">
+              <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+                <div style="display: flex; align-items: center; justify-content: space-between">
+                  <span>Enable alerts</span>
+                  <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.alertsEnabled }}" onChange="{{ onTog }}" data-key="alertsEnabled" hint-size="38px,22px"></x-import>
+                </div>
+                <div>
+                  <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--core-s-3)">
+                    <span style="color: var(--core-text-2)">Master volume</span>
+                    <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-xs)">{{ cfg.masterVolume }}%</span>
+                  </div>
+                  <input type="range" min="0" max="100" value="{{ cfg.masterVolume }}" onInput="{{ onNum }}" data-key="masterVolume">
+                </div>
+                <p style="margin: 0; font-size: var(--core-fs-xs); color: var(--core-text-3); line-height: var(--core-lh-relaxed)">Cues are generated in the app, so they keep working with the window minimised. Each event has a distinct rhythm — the pulse count matches how often it happens, so two blips is the 2-minute power rune and three notes is the 7-minute wisdom rune.</p>
+                <x-import component-from-global-scope="Core_00591b.Field" label="Voice pack" hint="A voice pack replaces the cues with spoken callouts. Packs are not shipped — generate one, or drop your own files in assets/voice/." hint-size="100%,90px">
+                  <x-import component-from-global-scope="Core_00591b.Select" value="{{ cfg.voicePack }}" onChange="{{ onTxt }}" data-key="voicePack" options="{{ voiceOptions }}" hint-size="100%,38px"></x-import>
+                </x-import>
+              </div>
+            </x-import>
+          </x-import>
+          <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,460px">
+            <x-import component-from-global-scope="Core_00591b.CardHeader" title="Events" hint-size="100%,56px"></x-import>
+            <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,400px">
+              <div style="display: flex; flex-direction: column; gap: var(--core-s-5)">
+                <sc-for list="{{ alertEvents }}" as="ev" hint-placeholder-count="5">
+                  <div style="display: grid; grid-template-columns: 1.2fr 1fr auto auto; align-items: center; gap: var(--core-s-6); padding: var(--core-s-5); border: 1px solid var(--core-border); border-radius: var(--core-r-md); background: var(--core-surface-2)">
+                    <div>
+                      <div style="font-weight: var(--core-fw-medium)">{{ ev.name }}</div>
+                      <div style="font-family: var(--core-font-mono); font-size: var(--core-fs-2xs); color: var(--core-text-3)">{{ ev.cadence }}</div>
+                      <div style="font-size: var(--core-fs-xs); color: var(--core-text-2)">{{ ev.cue }}</div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: var(--core-s-4)">
+                      <span style="font-size: var(--core-fs-xs); color: var(--core-text-3)">Lead</span>
+                      <span style="font-family: var(--core-font-mono); font-size: var(--core-fs-xs)">{{ ev.lead }}s</span>
+                    </div>
+                    <x-import component-from-global-scope="Core_00591b.Button" variant="soft" size="sm" hint-size="60px,32px">Test</x-import>
+                    <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ ev.on }}" onChange="{{ onTog }}" data-key="{{ ev.key }}" hint-size="38px,22px"></x-import>
+                  </div>
+                </sc-for>
+              </div>
+            </x-import>
+          </x-import>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ p.activity }}">
+        <div style="display: flex; flex-direction: column; gap: var(--core-s-6); height: 100%">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--core-s-6)">
+            <x-import component-from-global-scope="Core_00591b.Tabs" items="{{ logTabs }}" value="{{ state.logFilter }}" onChange="{{ onFilter }}" variant="pills" hint-size="420px,36px"></x-import>
+            <div style="display: flex; align-items: center; gap: var(--core-s-4)">
+              <x-import component-from-global-scope="Core_00591b.Button" variant="secondary" size="sm" onClick="{{ onTogglePause }}" hint-size="90px,32px">{{ pauseLabel }}</x-import>
+              <x-import component-from-global-scope="Core_00591b.Button" variant="danger" size="sm" onClick="{{ onClearLog }}" hint-size="80px,32px">Clear</x-import>
+            </div>
+          </div>
+          <div style="flex: 1; overflow-y: auto; padding: var(--core-s-6); border: 1px solid var(--core-border); border-radius: var(--core-r-lg); background: var(--core-bg-sunken); font-family: var(--core-font-mono); font-size: var(--core-fs-xs); line-height: 1.9">
+            <sc-for list="{{ logs }}" as="e" hint-placeholder-count="12">
+              <div style="display: flex; gap: var(--core-s-5)">
+                <span style="color: var(--core-text-3)">{{ e.timestamp }}</span>
+                <span style="width: 76px; color: var(--core-text-3)">{{ e.tag }}</span>
+                <span style="color: {{ e.color }}">{{ e.message }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ p.diag }}">
+        <div style="display: flex; flex-direction: column; gap: var(--core-s-6); max-width: 1180px">
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--core-s-5)">
+            <sc-for list="{{ diagStatus }}" as="s" hint-placeholder-count="3">
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: var(--core-s-6); border: 1px solid var(--core-border); border-radius: var(--core-r-lg); background: var(--core-surface)">
+                <span>{{ s.label }}</span>
+                <x-import component-from-global-scope="Core_00591b.Badge" tone="{{ s.tone }}" dot="{{ true }}" hint-size="80px,20px">{{ s.state }}</x-import>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--core-s-6); align-items: start">
+            <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+              <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,260px">
+                <x-import component-from-global-scope="Core_00591b.CardHeader" title="GSI pipeline" hint-size="100%,56px"></x-import>
+                <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,200px">
+                  <x-import component-from-global-scope="Core_00591b.Table" columns="{{ metricColumns }}" rows="{{ gsiMetrics }}" compact="{{ true }}" hint-size="100%,180px"></x-import>
+                </x-import>
+              </x-import>
+              <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,180px">
+                <x-import component-from-global-scope="Core_00591b.CardHeader" title="Keyboard hook" hint-size="100%,56px"></x-import>
+                <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,120px">
+                  <x-import component-from-global-scope="Core_00591b.Table" columns="{{ metricColumns }}" rows="{{ hookMetrics }}" compact="{{ true }}" hint-size="100%,100px"></x-import>
+                </x-import>
+              </x-import>
+            </div>
+            <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,300px">
+              <x-import component-from-global-scope="Core_00591b.CardHeader" title="Synthetic input" hint-size="100%,56px"></x-import>
+              <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,240px">
+                <x-import component-from-global-scope="Core_00591b.Table" columns="{{ metricColumns }}" rows="{{ inputMetrics }}" compact="{{ true }}" hint-size="100%,220px"></x-import>
+              </x-import>
+            </x-import>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ p.settings }}">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--core-s-6); max-width: 1180px; align-items: start">
+          <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+            <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,200px">
+              <x-import component-from-global-scope="Core_00591b.CardHeader" title="Server" hint-size="100%,56px"></x-import>
+              <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,140px">
+                <div style="display: flex; flex-direction: column; gap: var(--core-s-5)">
+                  <x-import component-from-global-scope="Core_00591b.Field" label="GSI port" hint-size="100%,66px">
+                    <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.gsiPort }}" onChange="{{ onNum }}" data-key="gsiPort" hint-size="100%,38px"></x-import>
+                  </x-import>
+                  <x-import component-from-global-scope="Core_00591b.Alert" tone="warning" hint-size="100%,52px">Restart required after changing port.</x-import>
+                </div>
+              </x-import>
+            </x-import>
+            <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,360px">
+              <x-import component-from-global-scope="Core_00591b.CardHeader" title="Keybindings" subtitle="Item slots the runtime is allowed to press" hint-size="100%,64px"></x-import>
+              <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,290px">
+                <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+                  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--core-s-5)">
+                    <sc-for list="{{ slotKeys }}" as="s" hint-placeholder-count="6">
+                      <x-import component-from-global-scope="Core_00591b.Field" label="{{ s.label }}" hint-size="100%,66px">
+                        <x-import component-from-global-scope="Core_00591b.Input" value="{{ s.value }}" onChange="{{ onTxt }}" data-key="{{ s.key }}" hint-size="100%,38px"></x-import>
+                      </x-import>
+                    </sc-for>
+                  </div>
+                  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--core-s-5)">
+                    <x-import component-from-global-scope="Core_00591b.Field" label="Neutral slot" hint-size="100%,66px">
+                      <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.neutralSlot }}" onChange="{{ onTxt }}" data-key="neutralSlot" hint-size="100%,38px"></x-import>
+                    </x-import>
+                    <x-import component-from-global-scope="Core_00591b.Field" label="Combo trigger" hint-size="100%,66px">
+                      <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.comboTrigger }}" onChange="{{ onTxt }}" data-key="comboTrigger" hint-size="100%,38px"></x-import>
+                    </x-import>
+                    <x-import component-from-global-scope="Core_00591b.Field" label="Capture HUD portrait" hint-size="100%,66px">
+                      <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.capturePortrait }}" onChange="{{ onTxt }}" data-key="capturePortrait" hint-size="100%,38px"></x-import>
+                    </x-import>
+                  </div>
+                </div>
+              </x-import>
+            </x-import>
+            <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,200px">
+              <x-import component-from-global-scope="Core_00591b.CardHeader" title="HUD anchors" subtitle="Hover the centre of the portrait in-game and press F9" hint-size="100%,64px"></x-import>
+              <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,130px">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--core-s-5)">
+                  <span style="font-size: var(--core-fs-xs); color: var(--core-text-3); line-height: var(--core-lh-relaxed)">Slark's shard ability — and anything else Dota refuses to self-cast — is aimed by clicking your hero portrait.</span>
+                  <x-import component-from-global-scope="Core_00591b.Badge" tone="success" dot="{{ true }}" hint-size="120px,20px">Calibrated</x-import>
+                </div>
+              </x-import>
+            </x-import>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+            <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,300px">
+              <x-import component-from-global-scope="Core_00591b.CardHeader" title="Rune alerts" hint-size="100%,56px"></x-import>
+              <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,240px">
+                <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+                  <div style="display: flex; align-items: center; justify-content: space-between">
+                    <span>Enable rune alerts</span>
+                    <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.runeAlerts }}" onChange="{{ onTog }}" data-key="runeAlerts" hint-size="38px,22px"></x-import>
+                  </div>
+                  <x-import component-from-global-scope="Core_00591b.Field" label="Alert lead time" hint-size="100%,66px">
+                    <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.runeLead }}" onChange="{{ onNum }}" data-key="runeLead" suffix="s" hint-size="100%,38px"></x-import>
+                  </x-import>
+                  <x-import component-from-global-scope="Core_00591b.Field" label="Check interval" hint-size="100%,66px">
+                    <x-import component-from-global-scope="Core_00591b.Input" value="{{ cfg.runeInterval }}" onChange="{{ onNum }}" data-key="runeInterval" suffix="s" hint-size="100%,38px"></x-import>
+                  </x-import>
+                  <div style="display: flex; align-items: center; justify-content: space-between">
+                    <span>Audio alert</span>
+                    <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.runeAudio }}" onChange="{{ onTog }}" data-key="runeAudio" hint-size="38px,22px"></x-import>
+                  </div>
+                </div>
+              </x-import>
+            </x-import>
+            <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,340px">
+              <x-import component-from-global-scope="Core_00591b.CardHeader" title="Application" hint-size="100%,56px"></x-import>
+              <x-import component-from-global-scope="Core_00591b.CardBody" hint-size="100%,280px">
+                <div style="display: flex; flex-direction: column; gap: var(--core-s-6)">
+                  <div style="display: flex; align-items: center; justify-content: space-between">
+                    <span>Check for updates on startup</span>
+                    <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.updateStartup }}" onChange="{{ onTog }}" data-key="updateStartup" hint-size="38px,22px"></x-import>
+                  </div>
+                  <div style="display: flex; align-items: center; justify-content: space-between">
+                    <span>Include pre-releases</span>
+                    <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.prereleases }}" onChange="{{ onTog }}" data-key="prereleases" hint-size="38px,22px"></x-import>
+                  </div>
+                  <x-import component-from-global-scope="Core_00591b.Field" label="Log level" hint-size="100%,66px">
+                    <x-import component-from-global-scope="Core_00591b.Select" value="{{ cfg.logLevel }}" onChange="{{ onTxt }}" data-key="logLevel" options="{{ logLevelOptions }}" hint-size="100%,38px"></x-import>
+                  </x-import>
+                  <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: var(--core-s-6)">
+                    <div>
+                      <div>Write log file</div>
+                      <div style="font-size: var(--core-fs-xs); color: var(--core-text-3); line-height: var(--core-lh-relaxed)">Writes to %LOCALAPPDATA%\dota2-scripts\logs\, rotated daily. Restart required after changing this.</div>
+                    </div>
+                    <x-import component-from-global-scope="Core_00591b.Switch" checked="{{ cfg.writeLog }}" onChange="{{ onTog }}" data-key="writeLog" hint-size="38px,22px"></x-import>
+                  </div>
+                </div>
+              </x-import>
+            </x-import>
+            <x-import component-from-global-scope="Core_00591b.Card" hint-size="100%,160px">
+              <x-import component-from-global-scope="Core_00591b.CardHeader" title="Advanced" subtitle="Restores every value in config.toml to its shipped default" hint-size="100%,64px"></x-import>
+              <x-import component-from-global-scope="Core_00591b.CardFooter" hint-size="100%,60px">
+                <x-import component-from-global-scope="Core_00591b.Button" variant="danger" size="sm" hint-size="150px,32px">Reset to defaults</x-import>
+              </x-import>
+            </x-import>
+          </div>
+        </div>
+      </sc-if>
+
+    </main>
+
+    <sc-if value="{{ tickerOn }}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; align-items: center; gap: var(--core-s-6); flex: none; height: 34px; padding: 0 var(--core-s-7); border-top: 1px solid var(--core-border); background: var(--core-bg-sunken); font-family: var(--core-font-mono); font-size: var(--core-fs-2xs)">
+        <span style="color: var(--core-text-3)">{{ lastLog.timestamp }}</span>
+        <span style="flex: 1; color: {{ lastLog.color }}">{{ lastLog.message }}</span>
+        <button type="button" onClick="{{ onNav }}" data-page="activity" style="border: 0; background: none; color: var(--core-accent-text); font-family: inherit; font-size: inherit; cursor: pointer">View all</button>
+      </div>
+    </sc-if>
+
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'dark' | 'light'&quot;},&quot;simulateMatch&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Prototype state&quot;},&quot;showTicker&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Prototype state&quot;}}">
+const ICONS = {
+  dashboard: 'M3.5 3.5h5v5h-5zM11.5 3.5h5v5h-5zM3.5 11.5h5v5h-5zM11.5 11.5h5v5h-5z',
+  heroes: 'M7.5 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5M2.5 16.5c0-2.5 2.2-4.2 5-4.2s5 1.7 5 4.2M13.5 12.6c2 .4 3.5 1.9 3.5 3.9M13 8.8a2.4 2.4 0 0 0 0-4.6',
+  surv: 'M10 16.5S4 12.9 4 9A3.4 3.4 0 0 1 10 6.6 3.4 3.4 0 0 1 16 9c0 3.9-6 7.5-6 7.5z',
+  danger: 'M10 3l6 2v5c0 4-3 6.2-6 7-3-.8-6-3-6-7V5z',
+  soul: 'M10 16.5a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5',
+  armlet: 'M4.5 7.5h11v2.5a5.5 5.5 0 0 1-11 0zM7 7.5V5h6v2.5',
+  boots: 'M5 3.5h4v6h4a3 3 0 0 1 3 3v4H5z',
+  minimap: 'M10 16.5a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13M10 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6M10 10h6.5',
+  waves: 'M3.5 7c2-2 4-2 6 0s4 2 6 0M3.5 11c2-2 4-2 6 0s4 2 6 0M3.5 15c2-2 4-2 6 0s4 2 6 0',
+  alerts: 'M6 8a4 4 0 0 1 8 0v4l1.5 2.5h-11L6 12zM8 15a2 2 0 0 0 4 0',
+  activity: 'M5 3h6l4 4v10H5zM11 3v4h4M7.5 11h5M7.5 14h5',
+  diag: 'M3 10h3l2-5 3 10 2-5h4',
+  settings: 'M3 6h5M11.5 6H17M3 14h8M14.5 14H17M9.75 6a1.75 1.75 0 1 0 3.5 0 1.75 1.75 0 0 0-3.5 0M12.75 14a1.75 1.75 0 1 0 3.5 0 1.75 1.75 0 0 0-3.5 0'
+};
+
+const HEROES = [
+  { id: 'broodmother', displayName: 'Broodmother', internalName: 'npc_dota_hero_broodmother', role: 'Pusher / Carry' },
+  { id: 'earth_spirit', displayName: 'Earth Spirit', internalName: 'npc_dota_hero_earth_spirit', role: 'Support / Disabler' },
+  { id: 'ember_spirit', displayName: 'Ember Spirit', internalName: 'npc_dota_hero_ember_spirit', role: 'Carry / Escape' },
+  { id: 'huskar', displayName: 'Huskar', internalName: 'npc_dota_hero_huskar', role: 'Carry / Durable' },
+  { id: 'invoker', displayName: 'Invoker', internalName: 'npc_dota_hero_invoker', role: 'Carry / Nuker' },
+  { id: 'largo', displayName: 'Largo', internalName: 'npc_dota_hero_largo', role: 'Support / Healer' },
+  { id: 'legion_commander', displayName: 'Legion Commander', internalName: 'npc_dota_hero_legion_commander', role: 'Initiator / Durable' },
+  { id: 'magnus', displayName: 'Magnus', internalName: 'npc_dota_hero_magnataur', role: 'Initiator / Disabler' },
+  { id: 'meepo', displayName: 'Meepo', internalName: 'npc_dota_hero_meepo', role: 'Carry / Escape' },
+  { id: 'mirana', displayName: 'Mirana', internalName: 'npc_dota_hero_mirana', role: 'Carry / Escape' },
+  { id: 'outworld_destroyer', displayName: 'Outworld Destroyer', internalName: 'npc_dota_hero_obsidian_destroyer', role: 'Carry / Nuker' },
+  { id: 'shadow_fiend', displayName: 'Shadow Fiend', internalName: 'npc_dota_hero_nevermore', role: 'Carry / Nuker' },
+  { id: 'slark', displayName: 'Slark', internalName: 'npc_dota_hero_slark', role: 'Carry / Escape' },
+  { id: 'snapfire', displayName: 'Snapfire', internalName: 'npc_dota_hero_snapfire', role: 'Support / Nuker' },
+  { id: 'tiny', displayName: 'Tiny', internalName: 'npc_dota_hero_tiny', role: 'Initiator / Nuker' }
+];
+
+const ARMLET_HERO_IDS = ['broodmother', 'huskar', 'invoker', 'largo', 'legion_commander', 'meepo', 'outworld_destroyer', 'shadow_fiend', 'tiny'];
+
+const HERO_TRIGGERS = {
+  huskar: [{ name: 'Armlet toggle', detail: 'HP < 130' }, { name: 'Berserker Blood', detail: 'passive read' }, { name: 'Life Break', detail: 'combo step 3' }],
+  shadow_fiend: [{ name: 'Raze interception', detail: 'Q / W / E' }, { name: 'Requiem', detail: 'R held' }],
+  outworld_destroyer: [{ name: 'Astral self-cast', detail: 'danger' }, { name: 'Ultimate interception', detail: 'R' }],
+  largo: [{ name: 'Amphibian Rhapsody', detail: 'beat timing' }, { name: 'Song control', detail: 'F' }],
+  broodmother: [{ name: 'Spider micro', detail: 'Space' }, { name: 'Auto items', detail: 'Space + RMB' }]
+};
+
+const LOGS = [
+  { id: 1, timestamp: '19:42:03', category: 'system', message: 'GSI server listening on 127.0.0.1:3000' },
+  { id: 2, timestamp: '19:42:04', category: 'system', message: 'Keyboard hook installed (low-level, admin)' },
+  { id: 3, timestamp: '19:44:11', category: 'system', message: 'Hero detected: Huskar (level 6)' },
+  { id: 4, timestamp: '19:44:12', category: 'action', message: 'Armlet automation armed — threshold 130 HP' },
+  { id: 5, timestamp: '19:47:29', category: 'danger', message: 'Danger: 412 HP lost in 480ms' },
+  { id: 6, timestamp: '19:47:29', category: 'action', message: 'Used Magic Wand (slot 2)' },
+  { id: 7, timestamp: '19:47:30', category: 'action', message: 'Toggled Armlet off at 118 HP' },
+  { id: 8, timestamp: '19:47:33', category: 'action', message: 'Used Greater Faerie Fire (slot 5)' },
+  { id: 9, timestamp: '19:48:02', category: 'warning', message: 'Soul Ring skipped — health floor 20%' },
+  { id: 10, timestamp: '19:50:00', category: 'system', message: 'Power rune in 15s' },
+  { id: 11, timestamp: '19:51:18', category: 'error', message: 'GSI payload rejected — unknown ability field' },
+  { id: 12, timestamp: '19:52:44', category: 'action', message: 'Phase Boots activated after 168u of travel' }
+];
+
+const CATEGORY_COLOR = {
+  action: 'var(--core-success-text)',
+  danger: 'var(--core-danger-text)',
+  warning: 'var(--core-warning-text)',
+  system: 'var(--core-info-text)',
+  error: 'var(--core-danger-text)'
+};
+
+const PAGE_TITLES = {
+  dashboard: 'Dashboard',
+  heroes: 'Heroes',
+  heroDetail: 'Hero config',
+  surv: 'Survivability',
+  danger: 'Danger detection',
+  soul: 'Soul Ring',
+  armlet: 'Armlet',
+  boots: 'Boots',
+  minimap: 'Minimap intelligence',
+  waves: 'Wave tracker',
+  alerts: 'Objective alerts',
+  activity: 'Activity log',
+  diag: 'Diagnostics',
+  settings: 'Settings'
+};
+
+class Component extends DCLogic {
+  state = {
+    page: 'dashboard',
+    hero: 'huskar',
+    logFilter: 'all',
+    collapsed: false,
+    paused: false,
+    logCleared: false,
+    cfg: {
+      gsiEnabled: true,
+      standaloneEnabled: true,
+      healHp: 30, healHpDanger: 50, maxHealItems: 3,
+      lanePhase: true, lanePhaseHp: 12, lanePhaseDuration: 480, holdInvis: true,
+      bkb: false, satanic: true, satanicHp: 40, bladeMail: true, mjollnir: true, glimmer: true, ghost: true, shiva: true,
+      neutralEnabled: true, neutralDangerOnly: true, neutralHp: 50, neutralKey: '0',
+      dangerEnabled: true, dangerHp: 70, rapidLoss: 100, burstWindow: 500, clearDelay: 3,
+      soulEnabled: true, soulMinMana: 100, soulMinHealth: 20, soulDelay: 30, soulCooldown: 10, soulInterceptItems: true,
+      armletEnabled: true, armletModifier: 'Alt', armletThreshold: 130, armletOffset: 150, armletCooldown: 300,
+      roshanEnabled: true, roshanKey: 'Insert', roshanArmed: false, roshanMargin: 60,
+      phaseEnabled: true, phaseDistance: 150,
+      captureEnabled: false, regionX: 2, regionY: 835, regionW: 240, regionH: 245, captureInterval: 1000, sampleEveryN: 30,
+      hueMax: 15, hueMinWrap: 340, minSat: 40, minVal: 30, analysisEnabled: true, minCluster: 20, maxCluster: 200,
+      overlayHotkey: true, offsetX: 0, offsetY: 0, overlayOpacity: 85, drawLaneLines: false,
+      alertsEnabled: false, masterVolume: 80, voicePack: 'en-sapi',
+      evPowerRune: true, evWisdomRune: true, evTormentor: true, evNeutral: false, evStack: true,
+      gsiPort: 3000, slot1: 'z', slot2: 'x', slot3: 'c', slot4: 'v', slot5: 'b', slot6: 'n',
+      neutralSlot: '0', comboTrigger: 'Home', capturePortrait: 'F9',
+      runeAlerts: true, runeLead: 10, runeInterval: 120, runeAudio: true,
+      updateStartup: true, prereleases: true, logLevel: 'Info', writeLog: true,
+      heroCombo: true, heroTrigger: 'Home', heroDelay: 120
+    }
+  };
+
+  set(key, value) {
+    this.setState((s) => ({ cfg: { ...s.cfg, [key]: value } }));
+  }
+
+  icon(name) {
+    return React.createElement('svg', { width: 18, height: 18, viewBox: '0 0 20 20', fill: 'none', style: { display: 'block' } },
+      React.createElement('path', { d: ICONS[name], stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round' }));
+  }
+
+  renderVals() {
+    const cfg = this.state.cfg;
+    const page = this.state.page;
+    const sim = this.props.simulateMatch ?? true;
+    const hero = HEROES.find((h) => h.id === this.state.hero) || HEROES[3];
+
+    const pages = {};
+    Object.keys(PAGE_TITLES).forEach((k) => { pages[k] = page === k; });
+
+    const nav = { ...pages, heroes: page === 'heroes' || page === 'heroDetail' };
+
+    const icons = {};
+    Object.keys(ICONS).forEach((k) => { icons[k] = this.icon(k); });
+
+    const logs = (this.state.logCleared ? [] : LOGS)
+      .filter((e) => this.state.logFilter === 'all' || e.category === this.state.logFilter)
+      .map((e) => ({ ...e, tag: '[' + e.category + ']', color: CATEGORY_COLOR[e.category] }));
+
+    const allLogs = LOGS.map((e) => ({ ...e, tag: '[' + e.category + ']', color: CATEGORY_COLOR[e.category] }));
+
+    const modules = [
+      { name: 'Survivability', page: 'surv', on: cfg.gsiEnabled },
+      { name: 'Danger', page: 'danger', on: cfg.dangerEnabled },
+      { name: 'Soul Ring', page: 'soul', on: cfg.soulEnabled },
+      { name: 'Armlet', page: 'armlet', on: cfg.armletEnabled },
+      { name: 'Boots', page: 'boots', on: cfg.phaseEnabled },
+      { name: 'Minimap', page: 'minimap', on: cfg.captureEnabled },
+      { name: 'Waves', page: 'waves', on: cfg.overlayHotkey },
+      { name: 'Alerts', page: 'alerts', on: cfg.alertsEnabled }
+    ].map((m) => ({ ...m, tone: m.on ? 'success' : 'neutral', state: m.on ? 'Armed' : 'Off' }));
+
+    const defensiveItems = [
+      { key: 'bkb', name: 'Black King Bar' },
+      { key: 'satanic', name: 'Satanic' },
+      { key: 'bladeMail', name: 'Blade Mail' },
+      { key: 'mjollnir', name: 'Mjollnir' },
+      { key: 'glimmer', name: 'Glimmer Cape' },
+      { key: 'ghost', name: 'Ghost Scepter' },
+      { key: 'shiva', name: "Shiva's Guard" }
+    ].map((it, i) => ({ ...it, order: i + 1, on: !!cfg[it.key] }));
+
+    const alertEvents = [
+      { key: 'evPowerRune', name: 'Power rune', cadence: 'every 2 min from 6:00', cue: 'Two rising bell blips', lead: 15 },
+      { key: 'evWisdomRune', name: 'Wisdom rune', cadence: 'every 7 min from 7:00', cue: 'Three rising wooden notes', lead: 20 },
+      { key: 'evTormentor', name: 'Tormentor', cadence: 'spawns at 20:00, then 10 min', cue: 'Low double thud', lead: 30 },
+      { key: 'evNeutral', name: 'Neutral drops', cadence: 'tier windows from 7:00', cue: 'Single soft chime', lead: 10 },
+      { key: 'evStack', name: 'Stack timing', cadence: 'every minute at :53', cue: 'Short tick pair', lead: 7 }
+    ].map((ev) => ({ ...ev, on: !!cfg[ev.key] }));
+
+    const zones = ['Top lane', 'Mid lane', 'Bot lane', 'Dire jungle', 'Radiant jungle', 'Roshan', 'Other']
+      .map((name) => ({ name, radiant: '0', dire: '0', state: 'Quiet' }));
+
+    const lanes = [
+      { name: 'Top', matchup: 'R: offlane · D: safelane', eta: '—' },
+      { name: 'Mid', matchup: 'R: mid · D: mid', eta: '—' },
+      { name: 'Bottom', matchup: 'R: safelane · D: offlane', eta: '—' }
+    ];
+
+    const metricColumns = [
+      { key: 'label', header: 'Metric' },
+      { key: 'value', header: 'Value', numeric: true, align: 'right' }
+    ];
+
+    return {
+      theme: this.props.theme ?? 'dark',
+      collapsedAttr: this.state.collapsed ? '1' : '0',
+      collapseGlyph: this.state.collapsed ? '»' : '«',
+      onToggleSidebar: () => this.setState((s) => ({ collapsed: !s.collapsed })),
+      tickerOn: (this.props.showTicker ?? true) && !this.state.logCleared,
+      p: pages,
+      nav,
+      icons,
+      state: this.state,
+      cfg,
+      pageTitle: PAGE_TITLES[page],
+      counts: { heroes: String(HEROES.length) },
+      game: {
+        inGame: sim,
+        connTone: sim ? 'success' : 'danger',
+        connLabel: sim ? 'GSI connected' : 'Disconnected',
+        heroName: sim ? hero.displayName : 'No hero',
+        heroRole: sim ? hero.role : 'Waiting for game',
+        avatarStatus: sim ? 'online' : 'offline',
+        level: 12,
+        hp: 74,
+        mana: 41,
+        gsiState: sim ? 'live' : 'waiting',
+        clock: sim ? '24:18' : '0:00'
+      },
+      hero: { ...hero, keys: ['Q', 'W', 'E', 'R'], triggers: HERO_TRIGGERS[hero.id] || [{ name: 'Standalone combo', detail: 'Home' }, { name: 'Survivability', detail: 'shared' }] },
+      heroes: HEROES.map((h) => ({ ...h, isActive: sim && h.id === hero.id, border: sim && h.id === hero.id ? 'var(--core-accent)' : 'var(--core-border)' })),
+      heroOptions: HEROES.map((h) => ({ value: h.id, label: h.displayName })),
+      armletHeroes: HEROES.filter((h) => ARMLET_HERO_IDS.indexOf(h.id) !== -1),
+      modules,
+      defensiveItems,
+      neutralItems: ['item_essence_ring', 'item_minotaur_horn', 'item_metamorphic_mandible', 'item_jidi_pollen_bag', 'item_ash_legion_shield', 'item_idol_of_screeauk'],
+      soulKeys: ['Q', 'W', 'E', 'R', 'D', 'F'],
+      modifierOptions: ['Alt', 'Ctrl', 'Shift', 'None'],
+      voiceOptions: ['en-sapi', 'none'],
+      logLevelOptions: ['Error', 'Warn', 'Info', 'Debug', 'Trace'],
+      alertEvents,
+      zones,
+      lanes,
+      logs,
+      recentLogs: allLogs.slice(-5),
+      lastLog: allLogs[allLogs.length - 1],
+      logTabs: [
+        { label: 'All', value: 'all' },
+        { label: 'Actions', value: 'action' },
+        { label: 'Danger', value: 'danger' },
+        { label: 'Warnings', value: 'warning' },
+        { label: 'Errors', value: 'error' },
+        { label: 'System', value: 'system' }
+      ],
+      pauseLabel: this.state.paused ? 'Resume' : 'Pause',
+      roshan: { tone: cfg.roshanArmed ? 'warning' : 'neutral', label: cfg.roshanArmed ? 'Armed' : 'Disarmed' },
+      minimap: { captureState: cfg.captureEnabled ? 'running' : 'idle' },
+      slotKeys: [1, 2, 3, 4, 5, 6].map((n) => ({ key: 'slot' + n, label: 'Slot ' + n, value: cfg['slot' + n] })),
+      metricColumns,
+      gsiMetrics: [
+        { id: 'p', label: 'Events processed', value: '18,204' },
+        { id: 'd', label: 'Events dropped', value: '0' },
+        { id: 'r', label: 'Events rejected', value: '2' },
+        { id: 'q', label: 'Queue depth', value: '0 / 64' }
+      ],
+      hookMetrics: [
+        { id: 's', label: 'Soul Ring state', value: 'ready' },
+        { id: 'b', label: 'Blocked keys', value: 'Q, W, E, R' }
+      ],
+      inputMetrics: [
+        { id: 'q', label: 'Queue depth', value: '0' },
+        { id: 't', label: 'Total queued', value: '1,431' },
+        { id: 'p', label: 'Peak depth', value: '6' },
+        { id: 'c', label: 'Completions', value: '1,431' },
+        { id: 'd', label: 'Drops', value: '0' }
+      ],
+      diagStatus: [
+        { label: 'GSI server', tone: sim ? 'success' : 'danger', state: sim ? 'Active' : 'Inactive' },
+        { label: 'Keyboard hook', tone: 'success', state: 'Active' },
+        { label: 'Game state', tone: sim ? 'success' : 'neutral', state: sim ? 'Receiving' : 'Idle' }
+      ],
+      onNav: (e) => this.setState({ page: e.currentTarget.dataset.page }),
+      onHero: (e) => this.setState({ hero: e.currentTarget.dataset.hero, page: 'heroDetail' }),
+      onHeroSelect: (e) => this.setState({ hero: e.target.value }),
+      onOpenActiveHero: () => this.setState({ page: 'heroDetail' }),
+      onFilter: (v) => this.setState({ logFilter: v }),
+      onTogglePause: () => this.setState((s) => ({ paused: !s.paused })),
+      onClearLog: () => this.setState({ logCleared: true }),
+      onTog: (e) => this.set(e.target.dataset.key, e.target.checked),
+      onNum: (e) => this.set(e.target.dataset.key, Number(e.target.value)),
+      onTxt: (e) => this.set(e.target.dataset.key, e.target.value)
+    };
+  }
+}
+
+</script>
+</body>
+</html>

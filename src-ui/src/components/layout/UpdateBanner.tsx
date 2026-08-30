@@ -21,7 +21,7 @@ function ReleaseNotesModal({
       onClick={onClose}
     >
       <div
-        className="mx-4 flex max-h-[80vh] w-full max-w-2xl flex-col rounded-lg border border-border bg-elevated shadow-2xl"
+        className="mx-4 flex max-h-[80vh] w-full max-w-2xl flex-col rounded-xl border border-border bg-surface shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
@@ -37,7 +37,7 @@ function ReleaseNotesModal({
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          <div className="prose prose-invert prose-sm max-w-none prose-headings:text-gold prose-a:text-gold prose-strong:text-content prose-code:rounded prose-code:bg-base prose-code:px-1.5 prose-code:py-0.5 prose-code:text-content prose-pre:bg-base prose-li:text-subtle">
+          <div className="prose prose-invert prose-sm max-w-none prose-headings:text-content prose-a:text-accent-text prose-strong:text-content prose-code:rounded prose-code:bg-base prose-code:px-1.5 prose-code:py-0.5 prose-code:text-content prose-pre:bg-base prose-li:text-subtle">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{notes}</ReactMarkdown>
           </div>
         </div>
@@ -68,9 +68,9 @@ export function UpdateBanner() {
 
   return (
     <>
-      <div className="flex items-center justify-between gap-4 border-b border-border bg-elevated px-4 py-2">
+      <div className="flex items-center justify-between gap-4 border-b border-border bg-accent-soft px-5 py-2">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gold">
+          <span className="text-sm font-medium text-accent-text">
             🎉 Update v{updateState.version} available
           </span>
           {updateState.releaseNotes && (

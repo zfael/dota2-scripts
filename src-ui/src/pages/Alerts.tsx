@@ -5,6 +5,7 @@ import { Dropdown } from "../components/common/Dropdown";
 import { Toggle } from "../components/common/Toggle";
 import { NumberInput } from "../components/common/NumberInput";
 import { Slider } from "../components/common/Slider";
+import { SettingRow } from "../components/common/SettingRow";
 import { useAlertStore } from "../stores/alertStore";
 import { useConfigStore } from "../stores/configStore";
 import type { AlertEventKey } from "../types/alerts";
@@ -29,32 +30,37 @@ function EventRow({
   const testPlay = useAlertStore((s) => s.testPlay);
 
   const update = (updates: Partial<AlertEventConfig>) =>
-    useConfigStore.getState().updateConfig("alerts", { [eventKey]: { ...settings, ...updates } });
+    useConfigStore
+      .getState()
+      .updateConfig("alerts", { [eventKey]: { ...settings, ...updates } });
 
   return (
-    <div className="space-y-2 rounded-md border border-border bg-base/40 p-3">
-      <div className="flex items-start justify-between gap-3">
+    <div className="rounded-md border border-border bg-elevated p-3">
+      <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-content">{label}</span>
-            <span className="font-mono text-xs text-gold">
+            <span className="font-medium text-content">{label}</span>
+            <span className="font-mono text-xs text-accent-text">
               {formatCountdown(countdown?.secondsUntil ?? null)}
             </span>
           </div>
-          <div className="text-[11px] text-muted">{schedule}</div>
-          <div className="text-[11px] text-subtle">Cue: {cue}</div>
+          <div className="font-mono text-2xs text-muted">{schedule}</div>
+          <div className="text-xs text-subtle">{cue}</div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Button onClick={() => void testPlay(eventKey)}>Test</Button>
+        <div className="flex shrink-0 items-center gap-3">
+          <Button variant="soft" size="sm" onClick={() => void testPlay(eventKey)}>
+            Test
+          </Button>
           <Toggle
             label=""
+            ariaLabel={label}
             checked={settings.enabled}
             onChange={(v) => update({ enabled: v })}
           />
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="mt-3 grid grid-cols-2 gap-3">
         <NumberInput
           label="Lead Time"
           value={settings.lead_seconds}
@@ -90,16 +96,13 @@ export default function Alerts() {
   }, [startPolling]);
 
   return (
-    <div className="space-y-6 p-6">
-      <div>
-        <h2 className="text-xl font-semibold">Objective Alerts</h2>
-        <p className="mt-1 text-sm text-subtle">
-          Audio cues for runes, Tormentor, neutral drops, and stack timings
-        </p>
-      </div>
+    <div className="max-w-[900px] space-y-4 p-6">
+      <p className="text-subtle">
+        Audio cues for runes, Tormentor, neutral drops, and stack timings.
+      </p>
 
       <Card title="Master">
-        <Toggle
+        <SettingRow
           label="Enable Alerts"
           checked={alerts.enabled}
           onChange={(v) => updateAlerts({ enabled: v })}
@@ -112,7 +115,7 @@ export default function Alerts() {
           step={0.05}
           onChange={(v) => updateAlerts({ master_volume: v })}
         />
-        <p className="text-xs text-muted">
+        <p className="text-xs leading-relaxed text-muted">
           Cues are generated in the app, so they keep working with the window
           minimised. Each event has a distinct rhythm — the pulse count matches how
           often it happens, so two blips is the 2-minute power rune and three notes
@@ -127,21 +130,12 @@ export default function Alerts() {
             ...voicePacks.map((pack) => ({ value: pack, label: pack })),
           ]}
           onChange={(v) => updateAlerts({ voice_pack: v })}
+          hint="A voice pack replaces the cues with spoken callouts. Packs are not shipped — generate one with scripts/generate-voice-pack.ps1, or drop your own files in assets/voice/<name>/. Any event the pack is missing falls back to its generated cue."
         />
-        <p className="text-xs text-muted">
-          A voice pack replaces the cues with spoken callouts, which need no learning
-          at all. Packs are not shipped — generate one with{" "}
-          <span className="font-mono text-subtle">
-            scripts/generate-voice-pack.ps1
-          </span>
-          , or drop your own files in{" "}
-          <span className="font-mono text-subtle">assets/voice/&lt;name&gt;/</span>.
-          Any event the pack is missing falls back to its generated cue.
-        </p>
       </Card>
 
-      <Card title="Events">
-        <div className="space-y-3">
+      <Card title="Events" flushBody>
+        <div className="flex flex-col gap-3">
           {ALERT_EVENTS.map((event) => (
             <EventRow
               key={event.key}

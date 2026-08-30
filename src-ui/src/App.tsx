@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { pageTitleFor } from "./lib/nav";
 import { Sidebar } from "./components/layout/Sidebar";
 import { StatusHeader } from "./components/layout/StatusHeader";
 import { UpdateBanner } from "./components/layout/UpdateBanner";
@@ -23,6 +24,12 @@ import Settings from "./pages/Settings";
 import MinimapIntelligence from "./pages/MinimapIntelligence";
 import WaveTracker from "./pages/WaveTracker";
 import Alerts from "./pages/Alerts";
+
+/** Reads the route so the topbar can title the page — must live under the router. */
+function PageTitle({ children }: { children: (title: string) => React.ReactNode }) {
+  const { pathname } = useLocation();
+  return <>{children(pageTitleFor(pathname))}</>;
+}
 
 export default function App() {
   useEffect(() => {
@@ -78,23 +85,29 @@ export default function App() {
       <div className="flex h-screen w-screen overflow-hidden bg-base">
         <Sidebar />
         <div className="flex flex-1 flex-col overflow-hidden">
-          <StatusHeader
-            heroName={game.heroName ?? undefined}
-            heroLevel={game.heroLevel}
-            invokerProfileLabel={invokerProfileLabel}
-            hpPercent={game.hpPercent}
-            manaPercent={game.manaPercent}
-            inDanger={game.inDanger}
-            connected={game.connected}
-            appVersion={appVersion}
-            runeTimer={game.runeTimer}
-            stunned={game.stunned}
-            silenced={game.silenced}
-            alive={game.alive}
-            respawnTimer={game.respawnTimer}
-          />
+          <PageTitle>
+            {(title) => (
+              <StatusHeader
+                title={title}
+                heroName={game.heroName ?? undefined}
+                heroLevel={game.heroLevel}
+                invokerProfileLabel={invokerProfileLabel}
+                hpPercent={game.hpPercent}
+                manaPercent={game.manaPercent}
+                inDanger={game.inDanger}
+                connected={game.connected}
+                appVersion={appVersion}
+                runeTimer={game.runeTimer}
+                stunned={game.stunned}
+                silenced={game.silenced}
+                alive={game.alive}
+                respawnTimer={game.respawnTimer}
+              />
+            )}
+          </PageTitle>
           <UpdateBanner />
-          <main className="flex-1 overflow-y-auto page-transition">
+          <main className="page-transition flex-1 overflow-y-auto">
+            <div className="mx-auto h-full w-full max-w-[1228px]">
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/heroes" element={<Heroes />} />
@@ -111,6 +124,7 @@ export default function App() {
               <Route path="/diagnostics" element={<Diagnostics />} />
               <Route path="/settings" element={<Settings />} />
             </Routes>
+            </div>
           </main>
           <ActivityTicker entries={tickerEntries} />
         </div>

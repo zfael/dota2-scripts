@@ -1,76 +1,58 @@
 import { useEffect } from "react";
+import { Badge, type BadgeTone } from "../components/common/Badge";
 import { Card } from "../components/common/Card";
-import { Toggle } from "../components/common/Toggle";
 import { NumberInput } from "../components/common/NumberInput";
+import { SettingRow } from "../components/common/SettingRow";
 import { Slider } from "../components/common/Slider";
 import { useConfigStore } from "../stores/configStore";
 import { useMinimapStore } from "../stores/minimapStore";
 import type { MapZone, ActivityLevel } from "../types/minimap";
 import { ZONE_DISPLAY_NAMES, ZONE_ICONS } from "../types/minimap";
 
-const ACTIVITY_STYLES: Record<ActivityLevel, { bg: string; text: string }> = {
-  Quiet: { bg: "bg-elevated", text: "text-muted" },
-  Active: { bg: "bg-blue-900/40", text: "text-blue-400" },
-  Fight: { bg: "bg-gold/20", text: "text-gold" },
+const ACTIVITY_TONES: Record<ActivityLevel, BadgeTone> = {
+  Quiet: "neutral",
+  Active: "info",
+  Fight: "warning",
 };
 
-const EVENT_BADGE_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  FightDetected: { bg: "bg-gold/80", text: "text-base", label: "FIGHT" },
-  FightOngoing: { bg: "bg-gold/50", text: "text-base", label: "FIGHT" },
-  EnemyRotation: { bg: "bg-blue-600", text: "text-white", label: "ROTATE" },
-  EnemyGrouping: { bg: "bg-red-600", text: "text-white", label: "GROUP" },
+const EVENT_BADGES: Record<string, { tone: BadgeTone; label: string }> = {
+  FightDetected: { tone: "warning", label: "FIGHT" },
+  FightOngoing: { tone: "warning", label: "FIGHT" },
+  EnemyRotation: { tone: "info", label: "ROTATE" },
+  EnemyGrouping: { tone: "danger", label: "GROUP" },
 };
 
-function HealthDot({ health }: { health: string }) {
-  const colors: Record<string, string> = {
-    healthy: "bg-green-500",
-    unhealthy: "bg-red-500",
-    idle: "bg-muted",
-  };
-  return (
-    <span className={`inline-block h-2.5 w-2.5 rounded-full ${colors[health] ?? colors.idle}`} />
-  );
-}
-
+/**
+ * The design draws the page's live capture state as a single monospaced strip
+ * above the columns — key, then value, no punctuation between fields.
+ */
 function StatusBar() {
   const status = useMinimapStore((s) => s.status);
 
   return (
-    <div className="flex items-center gap-4 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm">
-      <div className="flex items-center gap-2">
-        <HealthDot health={status.health} />
-        <span className="text-subtle">
-          Capture: <span className="font-medium text-content capitalize">{status.health}</span>
-        </span>
-      </div>
-      <span className="text-border">|</span>
-      <span className="text-subtle">
-        Window:{" "}
-        <span className="font-mono text-xs text-content">{status.windowBindingStatus}</span>
+    <div className="flex flex-wrap items-center gap-6 rounded-lg border border-border bg-surface px-4 py-3 font-mono text-xs">
+      <span>
+        <span className="text-muted">capture </span>
+        <span className="text-content capitalize">{status.health}</span>
       </span>
-      <span className="text-border">|</span>
-      <span className="text-subtle">
-        Interval:{" "}
-        <span className="font-mono text-xs text-gold">{status.captureIntervalMs}ms</span>
+      <span>
+        <span className="text-muted">window </span>
+        <span className="text-content">{status.windowBindingStatus}</span>
+      </span>
+      <span>
+        <span className="text-muted">interval </span>
+        <span className="text-content">{status.captureIntervalMs}ms</span>
       </span>
       {status.lastCaptureDurationMs != null && (
-        <>
-          <span className="text-border">|</span>
-          <span className="text-subtle">
-            Last:{" "}
-            <span className="font-mono text-xs text-content">
-              {status.lastCaptureDurationMs}ms
-            </span>
-          </span>
-        </>
+        <span>
+          <span className="text-muted">last </span>
+          <span className="text-content">{status.lastCaptureDurationMs}ms</span>
+        </span>
       )}
       {status.consecutiveFailures > 0 && (
-        <>
-          <span className="text-border">|</span>
-          <span className="font-mono text-xs text-red-400">
-            ⚠ {status.consecutiveFailures} failures
-          </span>
-        </>
+        <span className="text-danger-text">
+          ⚠ {status.consecutiveFailures} failures
+        </span>
       )}
     </div>
   );
@@ -81,25 +63,16 @@ function ZoneRow({ zone }: { zone: MapZone }) {
   const summary = zones.find((z) => z.zone === zone);
 
   const activity: ActivityLevel = summary?.currentActivity ?? "Quiet";
-  const style = ACTIVITY_STYLES[activity];
   const allies = summary ? Math.round(summary.avgAllyCount) : 0;
   const enemies = summary ? Math.round(summary.avgEnemyCount) : 0;
 
   return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <span className="text-subtle text-sm">{ZONE_ICONS[zone]}</span>
-        <span className="text-content text-sm">{ZONE_DISPLAY_NAMES[zone]}</span>
-      </div>
-      <div className="flex items-center gap-3">
-        <span className="font-mono text-xs text-green-400">{allies} 🟢</span>
-        <span className="font-mono text-xs text-red-400">{enemies} 🔴</span>
-        <span
-          className={`rounded px-2 py-0.5 font-mono text-[10px] font-semibold ${style.bg} ${style.text}`}
-        >
-          {activity}
-        </span>
-      </div>
+    <div className="flex items-center gap-3 py-1">
+      <span className="text-sm text-muted">{ZONE_ICONS[zone]}</span>
+      <span className="flex-1 text-sm text-content">{ZONE_DISPLAY_NAMES[zone]}</span>
+      <span className="font-mono text-xs text-success-text">{allies}</span>
+      <span className="font-mono text-xs text-danger-text">{enemies}</span>
+      <Badge tone={ACTIVITY_TONES[activity]}>{activity}</Badge>
     </div>
   );
 }
@@ -118,12 +91,12 @@ function EventFeed() {
   const events = useMinimapStore((s) => s.events);
 
   return (
-    <div className="rounded-md bg-base/50 p-3 font-mono text-xs space-y-1 max-h-48 overflow-y-auto">
+    <div className="max-h-48 space-y-1 overflow-y-auto rounded-md bg-sunken p-4 font-mono text-xs">
       {events.length === 0 && (
         <span className="text-muted">No events detected yet…</span>
       )}
       {events.map((evt) => {
-        const badge = EVENT_BADGE_STYLES[evt.type] ?? EVENT_BADGE_STYLES.FightDetected;
+        const badge = EVENT_BADGES[evt.type] ?? EVENT_BADGES.FightDetected;
         const zoneLabel = ZONE_DISPLAY_NAMES[evt.zone] ?? evt.zone;
         let message: string;
         switch (evt.type) {
@@ -144,13 +117,11 @@ function EventFeed() {
         }
         return (
           <div key={evt.id} className="flex items-center gap-2">
-            <span className="text-muted shrink-0">{evt.timestamp}</span>
-            <span
-              className={`rounded px-1.5 py-px text-[9px] font-bold ${badge.bg} ${badge.text} shrink-0`}
-            >
+            <span className="shrink-0 text-muted">{evt.timestamp}</span>
+            <Badge tone={badge.tone} className="h-4 text-[9px] font-bold">
               {badge.label}
-            </span>
-            <span className="text-content truncate">{message}</span>
+            </Badge>
+            <span className="truncate text-content">{message}</span>
           </div>
         );
       })}
@@ -174,21 +145,21 @@ export default function MinimapIntelligence() {
   }, [startPolling]);
 
   return (
-    <div className="space-y-6 p-6">
-      <div>
-        <h2 className="text-xl font-semibold">Minimap Intelligence</h2>
-        <p className="mt-1 text-sm text-subtle">
-          Real-time minimap capture and hero detection via color analysis
-        </p>
-      </div>
+    <div className="space-y-4 p-6">
+      <p className="text-subtle">
+        Real-time minimap capture and hero detection via colour analysis.
+      </p>
 
       <StatusBar />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         {/* Left Column — Configuration */}
         <div className="space-y-4">
-          <Card title="Capture Settings">
-            <Toggle
+          <Card
+            title="Capture Settings"
+            subtitle="Region of the screen sampled for hero dots"
+          >
+            <SettingRow
               label="Enable Capture"
               checked={capture.enabled}
               onChange={(v) => updateCapture({ enabled: v })}
@@ -239,12 +210,12 @@ export default function MinimapIntelligence() {
             />
           </Card>
 
-          <Card title="Color Thresholds" collapsible>
+          <Card title="Color Thresholds" subtitle="Hue, saturation and value gates per team" collapsible>
             <div className="space-y-4">
               {/* Red (Dire) detection */}
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <span className="inline-block h-2 w-2 rounded-full bg-red-500" />
+                  <span className="inline-block h-2 w-2 rounded-full bg-danger" />
                   <span className="text-xs font-semibold tracking-wider text-subtle uppercase">
                     Dire (Red) Detection
                   </span>
@@ -284,7 +255,7 @@ export default function MinimapIntelligence() {
               {/* Green (Radiant) detection */}
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
+                  <span className="inline-block h-2 w-2 rounded-full bg-success" />
                   <span className="text-xs font-semibold tracking-wider text-subtle uppercase">
                     Radiant (Green) Detection
                   </span>
@@ -349,20 +320,24 @@ export default function MinimapIntelligence() {
 
         {/* Right Column — Live Data */}
         <div className="space-y-4">
-          <Card title="Zone Activity">
-            <div className="space-y-2.5">
+          <Card
+            title="Zone Activity"
+            subtitle="Radiant / Dire dots seen per zone"
+            flushBody
+          >
+            <div className="flex flex-col">
               {ALL_ZONES.map((zone) => (
                 <ZoneRow key={zone} zone={zone} />
               ))}
             </div>
           </Card>
 
-          <Card title="Event Feed">
+          <Card title="Event Feed" flushBody>
             <EventFeed />
           </Card>
 
           <Card title="Detection Tuning" collapsible>
-            <Toggle
+            <SettingRow
               label="Enable Analysis"
               checked={analysis.enabled}
               onChange={(v) => updateAnalysis({ enabled: v })}

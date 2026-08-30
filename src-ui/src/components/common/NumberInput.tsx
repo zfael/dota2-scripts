@@ -1,3 +1,5 @@
+import { Field } from "./Field";
+
 interface NumberInputProps {
   label: string;
   value: number;
@@ -8,6 +10,7 @@ interface NumberInputProps {
    * values need this set or they read as invalid. */
   step?: number;
   suffix?: string;
+  hint?: string;
   disabled?: boolean;
 }
 
@@ -19,12 +22,12 @@ export function NumberInput({
   max,
   step,
   suffix,
+  hint,
   disabled = false,
 }: NumberInputProps) {
   return (
-    <div className="space-y-1">
-      <label className="text-xs text-subtle">{label}</label>
-      <div className="flex items-center gap-2">
+    <Field label={label} hint={hint}>
+      <div className="relative flex items-center">
         <input
           type="number"
           value={value}
@@ -33,12 +36,19 @@ export function NumberInput({
           max={max}
           step={step}
           disabled={disabled}
-          className="h-8 w-full rounded-md border border-border bg-input px-3 font-mono text-sm
-                     text-content focus:border-border-accent focus:outline-none
-                     disabled:cursor-not-allowed disabled:opacity-50"
+          aria-label={label}
+          className={`h-9 w-full rounded-md border border-border bg-input px-3 font-mono text-sm
+                     text-content transition-colors hover:border-border-strong
+                     focus:border-accent focus:outline-none
+                     disabled:cursor-not-allowed disabled:bg-elevated disabled:text-muted
+                     ${suffix ? "pr-10" : ""}`}
         />
-        {suffix && <span className="text-xs text-subtle shrink-0">{suffix}</span>}
+        {suffix && (
+          <span className="pointer-events-none absolute right-3 font-mono text-xs text-muted">
+            {suffix}
+          </span>
+        )}
       </div>
-    </div>
+    </Field>
   );
 }

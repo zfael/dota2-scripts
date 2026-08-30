@@ -51,7 +51,7 @@ describe("Boots page phase boots automation controls", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Boots")).toBeInTheDocument();
+    // The page title itself now lives in the topbar, not on the page.
     expect(screen.getByText("Phase Boots")).toBeInTheDocument();
     expect(screen.getByText("Enable Phase Boots Automation")).toBeInTheDocument();
     expect(screen.getByText("Minimum Movement Distance")).toBeInTheDocument();

@@ -1,41 +1,232 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
 @import "tailwindcss";
 
-@theme {
+/*
+ * Design tokens, ported verbatim from the "Core" design system the UI redesign
+ * was drawn against (claude.ai/design project "D2 Scripts").
+ *
+ * Two layers on purpose:
+ *   1. `--core-*` below are plain CSS custom properties, so they can be
+ *      redefined per theme on `[data-theme]`.
+ *   2. `@theme inline` maps Tailwind's colour namespace onto them. `inline`
+ *      makes utilities emit `var(--core-…)` rather than a resolved value, which
+ *      is what lets a theme swap repaint the whole app without a rebuild.
+ *
+ * Tailwind names are kept from before the redesign (`gold`, `subtle`, `muted`,
+ * `terminal`, …) so every existing class keeps working; only what they resolve
+ * to changed.
+ */
+:root {
+  /* Type */
+  --core-font-sans: "Instrument Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --core-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --core-fs-2xs: 11px;
+  --core-fs-xs: 12px;
+  --core-fs-sm: 13px;
+  --core-fs-md: 15px;
+  --core-fs-lg: 17px;
+  --core-fs-xl: 20px;
+  --core-fs-2xl: 25px;
+  --core-fs-3xl: 32px;
+  --core-lh-tight: 1.15;
+  --core-lh-snug: 1.32;
+  --core-lh-normal: 1.5;
+  --core-lh-relaxed: 1.65;
+  --core-tracking-tight: -0.02em;
+  --core-tracking-snug: -0.01em;
+  --core-tracking-wide: 0.06em;
+
+  /* Space */
+  --core-s-1: 2px;
+  --core-s-2: 4px;
+  --core-s-3: 6px;
+  --core-s-4: 8px;
+  --core-s-5: 12px;
+  --core-s-6: 16px;
+  --core-s-7: 20px;
+  --core-s-8: 24px;
+  --core-s-9: 32px;
+  --core-s-10: 40px;
+  --core-s-11: 48px;
+  --core-s-12: 64px;
+
+  /* Radius / border */
+  --core-r-xs: 4px;
+  --core-r-sm: 7px;
+  --core-r-md: 10px;
+  --core-r-lg: 14px;
+  --core-r-xl: 20px;
+  --core-r-2xl: 28px;
+  --core-r-full: 999px;
+  --core-bw: 1px;
+  --core-bw-thick: 1.5px;
+
+  /* Motion */
+  --core-dur-instant: 80ms;
+  --core-dur-fast: 140ms;
+  --core-dur-med: 220ms;
+  --core-dur-slow: 360ms;
+  --core-ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --core-focus-w: 3px;
+}
+
+/* Dark is the shipped theme. */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --core-bg: oklch(17.5% 0.014 258);
+  --core-bg-sunken: oklch(14% 0.012 258);
+  --core-surface: oklch(21.5% 0.016 258);
+  --core-surface-2: oklch(25.5% 0.017 258);
+  --core-surface-3: oklch(30% 0.018 258);
+  --core-border: oklch(31% 0.016 258);
+  --core-border-strong: oklch(40% 0.018 258);
+  --core-text: oklch(96% 0.006 258);
+  --core-text-2: oklch(75% 0.014 258);
+  --core-text-3: oklch(60% 0.014 258);
+  --core-text-inverse: oklch(19% 0.016 258);
+  --core-accent: oklch(66% 0.16 255);
+  --core-accent-hover: oklch(71% 0.16 255);
+  --core-accent-active: oklch(61% 0.16 255);
+  --core-accent-soft: oklch(30% 0.062 255);
+  --core-accent-soft-hover: oklch(34% 0.075 255);
+  --core-accent-fg: oklch(17% 0.025 255);
+  --core-accent-text: oklch(80% 0.115 255);
+  --core-success: oklch(70% 0.13 152);
+  --core-success-soft: oklch(28% 0.05 152);
+  --core-success-text: oklch(80% 0.11 152);
+  --core-warning: oklch(78% 0.13 82);
+  --core-warning-soft: oklch(30% 0.05 82);
+  --core-warning-text: oklch(85% 0.1 82);
+  --core-danger: oklch(65% 0.16 25);
+  --core-danger-soft: oklch(29% 0.06 25);
+  --core-danger-text: oklch(79% 0.12 25);
+  --core-info: oklch(72% 0.11 200);
+  --core-info-soft: oklch(28% 0.05 200);
+  --core-info-text: oklch(83% 0.09 200);
+  --core-focus: oklch(66% 0.16 255 / 0.4);
+  --core-overlay: oklch(10% 0.012 258 / 0.62);
+  --core-shadow-sm: 0 1px 2px oklch(8% 0.012 258 / 0.5);
+  --core-shadow-md: 0 2px 4px oklch(8% 0.012 258 / 0.4), 0 6px 16px oklch(8% 0.012 258 / 0.38);
+  --core-shadow-lg: 0 4px 8px oklch(8% 0.012 258 / 0.4), 0 18px 44px oklch(8% 0.012 258 / 0.46);
+}
+
+/* Shipped for completeness — nothing in the app sets data-theme="light" yet. */
+[data-theme="light"] {
+  color-scheme: light;
+  --core-bg: oklch(98.6% 0.006 258);
+  --core-bg-sunken: oklch(96.4% 0.009 258);
+  --core-surface: oklch(100% 0 0);
+  --core-surface-2: oklch(97.4% 0.008 258);
+  --core-surface-3: oklch(94.6% 0.011 258);
+  --core-border: oklch(91% 0.011 258);
+  --core-border-strong: oklch(83% 0.015 258);
+  --core-text: oklch(24% 0.022 260);
+  --core-text-2: oklch(46% 0.021 260);
+  --core-text-3: oklch(60% 0.019 260);
+  --core-text-inverse: oklch(99% 0.004 258);
+  --core-accent: oklch(52% 0.185 258);
+  --core-accent-hover: oklch(47% 0.185 258);
+  --core-accent-active: oklch(42% 0.175 258);
+  --core-accent-soft: oklch(95% 0.032 258);
+  --core-accent-soft-hover: oklch(92% 0.045 258);
+  --core-accent-fg: oklch(99% 0.004 258);
+  --core-accent-text: oklch(45% 0.18 258);
+  --core-success: oklch(54% 0.12 152);
+  --core-success-soft: oklch(95% 0.04 152);
+  --core-success-text: oklch(44% 0.11 152);
+  --core-warning: oklch(70% 0.13 82);
+  --core-warning-soft: oklch(96% 0.05 82);
+  --core-warning-text: oklch(48% 0.1 78);
+  --core-danger: oklch(54% 0.17 25);
+  --core-danger-soft: oklch(95% 0.04 25);
+  --core-danger-text: oklch(48% 0.16 25);
+  --core-info: oklch(56% 0.11 200);
+  --core-info-soft: oklch(95% 0.035 200);
+  --core-info-text: oklch(45% 0.11 200);
+  --core-focus: oklch(52% 0.185 258 / 0.3);
+  --core-overlay: oklch(24% 0.022 260 / 0.38);
+  --core-shadow-sm: 0 1px 2px oklch(30% 0.02 260 / 0.07);
+  --core-shadow-md: 0 1px 2px oklch(30% 0.02 260 / 0.06), 0 4px 12px oklch(30% 0.02 260 / 0.08);
+  --core-shadow-lg: 0 2px 4px oklch(30% 0.02 260 / 0.06), 0 14px 36px oklch(30% 0.02 260 / 0.12);
+}
+
+@theme inline {
   /* Surfaces */
-  --color-base: #0D0F12;
-  --color-surface: #161A21;
-  --color-elevated: #1E2330;
-  --color-input: #12151B;
+  --color-base: var(--core-bg);
+  --color-sunken: var(--core-bg-sunken);
+  --color-surface: var(--core-surface);
+  --color-elevated: var(--core-surface-2);
+  --color-raised: var(--core-surface-3);
+  --color-input: var(--core-surface);
 
   /* Borders */
-  --color-border: #2A3040;
-  --color-border-accent: #C8AA6E;
+  --color-border: var(--core-border);
+  --color-border-strong: var(--core-border-strong);
+  --color-border-accent: var(--core-accent);
 
   /* Text */
-  --color-content: #E8E6E3;
-  --color-subtle: #8B9BB4;
-  --color-muted: #4A5568;
+  --color-content: var(--core-text);
+  --color-subtle: var(--core-text-2);
+  --color-muted: var(--core-text-3);
 
-  /* Accents */
-  --color-gold: #C8AA6E;
-  --color-danger: #E74C3C;
-  --color-success: #2ECC71;
-  --color-info: #3498DB;
-  --color-warning: #F39C12;
+  /* Accent. `gold` is the historical name for the solid accent fill; the
+   * redesign made it the Core blue. `accent-text` is the readable-on-dark
+   * variant the design system uses for links and inline emphasis. */
+  --color-gold: var(--core-accent);
+  --color-accent: var(--core-accent);
+  --color-accent-hover: var(--core-accent-hover);
+  --color-accent-active: var(--core-accent-active);
+  --color-accent-soft: var(--core-accent-soft);
+  --color-accent-soft-hover: var(--core-accent-soft-hover);
+  --color-accent-fg: var(--core-accent-fg);
+  --color-accent-text: var(--core-accent-text);
 
-  /* Terminal */
-  --color-terminal: #00FF88;
-  --color-terminal-bg: #0A0E14;
+  /* Status */
+  --color-danger: var(--core-danger);
+  --color-danger-soft: var(--core-danger-soft);
+  --color-danger-text: var(--core-danger-text);
+  --color-success: var(--core-success);
+  --color-success-soft: var(--core-success-soft);
+  --color-success-text: var(--core-success-text);
+  --color-warning: var(--core-warning);
+  --color-warning-soft: var(--core-warning-soft);
+  --color-warning-text: var(--core-warning-text);
+  --color-info: var(--core-info);
+  --color-info-soft: var(--core-info-soft);
+  --color-info-text: var(--core-info-text);
+
+  /* Log console */
+  --color-terminal: var(--core-success-text);
+  --color-terminal-bg: var(--core-bg-sunken);
 
   /* Fonts */
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-sans: var(--core-font-sans);
+  --font-mono: var(--core-font-mono);
 
-  /* Border Radius */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
+  /* The design system's type ramp is a couple of steps tighter than
+   * Tailwind's default, which is what makes the dense config pages read as
+   * one system rather than a stack of forms. */
+  --text-2xs: var(--core-fs-2xs);
+  --text-xs: var(--core-fs-xs);
+  --text-sm: var(--core-fs-sm);
+  --text-base: var(--core-fs-md);
+  --text-lg: var(--core-fs-lg);
+  --text-xl: var(--core-fs-xl);
+  --text-2xl: var(--core-fs-2xl);
+  --text-3xl: var(--core-fs-3xl);
+
+  /* Radius */
+  --radius-xs: var(--core-r-xs);
+  --radius-sm: var(--core-r-sm);
+  --radius-md: var(--core-r-md);
+  --radius-lg: var(--core-r-lg);
+  --radius-xl: var(--core-r-xl);
+
+  /* Shadows */
+  --shadow-sm: var(--core-shadow-sm);
+  --shadow-md: var(--core-shadow-md);
+  --shadow-lg: var(--core-shadow-lg);
 }
 
 /* Base reset */
@@ -44,6 +235,22 @@ body {
   margin: 0;
   min-width: 900px;
   min-height: 650px;
+  font-size: var(--core-fs-sm);
+  line-height: var(--core-lh-normal);
+  text-wrap: pretty;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  letter-spacing: var(--core-tracking-tight);
+  line-height: var(--core-lh-tight);
+}
+
+::selection {
+  background: var(--core-accent-soft);
+  color: var(--core-text);
 }
 
 /*
@@ -67,27 +274,66 @@ body.overlay-mode #root {
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-base);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-muted);
-  border-radius: 3px;
+  background: var(--core-surface-3);
+  border-radius: var(--core-r-full);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-subtle);
+  background: var(--core-border-strong);
+}
+
+/*
+ * Range inputs. The design draws these as a hairline track with a small accent
+ * thumb ringed in the page background, so the thumb reads as a bead on the line
+ * rather than a button sitting on top of it.
+ */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: var(--core-r-full);
+  background: var(--core-surface-3);
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--core-accent);
+  border: 2px solid var(--core-bg);
+  cursor: pointer;
+}
+
+input[type="range"]:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 var(--core-focus-w) var(--core-focus);
 }
 
 /* Page transitions */
 @keyframes page-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .page-transition {
@@ -96,6 +342,13 @@ body.overlay-mode #root {
 
 /* Focus ring */
 *:focus-visible {
-  outline: 2px solid var(--color-border-accent);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 var(--core-focus-w) var(--core-focus);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

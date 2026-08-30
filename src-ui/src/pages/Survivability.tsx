@@ -5,7 +5,30 @@ import { Slider } from "../components/common/Slider";
 import { NumberInput } from "../components/common/NumberInput";
 import { KeyInput } from "../components/common/KeyInput";
 import { TagList } from "../components/common/TagList";
+import { SettingRow } from "../components/common/SettingRow";
+import { Divider } from "../components/common/Field";
 import { useConfigStore } from "../stores/configStore";
+import type { DangerDetectionConfig } from "../types/config";
+
+type DefensiveKey =
+  | "auto_bkb"
+  | "auto_satanic"
+  | "auto_blade_mail"
+  | "auto_mjollnir"
+  | "auto_glimmer_cape"
+  | "auto_ghost_scepter"
+  | "auto_shivas_guard";
+
+/** Priority order the runtime uses. The number is shown so the page states it. */
+const DEFENSIVE_ITEMS: { key: DefensiveKey; name: string }[] = [
+  { key: "auto_bkb", name: "Black King Bar" },
+  { key: "auto_satanic", name: "Satanic" },
+  { key: "auto_blade_mail", name: "Blade Mail" },
+  { key: "auto_mjollnir", name: "Mjollnir" },
+  { key: "auto_glimmer_cape", name: "Glimmer Cape" },
+  { key: "auto_ghost_scepter", name: "Ghost Scepter" },
+  { key: "auto_shivas_guard", name: "Shiva's Guard" },
+];
 
 export default function Survivability() {
   const common = useConfigStore((s) => s.config.common);
@@ -24,32 +47,29 @@ export default function Survivability() {
   const lanePhaseEnabled = common.lane_phase_duration_seconds > 0;
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="space-y-1">
-        <h2 className="text-xl font-semibold">Survivability</h2>
-        <p className="text-xs text-subtle">
-          What the runtime does to keep you alive. When it decides you are in
-          danger is tuned on{" "}
-          <Link to="/danger" className="text-gold hover:underline">
-            Danger Detection
-          </Link>
-          ; item-specific automation lives on{" "}
-          <Link to="/armlet" className="text-gold hover:underline">
-            Armlet
-          </Link>
-          ,{" "}
-          <Link to="/boots" className="text-gold hover:underline">
-            Boots
-          </Link>{" "}
-          and{" "}
-          <Link to="/soul-ring" className="text-gold hover:underline">
-            Soul Ring
-          </Link>
-          .
-        </p>
-      </div>
+    <div className="space-y-4 p-6">
+      <p className="text-subtle">
+        What the runtime does to keep you alive. When it decides you are in danger
+        is tuned on{" "}
+        <Link to="/danger" className="text-accent-text hover:underline">
+          Danger Detection
+        </Link>
+        ; item-specific automation lives on{" "}
+        <Link to="/armlet" className="text-accent-text hover:underline">
+          Armlet
+        </Link>
+        ,{" "}
+        <Link to="/boots" className="text-accent-text hover:underline">
+          Boots
+        </Link>{" "}
+        and{" "}
+        <Link to="/soul-ring" className="text-accent-text hover:underline">
+          Soul Ring
+        </Link>
+        .
+      </p>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         <div className="space-y-4">
           <Card title="Healing Items">
             <Slider
@@ -59,10 +79,8 @@ export default function Survivability() {
               max={90}
               onChange={(v) => updateCommon({ survivability_hp_threshold: v })}
               suffix="%"
+              hint="Baseline: heals once per event below this HP."
             />
-            <p className="text-xs text-subtle">
-              Baseline: heals once per event below this HP.
-            </p>
             <Slider
               label="Healing HP Threshold in Danger"
               value={danger.healing_threshold_in_danger}
@@ -78,30 +96,32 @@ export default function Survivability() {
               max={5}
               onChange={(v) => updateDanger({ max_healing_items_per_danger: v })}
             />
-            <div className="mt-2 space-y-1 text-xs text-muted">
-              <p className="font-medium text-subtle">
-                Normal: Cheese → Magic Stick → Faerie Fire → Magic Wand →
-                Enchanted Mango → Greater Faerie Fire
-              </p>
-              <p className="font-medium text-subtle">
-                In danger: Cheese → Greater Faerie Fire → Enchanted Mango →
-                Magic Wand → Magic Stick → Faerie Fire
-              </p>
+            <div className="flex flex-col gap-1.5 rounded-md bg-sunken p-3 font-mono text-2xs leading-relaxed text-subtle">
+              <div>
+                <span className="text-muted">normal&nbsp;&nbsp;</span>Cheese → Magic
+                Stick → Faerie Fire → Magic Wand → Enchanted Mango → Greater Faerie
+                Fire
+              </div>
+              <div>
+                <span className="text-muted">danger&nbsp;&nbsp;</span>Cheese → Greater
+                Faerie Fire → Enchanted Mango → Magic Wand → Magic Stick → Faerie
+                Fire
+              </div>
             </div>
           </Card>
 
-          <Card title="Lane Phase">
-            <Toggle
+          <Card
+            title="Lane Phase"
+            subtitle="Stops the runtime burning regen on lane harass"
+          >
+            <SettingRow
               label="Use a Lower Threshold Early"
+              description="Overrides both the normal and danger thresholds while it is active."
               checked={lanePhaseEnabled}
               onChange={(v) =>
                 updateCommon({ lane_phase_duration_seconds: v ? 480 : 0 })
               }
             />
-            <p className="text-xs text-subtle">
-              Stops the runtime from burning regen on lane harass. Overrides both
-              the normal and danger thresholds while it is active.
-            </p>
             {lanePhaseEnabled && (
               <>
                 <Slider
@@ -121,34 +141,30 @@ export default function Survivability() {
                     updateCommon({ lane_phase_duration_seconds: v })
                   }
                   suffix="s"
+                  hint="Measured from the horn. Pre-game clock values do not count."
                 />
-                <p className="text-xs text-subtle">
-                  Measured from the horn. Pre-game clock values do not count.
-                </p>
               </>
             )}
           </Card>
 
           <Card title="Invisibility">
-            <Toggle
+            <SettingRow
               label="Hold Automation While Invisible"
+              description="Shadow Blade and Silver Edge invisibility drops the moment anything is cast. While running, this holds Slark's Dark Pact, Phase Boots, healing, defensive, neutral and mana items, and the silence dispels."
               checked={invisibility.suppress_automation}
               onChange={(v) => updateInvisibility({ suppress_automation: v })}
             />
-            <p className="text-xs text-subtle">
-              Shadow Blade and Silver Edge invisibility drops the moment anything
-              is cast or activated. While it is running, this holds Slark's Dark
-              Pact, Phase Boots, healing, defensive, neutral and mana items, and
-              the silence dispels.
-            </p>
-            <p className="text-xs text-muted">
+            <p className="text-xs leading-relaxed text-muted">
               Never held: Slark's Shadow Dance and Depth Shroud, which grant
               invisibility rather than ending it, and Soul Ring and Armlet, which
               fire off your own keypress or to stop you dying.
             </p>
           </Card>
 
-          <Card title="Dispels">
+          <Card
+            title="Dispels"
+            subtitle="Fires on silence alone — independent of danger state — at most once per silence, Manta first"
+          >
             <Toggle
               label="Auto-Manta on Silence"
               checked={danger.auto_manta_on_silence}
@@ -159,72 +175,58 @@ export default function Survivability() {
               checked={danger.auto_lotus_on_silence}
               onChange={(v) => updateDanger({ auto_lotus_on_silence: v })}
             />
-            <p className="text-xs text-subtle">
-              Fires on silence alone — independent of danger state — at most once
-              per silence, Manta first.
-            </p>
           </Card>
         </div>
 
         <div className="space-y-4">
-          <Card title="Defensive Items">
-            <p className="text-xs text-subtle">
-              Used in priority order, only while danger detection is active.
-            </p>
-            <Toggle
-              label="Black King Bar"
-              checked={danger.auto_bkb}
-              onChange={(v) => updateDanger({ auto_bkb: v })}
-            />
-            <Toggle
-              label="Satanic"
-              checked={danger.auto_satanic}
-              onChange={(v) => updateDanger({ auto_satanic: v })}
-            />
+          <Card
+            title="Defensive Items"
+            subtitle="Used in priority order, only while danger detection is active"
+            flushBody
+          >
+            <div className="flex flex-col">
+              {DEFENSIVE_ITEMS.map((item, i) => (
+                <div
+                  key={item.key}
+                  className="flex items-center justify-between gap-3 py-2"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="font-mono text-2xs text-muted">{i + 1}</span>
+                    <span className="text-sm text-content">{item.name}</span>
+                  </span>
+                  <Toggle
+                    label=""
+                    ariaLabel={item.name}
+                    checked={danger[item.key]}
+                    onChange={(v) =>
+                      updateDanger({ [item.key]: v } as Partial<DangerDetectionConfig>)
+                    }
+                  />
+                </div>
+              ))}
+            </div>
             {danger.auto_satanic && (
-              <Slider
-                label="Satanic HP Threshold"
-                value={danger.satanic_hp_threshold}
-                min={10}
-                max={70}
-                onChange={(v) => updateDanger({ satanic_hp_threshold: v })}
-                suffix="%"
-              />
+              <>
+                <Divider className="my-3" />
+                <Slider
+                  label="Satanic HP Threshold"
+                  value={danger.satanic_hp_threshold}
+                  min={10}
+                  max={70}
+                  onChange={(v) => updateDanger({ satanic_hp_threshold: v })}
+                  suffix="%"
+                />
+              </>
             )}
-            <Toggle
-              label="Blade Mail"
-              checked={danger.auto_blade_mail}
-              onChange={(v) => updateDanger({ auto_blade_mail: v })}
-            />
-            <Toggle
-              label="Mjollnir"
-              checked={danger.auto_mjollnir}
-              onChange={(v) => updateDanger({ auto_mjollnir: v })}
-            />
-            <Toggle
-              label="Glimmer Cape"
-              checked={danger.auto_glimmer_cape}
-              onChange={(v) => updateDanger({ auto_glimmer_cape: v })}
-            />
-            <Toggle
-              label="Ghost Scepter"
-              checked={danger.auto_ghost_scepter}
-              onChange={(v) => updateDanger({ auto_ghost_scepter: v })}
-            />
-            <Toggle
-              label="Shiva's Guard"
-              checked={danger.auto_shivas_guard}
-              onChange={(v) => updateDanger({ auto_shivas_guard: v })}
-            />
           </Card>
 
           <Card title="Neutral Items">
-            <Toggle
+            <SettingRow
               label="Enable"
               checked={neutral.enabled}
               onChange={(v) => updateNeutral({ enabled: v })}
             />
-            <Toggle
+            <SettingRow
               label="Use in Danger Only"
               checked={neutral.use_in_danger}
               onChange={(v) => updateNeutral({ use_in_danger: v })}
@@ -247,7 +249,7 @@ export default function Survivability() {
               items={neutral.allowed_items}
               onChange={(v) => updateNeutral({ allowed_items: v })}
             />
-            <p className="text-xs text-subtle">
+            <p className="text-xs leading-relaxed text-muted">
               Listed neutrals the runtime has no cast mode for are ignored at
               runtime.
             </p>

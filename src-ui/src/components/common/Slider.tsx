@@ -6,9 +6,15 @@ interface SliderProps {
   step?: number;
   onChange: (value: number) => void;
   suffix?: string;
+  /** Explanatory line under the track. */
+  hint?: string;
   disabled?: boolean;
 }
 
+/**
+ * Label and monospaced readout on one baseline, then a native range input the
+ * stylesheet paints as a hairline track with an accent bead (see global.css).
+ */
 export function Slider({
   label,
   value,
@@ -17,40 +23,35 @@ export function Slider({
   step = 1,
   onChange,
   suffix = "",
+  hint,
   disabled = false,
 }: SliderProps) {
-  const pct = ((value - min) / (max - min)) * 100;
-
   return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between">
-        <label className="text-xs text-subtle">{label}</label>
-        <span className="font-mono text-xs text-gold">
+    <div>
+      <div className="mb-1.5 flex items-baseline justify-between gap-3">
+        <span className="text-sm text-subtle">{label}</span>
+        <span className="font-mono text-xs text-content">
           {value}
           {suffix}
         </span>
       </div>
-      <div className="relative h-1.5 w-full rounded-full bg-input">
-        <div
-          className="absolute left-0 top-0 h-full rounded-full bg-gold"
-          style={{ width: `${pct}%` }}
-        />
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
-          disabled={disabled}
-          aria-label={label}
-          aria-valuemin={min}
-          aria-valuemax={max}
-          aria-valuenow={value}
-          aria-valuetext={`${value}${suffix}`}
-          className="absolute inset-0 w-full cursor-pointer opacity-0"
-        />
-      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        disabled={disabled}
+        aria-label={label}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        aria-valuenow={value}
+        aria-valuetext={`${value}${suffix}`}
+      />
+      {hint && (
+        <div className="mt-1.5 text-xs leading-relaxed text-muted">{hint}</div>
+      )}
     </div>
   );
 }

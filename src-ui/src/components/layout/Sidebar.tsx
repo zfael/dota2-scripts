@@ -1,36 +1,12 @@
 import { NavLink } from "react-router-dom";
-import {
-  LayoutDashboard,
-  Swords,
-  HeartPulse,
-  Shield,
-  CircleDot,
-  Axe,
-  Footprints,
-  Radar,
-  Waves,
-  Bell,
-  ScrollText,
-  Activity,
-  Settings,
-} from "lucide-react";
+import { NAV_GROUPS } from "../../lib/nav";
+import { HEROES } from "../../types/game";
 import { useUIStore } from "../../stores/uiStore";
 
-const navItems = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/heroes", label: "Heroes", icon: Swords },
-  { to: "/survivability", label: "Survivability", icon: HeartPulse },
-  { to: "/danger", label: "Danger", icon: Shield },
-  { to: "/soul-ring", label: "Soul Ring", icon: CircleDot },
-  { to: "/armlet", label: "Armlet", icon: Axe },
-  { to: "/boots", label: "Boots", icon: Footprints },
-  { to: "/minimap", label: "Minimap", icon: Radar },
-  { to: "/waves", label: "Waves", icon: Waves },
-  { to: "/alerts", label: "Alerts", icon: Bell },
-  { to: "/activity", label: "Activity", icon: ScrollText },
-  { to: "/diagnostics", label: "Diagnostics", icon: Activity },
-  { to: "/settings", label: "Settings", icon: Settings },
-];
+/** Only Heroes carries a count; everything else would be noise. */
+const TRAILING: Record<string, string> = {
+  "/heroes": String(HEROES.length),
+};
 
 export function Sidebar() {
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
@@ -39,44 +15,78 @@ export function Sidebar() {
 
   return (
     <aside
-      className={`flex h-full shrink-0 flex-col border-r border-border bg-base transition-all duration-200 ${
-        sidebarCollapsed ? "w-[60px]" : "w-[200px]"
+      className={`flex h-full shrink-0 flex-col gap-3 border-r border-border bg-sunken p-3 transition-all duration-200 ${
+        sidebarCollapsed ? "w-16" : "w-[236px]"
       }`}
     >
-      <div className="p-4">
+      <div
+        className={`flex items-center gap-2 px-2 py-1.5 ${
+          sidebarCollapsed ? "justify-center px-0" : ""
+        }`}
+      >
+        <span className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-sm bg-gold text-sm font-bold text-accent-fg">
+          D2
+        </span>
         {!sidebarCollapsed && (
-          <h1 className="text-lg font-semibold text-gold">D2 Scripts</h1>
+          <span className="text-sm font-semibold tracking-[-0.01em] text-content">
+            D2 Scripts
+          </span>
         )}
       </div>
-      <nav className="flex-1 space-y-0.5 px-2">
-        {navItems.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === "/"}
-            className={({ isActive }) =>
-              `flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors ${
-                isActive
-                  ? "border-l-[3px] border-gold bg-elevated text-gold"
-                  : "border-l-[3px] border-transparent text-subtle hover:bg-elevated hover:text-content"
-              }`
-            }
-          >
-            <Icon className="h-5 w-5 shrink-0" />
-            {!sidebarCollapsed && <span>{label}</span>}
-          </NavLink>
+
+      <nav className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+        {NAV_GROUPS.map((group) => (
+          <div key={group.label} className="flex flex-col gap-px">
+            {!sidebarCollapsed && (
+              <span className="px-2 pt-2 pb-1 font-mono text-2xs tracking-[0.06em] text-muted uppercase">
+                {group.label}
+              </span>
+            )}
+            {group.items.map(({ to, label, icon: Icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={to === "/"}
+                title={sidebarCollapsed ? label : undefined}
+                className={({ isActive }) =>
+                  `flex items-center gap-2 rounded-sm p-2 text-sm font-medium transition-colors ${
+                    sidebarCollapsed ? "justify-center" : ""
+                  } ${
+                    isActive
+                      ? "bg-accent-soft text-accent-text"
+                      : "text-subtle hover:bg-elevated hover:text-content"
+                  }`
+                }
+              >
+                <Icon className="h-[18px] w-[18px] shrink-0 opacity-90" strokeWidth={1.5} />
+                {!sidebarCollapsed && (
+                  <>
+                    <span className="truncate">{label}</span>
+                    {TRAILING[to] && (
+                      <span className="ml-auto font-mono text-2xs text-muted">
+                        {TRAILING[to]}
+                      </span>
+                    )}
+                  </>
+                )}
+              </NavLink>
+            ))}
+          </div>
         ))}
       </nav>
-      <div className="border-t border-border">
-        {!sidebarCollapsed && (
-          <div className="px-4 pt-3">
-            <span className="text-xs text-muted">v{appVersion}</span>
-          </div>
-        )}
+
+      <div
+        className={`flex shrink-0 items-center gap-2 border-t border-border p-2 font-mono text-2xs text-muted ${
+          sidebarCollapsed ? "justify-center" : "justify-between"
+        }`}
+      >
+        {!sidebarCollapsed && <span>v{appVersion}</span>}
         <button
           type="button"
           onClick={toggleSidebar}
-          className="flex w-full items-center justify-center p-3 text-subtle hover:text-content"
+          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="grid h-[26px] w-[26px] cursor-pointer place-items-center rounded-sm border border-border text-xs text-muted transition-colors hover:bg-elevated hover:text-content"
         >
           {sidebarCollapsed ? "»" : "«"}
         </button>
