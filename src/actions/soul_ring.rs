@@ -22,6 +22,12 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tracing::{debug, info};
 
+/// Health Soul Ring's Sacrifice spends to refill mana. Fixed by the item, not scaled.
+///
+/// Danger detection needs this number so the drop is not read as incoming damage; see
+/// [`crate::actions::danger_detector::note_self_damage`].
+pub const SOUL_RING_HEALTH_COST: u32 = 170;
+
 /// What a key press is about to spend mana on, as far as the last GSI event knows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ManaSpend {
@@ -162,6 +168,12 @@ impl SoulRingState {
     /// Mark Soul Ring as triggered (updates cooldown lockout)
     pub fn mark_triggered(&mut self) {
         self.last_triggered = Some(Instant::now());
+
+        // Tell danger detection the HP drop it is about to see is ours. Without this the
+        // sacrifice alone clears both danger triggers, and buying mana would fire the
+        // whole defensive kit - Blade Mail, Ghost Scepter, Glimmer - at nobody.
+        crate::actions::danger_detector::note_self_damage(SOUL_RING_HEALTH_COST, "Soul Ring");
+
         info!(
             "💍 Soul Ring triggered! mana={}%, health={}%",
             self.hero_mana_percent, self.hero_health_percent

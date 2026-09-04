@@ -8,7 +8,8 @@
 
 | Path | What it owns |
 |---|---|
-| `src/actions/danger_detector.rs` | Cross-event HP tracker; `update(...)` owns the current danger decision and `is_in_danger()` exposes the persisted flag |
+| `src/actions/danger_detector.rs` | Cross-event HP tracker; `update(...)` owns the current danger decision, `is_in_danger()` exposes the persisted flag, and `note_self_damage(...)` discounts HP we spent on ourselves |
+| `src/actions/soul_ring.rs` | Declares `SOUL_RING_HEALTH_COST` and reports the sacrifice through `note_self_damage(...)` on every trigger |
 | `src/actions/common.rs` | Healing, defensive items, and neutral items; the shared survivability pass reuses one current-event danger result instead of re-reading the tracker mid-pass |
 | `src/actions/dispel.rs` | Silence dispels configured under `[danger_detection]`, but not gated by `in_danger` |
 | `src/config/settings.rs` | `DangerDetectionConfig` defaults and serde wiring |
@@ -27,9 +28,44 @@
 - `danger_detected`
 - `danger_start_time`
 
+### Self-inflicted HP is not damage
+
+`hp_delta` is **not** the raw drop between events. The raw drop is first reduced by any
+HP the runtime knows the hero spent on itself:
+
+```
+observed_delta = last_hp - current_hp
+hp_delta       = observed_delta - claim_self_damage(observed_delta)
+```
+
+A second global, `SELF_DAMAGE`, holds a pending allowance written by
+`note_self_damage(hp, source)`. Soul Ring is the only caller today: `mark_triggered()`
+reports `SOUL_RING_HEALTH_COST` (170) on every trigger, from both the keyboard replay path
+and the combo helper.
+
+Without this, buying mana was indistinguishable from a gank. 170 HP clears
+`rapid_loss_hp` (100) outright, and once HP sits below `hp_threshold_percent` any loss at
+all counts — so every Soul Ring press fired the whole defensive kit (Blade Mail, Ghost
+Scepter, Glimmer, Shiva's) at nobody.
+
+Rules:
+
+- Only the sacrifice is discounted, never real damage layered on top of it. 170 ours plus
+  300 theirs still reports a 300 HP loss and still enters danger.
+- The allowance is a decrementing budget, not a suppression flag. A tick that lands between
+  the key press and the sacrifice claims only its own small drop; the remainder still covers
+  the sacrifice when it arrives.
+- The allowance expires after `SELF_DAMAGE_WINDOW` (1500 ms, a code constant in
+  `danger_detector.rs` — not config). HP regen never claims against it.
+- Overlapping calls accumulate rather than overwrite.
+- Death clears it, alongside the HP tracker reset.
+
+The cost of this is a bounded blind spot: for up to 1.5 s after a Soul Ring press, up to
+170 HP of real burst reads as ours. Anything past that still registers.
+
 ### Entering danger
 
-Danger turns on when **either** condition is true:
+Danger turns on when **either** condition is true, using the discounted `hp_delta` above:
 
 1. **Rapid HP loss**
    - `hp_delta > rapid_loss_hp`
@@ -37,6 +73,10 @@ Danger turns on when **either** condition is true:
 2. **Low HP while still losing HP**
    - `current_hp_percent < hp_threshold_percent`
    - `hp_delta > 0`
+
+Note that `current_hp_percent` is the **raw** post-sacrifice value — the discount applies to
+the delta only. Soul Ring genuinely does leave you at lower HP, so the low-HP trigger still
+sees the truth; it just needs a fresh loss on top before it fires.
 
 Current checked-in defaults from `config/config.toml`:
 
@@ -61,7 +101,7 @@ Current default:
 
 ### Important implementation details
 
-- The tracker resets immediately when the hero dies.
+- The tracker resets immediately when the hero dies, and so does the self-damage allowance.
 - The first live GSI event only seeds the tracker; it never triggers danger.
 - The clear timer is measured from when danger was first entered, not from the latest safe event.
 - `is_in_danger()` is global process state, not stored inside `AppState`.

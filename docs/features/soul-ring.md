@@ -12,6 +12,7 @@ Learn how the Soul Ring item automation automatically triggers Soul Ring before 
 - **Safety checks** – Health and mana thresholds prevent wasted usage or suicide
 - **Cooldown lockout** – Prevents double-fire on double-tap or rapid key presses
 - **Mana-cost gating** – Only fires ahead of an ability or item that actually spends mana, priced from a generated table
+- **Danger-neutral** – The 170 HP sacrifice is reported to danger detection as self-inflicted, so buying mana no longer looks like being ganked
 
 ## Configuration
 
@@ -60,6 +61,7 @@ intercept_item_keys = true
 | `scripts/generate-mana-costs.ps1` | Regenerates the table from odota/dotaconstants |
 | `src/input/keyboard.rs` | Key interception with `grab()` |
 | `src/actions/dispatcher.rs` | GSI event updates to Soul Ring state |
+| `src/actions/danger_detector.rs` | Receives the sacrifice via `note_self_damage(...)` so it is not counted as incoming damage |
 | `src/config/settings.rs` | `SoulRingConfig` struct |
 
 ---
@@ -153,6 +155,23 @@ The checked-in config sets `trigger_cooldown_ms = 10`, while the Rust fallback i
 #### Infinite Loop Prevention
 
 The automation will **not** trigger Soul Ring when you press Soul Ring's own item slot key (would cause infinite loop).
+
+#### Danger Detection Is Told About the Sacrifice
+
+`SoulRingState::mark_triggered()` calls
+`danger_detector::note_self_damage(SOUL_RING_HEALTH_COST, "Soul Ring")` before the key goes
+out, on **both** trigger paths (the keyboard replay worker and
+`press_ability_with_soul_ring`).
+
+The 170 HP drop that follows would otherwise clear both danger triggers on its own —
+`rapid_loss_hp` defaults to 100, and any loss counts once HP is under
+`hp_threshold_percent` — so every Soul Ring press used to fire Blade Mail, Ghost Scepter,
+Glimmer Cape and Shiva's Guard at an empty screen. Danger detection now subtracts up to 170
+HP from the next observed drop and treats only the surplus as incoming damage.
+
+Real damage landing in the same window is unaffected: 170 ours plus 300 theirs still enters
+danger on the 300. See `docs/features/danger-detection.md` for the allowance rules and the
+1.5 s expiry.
 
 ### Intercepted Keys
 
