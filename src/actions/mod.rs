@@ -3,6 +3,7 @@ pub mod armlet;
 pub mod auto_items;
 pub mod common;
 pub mod danger_detector;
+pub mod defensive_windows;
 pub mod dispel;
 pub mod dispatcher;
 pub mod executor;

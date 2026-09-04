@@ -207,12 +207,27 @@ Current activation order:
 6. `item_ghost`
 7. `item_shivas_guard`
 
+Which of them fire is decided by `plan_defensive_items()`, a pure planner; the
+caller only presses the keys it hands back.
+
 Details:
 
 - each item is independently enabled/disabled in `[danger_detection]`
 - Mjollnir (Static Charge) and Glimmer are unit-targeted, so both are self-cast by double-tapping the bound key — `defensive_item_needs_self_cast()` in `common.rs` is the single list
 - from the first self-cast item onwards, `common.rs` queues the rest of the sequence on the shared `ActionExecutor`, so the synchronous GSI lane does not sleep for the 50ms follow-up timing and later defensive items still stay behind that item's second tap
 - Satanic has a separate HP gate: `satanic_hp_threshold`
+
+Two items are held back rather than fired blind (see "Defensive item windows"
+below):
+
+- **Ghost Scepter** waits while Glimmer Cape is running, and while Glimmer is
+  firing on this same tick. They are the same panic button pressed twice, so
+  spending both on one moment leaves nothing for the next one. Glimmer opens
+  because it hides us on top of the magic resistance.
+- **Blade Mail** is skipped whenever nothing can hit us: a live invisibility
+  window, a live Glimmer or Ghost Scepter window, or either of those two firing
+  on this tick. There is no incoming damage to return, and while hidden the
+  activation is also what would drop the fade.
 
 For the heuristics that decide when this path runs, see `docs/features/danger-detection.md`.
 
@@ -307,6 +322,47 @@ Turn the whole thing off with `[invisibility] suppress_automation = false`.
 Blind spot inherited from the tracker: a plain right-click attack breaks
 invisibility and produces no GSI signal, so the hold stays on until the window
 times out.
+
+---
+
+## Defensive item windows
+
+Owned by `src/actions/defensive_windows.rs`, a second cooldown-edge tracker built
+the same way as the invisibility one: a `0 -> N` cooldown edge on the item is the
+cast, and that item's own cooldown is the clock for its buff, so a window survives
+pauses and follows whatever cooldown the patch ships.
+
+Tracked sources, in `WINDOW_SOURCES`:
+
+| Item | Duration |
+|---|---|
+| `item_glimmer_cape` | 5s |
+| `item_ghost` | 4s |
+
+These are deliberately **not** part of `invisibility::is_invisible()`. That gate
+holds every automation in the app; these only feed the defensive planner, which
+reads all three through `DefensiveGates::current()`:
+
+| Gate | Holds |
+|---|---|
+| `invisibility::is_invisible()` | Blade Mail |
+| Glimmer window | Blade Mail, Ghost Scepter |
+| Ghost Scepter window | Blade Mail |
+
+Ghost form is not concealment, so it is not part of `DefensiveGates::hidden()` —
+it gates Blade Mail on its own reason: nobody can land the attack that Blade Mail
+would punish.
+
+Two differences from the invisibility tracker, both on purpose:
+
+- nothing closes a window early. Glimmer's magic resistance outlives the fade, so
+  a healing item pressed in between must not release Ghost Scepter.
+- the Blade Mail and Ghost Scepter holds ignore
+  `[invisibility] suppress_automation`. That switch is about not wasting a Shadow
+  Blade; these are about not wasting the item being pressed.
+
+Blind spot: a Glimmer cast on an ally looks identical from here, so a manual ally
+shield holds our own Ghost Scepter for five seconds.
 
 ---
 

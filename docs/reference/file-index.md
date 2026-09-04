@@ -59,6 +59,7 @@
 | `src/actions/item_automation.rs` | Shared item automation metadata, cast modes, and short lockout state | `docs/features/survivability.md`, `docs/reference/configuration.md` |
 | `src/actions/auto_items.rs` | Cached GSI item state and Broodmother item/ability combo execution | `docs/features/survivability.md`, `docs/reference/gsi-schema-and-usage.md` |
 | `src/actions/dispel.rs` | Silence dispel logic (Manta / Lotus) | `docs/features/survivability.md`, `docs/reference/gsi-schema-and-usage.md` |
+| `src/actions/defensive_windows.rs` | Glimmer Cape / Ghost Scepter windows inferred from cooldown edges, holding the items behind them | `docs/features/survivability.md`, `docs/features/danger-detection.md` |
 | `src/actions/soul_ring.rs` | Soul Ring shared state, gating rules, and replay helpers | `docs/features/soul-ring.md`, `docs/features/keyboard-interception.md`, `docs/reference/gsi-schema-and-usage.md` |
 | `src/actions/mana_costs.rs` | **Generated** item/ability mana cost tables; regenerate with `scripts/generate-mana-costs.ps1` | `docs/features/soul-ring.md` |
 

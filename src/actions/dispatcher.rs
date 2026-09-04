@@ -177,6 +177,9 @@ impl ActionDispatcher {
         // Invisibility is inferred from cooldown edges between consecutive payloads,
         // so this has to run on every event before anything can act on it.
         crate::actions::invisibility::observe_event(event);
+        // Same story for the Glimmer / Ghost Scepter windows the danger kit
+        // holds items behind.
+        crate::actions::defensive_windows::observe_event(event);
 
         // Shared keyboard/runtime caches are refreshed upstream in process_gsi_events().
         // Dispatcher only runs dispatch-local hooks and routes automation work.

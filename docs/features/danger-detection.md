@@ -166,9 +166,17 @@ Behavior details:
 - each item must be enabled in config
 - the item must exist in inventory
 - `item.can_cast` must be `true`
-- all eligible enabled items are attempted in one pass
+- all eligible enabled items are attempted in one pass, chosen by the pure
+  `plan_defensive_items()`
 - `item_glimmer_cape` is double-tapped in `use_item()` for self-cast
 - `item_satanic` has its own HP gate: `hp_percent <= satanic_hp_threshold`
+- `item_ghost` is held while `item_glimmer_cape` is running or firing this tick —
+  one panic button at a time
+- `item_blade_mail` is held whenever nothing can hit us: an invisibility window, a
+  Glimmer or Ghost Scepter window, or either of those firing this tick
+
+Those windows come from `src/actions/defensive_windows.rs`; see the "Defensive
+item windows" section of `docs/features/survivability.md`.
 
 ### 4. Neutral items in danger
 

@@ -1,4 +1,5 @@
 use crate::actions::activity::{push_activity, ActivityCategory};
+use crate::actions::defensive_windows;
 use crate::actions::executor::ActionExecutor;
 use crate::actions::invisibility;
 use crate::actions::item_automation::{
@@ -6,7 +7,7 @@ use crate::actions::item_automation::{
     try_acquire_global_lockout, write_movement_snapshot, CastMode, ItemAutomationSpec,
     MovementSnapshot, SupportStatus, TriggerFamily,
 };
-use crate::config::Settings;
+use crate::config::{DangerDetectionConfig, Settings};
 use crate::models::{GsiWebhookEvent, Item};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -226,6 +227,150 @@ fn plan_healing_items<'a>(
                 break; // Move to next item type
             }
         }
+    }
+
+    plan
+}
+
+/// Buff windows the defensive plan gates on that no GSI field reports.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct DefensiveGates {
+    /// Invisible from an item whose window an activation would throw away.
+    invisible: bool,
+    /// Glimmer Cape's own window is still running.
+    glimmer_active: bool,
+    /// Ghost Scepter's own window is still running.
+    ghost_active: bool,
+}
+
+impl DefensiveGates {
+    fn current() -> Self {
+        Self {
+            invisible: invisibility::is_invisible(),
+            glimmer_active: defensive_windows::is_active(defensive_windows::GLIMMER_ITEM),
+            ghost_active: defensive_windows::is_active(defensive_windows::GHOST_ITEM),
+        }
+    }
+
+    /// Enemies cannot see us right now, from either source.
+    fn hidden(self) -> bool {
+        self.invisible || self.glimmer_active
+    }
+}
+
+/// One defensive item the danger pass has decided to fire this tick.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct DefensiveItemPress {
+    item_name: String,
+    slot: String,
+    key: char,
+}
+
+/// Slot and key for an item that is in the inventory and off cooldown.
+fn ready_item_key<'a>(
+    event: &'a GsiWebhookEvent,
+    settings: &Settings,
+    item_name: &str,
+) -> Option<(&'a str, char)> {
+    let (slot, _) = event
+        .items
+        .all_slots()
+        .into_iter()
+        .find(|(_, item)| item.name == item_name && item.can_cast == Some(true))?;
+
+    settings.get_key_for_slot(slot).map(|key| (slot, key))
+}
+
+fn satanic_hp_gate_passes(event: &GsiWebhookEvent, config: &DangerDetectionConfig) -> bool {
+    // max_health is 0 in menu/draft payloads; dividing by it panics the whole
+    // GSI processing task.
+    if event.hero.max_health == 0 {
+        return false;
+    }
+
+    let hp_percent = (event.hero.health * 100) / event.hero.max_health;
+    if hp_percent > config.satanic_hp_threshold {
+        debug!(
+            "Satanic not used: HP {}% > threshold {}%",
+            hp_percent, config.satanic_hp_threshold
+        );
+        return false;
+    }
+
+    true
+}
+
+/// Decide which defensive items to fire this tick, in press order.
+///
+/// Pure so the ordering rules can be asserted in tests: the caller owns the key
+/// presses. Callers must have cleared [`should_consider_defensive_items`] first.
+fn plan_defensive_items(
+    event: &GsiWebhookEvent,
+    settings: &Settings,
+    gates: DefensiveGates,
+) -> Vec<DefensiveItemPress> {
+    let config = &settings.danger_detection;
+
+    let defensive_items = [
+        ("item_black_king_bar", config.auto_bkb),
+        ("item_satanic", config.auto_satanic),
+        ("item_blade_mail", config.auto_blade_mail),
+        ("item_mjollnir", config.auto_mjollnir),
+        ("item_glimmer_cape", config.auto_glimmer_cape),
+        ("item_ghost", config.auto_ghost_scepter),
+        ("item_shivas_guard", config.auto_shivas_guard),
+    ];
+
+    // Glimmer and Ghost Scepter open the windows the gated items answer to, and
+    // both sit after Blade Mail in press order, so their decisions have to be
+    // made up front.
+    let glimmer_fires = config.auto_glimmer_cape
+        && !gates.glimmer_active
+        && ready_item_key(event, settings, defensive_windows::GLIMMER_ITEM).is_some();
+    let ghost_held = gates.glimmer_active || glimmer_fires;
+    let ghost_fires = config.auto_ghost_scepter
+        && !gates.ghost_active
+        && !ghost_held
+        && ready_item_key(event, settings, defensive_windows::GHOST_ITEM).is_some();
+
+    // Blade Mail only pays for itself while something is hitting us. Hidden by
+    // invisibility or Glimmer, or ghosted by the Scepter, nothing is.
+    let blade_mail_wasted = gates.hidden() || glimmer_fires || gates.ghost_active || ghost_fires;
+
+    let mut plan = Vec::new();
+
+    for (item_name, enabled) in defensive_items {
+        if !enabled {
+            continue;
+        }
+
+        // Satanic has its own HP threshold check
+        if item_name == "item_satanic" && !satanic_hp_gate_passes(event, config) {
+            continue;
+        }
+
+        // Nothing to return damage to, and activating it is what would drop the
+        // fade in the first place.
+        if item_name == "item_blade_mail" && blade_mail_wasted {
+            debug!("Blade Mail held: hidden or ghosted this tick");
+            continue;
+        }
+
+        // One panic button at a time: Ghost Scepter waits for Glimmer to end.
+        if item_name == defensive_windows::GHOST_ITEM && ghost_held {
+            debug!("Ghost Scepter held: Glimmer Cape window still running");
+            continue;
+        }
+
+        let Some((slot, key)) = ready_item_key(event, settings, item_name) else {
+            continue;
+        };
+
+        plan.push(DefensiveItemPress {
+            item_name: item_name.to_string(),
+            slot: slot.to_string(),
+            key,
+        });
     }
 
     plan
@@ -578,10 +723,12 @@ impl SurvivabilityActions {
         event: &GsiWebhookEvent,
         in_danger: bool,
     ) {
-        // Check danger state and gather config - release lock before item usage
-        let (_enabled, satanic_threshold, defensive_items_config) = {
+        // Buff windows live in their own trackers, so they are read before the
+        // settings lock rather than under it.
+        let gates = DefensiveGates::current();
+
+        let plan = {
             let settings = self.settings.lock().unwrap();
-            let current_config = &settings.danger_detection;
 
             if !should_consider_defensive_items(event, &settings, in_danger) {
                 return;
@@ -592,77 +739,30 @@ impl SurvivabilityActions {
 
             debug!("In danger - checking defensive items");
 
-            // Gather config before releasing lock
-            let defensive_items = vec![
-                ("item_black_king_bar", current_config.auto_bkb),
-                ("item_satanic", current_config.auto_satanic),
-                ("item_blade_mail", current_config.auto_blade_mail),
-                ("item_mjollnir", current_config.auto_mjollnir),
-                ("item_glimmer_cape", current_config.auto_glimmer_cape),
-                ("item_ghost", current_config.auto_ghost_scepter),
-                ("item_shivas_guard", current_config.auto_shivas_guard),
-            ];
-
-            (true, current_config.satanic_hp_threshold, defensive_items)
+            plan_defensive_items(event, &settings, gates)
         }; // Lock released here
 
-        let mut ready_items = Vec::new();
-
-        // Try to activate all enabled items that are ready
-        for (item_name, enabled) in defensive_items_config {
-            if !enabled {
-                continue;
-            }
-
-            // Satanic has its own HP threshold check
-            if item_name == "item_satanic" {
-                // max_health is 0 in menu/draft payloads; dividing by it panics
-                // the whole GSI processing task.
-                if event.hero.max_health == 0 {
-                    continue;
-                }
-                let hp_percent = (event.hero.health * 100) / event.hero.max_health;
-                if hp_percent > satanic_threshold {
-                    debug!(
-                        "Satanic not used: HP {}% > threshold {}%",
-                        hp_percent, satanic_threshold
-                    );
-                    continue;
-                }
-            }
-
-            for (slot, item) in event.items.all_slots() {
-                if item.name == item_name {
-                    // Check if item can be cast (not on cooldown)
-                    if let Some(can_cast) = item.can_cast {
-                        if can_cast {
-                            debug!("Activating defensive item: {}", item_name);
-                            let key = {
-                                let settings = self.settings.lock().unwrap();
-                                settings.get_key_for_slot(slot)
-                            };
-
-                            if let Some(key) = key {
-                                info!("Using {} in {} (key: {})", item.name, slot, key);
-                                push_activity(
-                                    ActivityCategory::Action,
-                                    format!(
-                                        "Defensive item activated: {}",
-                                        item.name.replace("item_", "")
-                                    ),
-                                );
-                                ready_items.push((item.name.clone(), key));
-                            }
-                            break; // Move to next item type
-                        }
-                    }
-                }
-            }
-        }
-
-        if ready_items.is_empty() {
+        if plan.is_empty() {
             return;
         }
+
+        let ready_items: Vec<(String, char)> = plan
+            .into_iter()
+            .map(|press| {
+                info!(
+                    "Using {} in {} (key: {})",
+                    press.item_name, press.slot, press.key
+                );
+                push_activity(
+                    ActivityCategory::Action,
+                    format!(
+                        "Defensive item activated: {}",
+                        press.item_name.replace("item_", "")
+                    ),
+                );
+                (press.item_name, press.key)
+            })
+            .collect();
 
         if let Some(self_cast_index) = ready_items
             .iter()
@@ -794,6 +894,7 @@ impl SurvivabilityActions {
         if !event.hero.is_alive() {
             clear_movement_snapshot();
             invisibility::clear_snapshot();
+            defensive_windows::clear_snapshot();
             return;
         }
 
@@ -1090,6 +1191,7 @@ mod tests {
 mod snapshot_tests {
     use std::sync::{Arc, Mutex};
 
+    use crate::actions::defensive_windows;
     use crate::actions::executor::ActionExecutor;
     use crate::actions::invisibility;
     use crate::actions::item_automation::{
@@ -1101,8 +1203,9 @@ mod snapshot_tests {
 
     use super::{
         acquire_item_trigger_lockout, eligible_danger_neutral_spec, eligible_low_mana_item,
-        eligible_movement_item, healing_threshold_for_event, plan_healing_items,
-        should_consider_defensive_items, should_consider_neutral_item, SurvivabilityActions,
+        eligible_movement_item, healing_threshold_for_event, plan_defensive_items,
+        plan_healing_items, should_consider_defensive_items, should_consider_neutral_item,
+        DefensiveGates, DefensiveItemPress, SurvivabilityActions,
     };
 
     /// Guards the movement snapshot, the global lockouts and the invisibility
@@ -2033,5 +2136,389 @@ mod snapshot_tests {
         let event = base_event(hero_with_health(20, 20), items);
 
         actions.use_neutral_item_if_danger_with_snapshot(&event, false);
+    }
+
+    /// Glimmer in slot0, Ghost Scepter in slot1, Blade Mail in slot2, Shiva's in
+    /// slot3 — the four items every ordering rule below is about.
+    fn panic_kit_event() -> GsiWebhookEvent {
+        let mut items = empty_items();
+        items.slot0 = castable("item_glimmer_cape");
+        items.slot1 = castable("item_ghost");
+        items.slot2 = castable("item_blade_mail");
+        items.slot3 = castable("item_shivas_guard");
+        base_event(hero_with_health(100, 100), items)
+    }
+
+    fn planned_items(plan: &[DefensiveItemPress]) -> Vec<&str> {
+        plan.iter()
+            .map(|press| press.item_name.as_str())
+            .collect::<Vec<_>>()
+    }
+
+    #[test]
+    fn defensive_plan_resolves_slot_and_key() {
+        let settings = Settings::default();
+        let mut items = empty_items();
+        items.slot2 = castable("item_shivas_guard");
+        let event = base_event(hero_with_health(100, 100), items);
+
+        assert_eq!(
+            plan_defensive_items(&event, &settings, DefensiveGates::default()),
+            vec![DefensiveItemPress {
+                item_name: "item_shivas_guard".to_string(),
+                slot: "slot2".to_string(),
+                key: settings.keybindings.slot2,
+            }]
+        );
+    }
+
+    /// The reported bug: both panic items fired on the same tick, spending two
+    /// items on one moment.
+    #[test]
+    fn defensive_plan_holds_ghost_scepter_when_glimmer_fires_this_tick() {
+        let settings = Settings::default();
+        let event = panic_kit_event();
+
+        assert_eq!(
+            planned_items(&plan_defensive_items(
+                &event,
+                &settings,
+                DefensiveGates::default()
+            )),
+            vec!["item_glimmer_cape", "item_shivas_guard"]
+        );
+    }
+
+    #[test]
+    fn defensive_plan_holds_ghost_scepter_while_the_glimmer_window_runs() {
+        let settings = Settings::default();
+        // Glimmer is mid-window, so it is on cooldown and cannot re-fire.
+        let mut event = panic_kit_event();
+        event.items.slot0 = Item {
+            name: "item_glimmer_cape".to_string(),
+            can_cast: Some(false),
+            ..Default::default()
+        };
+
+        let gates = DefensiveGates {
+            glimmer_active: true,
+            ..DefensiveGates::default()
+        };
+
+        assert_eq!(
+            planned_items(&plan_defensive_items(&event, &settings, gates)),
+            vec!["item_shivas_guard"]
+        );
+    }
+
+    /// The whole point of the hold: Ghost Scepter is still there for the moment
+    /// after Glimmer runs out.
+    #[test]
+    fn defensive_plan_fires_ghost_scepter_once_the_glimmer_window_ends() {
+        let settings = Settings::default();
+        let mut event = panic_kit_event();
+        event.items.slot0 = Item {
+            name: "item_glimmer_cape".to_string(),
+            can_cast: Some(false),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            planned_items(&plan_defensive_items(
+                &event,
+                &settings,
+                DefensiveGates::default()
+            )),
+            vec!["item_ghost", "item_shivas_guard"]
+        );
+    }
+
+    #[test]
+    fn defensive_plan_fires_ghost_scepter_when_no_cape_is_owned() {
+        let settings = Settings::default();
+        let mut event = panic_kit_event();
+        event.items.slot0 = Item::default();
+
+        assert_eq!(
+            planned_items(&plan_defensive_items(
+                &event,
+                &settings,
+                DefensiveGates::default()
+            )),
+            vec!["item_ghost", "item_shivas_guard"]
+        );
+    }
+
+    /// Blade Mail on its own, with nothing hiding or ghosting us.
+    #[test]
+    fn defensive_plan_fires_blade_mail_when_we_are_being_hit() {
+        let settings = Settings::default();
+        let mut event = panic_kit_event();
+        event.items.slot0 = Item::default();
+        event.items.slot1 = Item::default();
+
+        assert_eq!(
+            planned_items(&plan_defensive_items(
+                &event,
+                &settings,
+                DefensiveGates::default()
+            )),
+            vec!["item_blade_mail", "item_shivas_guard"]
+        );
+    }
+
+    #[test]
+    fn defensive_plan_holds_blade_mail_while_invisible() {
+        let settings = Settings::default();
+        let mut event = panic_kit_event();
+        event.items.slot0 = Item::default();
+        event.items.slot1 = Item::default();
+
+        let gates = DefensiveGates {
+            invisible: true,
+            ..DefensiveGates::default()
+        };
+
+        assert_eq!(
+            planned_items(&plan_defensive_items(&event, &settings, gates)),
+            vec!["item_shivas_guard"]
+        );
+    }
+
+    #[test]
+    fn defensive_plan_holds_blade_mail_while_the_glimmer_window_runs() {
+        let settings = Settings::default();
+        let mut event = panic_kit_event();
+        event.items.slot0 = Item {
+            name: "item_glimmer_cape".to_string(),
+            can_cast: Some(false),
+            ..Default::default()
+        };
+
+        let gates = DefensiveGates {
+            glimmer_active: true,
+            ..DefensiveGates::default()
+        };
+
+        assert_eq!(
+            planned_items(&plan_defensive_items(&event, &settings, gates)),
+            vec!["item_shivas_guard"]
+        );
+    }
+
+    /// Blade Mail is pressed before Glimmer, but the fade it would sit under
+    /// starts in the same tick, so the return damage lands on nobody.
+    #[test]
+    fn defensive_plan_holds_blade_mail_when_glimmer_fires_this_tick() {
+        let settings = Settings::default();
+        let event = panic_kit_event();
+
+        assert!(!planned_items(&plan_defensive_items(
+            &event,
+            &settings,
+            DefensiveGates::default()
+        ))
+        .contains(&"item_blade_mail"));
+    }
+
+    /// Ghosted, nobody can land an attack to be punished for.
+    #[test]
+    fn defensive_plan_holds_blade_mail_while_the_ghost_window_runs() {
+        let settings = Settings::default();
+        let mut event = panic_kit_event();
+        event.items.slot0 = Item::default();
+        // Ghost is mid-window, so it is on cooldown and cannot re-fire.
+        event.items.slot1 = Item {
+            name: "item_ghost".to_string(),
+            can_cast: Some(false),
+            ..Default::default()
+        };
+
+        let gates = DefensiveGates {
+            ghost_active: true,
+            ..DefensiveGates::default()
+        };
+
+        assert_eq!(
+            planned_items(&plan_defensive_items(&event, &settings, gates)),
+            vec!["item_shivas_guard"]
+        );
+    }
+
+    /// Same tick: Blade Mail is pressed first, but Ghost Scepter goes up right
+    /// behind it and covers the whole of Blade Mail's duration.
+    #[test]
+    fn defensive_plan_holds_blade_mail_when_ghost_scepter_fires_this_tick() {
+        let settings = Settings::default();
+        let mut event = panic_kit_event();
+        event.items.slot0 = Item::default();
+
+        assert_eq!(
+            planned_items(&plan_defensive_items(
+                &event,
+                &settings,
+                DefensiveGates::default()
+            )),
+            vec!["item_ghost", "item_shivas_guard"]
+        );
+    }
+
+    /// A Ghost Scepter that is itself being held by Glimmer must not be the
+    /// reason Blade Mail is skipped — Glimmer already is.
+    #[test]
+    fn defensive_plan_holds_blade_mail_once_when_both_panic_items_are_ready() {
+        let settings = Settings::default();
+        let event = panic_kit_event();
+
+        assert_eq!(
+            planned_items(&plan_defensive_items(
+                &event,
+                &settings,
+                DefensiveGates::default()
+            )),
+            vec!["item_glimmer_cape", "item_shivas_guard"]
+        );
+    }
+
+    /// With Ghost Scepter switched off, nothing holds Blade Mail back.
+    #[test]
+    fn defensive_plan_fires_blade_mail_when_ghost_scepter_is_disabled() {
+        let mut settings = Settings::default();
+        settings.danger_detection.auto_ghost_scepter = false;
+        let mut event = panic_kit_event();
+        event.items.slot0 = Item::default();
+
+        assert_eq!(
+            planned_items(&plan_defensive_items(
+                &event,
+                &settings,
+                DefensiveGates::default()
+            )),
+            vec!["item_blade_mail", "item_shivas_guard"]
+        );
+    }
+
+    #[test]
+    fn defensive_plan_keeps_the_configured_press_order() {
+        let mut settings = Settings::default();
+        settings.danger_detection.auto_bkb = true;
+
+        let mut items = empty_items();
+        items.slot0 = castable("item_shivas_guard");
+        items.slot1 = castable("item_mjollnir");
+        items.slot2 = castable("item_satanic");
+        items.slot3 = castable("item_black_king_bar");
+        // 20% HP clears Satanic's own 40% gate.
+        let event = base_event(hero_with_health(20, 20), items);
+
+        assert_eq!(
+            planned_items(&plan_defensive_items(
+                &event,
+                &settings,
+                DefensiveGates::default()
+            )),
+            vec![
+                "item_black_king_bar",
+                "item_satanic",
+                "item_mjollnir",
+                "item_shivas_guard",
+            ]
+        );
+    }
+
+    #[test]
+    fn defensive_plan_still_honours_the_satanic_hp_gate() {
+        let settings = Settings::default();
+        let mut items = empty_items();
+        items.slot0 = castable("item_satanic");
+        let healthy = base_event(hero_with_health(100, 100), items.clone());
+        let hurt = base_event(hero_with_health(20, 20), items);
+
+        assert!(plan_defensive_items(&healthy, &settings, DefensiveGates::default()).is_empty());
+        assert_eq!(
+            planned_items(&plan_defensive_items(
+                &hurt,
+                &settings,
+                DefensiveGates::default()
+            )),
+            vec!["item_satanic"]
+        );
+    }
+
+    #[test]
+    fn defensive_plan_skips_items_that_cannot_be_cast() {
+        let settings = Settings::default();
+        let mut items = empty_items();
+        items.slot0 = Item {
+            name: "item_shivas_guard".to_string(),
+            can_cast: Some(false),
+            ..Default::default()
+        };
+        // Dota omits can_cast entirely on some payloads; that is not "ready".
+        items.slot1 = Item {
+            name: "item_ghost".to_string(),
+            can_cast: None,
+            ..Default::default()
+        };
+        let event = base_event(hero_with_health(100, 100), items);
+
+        assert!(plan_defensive_items(&event, &settings, DefensiveGates::default()).is_empty());
+    }
+
+    #[test]
+    fn defensive_plan_skips_disabled_items() {
+        let mut settings = Settings::default();
+        settings.danger_detection.auto_glimmer_cape = false;
+        settings.danger_detection.auto_blade_mail = false;
+        let event = panic_kit_event();
+
+        // With Glimmer switched off nothing holds Ghost Scepter back.
+        assert_eq!(
+            planned_items(&plan_defensive_items(
+                &event,
+                &settings,
+                DefensiveGates::default()
+            )),
+            vec!["item_ghost", "item_shivas_guard"]
+        );
+    }
+
+    #[test]
+    fn defensive_gates_read_every_tracker() {
+        let _guard = shared_state_test_lock().lock().unwrap();
+        invisibility::replace_snapshot_for_tests(None);
+        defensive_windows::replace_snapshot_for_tests(None);
+
+        assert_eq!(DefensiveGates::current(), DefensiveGates::default());
+        assert!(!DefensiveGates::current().hidden());
+
+        defensive_windows::replace_snapshot_for_tests(Some(
+            defensive_windows::active_snapshot_for_tests(
+                "npc_dota_hero_lion",
+                defensive_windows::GLIMMER_ITEM,
+            ),
+        ));
+        let with_glimmer = DefensiveGates::current();
+
+        defensive_windows::replace_snapshot_for_tests(Some(
+            defensive_windows::active_snapshot_for_tests(
+                "npc_dota_hero_lion",
+                defensive_windows::GHOST_ITEM,
+            ),
+        ));
+        let with_ghost = DefensiveGates::current();
+
+        defensive_windows::replace_snapshot_for_tests(None);
+        invisibility::replace_snapshot_for_tests(Some(invisibility::active_snapshot_for_tests(
+            "npc_dota_hero_lion",
+        )));
+        let with_invis = DefensiveGates::current();
+
+        invisibility::replace_snapshot_for_tests(None);
+
+        assert!(with_glimmer.glimmer_active && with_glimmer.hidden());
+        // Ghost form is not concealment: it gates Blade Mail, not the fade.
+        assert!(with_ghost.ghost_active && !with_ghost.hidden());
+        assert!(with_invis.invisible && with_invis.hidden());
     }
 }
