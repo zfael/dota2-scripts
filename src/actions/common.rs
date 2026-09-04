@@ -45,7 +45,10 @@ impl PlannedKeyPress {
 /// Defensive items that target a unit, so the key has to be double-tapped to
 /// land on ourselves instead of waiting for a cursor click.
 fn defensive_item_needs_self_cast(item_name: &str) -> bool {
-    matches!(item_name, "item_glimmer_cape" | "item_mjollnir")
+    matches!(
+        item_name,
+        "item_glimmer_cape" | "item_mjollnir" | "item_lotus_orb"
+    )
 }
 
 fn plan_item_key_sequence(item_name: &str, key: char) -> Vec<PlannedKeyPress> {
@@ -315,6 +318,7 @@ fn plan_defensive_items(
         ("item_black_king_bar", config.auto_bkb),
         ("item_satanic", config.auto_satanic),
         ("item_blade_mail", config.auto_blade_mail),
+        ("item_lotus_orb", config.auto_lotus_orb),
         ("item_mjollnir", config.auto_mjollnir),
         ("item_glimmer_cape", config.auto_glimmer_cape),
         ("item_ghost", config.auto_ghost_scepter),
@@ -333,9 +337,14 @@ fn plan_defensive_items(
         && !ghost_held
         && ready_item_key(event, settings, defensive_windows::GHOST_ITEM).is_some();
 
-    // Blade Mail only pays for itself while something is hitting us. Hidden by
-    // invisibility or Glimmer, or ghosted by the Scepter, nothing is.
-    let blade_mail_wasted = gates.hidden() || glimmer_fires || gates.ghost_active || ghost_fires;
+    // Hidden, we are not being cast at or attacked, and the activation is what
+    // would drop the fade. Ghost form is not hidden — spells still land on us,
+    // so Lotus Orb is still worth reflecting them with.
+    let hidden = gates.hidden() || glimmer_fires;
+
+    // Blade Mail only pays for itself while something is hitting us. Hidden or
+    // ghosted, nothing is.
+    let blade_mail_wasted = hidden || gates.ghost_active || ghost_fires;
 
     let mut plan = Vec::new();
 
@@ -353,6 +362,13 @@ fn plan_defensive_items(
         // fade in the first place.
         if item_name == "item_blade_mail" && blade_mail_wasted {
             debug!("Blade Mail held: hidden or ghosted this tick");
+            continue;
+        }
+
+        // Lotus Orb reflects what is aimed at us, and nothing is aimed at
+        // something it cannot see.
+        if item_name == "item_lotus_orb" && hidden {
+            debug!("Lotus Orb held: hidden this tick");
             continue;
         }
 
@@ -1114,6 +1130,17 @@ mod tests {
                 PlannedKeyPress::new('2', 0),
                 PlannedKeyPress::new('4', SELF_CAST_DELAY_MS),
                 PlannedKeyPress::new('4', 0),
+                PlannedKeyPress::new('5', 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn lotus_orb_plan_double_taps_for_self_cast() {
+        assert_eq!(
+            plan_item_key_sequence("item_lotus_orb", '5'),
+            vec![
+                PlannedKeyPress::new('5', SELF_CAST_DELAY_MS),
                 PlannedKeyPress::new('5', 0),
             ]
         );
@@ -2377,6 +2404,109 @@ mod snapshot_tests {
                 DefensiveGates::default()
             )),
             vec!["item_glimmer_cape", "item_shivas_guard"]
+        );
+    }
+
+    /// Lotus Orb answers to concealment only: spells still land on a ghosted
+    /// hero, so there is still something to reflect.
+    #[test]
+    fn defensive_plan_fires_lotus_orb_while_the_ghost_window_runs() {
+        let settings = Settings::default();
+        let mut event = panic_kit_event();
+        event.items.slot0 = Item::default();
+        event.items.slot1 = Item {
+            name: "item_ghost".to_string(),
+            can_cast: Some(false),
+            ..Default::default()
+        };
+        event.items.slot4 = castable("item_lotus_orb");
+
+        let gates = DefensiveGates {
+            ghost_active: true,
+            ..DefensiveGates::default()
+        };
+
+        assert_eq!(
+            planned_items(&plan_defensive_items(&event, &settings, gates)),
+            vec!["item_lotus_orb", "item_shivas_guard"]
+        );
+    }
+
+    #[test]
+    fn defensive_plan_holds_lotus_orb_while_invisible() {
+        let settings = Settings::default();
+        let mut event = panic_kit_event();
+        event.items.slot0 = Item::default();
+        event.items.slot1 = Item::default();
+        event.items.slot4 = castable("item_lotus_orb");
+
+        let gates = DefensiveGates {
+            invisible: true,
+            ..DefensiveGates::default()
+        };
+
+        assert_eq!(
+            planned_items(&plan_defensive_items(&event, &settings, gates)),
+            vec!["item_shivas_guard"]
+        );
+    }
+
+    #[test]
+    fn defensive_plan_holds_lotus_orb_while_the_glimmer_window_runs() {
+        let settings = Settings::default();
+        let mut event = panic_kit_event();
+        event.items.slot0 = Item {
+            name: "item_glimmer_cape".to_string(),
+            can_cast: Some(false),
+            ..Default::default()
+        };
+        event.items.slot1 = Item::default();
+        event.items.slot4 = castable("item_lotus_orb");
+
+        let gates = DefensiveGates {
+            glimmer_active: true,
+            ..DefensiveGates::default()
+        };
+
+        assert_eq!(
+            planned_items(&plan_defensive_items(&event, &settings, gates)),
+            vec!["item_shivas_guard"]
+        );
+    }
+
+    /// Glimmer goes up on this same tick, so Lotus would be reflecting for a
+    /// hero nobody can target.
+    #[test]
+    fn defensive_plan_holds_lotus_orb_when_glimmer_fires_this_tick() {
+        let settings = Settings::default();
+        let mut event = panic_kit_event();
+        event.items.slot4 = castable("item_lotus_orb");
+
+        assert_eq!(
+            planned_items(&plan_defensive_items(
+                &event,
+                &settings,
+                DefensiveGates::default()
+            )),
+            vec!["item_glimmer_cape", "item_shivas_guard"]
+        );
+    }
+
+    #[test]
+    fn defensive_plan_fires_lotus_orb_when_nothing_conceals_us() {
+        let settings = Settings::default();
+        let mut event = panic_kit_event();
+        event.items.slot0 = Item::default();
+        event.items.slot1 = Item::default();
+        event.items.slot4 = castable("item_lotus_orb");
+
+        assert_eq!(
+            planned_items(&plan_defensive_items(
+                &event,
+                &settings,
+                DefensiveGates::default()
+            )),
+            vec!["item_blade_mail", "item_lotus_orb", "item_shivas_guard"]
         );
     }
 

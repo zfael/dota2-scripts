@@ -157,9 +157,11 @@ Current activation order:
 1. `item_black_king_bar`
 2. `item_satanic`
 3. `item_blade_mail`
-4. `item_glimmer_cape`
-5. `item_ghost`
-6. `item_shivas_guard`
+4. `item_lotus_orb`
+5. `item_mjollnir`
+6. `item_glimmer_cape`
+7. `item_ghost`
+8. `item_shivas_guard`
 
 Behavior details:
 
@@ -168,12 +170,17 @@ Behavior details:
 - `item.can_cast` must be `true`
 - all eligible enabled items are attempted in one pass, chosen by the pure
   `plan_defensive_items()`
-- `item_glimmer_cape` is double-tapped in `use_item()` for self-cast
+- `item_glimmer_cape`, `item_mjollnir` and `item_lotus_orb` are double-tapped for
+  self-cast
 - `item_satanic` has its own HP gate: `hp_percent <= satanic_hp_threshold`
 - `item_ghost` is held while `item_glimmer_cape` is running or firing this tick —
   one panic button at a time
 - `item_blade_mail` is held whenever nothing can hit us: an invisibility window, a
   Glimmer or Ghost Scepter window, or either of those firing this tick
+- `item_lotus_orb` is held only while we are concealed — an invisibility window, a
+  Glimmer window, or a Glimmer firing this tick. A Ghost Scepter window does
+  **not** hold it: spells still land on a ghosted hero, so there is still
+  something to reflect
 
 Those windows come from `src/actions/defensive_windows.rs`; see the "Defensive
 item windows" section of `docs/features/survivability.md`.
@@ -234,6 +241,7 @@ Defaults come from `src/config/settings.rs`; checked-in values live in `config/c
 | `auto_satanic` | `bool` | `true` | Yes | Auto-use Satanic while in danger |
 | `satanic_hp_threshold` | `u32` | `40` | Yes | Additional HP gate for Satanic |
 | `auto_blade_mail` | `bool` | `true` | Yes | Auto-use Blade Mail while in danger |
+| `auto_lotus_orb` | `bool` | `true` | Yes | Auto-use Lotus Orb while in danger (self-cast) |
 | `auto_glimmer_cape` | `bool` | `true` | Yes | Auto-use Glimmer Cape while in danger |
 | `auto_ghost_scepter` | `bool` | `true` | Yes | Auto-use Ghost Scepter while in danger |
 | `auto_shivas_guard` | `bool` | `true` | Yes | Auto-use Shiva's Guard while in danger |

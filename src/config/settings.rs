@@ -851,6 +851,8 @@ pub struct DangerDetectionConfig {
     pub satanic_hp_threshold: u32,
     #[serde(default = "default_auto_blade_mail")]
     pub auto_blade_mail: bool,
+    #[serde(default = "default_auto_lotus_orb")]
+    pub auto_lotus_orb: bool,
     #[serde(default = "default_auto_mjollnir")]
     pub auto_mjollnir: bool,
     #[serde(default = "default_auto_glimmer_cape")]
@@ -2532,6 +2534,9 @@ fn default_satanic_hp_threshold() -> u32 {
 fn default_auto_blade_mail() -> bool {
     true
 }
+fn default_auto_lotus_orb() -> bool {
+    true
+}
 fn default_auto_mjollnir() -> bool {
     true
 }
@@ -3070,6 +3075,7 @@ impl Default for DangerDetectionConfig {
             auto_satanic: default_auto_satanic(),
             satanic_hp_threshold: default_satanic_hp_threshold(),
             auto_blade_mail: default_auto_blade_mail(),
+            auto_lotus_orb: default_auto_lotus_orb(),
             auto_mjollnir: default_auto_mjollnir(),
             auto_glimmer_cape: default_auto_glimmer_cape(),
             auto_ghost_scepter: default_auto_ghost_scepter(),

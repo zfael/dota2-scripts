@@ -197,6 +197,11 @@ export default function Survivability() {
               onChange={(v) => updateDanger({ auto_blade_mail: v })}
             />
             <Toggle
+              label="Lotus Orb"
+              checked={danger.auto_lotus_orb}
+              onChange={(v) => updateDanger({ auto_lotus_orb: v })}
+            />
+            <Toggle
               label="Mjollnir"
               checked={danger.auto_mjollnir}
               onChange={(v) => updateDanger({ auto_mjollnir: v })}

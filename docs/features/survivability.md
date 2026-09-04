@@ -202,10 +202,11 @@ Current activation order:
 1. `item_black_king_bar`
 2. `item_satanic`
 3. `item_blade_mail`
-4. `item_mjollnir`
-5. `item_glimmer_cape`
-6. `item_ghost`
-7. `item_shivas_guard`
+4. `item_lotus_orb`
+5. `item_mjollnir`
+6. `item_glimmer_cape`
+7. `item_ghost`
+8. `item_shivas_guard`
 
 Which of them fire is decided by `plan_defensive_items()`, a pure planner; the
 caller only presses the keys it hands back.
@@ -213,11 +214,11 @@ caller only presses the keys it hands back.
 Details:
 
 - each item is independently enabled/disabled in `[danger_detection]`
-- Mjollnir (Static Charge) and Glimmer are unit-targeted, so both are self-cast by double-tapping the bound key — `defensive_item_needs_self_cast()` in `common.rs` is the single list
+- Mjollnir (Static Charge), Glimmer and Lotus Orb are unit-targeted, so all three are self-cast by double-tapping the bound key — `defensive_item_needs_self_cast()` in `common.rs` is the single list
 - from the first self-cast item onwards, `common.rs` queues the rest of the sequence on the shared `ActionExecutor`, so the synchronous GSI lane does not sleep for the 50ms follow-up timing and later defensive items still stay behind that item's second tap
 - Satanic has a separate HP gate: `satanic_hp_threshold`
 
-Two items are held back rather than fired blind (see "Defensive item windows"
+Three items are held back rather than fired blind (see "Defensive item windows"
 below):
 
 - **Ghost Scepter** waits while Glimmer Cape is running, and while Glimmer is
@@ -228,6 +229,11 @@ below):
   window, a live Glimmer or Ghost Scepter window, or either of those two firing
   on this tick. There is no incoming damage to return, and while hidden the
   activation is also what would drop the fade.
+- **Lotus Orb** is skipped only while we are concealed — invisibility window,
+  Glimmer window, or a Glimmer firing on this tick. Nothing is aimed at a hero it
+  cannot see, and the cast would drop the fade. A Ghost Scepter window is
+  deliberately *not* a hold: spells still land on a ghosted hero, so there is
+  still something worth reflecting.
 
 For the heuristics that decide when this path runs, see `docs/features/danger-detection.md`.
 
@@ -345,13 +351,13 @@ reads all three through `DefensiveGates::current()`:
 
 | Gate | Holds |
 |---|---|
-| `invisibility::is_invisible()` | Blade Mail |
-| Glimmer window | Blade Mail, Ghost Scepter |
+| `invisibility::is_invisible()` | Blade Mail, Lotus Orb |
+| Glimmer window | Blade Mail, Lotus Orb, Ghost Scepter |
 | Ghost Scepter window | Blade Mail |
 
 Ghost form is not concealment, so it is not part of `DefensiveGates::hidden()` —
-it gates Blade Mail on its own reason: nobody can land the attack that Blade Mail
-would punish.
+it gates Blade Mail on its own reason (nobody can land the attack that Blade Mail
+would punish) and leaves Lotus Orb alone.
 
 Two differences from the invisibility tracker, both on purpose:
 
@@ -436,7 +442,7 @@ across three config sections rather than mirroring one:
 |---|---|---|
 | Healing Items | `[common]`, `[danger_detection]` | `survivability_hp_threshold`, `healing_threshold_in_danger`, `max_healing_items_per_danger` |
 | Lane Phase | `[common]` | `lane_phase_duration_seconds`, `lane_phase_healing_threshold` |
-| Defensive Items | `[danger_detection]` | `auto_bkb`, `auto_satanic`, `satanic_hp_threshold`, `auto_blade_mail`, `auto_mjollnir`, `auto_glimmer_cape`, `auto_ghost_scepter`, `auto_shivas_guard` |
+| Defensive Items | `[danger_detection]` | `auto_bkb`, `auto_satanic`, `satanic_hp_threshold`, `auto_blade_mail`, `auto_lotus_orb`, `auto_mjollnir`, `auto_glimmer_cape`, `auto_ghost_scepter`, `auto_shivas_guard` |
 | Dispels | `[danger_detection]` | `auto_manta_on_silence`, `auto_lotus_on_silence` |
 | Neutral Items | `[neutral_items]` | `enabled`, `use_in_danger`, `hp_threshold`, `self_cast_key`, `allowed_items` |
 | Invisibility | `[invisibility]` | `suppress_automation` |
@@ -464,7 +470,7 @@ Deliberately **not** on that page:
 | `[common]` | `survivability_hp_threshold`, `lane_phase_duration_seconds`, `lane_phase_healing_threshold` |
 | `[armlet]` | `enabled`, `cast_modifier`, `toggle_threshold`, `predictive_offset`, `toggle_cooldown_ms` |
 | `[armlet.roshan]` | `enabled`, `toggle_key`, `emergency_margin_hp`, `learning_window_ms`, `min_confidence_hits`, `min_sample_damage`, `stale_reset_ms` |
-| `[danger_detection]` | `enabled`, `healing_threshold_in_danger`, `max_healing_items_per_danger`, `auto_bkb`, `auto_satanic`, `satanic_hp_threshold`, `auto_blade_mail`, `auto_mjollnir`, `auto_glimmer_cape`, `auto_ghost_scepter`, `auto_shivas_guard`, `auto_manta_on_silence`, `auto_lotus_on_silence` |
+| `[danger_detection]` | `enabled`, `healing_threshold_in_danger`, `max_healing_items_per_danger`, `auto_bkb`, `auto_satanic`, `satanic_hp_threshold`, `auto_blade_mail`, `auto_lotus_orb`, `auto_mjollnir`, `auto_glimmer_cape`, `auto_ghost_scepter`, `auto_shivas_guard`, `auto_manta_on_silence`, `auto_lotus_on_silence` |
 | `[heroes.<hero>.armlet]` | optional per-hero `enabled`, `toggle_threshold`, `predictive_offset`, `toggle_cooldown_ms` overrides |
 | `[neutral_items]` | `enabled`, `self_cast_key`, `use_in_danger`, `hp_threshold`, `allowed_items` |
 | `[mana_automation]` | `enabled`, `mana_threshold_percent`, `excluded_heroes`, `allowed_items` |

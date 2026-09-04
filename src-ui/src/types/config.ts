@@ -349,6 +349,7 @@ export interface DangerDetectionConfig {
   auto_satanic: boolean;
   satanic_hp_threshold: number;
   auto_blade_mail: boolean;
+  auto_lotus_orb: boolean;
   auto_mjollnir: boolean;
   auto_glimmer_cape: boolean;
   auto_ghost_scepter: boolean;
