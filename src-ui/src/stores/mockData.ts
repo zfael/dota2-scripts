@@ -183,6 +183,14 @@ export const mockConfig: Settings = {
       center_camera_on_ultimate: true, camera_center_key: "1",
       camera_center_delay_ms: 60,
     },
+    morphling: {
+      enabled: true, strength_key: "f", agility_key: "d",
+      target_hp_gain: 330,
+      return_to_agility: true, return_delay_seconds: 5,
+      return_min_health_percent: 70,
+      max_shift_seconds: 4, plateau_ms: 700,
+      press_settle_ms: 500, manual_override_seconds: 5,
+    },
     mirana: {
       enabled: true, leap_key: "e",
       turn_delay_ms: 200, require_ability_ready: true,

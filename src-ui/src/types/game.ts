@@ -9,6 +9,7 @@ export type HeroType =
   | "magnus"
   | "meepo"
   | "mirana"
+  | "morphling"
   | "outworld_destroyer"
   | "shadow_fiend"
   | "slark"
@@ -34,6 +35,7 @@ export const HEROES: HeroInfo[] = [
   { id: "magnus", displayName: "Magnus", internalName: "npc_dota_hero_magnataur", icon: "🦏", role: "Initiator / Disabler" },
   { id: "meepo", displayName: "Meepo", internalName: "npc_dota_hero_meepo", icon: "🐾", role: "Carry / Escape" },
   { id: "mirana", displayName: "Mirana", internalName: "npc_dota_hero_mirana", icon: "🌙", role: "Carry / Escape" },
+  { id: "morphling", displayName: "Morphling", internalName: "npc_dota_hero_morphling", icon: "💧", role: "Carry / Escape" },
   { id: "outworld_destroyer", displayName: "Outworld Destroyer", internalName: "npc_dota_hero_obsidian_destroyer", icon: "🌀", role: "Carry / Nuker" },
   { id: "shadow_fiend", displayName: "Shadow Fiend", internalName: "npc_dota_hero_nevermore", icon: "👻", role: "Carry / Nuker" },
   { id: "slark", displayName: "Slark", internalName: "npc_dota_hero_slark", icon: "🐟", role: "Carry / Escape" },

@@ -84,6 +84,7 @@
 | `src/actions/heroes/outworld_destroyer.rs` | Outworld Destroyer barrier, combo worker, ultimate interception support, and self-Astral helper | `docs/heroes/outworld_destroyer.md`, `docs/features/keyboard-interception.md` |
 | `src/actions/heroes/slark.rs` | Slark directional Pounce automation (Pounce-key intercept + GSI readiness gate), GSI-driven Dark Pact debuff cleanse, and the low-HP Shadow Dance escape with shard fallback | `docs/heroes/slark.md`, `docs/features/keyboard-interception.md`, `docs/features/hud-anchors.md` |
 | `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend raze / ultimate / standalone combo logic | `docs/heroes/shadow_fiend.md`, `docs/features/keyboard-interception.md` |
+| `src/actions/heroes/morphling.rs` | Morphling Attribute Shift automation (strength on danger, gated shift back, self-damage declaration) | `docs/heroes/morphling.md`, `docs/features/danger-detection.md` |
 | `src/actions/heroes/snapfire.rs` | Snapfire directional Firesnap Cookie automation (trigger-key intercept + ALT self-cast leap) | `docs/heroes/snapfire.md`, `docs/features/keyboard-interception.md` |
 | `src/actions/heroes/tiny.rs` | Tiny standalone combo | `docs/heroes/tiny.md` |
 
@@ -142,6 +143,7 @@
 | `src-ui/src/components/heroes/configs/EarthSpiritConfig.tsx` | Earth Spirit config panel: both remnant combos' keys and delays, the roll double-tap toggle, and the two readiness gates | `docs/heroes/earth_spirit.md` |
 | `src-ui/src/components/heroes/configs/EmberSpiritConfig.tsx` | Ember Spirit config panel: remnant-chase keys and delay, plus Flame Guard auto-cast toggle, key, HP threshold, and retry cooldown | `docs/heroes/ember_spirit.md` |
 | `src-ui/src/components/heroes/configs/SlarkConfig.tsx` | Slark config panel: Pounce intercept toggle, Pounce key, turn delay, readiness gate, and auto Dark Pact cleanse | `docs/heroes/slark.md` |
+| `src-ui/src/components/heroes/configs/MorphlingConfig.tsx` | Morphling Attribute Shift config panel: shift keys, HP target, shift-back gates, timing | `docs/heroes/morphling.md` |
 | `src-ui/src/components/heroes/configs/SnapfireConfig.tsx` | Snapfire directional-cookie config panel: intercept toggle, trigger key, turn delay, cookie key | `docs/heroes/snapfire.md` |
 | `src-ui/src/components/heroes/configs/InvokerConfig.tsx` | Invoker profile-builder shell that wires preset library, profile list, and editor state | `docs/heroes/invoker.md` |
 | `src-ui/src/components/heroes/configs/InvokerConfig.test.tsx` | Vitest coverage for Invoker profile rendering and duplication | `docs/heroes/invoker.md` |
@@ -218,6 +220,8 @@
 | File | Purpose | Linked Doc |
 |---|---|---|
 | `examples/mouse_test.rs` | Local helper binary for inspecting `rdev` mouse button events | `docs/workflows/testing-and-debugging.md` |
+| `examples/morphling_shift_probe.rs` | GSI probe that measured what a Morphling shift looks like; also replays a capture | `docs/heroes/morphling.md` |
+| `examples/morphling_shift_control.rs` | Simulator the Morphling shift decision loop was proved against before it reached `src/` | `docs/heroes/morphling.md` |
 | `examples/minimap_analyze.rs` | Standalone CLI for running hero detection on PNG captures | `docs/superpowers/specs/2026-03-31-minimap-hero-detection-design.md` |
 
 ## `docs/`
@@ -240,6 +244,7 @@
 | `docs/heroes/magnus.md` | Magnus automation doc: directional Reverse Polarity |
 | `docs/heroes/meepo.md` | Meepo automation doc |
 | `docs/heroes/mirana.md` | Mirana automation doc: directional Leap |
+| `docs/heroes/morphling.md` | Morphling automation doc: Attribute Shift on danger |
 | `docs/heroes/earth_spirit.md` | Earth Spirit automation doc: silence combo, enhanced roll |
 | `docs/heroes/ember_spirit.md` | Ember Spirit automation doc: remnant chase, Flame Guard auto-cast |
 | `docs/heroes/outworld_destroyer.md` | Outworld Destroyer automation doc |

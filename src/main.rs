@@ -188,6 +188,11 @@ async fn main() {
                                 state::HeroType::Magnus => models::Hero::Magnataur.to_game_name(),
                                 state::HeroType::Meepo => models::Hero::Meepo.to_game_name(),
                                 state::HeroType::Mirana => models::Hero::Mirana.to_game_name(),
+                                // Routed for completeness; Morphling has no
+                                // standalone combo, so its handler is a no-op.
+                                state::HeroType::Morphling => {
+                                    models::Hero::Morphling.to_game_name()
+                                }
                                 state::HeroType::OutworldDestroyer => {
                                     models::Hero::ObsidianDestroyer.to_game_name()
                                 }

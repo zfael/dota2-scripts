@@ -342,6 +342,43 @@ suspend_after_manual_combo_ms = 2500
 poof_press_count = 1
 poof_press_interval_ms = 35
 
+[heroes.morphling]
+# Shift toward strength when the danger detector fires, hold it while the fight
+# lasts, hand it back once things are quiet. Driven entirely by hero.max_health:
+# GSI has no field that says which shift is running (ability_active reports true
+# for every ability, including the cosmetic ones).
+enabled = true
+# Attribute Shift keys. These are pressed as ordinary keys, so they must match
+# your in-game bindings.
+strength_key = "f"
+agility_key = "d"
+# How much max HP to buy when a fight starts. 22 HP is one strength point on the
+# current patch, so 330 is about 15 points, roughly a second of shifting. Raise
+# it if you are still dying through the shift.
+target_hp_gain = 330
+# Shift back to agility on its own once the fight is over. Turn off to keep the
+# shift back for yourself.
+return_to_agility = true
+# How long danger has to stay clear before shifting back. Deliberately separate
+# from [danger_detection].clear_delay_seconds: a lull in the damage is not the
+# end of the fight, and this is the timeout that covers standing in one.
+return_delay_seconds = 5
+# Never hand strength back below this much health. Losing max HP costs current
+# HP, which is how a shift back at low HP gets you killed.
+return_min_health_percent = 70
+# Hard cap on any single shift.
+max_shift_seconds = 4
+# How long max_health must stand still before the shift counts as finished —
+# either stopped or out of pool. Two GSI ticks, with room for a slow one.
+plateau_ms = 700
+# How long a press needs before its effect is believable. Measured at 95-391ms.
+# Pressing again inside this window would STOP the shift rather than adjust it,
+# so do not lower it without a fresh capture.
+press_settle_ms = 500
+# Shifting by hand takes the automation out of the loop for this long, and keeps
+# it out for as long as your shift is still moving.
+manual_override_seconds = 5
+
 [heroes.snapfire]
 # Press the trigger key to face the cursor and self-cast Firesnap Cookie (leap toward cursor).
 # W stays free for manually cookie-ing allies.

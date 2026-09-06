@@ -274,6 +274,57 @@ pub struct SnapfireConfig {
     pub turn_delay_ms: u64,
 }
 
+/// Morphling's Attribute Shift on danger.
+///
+/// Every threshold here is in HP or seconds, never attribute points or tick
+/// counts: `hero.max_health` is the only thing GSI reports about a shift, and
+/// what a point is worth changes between patches.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MorphlingConfig {
+    /// Master toggle for the automatic shift.
+    #[serde(default = "default_morphling_enabled")]
+    pub enabled: bool,
+    /// Attribute Shift (Strength Gain) key.
+    #[serde(default = "default_morphling_strength_key")]
+    pub strength_key: char,
+    /// Attribute Shift (Agility Gain) key.
+    #[serde(default = "default_morphling_agility_key")]
+    pub agility_key: char,
+    /// How much `max_health` to buy when a fight starts. Raise it if you are
+    /// still dying through the shift; 22 HP is one strength point on the current
+    /// patch, so 330 is roughly 15 points, about a second of shifting.
+    #[serde(default = "default_morphling_target_hp_gain")]
+    pub target_hp_gain: u32,
+    /// Whether to shift back to agility on its own once the fight is over.
+    /// Turn it off to keep the shift back for yourself.
+    #[serde(default = "default_morphling_return_to_agility")]
+    pub return_to_agility: bool,
+    /// How long danger has to stay clear before shifting back. Separate from
+    /// `[danger_detection].clear_delay_seconds` on purpose: a lull in the
+    /// damage is not the end of the fight.
+    #[serde(default = "default_morphling_return_delay_seconds")]
+    pub return_delay_seconds: u64,
+    /// Never give strength back below this much health — losing max HP costs
+    /// current HP, which is how a shift back at low HP kills you.
+    #[serde(default = "default_morphling_return_min_health_percent")]
+    pub return_min_health_percent: u32,
+    /// Hard cap on any single shift, whatever the rest of the logic thinks.
+    #[serde(default = "default_morphling_max_shift_seconds")]
+    pub max_shift_seconds: u64,
+    /// How long `max_health` has to stand still before the shift counts as over
+    /// — either stopped or out of pool. Two GSI ticks, with room for a slow one.
+    #[serde(default = "default_morphling_plateau_ms")]
+    pub plateau_ms: u64,
+    /// How long a press needs before its effect is believable. Measured at
+    /// 95–391ms; pressing again inside that window would stop the shift instead
+    /// of adjusting it.
+    #[serde(default = "default_morphling_press_settle_ms")]
+    pub press_settle_ms: u64,
+    /// How long a shift you started yourself keeps the automation out of it.
+    #[serde(default = "default_morphling_manual_override_seconds")]
+    pub manual_override_seconds: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MagnusConfig {
     /// Master toggle for the directional Reverse Polarity intercept.
@@ -815,6 +866,8 @@ pub struct HeroesConfig {
     pub meepo: MeepoConfig,
     #[serde(default)]
     pub snapfire: SnapfireConfig,
+    #[serde(default)]
+    pub morphling: MorphlingConfig,
     #[serde(default)]
     pub magnus: MagnusConfig,
     #[serde(default)]
@@ -1658,6 +1711,39 @@ fn default_snapfire_cookie_key() -> char {
 }
 fn default_snapfire_turn_delay_ms() -> u64 {
     60
+}
+fn default_morphling_enabled() -> bool {
+    true
+}
+fn default_morphling_strength_key() -> char {
+    'f'
+}
+fn default_morphling_agility_key() -> char {
+    'd'
+}
+fn default_morphling_target_hp_gain() -> u32 {
+    330
+}
+fn default_morphling_return_to_agility() -> bool {
+    true
+}
+fn default_morphling_return_delay_seconds() -> u64 {
+    5
+}
+fn default_morphling_return_min_health_percent() -> u32 {
+    70
+}
+fn default_morphling_max_shift_seconds() -> u64 {
+    4
+}
+fn default_morphling_plateau_ms() -> u64 {
+    700
+}
+fn default_morphling_press_settle_ms() -> u64 {
+    500
+}
+fn default_morphling_manual_override_seconds() -> u64 {
+    5
 }
 fn default_magnus_enabled() -> bool {
     true
@@ -2804,6 +2890,24 @@ impl Default for SnapfireConfig {
     }
 }
 
+impl Default for MorphlingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_morphling_enabled(),
+            strength_key: default_morphling_strength_key(),
+            agility_key: default_morphling_agility_key(),
+            target_hp_gain: default_morphling_target_hp_gain(),
+            return_to_agility: default_morphling_return_to_agility(),
+            return_delay_seconds: default_morphling_return_delay_seconds(),
+            return_min_health_percent: default_morphling_return_min_health_percent(),
+            max_shift_seconds: default_morphling_max_shift_seconds(),
+            plateau_ms: default_morphling_plateau_ms(),
+            press_settle_ms: default_morphling_press_settle_ms(),
+            manual_override_seconds: default_morphling_manual_override_seconds(),
+        }
+    }
+}
+
 impl Default for MagnusConfig {
     fn default() -> Self {
         Self {
@@ -3052,6 +3156,7 @@ impl Default for HeroesConfig {
             broodmother: BroodmotherConfig::default(),
             meepo: MeepoConfig::default(),
             snapfire: SnapfireConfig::default(),
+            morphling: MorphlingConfig::default(),
             magnus: MagnusConfig::default(),
             mirana: MiranaConfig::default(),
             ember_spirit: EmberSpiritConfig::default(),

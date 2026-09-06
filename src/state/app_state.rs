@@ -21,6 +21,7 @@ pub enum HeroType {
     Magnus,
     Meepo,
     Mirana,
+    Morphling,
     OutworldDestroyer,
     ShadowFiend,
     Slark,
@@ -60,6 +61,7 @@ impl HeroType {
             name if name == Hero::Magnataur.to_game_name() => Some(HeroType::Magnus),
             name if name == Hero::Meepo.to_game_name() => Some(HeroType::Meepo),
             name if name == Hero::Mirana.to_game_name() => Some(HeroType::Mirana),
+            name if name == Hero::Morphling.to_game_name() => Some(HeroType::Morphling),
             name if name == Hero::ObsidianDestroyer.to_game_name() => {
                 Some(HeroType::OutworldDestroyer)
             }
@@ -82,6 +84,7 @@ impl HeroType {
             HeroType::Magnus => "Magnus",
             HeroType::Meepo => "Meepo",
             HeroType::Mirana => "Mirana",
+            HeroType::Morphling => "Morphling",
             HeroType::OutworldDestroyer => "Outworld Destroyer",
             HeroType::ShadowFiend => "Shadow Fiend",
             HeroType::Slark => "Slark",

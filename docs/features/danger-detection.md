@@ -39,9 +39,19 @@ hp_delta       = observed_delta - claim_self_damage(observed_delta)
 ```
 
 A second global, `SELF_DAMAGE`, holds a pending allowance written by
-`note_self_damage(hp, source)`. Soul Ring is the only caller today: `mark_triggered()`
-reports `SOUL_RING_HEALTH_COST` (170) on every trigger, from both the keyboard replay path
-and the combo helper.
+`note_self_damage(hp, source)`. Two callers today:
+
+| Caller | Reports | When |
+|---|---|---|
+| `src/actions/soul_ring.rs` | `SOUL_RING_HEALTH_COST` (170) | `mark_triggered()`, from both the keyboard replay path and the combo helper |
+| `src/actions/heroes/morphling.rs` | The HP an Attribute Shift just cost | Every event where `hero.max_health` fell, before `update(...)` sees it |
+
+The Morphling case is the same bug in a different shape: shifting toward agility
+lowers max HP, current HP follows it down, and a shift back that crosses the low-HP
+threshold would fire the defensive kit at nobody. It declares the drop whether or not
+the automation is enabled, since a shift done by hand reads identically, and caps the
+claim at the health actually lost — at partial HP the game clamps instead of
+subtracting. See `docs/heroes/morphling.md`.
 
 Without this, buying mana was indistinguishable from a gank. 170 HP clears
 `rapid_loss_hp` (100) outright, and once HP sits below `hp_threshold_percent` any loss at

@@ -312,6 +312,21 @@ export interface SlarkConfig {
   shard_key: string;
 }
 
+export interface MorphlingConfig {
+  enabled: boolean;
+  strength_key: string;
+  agility_key: string;
+  /** Max HP a fight buys. In HP, not attribute points: what a point is worth changes between patches. */
+  target_hp_gain: number;
+  return_to_agility: boolean;
+  return_delay_seconds: number;
+  return_min_health_percent: number;
+  max_shift_seconds: number;
+  plateau_ms: number;
+  press_settle_ms: number;
+  manual_override_seconds: number;
+}
+
 export interface SnapfireConfig {
   enabled: boolean;
   trigger_key: string;
@@ -330,6 +345,7 @@ export interface HeroesConfig {
   shadow_fiend: ShadowFiendConfig;
   slark: SlarkConfig;
   snapfire: SnapfireConfig;
+  morphling: MorphlingConfig;
   tiny: TinyConfig;
   outworld_destroyer: OutworldDestroyerConfig;
   largo: LargoConfig;

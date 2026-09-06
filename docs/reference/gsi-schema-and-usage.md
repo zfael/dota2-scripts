@@ -86,9 +86,9 @@ The model includes many fields, but the runtime currently reads this subset:
 |---|---|---|
 | `hero.name` | `src/state/app_state.rs`, `src/actions/dispatcher.rs`, `src/gsi/handler.rs`, `src/actions/heroes/meepo_state.rs`, UI | Hero detection, dispatcher routing, Meepo cache refresh/clear, debug logs |
 | `hero.alive` | `src/gsi/handler.rs`, `src/actions/common.rs`, `src/actions/dispel.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs`, `src/actions/soul_ring.rs`, UI | Death/respawn logs, action gating, Meepo defensive-cast gating, Meepo farm-assist gating, status display |
-| `hero.health` | `src/actions/common.rs`, `src/actions/danger_detector.rs`, `src/gsi/handler.rs`, UI | Armlet logic, danger calculations, HP bars |
+| `hero.health` | `src/actions/common.rs`, `src/actions/danger_detector.rs`, `src/actions/heroes/morphling.rs`, `src/gsi/handler.rs`, UI | Armlet logic, danger calculations, HP bars; Morphling caps its self-damage declaration at the health actually lost |
 | `hero.health_percent` | `src/actions/common.rs`, `src/actions/danger_detector.rs`, `src/actions/auto_items.rs`, `src/actions/heroes/largo.rs`, `src/actions/heroes/meepo.rs`, `src/actions/heroes/meepo_state.rs`, `src/actions/soul_ring.rs` | Healing thresholds, danger checks, auto-abilities, Largo song choice, Meepo Dig/MegaMeepo thresholds, Meepo observed-state UI, Soul Ring safety |
-| `hero.max_health` | `src/actions/common.rs`, `src/actions/danger_detector.rs`, UI | HP percentage math and progress bars |
+| `hero.max_health` | `src/actions/common.rs`, `src/actions/danger_detector.rs`, `src/actions/heroes/morphling.rs`, UI | HP percentage math and progress bars; Morphling reads its per-tick delta as the only available signal of which Attribute Shift is running, since GSI reports no shift state (see `docs/heroes/morphling.md`) |
 | `hero.mana` | UI | Mana bar text |
 | `hero.mana_percent` | `src/actions/heroes/largo.rs`, `src/actions/heroes/meepo_state.rs`, `src/actions/soul_ring.rs` | Largo low-mana shutdown, Meepo observed-state UI, and Soul Ring gating |
 | `hero.max_mana` | UI | Mana percentage display |
@@ -126,6 +126,14 @@ Fields such as `hero.magicimmune`, `hero.break`, talents, and buyback data are m
 | `abilities.ability5.can_cast` | `src/actions/heroes/shadow_fiend.rs` | Shadow Fiend standalone combo only fires when the ultimate is ready |
 
 `ability.ultimate` exists in the schema but is not currently read by runtime code.
+
+> **`ability.ability_active` is not usable as a toggle state.** It reads like the
+> field that would say whether a toggled ability is currently on, and it is not: a
+> live Morphling capture reports it `true` for every ability on every tick,
+> cosmetics (`plus_guild_banner`, `plus_high_five`) included. Anything that needs
+> to know whether a toggle is running has to infer it from a side effect — for
+> Attribute Shift that is the `hero.max_health` delta. See
+> `docs/heroes/morphling.md` and `examples/morphling_shift_probe.rs`.
 
 ### `items`
 

@@ -12,6 +12,7 @@ const configs: Record<HeroType, () => Promise<{ default: ComponentType }>> = {
   legion_commander: () => import("./LegionCommanderConfig"),
   magnus: () => import("./MagnusConfig"),
   mirana: () => import("./MiranaConfig"),
+  morphling: () => import("./MorphlingConfig"),
   outworld_destroyer: () => import("./OutworldDestroyerConfig"),
   shadow_fiend: () => import("./ShadowFiendConfig"),
   slark: () => import("./SlarkConfig"),

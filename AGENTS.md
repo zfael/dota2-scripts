@@ -21,7 +21,7 @@ Start here. Follow links to the source or doc file relevant to your task.
 | Config template | `config/config.toml` (embedded into the binary at build time) |
 | Live config | `%LOCALAPPDATA%\dota2-scripts\config\config.toml` |
 
-Supported heroes: **Broodmother, Earth Spirit, Ember Spirit, Huskar, Invoker, Largo, Legion Commander, Magnus, Meepo, Mirana, Outworld Destroyer, Shadow Fiend, Slark, Snapfire, Tiny**
+Supported heroes: **Broodmother, Earth Spirit, Ember Spirit, Huskar, Invoker, Largo, Legion Commander, Magnus, Meepo, Mirana, Morphling, Outworld Destroyer, Shadow Fiend, Slark, Snapfire, Tiny**
 
 ---
 
@@ -99,6 +99,7 @@ broken test build there once went unnoticed.
 | Magnus | `npc_dota_hero_magnataur` | `docs/heroes/magnus.md` | `src/actions/heroes/magnus.rs` |
 | Meepo | `npc_dota_hero_meepo` | `docs/heroes/meepo.md` | `src/actions/heroes/meepo.rs` |
 | Mirana | `npc_dota_hero_mirana` | `docs/heroes/mirana.md` | `src/actions/heroes/mirana.rs` |
+| Morphling | `npc_dota_hero_morphling` | `docs/heroes/morphling.md` | `src/actions/heroes/morphling.rs` |
 | Outworld Destroyer | `npc_dota_hero_obsidian_destroyer` | `docs/heroes/outworld_destroyer.md` | `src/actions/heroes/outworld_destroyer.rs` |
 | Shadow Fiend | `npc_dota_hero_nevermore` | `docs/heroes/shadow_fiend.md` | `src/actions/heroes/shadow_fiend.rs` |
 | Slark | `npc_dota_hero_slark` | `docs/heroes/slark.md` | `src/actions/heroes/slark.rs` |
@@ -127,6 +128,7 @@ broken test build there once went unnoticed.
 | `actions/heroes/ember_spirit.rs` | Ember Spirit remnant chase worker (Fire Remnant then Activate Fire Remnant) and Flame Guard auto-cast on danger |
 | `actions/heroes/magnus.rs` | Magnus directional Reverse Polarity worker and GSI readiness gate |
 | `actions/heroes/mirana.rs` | Mirana directional Leap worker and GSI readiness gate |
+| `actions/heroes/morphling.rs` | Morphling Attribute Shift controller: strength on danger, gated shift back, all read from `max_health` |
 | `actions/heroes/slark.rs` | Slark directional Pounce worker, Dark Pact cleanse, and low-HP escape |
 | `actions/heroes/traits.rs` | `HeroScript` trait — implement this to add a hero |
 | `actions/heroes/*.rs` | Per-hero automation; see the Hero Docs table |

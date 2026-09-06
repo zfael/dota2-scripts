@@ -535,6 +535,27 @@ All four fields are exposed in the React UI under **Heroes → Snapfire**.
 
 See `docs/heroes/snapfire.md` and `docs/features/keyboard-interception.md`.
 
+## `[heroes.morphling]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `enabled` | `true` | `true` | Master toggle for the automatic Attribute Shift. |
+| `strength_key` | `"f"` | `"f"` | Attribute Shift (Strength Gain) key. Pressed as an ordinary key, so it must match your in-game binding — the app cannot read Dota's keybinds. |
+| `agility_key` | `"d"` | `"d"` | Attribute Shift (Agility Gain) key. |
+| `target_hp_gain` | `330` | `330` | Max HP a fight buys. In HP rather than attribute points on purpose: `max_health` is the only thing GSI reports about a shift, and what a point is worth changes between patches (22 HP currently, so this is ~15 points). |
+| `return_to_agility` | `true` | `true` | Whether to shift back automatically. Set `false` to keep the shift back for yourself; strength on danger still fires. |
+| `return_delay_seconds` | `5` | `5` | How long danger must stay clear before shifting back. Separate from `[danger_detection].clear_delay_seconds`: a lull in the damage is not the end of the fight. |
+| `return_min_health_percent` | `70` | `70` | Never hand strength back below this much health — losing max HP costs current HP. |
+| `max_shift_seconds` | `4` | `4` | Hard cap on any single shift. |
+| `plateau_ms` | `700` | `700` | How long `max_health` must stand still before the shift counts as finished, either stopped or out of pool. Two GSI ticks with room for a slow one. |
+| `press_settle_ms` | `500` | `500` | How long a press needs before its effect is believable (measured 95–391ms). **Do not lower without a fresh capture:** a press inside this window stops the shift rather than adjusting it. |
+| `manual_override_seconds` | `5` | `5` | How long a shift you started yourself keeps the automation out of the loop. |
+
+All eleven fields are exposed in the React UI under **Heroes → Morphling**,
+which also shows the HP target converted to approximate strength points.
+
+See `docs/heroes/morphling.md` and `docs/features/danger-detection.md`.
+
 ## `[heroes.magnus]`
 
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |
