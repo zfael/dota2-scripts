@@ -8,6 +8,8 @@
 
 | Path | Why it matters |
 |---|---|
+| `examples/<hero>_<subject>_probe.rs` | Required when the trigger depends on state GSI does not report — see step 0 |
+| `examples/<hero>_<subject>_control.rs` | Required when the automation presses keys in a fight — see step 0 |
 | `src/actions/heroes/traits.rs` | Defines the `HeroScript` contract |
 | `src/actions/heroes/<hero>.rs` | New hero implementation |
 | `src/actions/heroes/mod.rs` | Adds the module + re-export |
@@ -27,6 +29,32 @@
 | `docs/reference/gsi-schema-and-usage.md` | Update if you start depending on new GSI fields |
 | `docs/reference/file-index.md` | Add the new file/doc touchpoints |
 | `AGENTS.md` | Add the hero to navigation and the Hero Docs table |
+
+---
+
+## 0. Decide whether this needs a probe first
+
+Before any of the wiring below, answer two questions:
+
+1. **Does the trigger depend on something GSI has no field for** — a toggle's
+   state, a channel, a modifier, whether a cast landed? GSI exposes no modifiers
+   block, so this is common.
+2. **Will it press keys in a fight**, where a wrong press costs the game?
+
+If either is yes, the evidence comes before the code:
+**`docs/workflows/probe-first.md`.** A probe under `examples/` measures what the
+game actually reports, a simulator proves the decision loop against those
+measurements, and only then does anything enter `src/`.
+
+This is not optional ceremony. On the hero it was worked out on, the probe found
+that the field the feature would obviously have been built on
+(`abilities.abilityN.ability_active`) is meaningless, and the simulator and unit
+tests together caught three bugs that would each have shipped — one of which
+would have disabled the feature permanently in every game.
+
+If both answers are no — the trigger is a field that plainly means what it says,
+and the action is not time-critical — carry on to step 1 and use the normal loop
+in `docs/workflows/testing-and-debugging.md`.
 
 ---
 
@@ -168,6 +196,7 @@ Required doc updates:
 | `docs/reference/file-index.md` | Add the new source file row and relevant doc links |
 | `docs/reference/configuration.md` | Add/update the hero config section |
 | `docs/reference/gsi-schema-and-usage.md` | Update if the hero depends on new GSI fields, slots, or ability conventions |
+| `docs/heroes/<hero>.md` | If you built a probe, name it as the re-measure tool after a patch, and record the numbers it measured |
 
 This repo's maintenance contract is: **every hero script needs a paired doc under `docs/heroes/`.**
 
@@ -188,6 +217,7 @@ Then check:
 - the `Current Hero` status line shows the expected `event.hero.name`
 - if the hero participates in `HeroType`/manual override flow, confirm it appears there too
 - the relevant GSI fields are present in fixtures or live logs
+- if you built a probe or simulator in step 0, both still run and pass, and no constant they measured has leaked into the decision logic
 - docs match the new config and trigger model
 
 If the hero is GSI-heavy, add or update fixture coverage in:
@@ -205,4 +235,5 @@ See `docs/workflows/testing-and-debugging.md` and `docs/workflows/troubleshootin
 - `docs/reference/configuration.md`
 - `docs/reference/gsi-schema-and-usage.md`
 - `docs/reference/file-index.md`
+- `docs/workflows/probe-first.md`
 - `docs/heroes/hero-template.md`

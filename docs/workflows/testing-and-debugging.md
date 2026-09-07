@@ -2,6 +2,11 @@
 
 **Purpose**: Use this page for the repo's normal verification loop: tests, release builds, logging, fixtures, and live runtime checks.
 
+This is the loop for work whose behaviour you already understand. If you are building
+automation that depends on game state GSI does not report, or that presses keys in a
+fight, start at `docs/workflows/probe-first.md` instead and come back here once the
+uncertainty is measured away.
+
 ---
 
 ## Quick commands
@@ -184,6 +189,7 @@ If you are debugging interception or combos, pair the UI with:
 
 ## Related docs
 
+- `docs/workflows/probe-first.md`
 - `docs/workflows/troubleshooting.md`
 - `docs/reference/gsi-schema-and-usage.md`
 - `docs/reference/configuration.md`

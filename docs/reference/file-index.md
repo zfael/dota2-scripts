@@ -217,6 +217,10 @@
 
 ## `examples/`
 
+Probes and simulators are kept here permanently, not deleted once the feature
+lands: they are the evidence it was built on and the tool for re-measuring after
+a gameplay patch. See `docs/workflows/probe-first.md`.
+
 | File | Purpose | Linked Doc |
 |---|---|---|
 | `examples/mouse_test.rs` | Local helper binary for inspecting `rdev` mouse button events | `docs/workflows/testing-and-debugging.md` |
@@ -257,6 +261,7 @@
 | `docs/reference/gsi-schema-and-usage.md` | Consumed GSI fields, event flow, debug pointers |
 | `docs/reference/file-index.md` | This repo map |
 | `docs/workflows/adding-a-hero.md` | End-to-end hero addition workflow |
+| `docs/workflows/probe-first.md` | Probe-then-simulate method: measuring uncertain game state before modelling it, and proving in-fight key presses before shipping them |
 | `docs/workflows/testing-and-debugging.md` | Test, build, fixture, and logging workflow |
 | `docs/workflows/troubleshooting.md` | Runtime failure-mode guide |
 | `docs/superpowers/specs/` | Archived design/spec docs for larger documentation or feature efforts |

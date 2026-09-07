@@ -70,6 +70,7 @@ broken test build there once went unnoticed.
 | Understand the overall system | `docs/architecture/overview.md` |
 | Trace boot order, threads, and a GSI event end-to-end | `docs/architecture/runtime-flow.md` |
 | Understand `AppState`, hero routing, and common action composition | `docs/architecture/state-and-dispatch.md` |
+| Build automation whose trigger GSI does not report, or that presses keys in a fight | `docs/workflows/probe-first.md` — **measure before you model** |
 | Add a new hero script | `docs/workflows/adding-a-hero.md` |
 | Run or write tests | `docs/workflows/testing-and-debugging.md` |
 | Debug a broken feature | `docs/workflows/troubleshooting.md` |
@@ -209,6 +210,20 @@ manipulate windows must stay sync (main thread) — see `commands/overlay.rs`.
 | `src-ui/src/types/` | TypeScript mirrors of `src-tauri/src/ipc_types.rs` |
 | `src-ui/src/lib/overlay.ts` | Overlay-window detection and pre-paint body styling |
 
+### `examples/`
+
+Standalone binaries. Probes and simulators live here permanently — they are the
+evidence a feature was built on and the tool for re-measuring after a patch. See
+`docs/workflows/probe-first.md`.
+
+| File | Purpose |
+|---|---|
+| `examples/morphling_shift_probe.rs` | Records GSI on its own port and replays a capture; measures what an Attribute Shift looks like in the payload |
+| `examples/morphling_shift_control.rs` | Simulates the shift from those measurements and runs the decision loop against 16 scenario checks |
+| `examples/minimap_capture.rs` | Captures minimap PNGs for offline analysis |
+| `examples/minimap_analyze.rs` | Runs hero detection over captured PNGs |
+| `examples/mouse_test.rs` | Inspects raw `rdev` mouse button events |
+
 ### `tests/` and `scripts/`
 
 | Path | Purpose |
@@ -231,7 +246,7 @@ built the way it was; the feature docs above describe what it does now.
 
 | You are changing… | Read first |
 |---|---|
-| Any hero script in `src/actions/heroes/` | The matching hero doc; `docs/workflows/adding-a-hero.md` |
+| Any hero script in `src/actions/heroes/` | The matching hero doc; `docs/workflows/adding-a-hero.md`; `docs/workflows/probe-first.md` if the change rests on state GSI does not report |
 | `src/actions/dispatcher.rs` | `docs/architecture/state-and-dispatch.md`, `docs/architecture/runtime-flow.md` |
 | `src/actions/danger_detector.rs` | `docs/features/danger-detection.md` |
 | `src/actions/common.rs` | `docs/features/survivability.md`, `docs/features/danger-detection.md` |
@@ -251,6 +266,31 @@ built the way it was; the feature docs above describe what it does now.
 | `src-tauri/src/commands/` | The threading rule in the Code Map above, plus the affected feature doc |
 | `src-tauri/src/ipc_types.rs` | The mirrored type in `src-ui/src/types/` — they must stay in sync |
 | `src-ui/` pages or stores | The affected feature doc |
+
+---
+
+## Building Contract
+
+**Measure before you model.** When automation depends on game state GSI does not
+report as a field — a toggle's state, a channel, a modifier, whether a cast
+landed — or when it presses keys in a fight, the evidence comes before the code:
+a probe under `examples/` that measures what the game actually reports, then a
+simulator that proves the decision loop against those measurements, and only then
+anything in `src/`. Full method and checklist: `docs/workflows/probe-first.md`.
+
+Two rules that follow from it and are easy to get wrong:
+
+- **Never trust a GSI field to mean what its name suggests.** Check it against a
+  capture. `abilities.abilityN.ability_active` reads `true` for every ability on
+  every tick, cosmetics included — see `docs/reference/gsi-schema-and-usage.md`.
+- **Measured constants stay out of the decision logic.** They describe the world
+  the code was tested against, not its rules. Config thresholds go in units GSI
+  reports (HP, seconds); "how far will this move before my press lands" comes
+  from the last delta actually observed, never a stored rate. That is what makes
+  a feature survive a gameplay patch untouched.
+
+Probes are kept, not deleted after the feature lands: they are the re-measure
+tool when a patch changes the numbers.
 
 ---
 
@@ -290,6 +330,7 @@ built the way it was; the feature docs above describe what it does now.
 | `docs/reference/gsi-schema-and-usage.md` | Consumed GSI fields, event flow, fixture-backed references |
 | `docs/reference/file-index.md` | Every file → purpose → linked doc |
 | `docs/workflows/adding-a-hero.md` | End-to-end hero addition checklist |
+| `docs/workflows/probe-first.md` | Probe-then-simulate method for uncertain game state and in-fight key presses |
 | `docs/workflows/testing-and-debugging.md` | Test, build, fixture, and logging workflow |
 | `docs/workflows/troubleshooting.md` | GSI connectivity, config drift, key intercept failures |
 | `README.md` | User-facing overview and installation |
