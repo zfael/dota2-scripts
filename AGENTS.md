@@ -74,6 +74,7 @@ broken test build there once went unnoticed.
 | Add a new hero script | `docs/workflows/adding-a-hero.md` |
 | Run or write tests | `docs/workflows/testing-and-debugging.md` |
 | Debug a broken feature | `docs/workflows/troubleshooting.md` |
+| Check Valve's tracker for newly reported gameplay bugs | `.claude/skills/dota-bug-watch/SKILL.md` — run `scripts/dota-bug-watch.ps1` |
 | Find a config key, fallback default, or section owner | `docs/reference/configuration.md` |
 | Trace which GSI fields the app actually consumes | `docs/reference/gsi-schema-and-usage.md` |
 | Tune danger heuristics, healing thresholds, or defensive items | `docs/features/danger-detection.md` |

@@ -192,6 +192,7 @@
 | `src/audio/player.rs` | rodio output: PCM and file playback for alert cues | `docs/features/objective-alerts.md` |
 | `src/audio/voice_pack.rs` | Voice pack discovery and per-event sound resolution order | `docs/features/objective-alerts.md` |
 | `scripts/generate-voice-pack.ps1` | Generates a spoken voice pack using the Windows speech synthesiser | `docs/features/objective-alerts.md` |
+| `scripts/dota-bug-watch.ps1` | Pulls new ValveSoftware/Dota2-Gameplay issues since a stored cursor and tiers them by relevance to our automation | `.claude/skills/dota-bug-watch/SKILL.md` |
 | `src-tauri/src/commands/alerts.rs` | Tauri commands for alert countdowns and test playback | `docs/features/objective-alerts.md` |
 | `src-ui/src/types/alerts.ts` | Alert event keys, catalogue metadata, and countdown formatting | `docs/features/objective-alerts.md` |
 | `src-ui/src/stores/alertStore.ts` | Alert countdown polling and test playback | `docs/features/objective-alerts.md` |
