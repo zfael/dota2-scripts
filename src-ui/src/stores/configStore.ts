@@ -14,6 +14,15 @@ export const CONFIG_UPDATED_EVENT = "config_updated";
 interface ConfigStore {
   config: Settings;
   loaded: boolean;
+  /**
+   * The last write that Rust rejected, or null.
+   *
+   * A rejected write used to be a bare `console.error`, so the UI kept showing
+   * the value it had optimistically applied and the user only found out the
+   * setting had not saved when they restarted the app (issue #20).
+   */
+  saveError: string | null;
+  clearSaveError: () => void;
   loadConfig: () => Promise<void>;
   startListening: () => Promise<() => void>;
   updateConfig: <K extends keyof Settings>(
@@ -49,6 +58,7 @@ function debouncedInvoke(
   key: string,
   command: string,
   args: Record<string, unknown>,
+  onError: (message: string) => void,
 ) {
   if (!isTauri()) return;
 
@@ -61,6 +71,7 @@ function debouncedInvoke(
       await invoke(command, args);
     } catch (e) {
       console.error(`Failed to persist '${key}':`, e);
+      onError(e instanceof Error ? e.message : String(e));
     } finally {
       // Only stand down if no newer edit to this section was queued while the
       // call was in flight — otherwise that edit's echo would slip through.
@@ -74,17 +85,27 @@ function debouncedInvoke(
   debounceTimers[key] = handle;
 }
 
-function debouncedPersist(section: string, updates: Record<string, unknown>) {
-  debouncedInvoke(`config:${section}`, "update_config", { section, updates });
+function debouncedPersist(
+  section: string,
+  updates: Record<string, unknown>,
+  onError: (message: string) => void,
+) {
+  debouncedInvoke(`config:${section}`, "update_config", { section, updates }, onError);
 }
 
-function debouncedPersistHero(hero: string, updates: Record<string, unknown>) {
-  debouncedInvoke(`hero:${hero}`, "update_hero_config", { hero, updates });
+function debouncedPersistHero(
+  hero: string,
+  updates: Record<string, unknown>,
+  onError: (message: string) => void,
+) {
+  debouncedInvoke(`hero:${hero}`, "update_hero_config", { hero, updates }, onError);
 }
 
 export const useConfigStore = create<ConfigStore>((set) => ({
   config: mockConfig,
   loaded: false,
+  saveError: null,
+  clearSaveError: () => set({ saveError: null }),
 
   loadConfig: async () => {
     if (!isTauri()) {
@@ -113,17 +134,23 @@ export const useConfigStore = create<ConfigStore>((set) => ({
 
   updateConfig: (section, updates) => {
     set((state) => {
+      // Kept so a rejected write can put back exactly what was on screen
+      // before, rather than leaving a value the backend refused to store.
+      const previous = state.config[section];
       const newConfig = {
         ...state.config,
         [section]: { ...state.config[section], ...updates },
       };
-      debouncedPersist(section, updates as Record<string, unknown>);
-      return { config: newConfig };
+      debouncedPersist(section, updates as Record<string, unknown>, (message) =>
+        set({ config: { ...newConfig, [section]: previous }, saveError: message }),
+      );
+      return { config: newConfig, saveError: null };
     });
   },
 
   updateHeroConfig: (hero, updates) => {
     set((state) => {
+      const previous = state.config.heroes[hero];
       const newConfig = {
         ...state.config,
         heroes: {
@@ -131,8 +158,13 @@ export const useConfigStore = create<ConfigStore>((set) => ({
           [hero]: { ...state.config.heroes[hero], ...updates },
         },
       };
-      debouncedPersistHero(hero, updates as Record<string, unknown>);
-      return { config: newConfig };
+      debouncedPersistHero(hero, updates as Record<string, unknown>, (message) =>
+        set({
+          config: { ...newConfig, heroes: { ...newConfig.heroes, [hero]: previous } },
+          saveError: message,
+        }),
+      );
+      return { config: newConfig, saveError: null };
     });
   },
 }));

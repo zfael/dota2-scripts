@@ -81,10 +81,27 @@ function HudAnchorsCard() {
 export default function Settings() {
   const config = useConfigStore((s) => s.config);
   const updateConfig = useConfigStore((s) => s.updateConfig);
+  const saveError = useConfigStore((s) => s.saveError);
+  const clearSaveError = useConfigStore((s) => s.clearSaveError);
 
   return (
     <div className="space-y-6 p-6">
       <h2 className="text-xl font-semibold">Settings</h2>
+
+      {saveError && (
+        <div className="flex items-start justify-between gap-3 rounded-md border border-red-500/40 bg-red-500/10 p-3">
+          <p className="text-xs text-red-300">
+            <strong>Not saved.</strong> {saveError}
+          </p>
+          <button
+            type="button"
+            onClick={clearSaveError}
+            className="text-xs text-muted hover:text-content"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="space-y-4">
@@ -98,6 +115,12 @@ export default function Settings() {
           </Card>
 
           <Card title="Keybindings">
+            <p className="text-xs text-muted">
+              Match these to your item slots in Dota. Click a box, then press the
+              key or mouse button — <code>Space</code>, F-keys, numpad and the
+              thumb buttons (<code>Mouse4</code>/<code>Mouse5</code>) all work.
+              Left and right click cannot be bound; Dota needs them.
+            </p>
             <div className="grid grid-cols-3 gap-3">
               <KeyInput label="Slot 1" value={config.keybindings.slot0} onChange={(v) => updateConfig("keybindings", { slot0: v })} />
               <KeyInput label="Slot 2" value={config.keybindings.slot1} onChange={(v) => updateConfig("keybindings", { slot1: v })} />

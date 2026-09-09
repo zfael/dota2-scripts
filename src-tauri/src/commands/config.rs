@@ -98,8 +98,9 @@ pub fn update_config(
         serde_json::from_value(config_value).map_err(|e| format!("Deserialize error: {}", e))?;
 
     validate_settings(&new_settings)?;
+    // Only the edited section is written back. See `Settings::save_section`.
     new_settings
-        .save()
+        .save_section(&section)
         .map_err(|e| format!("Failed to write config: {}", e))?;
 
     *settings = new_settings;
@@ -198,8 +199,9 @@ pub fn update_hero_config(
         serde_json::from_value(config_value).map_err(|e| format!("Deserialize error: {}", e))?;
 
     validate_settings(&new_settings)?;
+    // A hero edit lives under [heroes], so that is the section to write back.
     new_settings
-        .save()
+        .save_section("heroes")
         .map_err(|e| format!("Failed to write config: {}", e))?;
 
     *settings = new_settings;

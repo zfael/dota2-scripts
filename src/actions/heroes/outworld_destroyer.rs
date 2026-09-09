@@ -2,7 +2,8 @@ use crate::actions::common::SurvivabilityActions;
 use crate::actions::executor::ActionExecutor;
 use crate::actions::heroes::HeroScript;
 use crate::config::{OutworldDestroyerConfig, Settings};
-use crate::input::simulation::press_key;
+use crate::input::binding::KeyBinding;
+use crate::input::simulation::{press_binding, press_key};
 use crate::models::{GsiWebhookEvent, Hero};
 use lazy_static::lazy_static;
 use std::sync::{mpsc, Arc, LazyLock, Mutex};
@@ -22,7 +23,7 @@ lazy_static! {
 
 #[derive(Debug, Clone)]
 pub struct OutworldDestroyerComboConfig {
-    pub slot_keys: [char; 6],
+    pub slot_keys: [KeyBinding; 6],
     pub objurgation_key: char,
     pub arcane_orb_key: char,
     pub astral_imprisonment_key: char,
@@ -72,20 +73,20 @@ fn ability_is_ready(event: &GsiWebhookEvent, ability_name: &str) -> bool {
 
 fn find_castable_slot_key_by_name(
     event: &GsiWebhookEvent,
-    slot_keys: &[char; 6],
+    slot_keys: &[KeyBinding; 6],
     item_name: &str,
-) -> Option<char> {
+) -> Option<KeyBinding> {
     let inventory = [
-        (&event.items.slot0, slot_keys[0]),
-        (&event.items.slot1, slot_keys[1]),
-        (&event.items.slot2, slot_keys[2]),
-        (&event.items.slot3, slot_keys[3]),
-        (&event.items.slot4, slot_keys[4]),
-        (&event.items.slot5, slot_keys[5]),
+        (&event.items.slot0, &slot_keys[0]),
+        (&event.items.slot1, &slot_keys[1]),
+        (&event.items.slot2, &slot_keys[2]),
+        (&event.items.slot3, &slot_keys[3]),
+        (&event.items.slot4, &slot_keys[4]),
+        (&event.items.slot5, &slot_keys[5]),
     ];
 
     inventory.iter().find_map(|(item, key)| {
-        (item.name.contains(item_name) && item.can_cast == Some(true)).then_some(*key)
+        (item.name.contains(item_name) && item.can_cast == Some(true)).then(|| (*key).clone())
     })
 }
 
@@ -138,7 +139,7 @@ fn execute_combo_items(event: &GsiWebhookEvent, config: &OutworldDestroyerComboC
         if let Some(key) = find_castable_slot_key_by_name(event, &config.slot_keys, item_name) {
             info!("🌌 OD combo item '{}' on key {}", item_name, key);
             for _ in 0..spam_count {
-                press_key(key);
+                press_binding(&key);
                 thread::sleep(Duration::from_millis(config.combo_item_delay_ms));
             }
         }
@@ -154,9 +155,9 @@ fn maybe_cast_bkb(event: &GsiWebhookEvent, config: &OutworldDestroyerComboConfig
         find_castable_slot_key_by_name(event, &config.slot_keys, "black_king_bar")
     {
         info!("🌌 OD using BKB ({})", key);
-        press_key(key);
+        press_binding(&key);
         thread::sleep(Duration::from_millis(30));
-        press_key(key);
+        press_binding(&key);
         thread::sleep(Duration::from_millis(config.post_bkb_delay_ms));
     }
 }
@@ -248,7 +249,7 @@ fn run_standalone_request(request: OutworldDestroyerRequest) {
 
     if let Some(key) = find_castable_slot_key_by_name(&event, &config.slot_keys, "blink") {
         info!("🌌 OD using Blink ({})", key);
-        press_key(key);
+        press_binding(&key);
         thread::sleep(Duration::from_millis(config.post_blink_delay_ms));
     } else {
         info!("🌌 OD standalone combo continuing without Blink");
@@ -294,14 +295,7 @@ fn run_self_astral_request(request: OutworldDestroyerRequest) {
 fn build_combo_config(settings: &Settings) -> OutworldDestroyerComboConfig {
     let od = &settings.heroes.outworld_destroyer;
     OutworldDestroyerComboConfig {
-        slot_keys: [
-            settings.keybindings.slot0,
-            settings.keybindings.slot1,
-            settings.keybindings.slot2,
-            settings.keybindings.slot3,
-            settings.keybindings.slot4,
-            settings.keybindings.slot5,
-        ],
+        slot_keys: settings.keybindings.item_slots().map(Clone::clone),
         objurgation_key: od.objurgation_key,
         arcane_orb_key: od.arcane_orb_key,
         astral_imprisonment_key: od.astral_imprisonment_key,
@@ -421,7 +415,7 @@ pub fn build_keyboard_combo_config(settings: &Settings) -> OutworldDestroyerComb
 #[cfg(test)]
 mod tests {
     use super::{
-        ability_is_ready, find_castable_slot_key_by_name, should_trigger_objurgation,
+        ability_is_ready, find_castable_slot_key_by_name, should_trigger_objurgation, KeyBinding,
         OBJURGATION_ABILITY_NAME, SANITYS_ECLIPSE_ABILITY_NAME,
     };
     use crate::config::Settings;
@@ -444,16 +438,20 @@ mod tests {
     fn maps_castable_item_slots_with_custom_keys() {
         let event = od_fixture();
         assert_eq!(
-            find_castable_slot_key_by_name(&event, &['z', 'x', 'c', 'v', 'b', 'n'], "blink"),
-            Some('z')
+            find_castable_slot_key_by_name(
+                &event,
+                &['z', 'x', 'c', 'v', 'b', 'n'].map(KeyBinding::Char),
+                "blink"
+            ),
+            Some(KeyBinding::Char('z'))
         );
         assert_eq!(
             find_castable_slot_key_by_name(
                 &event,
-                &['z', 'x', 'c', 'v', 'b', 'n'],
+                &['z', 'x', 'c', 'v', 'b', 'n'].map(KeyBinding::Char),
                 "black_king_bar"
             ),
-            Some('x')
+            Some(KeyBinding::Char('x'))
         );
     }
 

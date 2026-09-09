@@ -3,7 +3,7 @@ use crate::actions::common::{find_item_slot, SurvivabilityActions};
 use crate::actions::executor::ActionExecutor;
 use crate::actions::soul_ring::press_ability_with_soul_ring;
 use crate::config::Settings;
-use crate::input::simulation::press_key;
+use crate::input::simulation::{press_binding, press_key};
 use crate::models::{GsiWebhookEvent, Hero, Item};
 use std::any::Any;
 use std::sync::{Arc, Mutex};
@@ -48,34 +48,34 @@ impl LegionCommanderScript {
         // 3. Blade Mail (if present) - double tap
         if let Some(key) = find_item_slot(event, &settings, Item::BladeMail) {
             info!("Using Blade Mail ({})", key);
-            press_key(key);
+            press_binding(&key);
             thread::sleep(Duration::from_millis(30));
-            press_key(key);
+            press_binding(&key);
             thread::sleep(Duration::from_millis(50));
         }
         
         // 4. Mjollnir (if present) - double tap
         if let Some(key) = find_item_slot(event, &settings, Item::Mjollnir) {
             info!("Using Mjollnir ({})", key);
-            press_key(key);
+            press_binding(&key);
             thread::sleep(Duration::from_millis(30));
-            press_key(key);
+            press_binding(&key);
             thread::sleep(Duration::from_millis(50));
         }
         
         // 5. BKB (if present) - double tap
         if let Some(key) = find_item_slot(event, &settings, Item::BlackKingBar) {
             info!("Using BKB ({})", key);
-            press_key(key);
+            press_binding(&key);
             thread::sleep(Duration::from_millis(30));
-            press_key(key);
+            press_binding(&key);
             thread::sleep(Duration::from_millis(50));
         }
         
         // 6. Blink (single tap)
         if let Some(key) = find_item_slot(event, &settings, Item::Blink) {
             info!("Using Blink ({})", key);
-            press_key(key);
+            press_binding(&key);
             thread::sleep(Duration::from_millis(100));
         }
         
@@ -85,7 +85,7 @@ impl LegionCommanderScript {
         {
             info!("Using Orchid/Bloodthorn ({}) - spam for linkens", key);
             for _ in 0..10 {
-                press_key(key);
+                press_binding(&key);
                 thread::sleep(Duration::from_millis(30));
             }
             thread::sleep(Duration::from_millis(50));

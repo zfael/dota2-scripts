@@ -23,6 +23,7 @@ use crate::actions::soul_ring::{SoulRingKeyboardConfig, SoulRingState};
 use crate::actions::SOUL_RING_STATE;
 use crate::config::settings::InvokerProfileMode;
 use crate::config::{AutoAbilityConfig, Settings};
+use crate::input::binding::KeyBinding;
 use crate::input::simulation::SIMULATING_KEYS;
 use crate::state::app_state::AppState;
 
@@ -168,10 +169,29 @@ fn key_to_char(key: Key) -> Option<char> {
     }
 }
 
+/// Something the grab layer can synthesize: a key, or a mouse button.
+///
+/// Soul Ring lives in an item slot, and an item slot can be bound to a thumb
+/// mouse button. Without this the replay simply skipped the trigger for such a
+/// slot — no press, no warning.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SimulatedInput {
+    Key(Key),
+    Button(Button),
+}
+
+/// What `rdev` needs to press this binding, or `None` if it can press neither.
+fn rdev_input_for(binding: &KeyBinding) -> Option<SimulatedInput> {
+    binding
+        .rdev_key()
+        .map(SimulatedInput::Key)
+        .or_else(|| binding.rdev_button().map(SimulatedInput::Button))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SoulRingReplayPlan {
     TriggerThenOriginal {
-        soul_ring_key: Key,
+        soul_ring_key: SimulatedInput,
         delay_ms: u64,
         original_key: Key,
     },
@@ -185,11 +205,11 @@ fn plan_soul_ring_replay(
     original_key: Key,
     config: &SoulRingKeyboardConfig,
 ) -> SoulRingReplayPlan {
-    if let Some(original_char) = key_to_char(original_key) {
-        if state.should_intercept_key_with_config(original_char, config)
+    if let Some(original_binding) = KeyBinding::from_event(&EventType::KeyPress(original_key)) {
+        if state.should_intercept_key_with_config(&original_binding, config)
             && state.should_trigger_with_config(config)
         {
-            if let Some(sr_key) = state.slot_key.and_then(char_to_key) {
+            if let Some(sr_key) = state.slot_key.as_ref().and_then(rdev_input_for) {
                 return SoulRingReplayPlan::TriggerThenOriginal {
                     soul_ring_key: sr_key,
                     delay_ms: config.delay_before_ability_ms,
@@ -236,14 +256,27 @@ static SOUL_RING_REPLAY_QUEUE: LazyLock<Sender<SoulRingReplayRequest>> = LazyLoc
 /// Simulate a key press using rdev (must be called from a non-grab thread)
 /// Sets SIMULATING_KEYS flag to prevent re-interception
 pub fn simulate_key(key: Key) {
+    simulate_input(SimulatedInput::Key(key));
+}
+
+/// Press and release one input, guarding against our own grab re-intercepting it.
+fn simulate_input(input: SimulatedInput) {
+    let (press, release) = match input {
+        SimulatedInput::Key(key) => (EventType::KeyPress(key), EventType::KeyRelease(key)),
+        SimulatedInput::Button(button) => (
+            EventType::ButtonPress(button),
+            EventType::ButtonRelease(button),
+        ),
+    };
+
     SIMULATING_KEYS.store(true, Ordering::SeqCst);
 
-    if let Err(e) = simulate(&EventType::KeyPress(key)) {
-        warn!("Failed to simulate key press: {:?}", e);
+    if let Err(e) = simulate(&press) {
+        warn!("Failed to simulate press of {:?}: {:?}", input, e);
     }
     thread::sleep(Duration::from_millis(5));
-    if let Err(e) = simulate(&EventType::KeyRelease(key)) {
-        warn!("Failed to simulate key release: {:?}", e);
+    if let Err(e) = simulate(&release) {
+        warn!("Failed to simulate release of {:?}: {:?}", input, e);
     }
 
     thread::sleep(Duration::from_millis(5));
@@ -269,7 +302,7 @@ fn execute_soul_ring_plan_with_context(
             drop(guard);
 
             debug!("💍 Pressing Soul Ring key{}: {:?}", context, soul_ring_key);
-            simulate_key(soul_ring_key);
+            simulate_input(soul_ring_key);
 
             thread::sleep(Duration::from_millis(delay_ms));
 
@@ -389,7 +422,8 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                 // Single live SOUL_RING_STATE read for all Soul Ring interception decisions
                 let should_intercept_for_soul_ring = if let Some(ch) = key_char {
                     let soul_ring_state = SOUL_RING_STATE.lock().unwrap();
-                    let spend = soul_ring_state.spend_for_key(ch, &snapshot.soul_ring);
+                    let spend = soul_ring_state
+                        .spend_for_key(&KeyBinding::from(ch), &snapshot.soul_ring);
                     let should_intercept = spend.warrants_soul_ring();
                     let should_trigger =
                         soul_ring_state.should_trigger_with_config(&snapshot.soul_ring);
@@ -868,7 +902,7 @@ pub struct BroodmotherKeyboardSnapshot {
     pub auto_abilities: Vec<AutoAbilityConfig>,
     pub abilities_first: bool,
     /// Slot keybindings [slot0..slot5] for item-key lookup.
-    pub slot_keys: [char; 6],
+    pub slot_keys: [KeyBinding; 6],
 }
 
 /// Immutable snapshot of all keyboard-listener configuration, derived from
@@ -929,7 +963,7 @@ pub struct KeyboardSnapshot {
 #[derive(Debug, Clone)]
 enum BroodmotherCallbackAction {
     AutoItems {
-        slot_keys: [char; 6],
+        slot_keys: [KeyBinding; 6],
         auto_items: Vec<String>,
         auto_abilities: Vec<AutoAbilityConfig>,
         abilities_first: bool,
@@ -1103,14 +1137,7 @@ impl KeyboardSnapshot {
                 auto_items: bm.auto_items.clone(),
                 auto_abilities: bm.auto_abilities.clone(),
                 abilities_first: bm.auto_abilities_first,
-                slot_keys: [
-                    settings.keybindings.slot0,
-                    settings.keybindings.slot1,
-                    settings.keybindings.slot2,
-                    settings.keybindings.slot3,
-                    settings.keybindings.slot4,
-                    settings.keybindings.slot5,
-                ],
+                slot_keys: settings.keybindings.item_slots().map(Clone::clone),
             },
             snapfire_enabled: state.selected_hero == Some(crate::state::HeroType::Snapfire),
             snapfire: SnapfireKeyboardSnapshot {
@@ -1215,7 +1242,7 @@ impl Default for KeyboardSnapshot {
                 auto_items: vec![],
                 auto_abilities: vec![],
                 abilities_first: false,
-                slot_keys: ['a', 's', 'd', 'f', 'g', 'h'],
+                slot_keys: ['a', 's', 'd', 'f', 'g', 'h'].map(KeyBinding::Char),
             },
             snapfire_enabled: false,
             snapfire: SnapfireKeyboardSnapshot {
@@ -1288,7 +1315,7 @@ fn plan_broodmother_callback_action(
             if modifier_held && broodmother_active && snapshot.broodmother.auto_items_enabled =>
         {
             Some(BroodmotherCallbackAction::AutoItems {
-                slot_keys: snapshot.broodmother.slot_keys,
+                slot_keys: snapshot.broodmother.slot_keys.clone(),
                 auto_items: snapshot.broodmother.auto_items.clone(),
                 auto_abilities: snapshot.broodmother.auto_abilities.clone(),
                 abilities_first: snapshot.broodmother.abilities_first,
@@ -1434,7 +1461,7 @@ mod tests {
                 auto_items: vec!["item1".to_string(), "item2".to_string()],
                 auto_abilities: vec![],
                 abilities_first: true,
-                slot_keys: ['a', 's', 'd', 'f', 'g', 'h'],
+                slot_keys: ['a', 's', 'd', 'f', 'g', 'h'].map(KeyBinding::Char),
             },
             snapfire_enabled: false,
             snapfire: SnapfireKeyboardSnapshot {
@@ -1805,7 +1832,7 @@ mod tests {
             trigger_cooldown_ms: 250,
             ability_keys: ['q', 'w', 'e'].into_iter().collect(),
             intercept_item_keys: true,
-            item_slot_keys: ['z', 'x', 'c', 'v', 'b', 'n'].into_iter().collect(),
+            item_slot_keys: ['z', 'x', 'c', 'v', 'b', 'n'].map(KeyBinding::Char).into_iter().collect(),
         }
     }
 
@@ -1814,7 +1841,7 @@ mod tests {
         let mut state = SoulRingState::default();
         state.available = true;
         state.can_cast = true;
-        state.slot_key = Some('z');
+        state.slot_key = Some(KeyBinding::Char('z'));
         state.hero_alive = true;
         state.hero_mana_percent = 10;
         state.hero_health_percent = 90;
@@ -1834,8 +1861,42 @@ mod tests {
                 delay_ms,
                 original_key,
             } => {
-                assert_eq!(soul_ring_key, Key::KeyZ);
+                assert_eq!(soul_ring_key, SimulatedInput::Key(Key::KeyZ));
                 assert_eq!(delay_ms, config.delay_before_ability_ms);
+                assert_eq!(original_key, Key::KeyQ);
+            }
+            _ => panic!("Expected TriggerThenOriginal plan"),
+        }
+    }
+
+    /// Soul Ring sits in an item slot, and an item slot can be bound to a thumb
+    /// mouse button. The plan has to carry that through, or the trigger is
+    /// silently skipped for anyone who binds items to their mouse (issue #20).
+    #[test]
+    fn soul_ring_replay_plan_handles_a_mouse_bound_soul_ring_slot() {
+        let mut state = SoulRingState::default();
+        state.available = true;
+        state.can_cast = true;
+        state.slot_key = Some(KeyBinding::parse("Mouse4"));
+        state.hero_alive = true;
+        state.hero_mana_percent = 10;
+        state.hero_health_percent = 90;
+        state.ability_slots = vec![crate::actions::soul_ring::AbilitySlot {
+            name: "mirana_starfall".to_string(),
+            level: 1,
+            passive: false,
+        }];
+
+        let config = soul_ring_test_config();
+        let plan = crate::input::keyboard::plan_soul_ring_replay(&state, Key::KeyQ, &config);
+
+        match plan {
+            crate::input::keyboard::SoulRingReplayPlan::TriggerThenOriginal {
+                soul_ring_key,
+                original_key,
+                ..
+            } => {
+                assert_eq!(soul_ring_key, SimulatedInput::Button(Button::Unknown(1)));
                 assert_eq!(original_key, Key::KeyQ);
             }
             _ => panic!("Expected TriggerThenOriginal plan"),
@@ -1847,7 +1908,7 @@ mod tests {
         let mut state = SoulRingState::default();
         state.available = true;
         state.can_cast = true;
-        state.slot_key = Some('z');
+        state.slot_key = Some(KeyBinding::Char('z'));
         state.hero_alive = true;
         state.hero_mana_percent = 100;
         state.hero_health_percent = 90;
@@ -1872,7 +1933,7 @@ mod tests {
         let mut state = SoulRingState::default();
         state.available = true;
         state.can_cast = true;
-        state.slot_key = Some('?');
+        state.slot_key = Some(KeyBinding::Char('?'));
         state.hero_alive = true;
         state.hero_mana_percent = 10;
         state.hero_health_percent = 90;

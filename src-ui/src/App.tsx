@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { Sidebar } from "./components/layout/Sidebar";
 import { StatusHeader } from "./components/layout/StatusHeader";
 import { UpdateBanner } from "./components/layout/UpdateBanner";
@@ -24,7 +24,43 @@ import MinimapIntelligence from "./pages/MinimapIntelligence";
 import WaveTracker from "./pages/WaveTracker";
 import Alerts from "./pages/Alerts";
 
+/**
+ * Stop the webview treating the thumb mouse buttons as Back and Forward.
+ *
+ * `MemoryRouter` already leaves the gesture with no in-app history to pop, but
+ * the webview can still act on the buttons itself. Swallowing them here is also
+ * what lets `KeyInput` capture Mouse4/Mouse5 as ordinary bindings.
+ *
+ * Registered as a capturing listener on `window` so it runs before anything
+ * else, and paired with `auxclick` because preventing `mousedown` alone does
+ * not stop every navigation path.
+ */
+function useSuppressBackForwardButtons() {
+  useEffect(() => {
+    const swallowThumbButtons = (event: MouseEvent) => {
+      // 3 = back (Mouse4), 4 = forward (Mouse5). Left/middle/right pass through.
+      if (event.button === 3 || event.button === 4) {
+        event.preventDefault();
+      }
+    };
+
+    const events: Array<keyof WindowEventMap> = ["mousedown", "mouseup", "auxclick"];
+    events.forEach((name) =>
+      window.addEventListener(name, swallowThumbButtons as EventListener, { capture: true }),
+    );
+
+    return () =>
+      events.forEach((name) =>
+        window.removeEventListener(name, swallowThumbButtons as EventListener, {
+          capture: true,
+        }),
+      );
+  }, []);
+}
+
 export default function App() {
+  useSuppressBackForwardButtons();
+
   useEffect(() => {
     useConfigStore.getState().loadConfig();
     useUIStore.getState().loadInitialState();
@@ -74,7 +110,12 @@ export default function App() {
   }, [game.heroName, invokerActiveComboProfileId, invokerProfiles]);
 
   return (
-    <BrowserRouter>
+    /* MemoryRouter, not BrowserRouter: BrowserRouter pushes every navigation
+       onto the real WebView2 history, and Mouse4 is the webview's built-in Back
+       gesture. Binding an item slot to Mouse4 therefore threw the user back to
+       the Dashboard instead of registering the key. Keeping history in memory
+       leaves the gesture nothing to pop. Nothing here needs real URLs. */
+    <MemoryRouter>
       <div className="flex h-screen w-screen overflow-hidden bg-base">
         <Sidebar />
         <div className="flex flex-1 flex-col overflow-hidden">
@@ -115,6 +156,6 @@ export default function App() {
           <ActivityTicker entries={tickerEntries} />
         </div>
       </div>
-    </BrowserRouter>
+    </MemoryRouter>
   );
 }

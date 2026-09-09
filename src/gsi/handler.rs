@@ -298,6 +298,7 @@ pub async fn process_gsi_events(
 mod tests {
     use super::{gsi_webhook_handler, process_gsi_events, GsiServerState};
     use crate::actions::auto_items::LATEST_GSI_EVENT;
+    use crate::input::binding::KeyBinding;
     use crate::actions::executor::ActionExecutor;
     use crate::actions::heroes::broodmother::BROODMOTHER_ACTIVE;
     use crate::actions::heroes::meepo_macro::{
@@ -565,7 +566,7 @@ mod tests {
 
         let soul_ring_state = SOUL_RING_STATE.lock().unwrap();
         assert!(soul_ring_state.available);
-        assert_eq!(soul_ring_state.slot_key, Some('z'));
+        assert_eq!(soul_ring_state.slot_key, Some(KeyBinding::Char('z')));
         assert!(soul_ring_state.can_cast);
         assert!(soul_ring_state.hero_alive);
         assert_eq!(soul_ring_state.hero_mana_percent, 10);

@@ -641,7 +641,7 @@ fn advance_semi_auto_session(
             } => {
                 if let Some(key) = find_item_slot_by_name(event, &session.settings, &target) {
                     info!("🔮 Using semi-auto combo item: {}", target);
-                    crate::input::simulation::press_key(key);
+                    crate::input::simulation::press_binding(&key);
                 } else {
                     info!("🔮 Semi-auto combo item {} not found, skipping", target);
                 }
@@ -939,7 +939,7 @@ fn run_profile(
 
                 if let Some(key) = find_item_slot_by_name(event, settings, &target) {
                     info!("🔮 Using combo item: {}", target);
-                    crate::input::simulation::press_key(key);
+                    crate::input::simulation::press_binding(&key);
                 } else {
                     info!("🔮 Combo item {} not found, skipping", target);
                 }

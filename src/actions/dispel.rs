@@ -6,6 +6,7 @@
 
 use crate::actions::executor::ActionExecutor;
 use crate::config::Settings;
+use crate::input::binding::KeyBinding;
 use crate::models::gsi_event::Item;
 use crate::models::GsiWebhookEvent;
 use lazy_static::lazy_static;
@@ -140,7 +141,7 @@ pub fn check_and_dispel_silence(
                     attempt,
                     jitter
                 );
-                press_dispel_item(key, item);
+                press_dispel_item(&key, item);
             });
         }
     }
@@ -231,12 +232,12 @@ fn is_castable(item: &Item) -> bool {
     item.can_cast.unwrap_or(false) && item.cooldown.unwrap_or(0) == 0
 }
 
-fn press_dispel_item(key: char, item: DispelItem) {
-    crate::input::simulation::press_key(key);
+fn press_dispel_item(key: &KeyBinding, item: DispelItem) {
+    crate::input::simulation::press_binding(key);
 
     if item.needs_self_cast_tap() {
         thread::sleep(Duration::from_millis(SELF_CAST_DELAY_MS));
-        crate::input::simulation::press_key(key);
+        crate::input::simulation::press_binding(key);
     }
 }
 

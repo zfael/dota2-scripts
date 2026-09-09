@@ -9,7 +9,8 @@
 //! 3. Right-click the target
 
 use crate::config::AutoAbilityConfig;
-use crate::input::simulation::{mouse_click, press_key};
+use crate::input::binding::KeyBinding;
+use crate::input::simulation::{mouse_click, press_binding, press_key};
 use crate::models::GsiWebhookEvent;
 use lazy_static::lazy_static;
 use std::sync::atomic::AtomicBool;
@@ -57,17 +58,21 @@ pub fn update_gsi_state(event: &GsiWebhookEvent) {
 }
 
 /// Find item slot key by item name (partial match)
-fn find_item_key(event: &GsiWebhookEvent, slot_keys: &[char; 6], item_name: &str) -> Option<char> {
+fn find_item_key(
+    event: &GsiWebhookEvent,
+    slot_keys: &[KeyBinding; 6],
+    item_name: &str,
+) -> Option<KeyBinding> {
     let items = &event.items;
 
     // Check each slot for the item (partial match, e.g., "orchid" matches "item_orchid")
     let slots = [
-        (&items.slot0, slot_keys[0]),
-        (&items.slot1, slot_keys[1]),
-        (&items.slot2, slot_keys[2]),
-        (&items.slot3, slot_keys[3]),
-        (&items.slot4, slot_keys[4]),
-        (&items.slot5, slot_keys[5]),
+        (&items.slot0, &slot_keys[0]),
+        (&items.slot1, &slot_keys[1]),
+        (&items.slot2, &slot_keys[2]),
+        (&items.slot3, &slot_keys[3]),
+        (&items.slot4, &slot_keys[4]),
+        (&items.slot5, &slot_keys[5]),
     ];
 
     for (item, key) in slots {
@@ -81,7 +86,7 @@ fn find_item_key(event: &GsiWebhookEvent, slot_keys: &[char; 6], item_name: &str
                     "🎯 Found castable item '{}' in slot with key '{}'",
                     item.name, key
                 );
-                return Some(key);
+                return Some(key.clone());
             } else {
                 debug!(
                     "🎯 Item '{}' found but not castable (can_cast={}, cd={})",
@@ -102,7 +107,7 @@ fn find_item_key(event: &GsiWebhookEvent, slot_keys: &[char; 6], item_name: &str
 /// * `auto_abilities` - List of abilities to auto-cast with optional HP thresholds
 /// * `abilities_first` - If true, cast abilities before items; if false, items first
 pub fn execute_auto_items(
-    slot_keys: &[char; 6],
+    slot_keys: &[KeyBinding; 6],
     item_names: &[String],
     auto_abilities: &[AutoAbilityConfig],
     abilities_first: bool,
@@ -128,7 +133,7 @@ pub fn execute_auto_items(
         for item_name in item_names {
             if let Some(key) = find_item_key(&event, slot_keys, item_name) {
                 info!("🎯 Using item '{}' (key: {})", item_name, key);
-                press_key(key);
+                press_binding(&key);
                 *items_used += 1;
                 thread::sleep(Duration::from_millis(30));
             }

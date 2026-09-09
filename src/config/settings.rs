@@ -1,6 +1,7 @@
 use crate::config::storage::{
     bootstrap_live_config, persist_live_config, ConfigPaths, EMBEDDED_CONFIG_TEMPLATE,
 };
+use crate::input::binding::KeyBinding;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -37,24 +38,57 @@ pub struct ServerConfig {
     pub port: u16,
 }
 
+/// Which key each item slot is bound to in Dota's own settings.
+///
+/// These are [`KeyBinding`] rather than `char` because Dota lets you bind item
+/// slots to anything — Space, F-keys, numpad, the side mouse buttons — and a
+/// `char` both excluded those and made one unrepresentable key a hard parse
+/// error that discarded the whole config file (issue #20).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeybindingsConfig {
     #[serde(default = "default_slot0")]
-    pub slot0: char,
+    pub slot0: KeyBinding,
     #[serde(default = "default_slot1")]
-    pub slot1: char,
+    pub slot1: KeyBinding,
     #[serde(default = "default_slot2")]
-    pub slot2: char,
+    pub slot2: KeyBinding,
     #[serde(default = "default_slot3")]
-    pub slot3: char,
+    pub slot3: KeyBinding,
     #[serde(default = "default_slot4")]
-    pub slot4: char,
+    pub slot4: KeyBinding,
     #[serde(default = "default_slot5")]
-    pub slot5: char,
+    pub slot5: KeyBinding,
     #[serde(default = "default_neutral")]
-    pub neutral0: char,
+    pub neutral0: KeyBinding,
     #[serde(default = "default_hotkey")]
     pub combo_trigger: String,
+}
+
+impl KeybindingsConfig {
+    /// Every item slot, in slot order, paired with its config key name.
+    pub fn slots(&self) -> [(&'static str, &KeyBinding); 7] {
+        [
+            ("slot0", &self.slot0),
+            ("slot1", &self.slot1),
+            ("slot2", &self.slot2),
+            ("slot3", &self.slot3),
+            ("slot4", &self.slot4),
+            ("slot5", &self.slot5),
+            ("neutral0", &self.neutral0),
+        ]
+    }
+
+    /// The six inventory slots, excluding the neutral slot.
+    pub fn item_slots(&self) -> [&KeyBinding; 6] {
+        [
+            &self.slot0,
+            &self.slot1,
+            &self.slot2,
+            &self.slot3,
+            &self.slot4,
+            &self.slot5,
+        ]
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -924,8 +958,11 @@ pub struct DangerDetectionConfig {
 pub struct NeutralItemConfig {
     #[serde(default = "default_neutral_items_enabled")]
     pub enabled: bool,
+    /// Dota's "self cast" modifier, pressed after an item key to aim it at your
+    /// own hero. Defaults to Space, which is exactly the kind of bind a `char`
+    /// stored as a blank-looking `" "` — hence [`KeyBinding`].
     #[serde(default = "default_self_cast_key")]
-    pub self_cast_key: char,
+    pub self_cast_key: KeyBinding,
     #[serde(default = "default_log_discoveries")]
     pub log_discoveries: bool,
     #[serde(default = "default_use_in_danger")]
@@ -1598,26 +1635,26 @@ fn default_port() -> u16 {
     3000
 }
 
-fn default_slot0() -> char {
-    'z'
+fn default_slot0() -> KeyBinding {
+    KeyBinding::Char('z')
 }
-fn default_slot1() -> char {
-    'x'
+fn default_slot1() -> KeyBinding {
+    KeyBinding::Char('x')
 }
-fn default_slot2() -> char {
-    'c'
+fn default_slot2() -> KeyBinding {
+    KeyBinding::Char('c')
 }
-fn default_slot3() -> char {
-    'v'
+fn default_slot3() -> KeyBinding {
+    KeyBinding::Char('v')
 }
-fn default_slot4() -> char {
-    'b'
+fn default_slot4() -> KeyBinding {
+    KeyBinding::Char('b')
 }
-fn default_slot5() -> char {
-    'n'
+fn default_slot5() -> KeyBinding {
+    KeyBinding::Char('n')
 }
-fn default_neutral() -> char {
-    '0'
+fn default_neutral() -> KeyBinding {
+    KeyBinding::Char('0')
 }
 fn default_hotkey() -> String {
     "Home".to_string()
@@ -2645,8 +2682,8 @@ fn default_auto_lotus_on_silence() -> bool {
 fn default_neutral_items_enabled() -> bool {
     false
 }
-fn default_self_cast_key() -> char {
-    ' '
+fn default_self_cast_key() -> KeyBinding {
+    KeyBinding::Named(crate::input::binding::NamedKey::Space)
 }
 fn default_log_discoveries() -> bool {
     true
@@ -3291,6 +3328,43 @@ fn legacy_suppress_while_invisible(contents: &str) -> Option<bool> {
         .as_bool()
 }
 
+/// Salvage a config file that does not deserialize as a whole.
+///
+/// Drops the smallest thing it can — one top-level section — and keeps the rest,
+/// instead of the old behaviour of discarding the entire file and silently
+/// reverting every setting the player had (issue #20). A section that survives
+/// is used as written; one that does not is replaced by its defaults and named
+/// in the log, so the player can see which part of their file to fix.
+pub fn recover_readable_sections(contents: &str) -> Settings {
+    let Ok(toml::Value::Table(document)) = toml::from_str::<toml::Value>(contents) else {
+        warn!("Config file is not valid TOML at all. Using default settings.");
+        return Settings::default();
+    };
+
+    let mut kept = toml::value::Table::new();
+
+    for (section, value) in document {
+        let mut candidate = kept.clone();
+        candidate.insert(section.clone(), value);
+
+        match toml::Value::Table(candidate.clone()).try_into::<Settings>() {
+            Ok(_) => kept = candidate,
+            Err(e) => warn!(
+                "Dropping unreadable config section [{}]: {}. Its defaults are used; \
+                 every other section is kept.",
+                section, e
+            ),
+        }
+    }
+
+    toml::Value::Table(kept)
+        .try_into::<Settings>()
+        .unwrap_or_else(|e| {
+            warn!("Could not rebuild settings from the readable sections: {e}");
+            Settings::default()
+        })
+}
+
 impl Settings {
     pub fn load() -> Self {
         let paths = match ConfigPaths::detect() {
@@ -3316,30 +3390,34 @@ impl Settings {
         };
 
         match fs::read_to_string(&config_path) {
-            Ok(contents) => match toml::from_str(&contents) {
-                Ok(settings) => {
-                    info!("Loaded configuration from {}", config_path.display());
-                    let mut settings: Settings = settings;
-                    if let Some(legacy) = legacy_suppress_while_invisible(&contents) {
-                        info!(
-                            "Carrying [phase_boots_automation] suppress_while_invisible = {} over \
-                             to [invisibility] suppress_automation",
-                            legacy
-                        );
-                        settings.invisibility.suppress_automation = legacy;
+            Ok(contents) => {
+                let mut settings = match toml::from_str::<Settings>(&contents) {
+                    Ok(settings) => {
+                        info!("Loaded configuration from {}", config_path.display());
+                        settings
                     }
-                    settings.validate_keybindings();
-                    settings
-                }
-                Err(e) => {
-                    warn!(
-                        "Failed to parse {}: {}. Using default settings.",
-                        config_path.display(),
-                        e
+                    Err(e) => {
+                        warn!(
+                            "Failed to parse {} as a whole: {}. Recovering the sections \
+                             that are still readable.",
+                            config_path.display(),
+                            e
+                        );
+                        recover_readable_sections(&contents)
+                    }
+                };
+
+                if let Some(legacy) = legacy_suppress_while_invisible(&contents) {
+                    info!(
+                        "Carrying [phase_boots_automation] suppress_while_invisible = {} over \
+                         to [invisibility] suppress_automation",
+                        legacy
                     );
-                    Settings::default()
+                    settings.invisibility.suppress_automation = legacy;
                 }
-            },
+                settings.validate_keybindings();
+                settings
+            }
             Err(e) => {
                 info!(
                     "Configuration file {} could not be read ({}). Using default settings.",
@@ -3351,37 +3429,52 @@ impl Settings {
         }
     }
 
+    /// Warn about slot bindings that will not do what the player expects.
+    ///
+    /// Three separate problems, all of which used to be invisible: a key bound
+    /// to two slots, a value we could not parse at all, and a key we can press
+    /// but cannot *see* being pressed — the last one silently disables Soul Ring
+    /// interception and armlet chords for that slot.
     fn validate_keybindings(&self) {
-        let mut key_map: HashMap<char, Vec<&str>> = HashMap::new();
+        let mut key_map: HashMap<String, Vec<&str>> = HashMap::new();
 
-        key_map
-            .entry(self.keybindings.slot0)
-            .or_insert_with(Vec::new)
-            .push("slot0");
-        key_map
-            .entry(self.keybindings.slot1)
-            .or_insert_with(Vec::new)
-            .push("slot1");
-        key_map
-            .entry(self.keybindings.slot2)
-            .or_insert_with(Vec::new)
-            .push("slot2");
-        key_map
-            .entry(self.keybindings.slot3)
-            .or_insert_with(Vec::new)
-            .push("slot3");
-        key_map
-            .entry(self.keybindings.slot4)
-            .or_insert_with(Vec::new)
-            .push("slot4");
-        key_map
-            .entry(self.keybindings.slot5)
-            .or_insert_with(Vec::new)
-            .push("slot5");
-        key_map
-            .entry(self.keybindings.neutral0)
-            .or_insert_with(Vec::new)
-            .push("neutral0");
+        for (name, binding) in self.keybindings.slots() {
+            if binding.is_unknown() {
+                warn!(
+                    "Keybinding '{}' is set to '{}', which is not a key this app \
+                     understands. That slot is disabled until it is rebound.",
+                    name, binding
+                );
+                continue;
+            }
+
+            if !binding.is_interceptable() {
+                warn!(
+                    "Keybinding '{}' is set to '{}', which this app can press but \
+                     cannot detect. Automation that reacts to you pressing that slot \
+                     (Soul Ring, armlet chords) will not fire for it.",
+                    name, binding
+                );
+            }
+
+            // Known limitation, called out rather than left to be discovered
+            // mid-game: the grab callback only inspects key presses, so a
+            // mouse-bound slot is pressed correctly by automation but pressing
+            // it yourself does not trigger the Soul Ring pre-cast.
+            if matches!(binding, KeyBinding::Mouse(_)) {
+                info!(
+                    "Keybinding '{}' is set to '{}'. Automation can press it, but \
+                     Soul Ring will not auto-fire when *you* press that slot — \
+                     interception currently watches keys only.",
+                    name, binding
+                );
+            }
+
+            key_map
+                .entry(binding.to_string())
+                .or_default()
+                .push(name);
+        }
 
         for (key, slots) in key_map.iter() {
             if slots.len() > 1 {
@@ -3393,17 +3486,12 @@ impl Settings {
         }
     }
 
-    pub fn get_key_for_slot(&self, slot: &str) -> Option<char> {
-        match slot {
-            "slot0" => Some(self.keybindings.slot0),
-            "slot1" => Some(self.keybindings.slot1),
-            "slot2" => Some(self.keybindings.slot2),
-            "slot3" => Some(self.keybindings.slot3),
-            "slot4" => Some(self.keybindings.slot4),
-            "slot5" => Some(self.keybindings.slot5),
-            "neutral0" => Some(self.keybindings.neutral0),
-            _ => None,
-        }
+    pub fn get_key_for_slot(&self, slot: &str) -> Option<KeyBinding> {
+        self.keybindings
+            .slots()
+            .into_iter()
+            .find(|(name, _)| *name == slot)
+            .map(|(_, binding)| binding.clone())
     }
 
     fn huskar_armlet_override(&self) -> HeroArmletOverrideConfig {
@@ -3490,6 +3578,31 @@ impl Settings {
         let config_path = persist_live_config(&paths, &desired_contents, EMBEDDED_CONFIG_TEMPLATE)
             .map_err(std::io::Error::other)?;
         info!("Settings saved to {}", config_path.display());
+        Ok(())
+    }
+
+    /// Persist a single top-level section, leaving the rest of the file untouched.
+    ///
+    /// Preferred over [`Self::save`] for a UI edit: the app reads `config.toml`
+    /// once at startup and never re-reads it, so writing the whole struct back
+    /// reverts anything the user changed by hand in the meantime. Writing only
+    /// the section they edited keeps that blast radius to one section.
+    pub fn save_section(&self, section: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let paths = ConfigPaths::detect().map_err(std::io::Error::other)?;
+        let document = toml::Value::try_from(self)?;
+        let section_value = document
+            .get(section)
+            .ok_or_else(|| std::io::Error::other(format!("Unknown config section: {section}")))?;
+
+        let config_path = crate::config::storage::persist_config_section(
+            &paths,
+            section,
+            section_value,
+            EMBEDDED_CONFIG_TEMPLATE,
+        )
+        .map_err(std::io::Error::other)?;
+
+        info!("Settings section [{}] saved to {}", section, config_path.display());
         Ok(())
     }
 }

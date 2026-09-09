@@ -8,7 +8,8 @@ use crate::actions::heroes::traits::HeroScript;
 use crate::actions::heroes::meepo_state::{latest_meepo_observed_state, refresh_meepo_observed_state};
 use crate::config::settings::MeepoConfig;
 use crate::config::Settings;
-use crate::input::simulation::{mouse_click, press_key};
+use crate::input::binding::KeyBinding;
+use crate::input::simulation::{mouse_click, press_binding, press_key};
 use crate::models::{GsiWebhookEvent, Hero, Item};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -100,7 +101,7 @@ fn find_combo_item_slot_key(
     event: &GsiWebhookEvent,
     settings: &Settings,
     partial_item_name: &str,
-) -> Option<char> {
+) -> Option<KeyBinding> {
     event
         .items
         .all_slots()
@@ -145,7 +146,7 @@ impl MeepoScript {
 
         if let Some(key) = find_item_slot(event, settings, Item::Blink) {
             info!("Using Blink ({})", key);
-            press_key(key);
+            press_binding(&key);
             thread::sleep(Duration::from_millis(meepo.post_blink_delay_ms));
         } else {
             info!("Meepo combo continuing without Blink");
@@ -155,7 +156,7 @@ impl MeepoScript {
             if let Some(key) = find_combo_item_slot_key(event, settings, item_name) {
                 info!("Using combo item '{}' ({})", item_name, key);
                 for index in 0..meepo.combo_item_spam_count {
-                    press_key(key);
+                    press_binding(&key);
                     if index + 1 < meepo.combo_item_spam_count {
                         thread::sleep(Duration::from_millis(meepo.combo_item_delay_ms));
                     }

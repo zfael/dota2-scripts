@@ -9,6 +9,14 @@ check_on_startup = true
 include_prereleases = false
 
 [keybindings]
+# Item slot keys, matching what you bound in Dota's own settings.
+# Accepted: a single character ("z", "0", "-"), a named key ("Space", "Tab",
+# "F1".."F12", "Home", "End", "Insert", "Delete", "PageUp", "PageDown",
+# arrow keys, "Numpad0".."Numpad9"), or a mouse button ("Mouse3" middle,
+# "Mouse4" back, "Mouse5" forward). Left and right click cannot be bound —
+# Dota needs them for move and attack orders.
+# A value that is not recognised disables that slot and is reported in the log;
+# it no longer discards the rest of this file.
 slot0 = "z"
 slot1 = "x"
 slot2 = "c"

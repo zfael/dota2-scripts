@@ -14,10 +14,12 @@
 | If the file is missing or TOML parsing fails, the app falls back to `Settings::default()` for the whole config | `src/config/settings.rs` |
 | Missing sections / missing keys inside a valid file fall back per-field because the structs use `#[serde(default)]` | `src/config/settings.rs` |
 | UI/config saves merge the new serialized settings into the existing live TOML so unknown local-only keys are preserved | `src/config/storage.rs`, `src/config/settings.rs`, `src-tauri/src/commands/config.rs` |
+| A UI edit writes back **only the section it touched** (`Settings::save_section`), so a hand edit elsewhere in the file survives it. Settings are still read once at startup, so editing the file while the app runs and then changing that same section in the UI still loses the edit | `src/config/storage.rs`, `src-tauri/src/commands/config.rs` |
+| A section that fails to deserialize is dropped on its own and defaulted; the rest of the file is kept | `src/config/settings.rs` (`recover_readable_sections`) |
 | The checked-in `config/config.toml` is **not** the same as the Rust fallback defaults for every field; treat both as important | `config/config.toml`, `src/config/settings.rs`, `src/config/storage.rs` |
 | `RUST_LOG` overrides `[logging].level` at process start | `src/main.rs` |
 | Duplicate inventory/neutral keybindings only warn; the app still starts | `src/config/settings.rs` |
-| Most hotkey-like string fields must be supported by `src/input/keyboard.rs::parse_key_string()` (`Home`, `End`, `Insert`, `Delete`, `PageUp`, `PageDown`, `F1`-`F12`, or one character) | `src/input/keyboard.rs` |
+| Most hotkey-like string fields must be supported by `src/input/keyboard.rs::parse_key_string()` (`Home`, `End`, `Insert`, `Delete`, `PageUp`, `PageDown`, `F1`-`F12`, or one character). **Item slot bindings are the exception** — they use the wider `KeyBinding` set below, which also covers mouse buttons and the numpad | `src/input/keyboard.rs`, `src/input/binding.rs` |
 
 **Deeper behavior docs**
 
@@ -47,16 +49,43 @@
 
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |
 |---|---:|---:|---|
-| `slot0` | `"z"` | `"z"` | One-character item hotkey; used when the runtime maps `items.slot0` to a key press. |
-| `slot1` | `"x"` | `"x"` | Same constraint as above. |
-| `slot2` | `"c"` | `"c"` | Same constraint as above. |
-| `slot3` | `"v"` | `"v"` | Same constraint as above. |
-| `slot4` | `"b"` | `"b"` | Same constraint as above. |
-| `slot5` | `"n"` | `"n"` | Same constraint as above. |
+| `slot0` | `"z"` | `"z"` | Item hotkey; used when the runtime maps `items.slot0` to a press. |
+| `slot1` | `"x"` | `"x"` | Same format as above. |
+| `slot2` | `"c"` | `"c"` | Same format as above. |
+| `slot3` | `"v"` | `"v"` | Same format as above. |
+| `slot4` | `"b"` | `"b"` | Same format as above. |
+| `slot5` | `"n"` | `"n"` | Same format as above. |
 | `neutral0` | `"0"` | `"0"` | Neutral-item self-cast key and neutral-slot mapping. |
 | `combo_trigger` | `"Home"` | `"Home"` | Present in settings, but current runtime wiring does not read this field when installing the keyboard listener; the live standalone trigger comes from `AppState.trigger_key` and hero-specific selection logic instead. See `src/ui/app.rs`, `src/main.rs`, and `docs/workflows/adding-a-hero.md`. |
 
-**Constraint**: `slot0`-`slot5` and `neutral0` deserialize to `char`, so TOML values must be single-character strings.
+**Accepted values**: `slot0`-`slot5` and `neutral0` deserialize to
+`KeyBinding` (`src/input/binding.rs`), which owns the canonical spellings:
+
+| Kind | Examples |
+|---|---|
+| Single character | `"z"`, `"0"`, `"-"` — stored lowercased |
+| Named key | `"Space"`, `"Tab"`, `"Enter"`, `"Escape"`, `"Backspace"`, `"Insert"`, `"Delete"`, `"Home"`, `"End"`, `"PageUp"`, `"PageDown"`, `"Up"`/`"Down"`/`"Left"`/`"Right"`, `"F1"`-`"F12"`, `"Numpad0"`-`"Numpad9"` |
+| Mouse button | `"Mouse3"` (middle), `"Mouse4"` (back), `"Mouse5"` (forward) |
+
+Left and right click are deliberately unbindable — Dota needs them for move and
+attack orders.
+
+**A value outside that list no longer breaks the file.** It is kept verbatim as
+`KeyBinding::Unknown`, that one slot is disabled, and the reason is logged. This
+replaced the old behaviour where a single unrepresentable key made
+`Settings::load()` discard the entire config and silently revert every other
+setting (issue #20).
+
+Two layers have to agree for a slot to be fully functional, and they are not the
+same set:
+
+- **Pressing** goes through `enigo`, and covers everything in the table above.
+- **Interception** (Soul Ring pre-cast, armlet chords) goes through `rdev`'s
+  grab callback, which currently inspects *key* presses only. A mouse-bound slot
+  is therefore pressed correctly by automation, but pressing it yourself will not
+  trigger the Soul Ring pre-cast. Startup logs say so per slot.
+
+`examples/keybind_config_probe.rs` is the regression check for all of this.
 
 **Runtime note**: the UI shows the currently active standalone trigger from `AppState.trigger_key`. Changing the selected hero updates that live key without restarting the app, but editing `config/config.toml` still requires a restart because settings load once at startup.
 
@@ -130,7 +159,7 @@ See `docs/features/danger-detection.md` and `docs/features/survivability.md`.
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |
 |---|---:|---:|---|
 | `enabled` | `true` | `false` | Checked-in config enables the feature; code fallback does not. |
-| `self_cast_key` | `"0"` | `" "` (space) | `char` field; must be a single-character string. |
+| `self_cast_key` | `"0"` | `"Space"` | `KeyBinding`; same accepted values as `[keybindings]`. The default used to be written as `" "`, which read as blank in the UI. |
 | `log_discoveries` | `false` | `true` | When true, `src/actions/dispatcher.rs` appends discoveries to `logs/neutral_items_discovered.txt`. |
 | `use_in_danger` | `true` | `true` | Additional gate for danger-triggered neutral usage. |
 | `hp_threshold` | `50` | `50` | Only used when danger criteria and feature gates allow it. |

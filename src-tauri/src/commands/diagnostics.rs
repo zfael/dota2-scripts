@@ -54,7 +54,7 @@ pub fn get_diagnostics(state: tauri::State<'_, TauriAppState>) -> Result<Diagnos
             }
             if let Ok(sr) = SOUL_RING_STATE.lock() {
                 if sr.available && sr.can_cast {
-                    if let Some(key) = sr.slot_key {
+                    if let Some(key) = sr.slot_key.as_ref() {
                         keys.push(format!("SoulRing({})", key));
                     }
                 }

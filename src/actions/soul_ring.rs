@@ -17,6 +17,7 @@
 use crate::actions::activity::{push_activity, ActivityCategory};
 use crate::actions::mana_costs::{ability_mana_cost, item_mana_cost};
 use crate::config::Settings;
+use crate::input::binding::KeyBinding;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -67,7 +68,7 @@ pub struct SoulRingState {
     /// Whether Soul Ring is currently in inventory
     pub available: bool,
     /// The key to press to use Soul Ring (based on its slot)
-    pub slot_key: Option<char>,
+    pub slot_key: Option<KeyBinding>,
     /// Whether Soul Ring can be cast (not on cooldown)
     pub can_cast: bool,
     /// Current hero mana percentage (0-100)
@@ -79,7 +80,7 @@ pub struct SoulRingState {
     /// Last time Soul Ring was triggered (for cooldown lockout)
     pub last_triggered: Option<Instant>,
     /// Maps slot keys to item names (for mana-cost lookup)
-    pub slot_items: HashMap<char, String>,
+    pub slot_items: HashMap<KeyBinding, String>,
     /// Ability slots by GSI index (0-5), for mana-cost lookup on ability keys.
     pub ability_slots: Vec<AbilitySlot>,
     /// GSI index of the ability flagged `ultimate`, which is what `R` casts.
@@ -191,14 +192,13 @@ impl SoulRingState {
     }
 
     /// Get the item name for a given slot key (if any)
-    pub fn get_item_for_key(&self, key_char: char) -> Option<&String> {
-        let key_lower = key_char.to_ascii_lowercase();
-        self.slot_items.get(&key_lower)
+    pub fn get_item_for_key(&self, binding: &KeyBinding) -> Option<&String> {
+        self.slot_items.get(binding)
     }
 
-    /// Price the item bound to `key_char`.
-    pub fn item_spend_for_key(&self, key_char: char) -> ManaSpend {
-        let Some(item_name) = self.get_item_for_key(key_char) else {
+    /// Price the item bound to `binding`.
+    pub fn item_spend_for_key(&self, binding: &KeyBinding) -> ManaSpend {
+        let Some(item_name) = self.get_item_for_key(binding) else {
             // Empty slot, or a slot GSI has not mapped to a key. Nothing to cast.
             return ManaSpend::Nothing;
         };
@@ -269,8 +269,8 @@ pub struct SoulRingKeyboardConfig {
     /// Ability keys that should trigger Soul Ring (stored lowercase).
     pub ability_keys: HashSet<char>,
     pub intercept_item_keys: bool,
-    /// Item slot keys from keybindings (stored lowercase).
-    pub item_slot_keys: HashSet<char>,
+    /// Item slot keys from keybindings, canonicalised by [`KeyBinding`].
+    pub item_slot_keys: HashSet<KeyBinding>,
 }
 
 impl SoulRingKeyboardConfig {
@@ -284,17 +284,12 @@ impl SoulRingKeyboardConfig {
             .map(|c| c.to_ascii_lowercase())
             .collect();
 
-        let item_slot_keys = [
-            settings.keybindings.slot0,
-            settings.keybindings.slot1,
-            settings.keybindings.slot2,
-            settings.keybindings.slot3,
-            settings.keybindings.slot4,
-            settings.keybindings.slot5,
-        ]
-        .iter()
-        .map(|c| c.to_ascii_lowercase())
-        .collect();
+        let item_slot_keys = settings
+            .keybindings
+            .item_slots()
+            .into_iter()
+            .cloned()
+            .collect();
 
         Self {
             enabled: settings.soul_ring.enabled,
@@ -313,9 +308,12 @@ impl SoulRingKeyboardConfig {
         self.ability_keys.contains(&key.to_ascii_lowercase())
     }
 
-    /// Return `true` if `key` is in the item-slot-keys set (case-insensitive).
-    pub fn is_item_slot_key(&self, key: char) -> bool {
-        self.item_slot_keys.contains(&key.to_ascii_lowercase())
+    /// Return `true` if `binding` is one of the configured item slots.
+    ///
+    /// Case folding happens in [`KeyBinding::parse`], so both sides are already
+    /// canonical by the time they reach the set.
+    pub fn is_item_slot_key(&self, binding: &KeyBinding) -> bool {
+        self.item_slot_keys.contains(binding)
     }
 }
 
@@ -352,45 +350,51 @@ impl SoulRingState {
     ///
     /// Ability keys and item keys can overlap in a custom layout, so an ability that
     /// costs mana wins over an item slot bound to the same key.
-    pub fn spend_for_key(&self, key_char: char, config: &SoulRingKeyboardConfig) -> ManaSpend {
+    pub fn spend_for_key(
+        &self,
+        binding: &KeyBinding,
+        config: &SoulRingKeyboardConfig,
+    ) -> ManaSpend {
         // A silence, mute, or hex drops the press entirely - nothing to pay for.
         if self.cast_blocked {
             return ManaSpend::Nothing;
         }
 
-        if config.is_ability_key(key_char) {
-            let spend = self.ability_spend_for_key(key_char);
-            if spend.warrants_soul_ring() {
-                return spend;
-            }
+        // Ability keys are still plain characters — Dota's ability binds are
+        // letters — so a mouse or named binding can only ever be an item slot.
+        if let KeyBinding::Char(key_char) = binding {
+            if config.is_ability_key(*key_char) {
+                let spend = self.ability_spend_for_key(*key_char);
+                if spend.warrants_soul_ring() {
+                    return spend;
+                }
 
-            // Fall through to the item table only if this key is also an item slot.
-            if !config.intercept_item_keys || !config.is_item_slot_key(key_char) {
-                return spend;
+                // Fall through to the item table only if this key is also an item slot.
+                if !config.intercept_item_keys || !config.is_item_slot_key(binding) {
+                    return spend;
+                }
             }
         }
 
-        if !config.intercept_item_keys || !config.is_item_slot_key(key_char) {
+        if !config.intercept_item_keys || !config.is_item_slot_key(binding) {
             return ManaSpend::Nothing;
         }
 
         // Never intercept Soul Ring's own key - that would recurse.
-        if let Some(sr_key) = self.slot_key {
-            if key_char.to_ascii_lowercase() == sr_key.to_ascii_lowercase() {
-                return ManaSpend::Nothing;
-            }
+        if self.slot_key.as_ref() == Some(binding) {
+            return ManaSpend::Nothing;
         }
 
-        self.item_spend_for_key(key_char)
+        self.item_spend_for_key(binding)
     }
 
     /// Config-based keyboard interception helper for the cached snapshot path.
     pub fn should_intercept_key_with_config(
         &self,
-        key_char: char,
+        binding: &KeyBinding,
         config: &SoulRingKeyboardConfig,
     ) -> bool {
-        self.spend_for_key(key_char, config).warrants_soul_ring()
+        self.spend_for_key(binding, config).warrants_soul_ring()
     }
 }
 
@@ -402,19 +406,19 @@ pub fn press_ability_with_soul_ring(key: char, settings: &Settings) {
     // Same mana-cost gate as the keyboard hook: a combo must not spend 170 HP to cast
     // something free either.
     let config = SoulRingKeyboardConfig::from_settings(settings);
-    let spend = state.spend_for_key(key, &config);
+    let spend = state.spend_for_key(&KeyBinding::from(key), &config);
 
     if state.should_trigger(settings)
         && state.is_ability_key(key, settings)
         && spend.warrants_soul_ring()
     {
-        if let Some(sr_key) = state.slot_key {
+        if let Some(sr_key) = state.slot_key.clone() {
             state.mark_triggered();
             drop(state); // Release lock before sleeping
 
             info!("💍 Soul Ring before ability '{}'", key);
             push_activity(ActivityCategory::Action, "Soul Ring combo triggered");
-            crate::input::simulation::press_key(sr_key);
+            crate::input::simulation::press_binding(&sr_key);
             std::thread::sleep(std::time::Duration::from_millis(
                 settings.soul_ring.delay_before_ability_ms,
             ));
@@ -467,9 +471,7 @@ pub fn update_from_gsi(
         // Build slot key -> item name mapping for mana-cost lookup
         if let Some(slot_key) = settings.get_key_for_slot(slot_name) {
             if !item.name.is_empty() && item.name != "empty" {
-                state
-                    .slot_items
-                    .insert(slot_key.to_ascii_lowercase(), item.name.clone());
+                state.slot_items.insert(slot_key, item.name.clone());
             }
         }
 
@@ -526,15 +528,15 @@ mod tests {
             trigger_cooldown_ms: 250,
             ability_keys: ['q', 'w', 'e', 'r'].into_iter().collect(),
             intercept_item_keys: true,
-            item_slot_keys: ['z', 'x', 'c'].into_iter().collect(),
+            item_slot_keys: ['z', 'x', 'c'].map(KeyBinding::Char).into_iter().collect(),
         }
     }
 
     fn state_holding(key: char, item: &str) -> SoulRingState {
         let mut state = SoulRingState::default();
-        state.slot_key = Some('z');
-        state.slot_items.insert('z', "item_soul_ring".to_string());
-        state.slot_items.insert(key, item.to_string());
+        state.slot_key = Some(KeyBinding::Char('z'));
+        state.slot_items.insert(KeyBinding::Char('z'), "item_soul_ring".to_string());
+        state.slot_items.insert(KeyBinding::Char(key), item.to_string());
         state
     }
 
@@ -554,7 +556,7 @@ mod tests {
         ] {
             let state = state_holding('x', free);
             assert!(
-                !state.should_intercept_key_with_config('x', &config),
+                !state.should_intercept_key_with_config(&KeyBinding::Char('x'), &config),
                 "{free} costs no mana and must not trigger Soul Ring"
             );
         }
@@ -572,11 +574,11 @@ mod tests {
         ] {
             let state = state_holding('x', item);
             assert_eq!(
-                state.item_spend_for_key('x'),
+                state.item_spend_for_key(&KeyBinding::Char('x')),
                 ManaSpend::Costs(cost),
                 "{item} should be priced at {cost}"
             );
-            assert!(state.should_intercept_key_with_config('x', &config));
+            assert!(state.should_intercept_key_with_config(&KeyBinding::Char('x'), &config));
         }
     }
 
@@ -586,10 +588,10 @@ mod tests {
     fn empty_item_slot_does_not_trigger_soul_ring() {
         let config = item_config();
         let mut state = SoulRingState::default();
-        state.slot_key = Some('z');
+        state.slot_key = Some(KeyBinding::Char('z'));
 
-        assert_eq!(state.item_spend_for_key('x'), ManaSpend::Nothing);
-        assert!(!state.should_intercept_key_with_config('x', &config));
+        assert_eq!(state.item_spend_for_key(&KeyBinding::Char('x')), ManaSpend::Nothing);
+        assert!(!state.should_intercept_key_with_config(&KeyBinding::Char('x'), &config));
     }
 
     /// An item added after the last table regeneration must fail safe.
@@ -598,8 +600,8 @@ mod tests {
         let config = item_config();
         let state = state_holding('x', "item_some_future_patch_thing");
 
-        assert_eq!(state.item_spend_for_key('x'), ManaSpend::Unknown);
-        assert!(!state.should_intercept_key_with_config('x', &config));
+        assert_eq!(state.item_spend_for_key(&KeyBinding::Char('x')), ManaSpend::Unknown);
+        assert!(!state.should_intercept_key_with_config(&KeyBinding::Char('x'), &config));
     }
 
     #[test]
@@ -607,7 +609,7 @@ mod tests {
         let config = item_config();
         let state = state_holding('z', "item_soul_ring");
 
-        assert!(!state.should_intercept_key_with_config('z', &config));
+        assert!(!state.should_intercept_key_with_config(&KeyBinding::Char('z'), &config));
     }
 
     /// Huskar pays health, not mana, for every one of his abilities.
@@ -625,7 +627,7 @@ mod tests {
 
         for key in ['q', 'w', 'e', 'r'] {
             assert!(
-                !state.should_intercept_key_with_config(key, &config),
+                !state.should_intercept_key_with_config(&KeyBinding::from(key), &config),
                 "Huskar's '{key}' spends health, not mana"
             );
         }
@@ -645,7 +647,7 @@ mod tests {
         assert_eq!(state.ability_spend_for_key('w'), ManaSpend::Nothing);
         assert_eq!(state.ability_spend_for_key('e'), ManaSpend::Nothing);
         for key in ['q', 'w', 'e'] {
-            assert!(!state.should_intercept_key_with_config(key, &config));
+            assert!(!state.should_intercept_key_with_config(&KeyBinding::from(key), &config));
         }
     }
 
@@ -689,12 +691,12 @@ mod tests {
         let mut state = state_holding('x', "item_shivas_guard");
         state.ability_slots = vec![ability("mirana_starfall", 1)];
 
-        assert!(state.should_intercept_key_with_config('x', &config));
-        assert!(state.should_intercept_key_with_config('q', &config));
+        assert!(state.should_intercept_key_with_config(&KeyBinding::Char('x'), &config));
+        assert!(state.should_intercept_key_with_config(&KeyBinding::Char('q'), &config));
 
         state.cast_blocked = true;
-        assert!(!state.should_intercept_key_with_config('x', &config));
-        assert!(!state.should_intercept_key_with_config('q', &config));
+        assert!(!state.should_intercept_key_with_config(&KeyBinding::Char('x'), &config));
+        assert!(!state.should_intercept_key_with_config(&KeyBinding::Char('q'), &config));
     }
 
     #[test]
@@ -716,7 +718,7 @@ mod tests {
             trigger_cooldown_ms: 250,
             ability_keys: ['q', 'w', 'e'].into_iter().collect(),
             intercept_item_keys: false,
-            item_slot_keys: ['z', 'x', 'c', 'v', 'b', 'n'].into_iter().collect(),
+            item_slot_keys: ['z', 'x', 'c', 'v', 'b', 'n'].map(KeyBinding::Char).into_iter().collect(),
         };
 
         assert!(config.is_ability_key('Q'));
@@ -734,12 +736,18 @@ mod tests {
             trigger_cooldown_ms: 250,
             ability_keys: ['q', 'w', 'e'].into_iter().collect(),
             intercept_item_keys: true,
-            item_slot_keys: ['z', 'x', 'c', 'v', 'b', 'n'].into_iter().collect(),
+            item_slot_keys: ['z', 'x', 'c', 'v', 'b', 'n']
+                .map(KeyBinding::Char)
+                .into_iter()
+                .collect(),
         };
 
-        assert!(config.is_item_slot_key('Z'));
-        assert!(config.is_item_slot_key('n'));
-        assert!(!config.is_item_slot_key('q'));
+        // Case folding is the constructor's job — `KeyBinding::from` and
+        // `KeyBinding::parse` are the only ways a binding enters the app, and
+        // both lowercase. The set lookup itself is then a plain equality check.
+        assert!(config.is_item_slot_key(&KeyBinding::from('Z')));
+        assert!(config.is_item_slot_key(&KeyBinding::from('n')));
+        assert!(!config.is_item_slot_key(&KeyBinding::from('q')));
     }
 
     #[test]
@@ -747,7 +755,7 @@ mod tests {
         let mut state = SoulRingState::default();
         state.available = true;
         state.can_cast = true;
-        state.slot_key = Some('z');
+        state.slot_key = Some(KeyBinding::Char('z'));
         state.hero_alive = true;
         state.hero_mana_percent = 50;
         state.hero_health_percent = 80;
@@ -771,7 +779,7 @@ mod tests {
         let mut state = SoulRingState::default();
         state.available = true;
         state.can_cast = true;
-        state.slot_key = Some('z');
+        state.slot_key = Some(KeyBinding::Char('z'));
         state.hero_alive = true;
         state.hero_mana_percent = 50;
         state.hero_health_percent = 80;
@@ -807,7 +815,7 @@ mod tests {
 
         // No GSI event yet - nothing is known to cost mana.
         let empty = SoulRingState::default();
-        assert!(!empty.should_intercept_key_with_config('q', &config));
+        assert!(!empty.should_intercept_key_with_config(&KeyBinding::Char('q'), &config));
 
         // Mirana: Starstorm on Q costs 80, Sacred Arrow on W costs 90.
         let mut state = SoulRingState::default();
@@ -817,10 +825,10 @@ mod tests {
             ability("mirana_leap", 1),
         ];
 
-        assert!(state.should_intercept_key_with_config('q', &config));
-        assert!(state.should_intercept_key_with_config('W', &config));
+        assert!(state.should_intercept_key_with_config(&KeyBinding::Char('q'), &config));
+        assert!(state.should_intercept_key_with_config(&KeyBinding::Char('W'), &config));
         // 'r' is not in ability_keys for this config.
-        assert!(!state.should_intercept_key_with_config('r', &config));
+        assert!(!state.should_intercept_key_with_config(&KeyBinding::Char('r'), &config));
     }
 
     #[test]
@@ -835,9 +843,9 @@ mod tests {
             trigger_cooldown_ms: 250,
             ability_keys: HashSet::new(),
             intercept_item_keys: false,
-            item_slot_keys: ['z', 'x', 'c'].into_iter().collect(),
+            item_slot_keys: ['z', 'x', 'c'].map(KeyBinding::Char).into_iter().collect(),
         };
 
-        assert!(!state.should_intercept_key_with_config('z', &config));
+        assert!(!state.should_intercept_key_with_config(&KeyBinding::Char('z'), &config));
     }
 }

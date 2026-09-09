@@ -3,7 +3,7 @@ use crate::actions::common::{find_item_slot, SurvivabilityActions};
 use crate::actions::executor::ActionExecutor;
 use crate::actions::soul_ring::press_ability_with_soul_ring;
 use crate::config::Settings;
-use crate::input::simulation::press_key;
+use crate::input::simulation::{press_binding, press_key};
 use crate::models::{GsiWebhookEvent, Hero, Item};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -32,7 +32,7 @@ impl TinyScript {
         // 1. Blink Dagger
         if let Some(key) = find_item_slot(event, &settings, Item::Blink) {
             info!("Using Blink ({})", key);
-            press_key(key);
+            press_binding(&key);
             thread::sleep(Duration::from_millis(100));
         } else {
             warn!("Blink dagger not found in inventory");

@@ -1,5 +1,6 @@
 use crate::config::settings::{ArmletRoshanConfig, EffectiveArmletConfig};
 use crate::config::Settings;
+use crate::input::binding::{KeyBinding, PressableKey};
 use crate::input::simulation::{armlet_chord, ModifierKey};
 use crate::models::GsiWebhookEvent;
 use lazy_static::lazy_static;
@@ -20,7 +21,7 @@ static ARMLET_ROSHAN_MODE_ARMED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ArmletTriggerStep {
-    QuickCast(char),
+    QuickCast(PressableKey),
     ModifierDown(ModifierKey),
     ModifierUp(ModifierKey),
 }
@@ -208,7 +209,7 @@ fn resolve_cast_modifier(config: &EffectiveArmletConfig) -> ModifierKey {
 }
 
 fn plan_dual_trigger_sequence(
-    slot_key: char,
+    slot_key: PressableKey,
     cast_modifier: ModifierKey,
 ) -> [ArmletTriggerStep; 4] {
     [
@@ -219,13 +220,16 @@ fn plan_dual_trigger_sequence(
     ]
 }
 
-fn execute_dual_trigger(slot_key: char, cast_modifier: ModifierKey) {
+fn execute_dual_trigger(slot_key: &KeyBinding, cast_modifier: ModifierKey) {
     let started = Instant::now();
-    let sequence = plan_dual_trigger_sequence(slot_key, cast_modifier);
-    debug!(
-        "Armlet dual-trigger starting for '{}' with {:?}: {:?}",
-        slot_key, cast_modifier, sequence
-    );
+    if let Some(target) = slot_key.pressable() {
+        debug!(
+            "Armlet dual-trigger starting for '{}' with {:?}: {:?}",
+            slot_key,
+            cast_modifier,
+            plan_dual_trigger_sequence(target, cast_modifier)
+        );
+    }
 
     armlet_chord(slot_key, cast_modifier);
 
@@ -578,7 +582,7 @@ fn simulate_armlet_replay(
     report
 }
 
-fn find_armlet_slot_key(event: &GsiWebhookEvent, settings: &Settings) -> Option<char> {
+fn find_armlet_slot_key(event: &GsiWebhookEvent, settings: &Settings) -> Option<KeyBinding> {
     let armlet_slot = event
         .items
         .all_slots()
@@ -955,7 +959,7 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
                 event.hero.name, health, evaluation.trigger_point, cooldown_ms, cast_modifier
             );
 
-            execute_dual_trigger(slot_key, cast_modifier);
+            execute_dual_trigger(&slot_key, cast_modifier);
 
             let mut critical_hp = ARMLET_CRITICAL_HP.lock().unwrap();
             *critical_hp = None;
@@ -975,7 +979,7 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
                 cast_modifier
             );
 
-            execute_dual_trigger(slot_key, cast_modifier);
+            execute_dual_trigger(&slot_key, cast_modifier);
             let mut last_toggle = ARMLET_LAST_TOGGLE.lock().unwrap();
             *last_toggle = Some(Instant::now());
 
@@ -997,7 +1001,7 @@ pub fn maybe_toggle(event: &GsiWebhookEvent, settings: &Settings) {
                 cast_modifier
             );
 
-            execute_dual_trigger(slot_key, cast_modifier);
+            execute_dual_trigger(&slot_key, cast_modifier);
             let mut last_toggle = ARMLET_LAST_TOGGLE.lock().unwrap();
             *last_toggle = Some(Instant::now());
 
@@ -1066,12 +1070,14 @@ mod tests {
 
     #[test]
     fn dual_trigger_plan_uses_quick_cast_then_modified_cast() {
+        let slot = super::KeyBinding::Char('x').pressable().unwrap();
+
         assert_eq!(
-            plan_dual_trigger_sequence('x', ModifierKey::Alt),
+            plan_dual_trigger_sequence(slot, ModifierKey::Alt),
             [
-                ArmletTriggerStep::QuickCast('x'),
+                ArmletTriggerStep::QuickCast(slot),
                 ArmletTriggerStep::ModifierDown(ModifierKey::Alt),
-                ArmletTriggerStep::QuickCast('x'),
+                ArmletTriggerStep::QuickCast(slot),
                 ArmletTriggerStep::ModifierUp(ModifierKey::Alt),
             ]
         );

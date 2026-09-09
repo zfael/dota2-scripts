@@ -7,6 +7,14 @@ export interface UpdateConfig {
   include_prereleases: boolean;
 }
 
+/**
+ * Item slot bindings, as the canonical names `src/input/binding.rs` parses:
+ * a single lowercase character, a named key ("Space", "F1", "Home", "Numpad0",
+ * arrow names), or a mouse button ("Mouse3" | "Mouse4" | "Mouse5").
+ *
+ * Anything else is stored verbatim and reported as unusable rather than
+ * rejected, so a typo disables one slot instead of the whole config file.
+ */
 export interface KeybindingsConfig {
   slot0: string;
   slot1: string;

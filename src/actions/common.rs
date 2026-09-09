@@ -8,6 +8,7 @@ use crate::actions::item_automation::{
     MovementSnapshot, SupportStatus, TriggerFamily,
 };
 use crate::config::{DangerDetectionConfig, Settings};
+use crate::input::binding::KeyBinding;
 use crate::models::{GsiWebhookEvent, Item};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -27,14 +28,14 @@ lazy_static::lazy_static! {
     static ref MOVEMENT_CHECK_CALLS: AtomicUsize = AtomicUsize::new(0);
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct PlannedKeyPress {
-    key: char,
+    key: KeyBinding,
     delay_after_ms: u64,
 }
 
 impl PlannedKeyPress {
-    const fn new(key: char, delay_after_ms: u64) -> Self {
+    fn new(key: KeyBinding, delay_after_ms: u64) -> Self {
         Self {
             key,
             delay_after_ms,
@@ -51,28 +52,28 @@ fn defensive_item_needs_self_cast(item_name: &str) -> bool {
     )
 }
 
-fn plan_item_key_sequence(item_name: &str, key: char) -> Vec<PlannedKeyPress> {
+fn plan_item_key_sequence(item_name: &str, key: &KeyBinding) -> Vec<PlannedKeyPress> {
     if defensive_item_needs_self_cast(item_name) {
         vec![
-            PlannedKeyPress::new(key, SELF_CAST_DELAY_MS),
-            PlannedKeyPress::new(key, 0),
+            PlannedKeyPress::new(key.clone(), SELF_CAST_DELAY_MS),
+            PlannedKeyPress::new(key.clone(), 0),
         ]
     } else {
-        vec![PlannedKeyPress::new(key, 0)]
+        vec![PlannedKeyPress::new(key.clone(), 0)]
     }
 }
 
-fn plan_defensive_item_key_sequence(items: &[(String, char)]) -> Vec<PlannedKeyPress> {
+fn plan_defensive_item_key_sequence(items: &[(String, KeyBinding)]) -> Vec<PlannedKeyPress> {
     items
         .iter()
-        .flat_map(|(item_name, key)| plan_item_key_sequence(item_name, *key))
+        .flat_map(|(item_name, key)| plan_item_key_sequence(item_name, key))
         .collect()
 }
 
 fn plan_automation_key_sequence(
     cast_mode: CastMode,
-    item_key: char,
-    self_cast_key: char,
+    item_key: KeyBinding,
+    self_cast_key: KeyBinding,
 ) -> Vec<PlannedKeyPress> {
     match cast_mode {
         CastMode::SelfCast => vec![
@@ -85,7 +86,7 @@ fn plan_automation_key_sequence(
 
 fn execute_key_sequence(sequence: Vec<PlannedKeyPress>) {
     for press in sequence {
-        crate::input::press_key(press.key);
+        crate::input::press_binding(&press.key);
         if press.delay_after_ms > 0 {
             std::thread::sleep(Duration::from_millis(press.delay_after_ms));
         }
@@ -93,7 +94,11 @@ fn execute_key_sequence(sequence: Vec<PlannedKeyPress>) {
 }
 
 /// Find the keybinding for a specific item in the hero's inventory
-pub fn find_item_slot(event: &GsiWebhookEvent, settings: &Settings, item: Item) -> Option<char> {
+pub fn find_item_slot(
+    event: &GsiWebhookEvent,
+    settings: &Settings,
+    item: Item,
+) -> Option<KeyBinding> {
     find_item_slot_by_name(event, settings, item.to_game_name())
 }
 
@@ -114,33 +119,13 @@ pub fn find_item_slot_by_name(
     event: &GsiWebhookEvent,
     settings: &Settings,
     item_name: &str,
-) -> Option<char> {
-    let items = &event.items;
-
-    // Check all inventory slots
-    if item_name_matches_lookup(&items.slot0.name, item_name) {
-        return settings.get_key_for_slot("slot0");
-    }
-    if item_name_matches_lookup(&items.slot1.name, item_name) {
-        return settings.get_key_for_slot("slot1");
-    }
-    if item_name_matches_lookup(&items.slot2.name, item_name) {
-        return settings.get_key_for_slot("slot2");
-    }
-    if item_name_matches_lookup(&items.slot3.name, item_name) {
-        return settings.get_key_for_slot("slot3");
-    }
-    if item_name_matches_lookup(&items.slot4.name, item_name) {
-        return settings.get_key_for_slot("slot4");
-    }
-    if item_name_matches_lookup(&items.slot5.name, item_name) {
-        return settings.get_key_for_slot("slot5");
-    }
-    if item_name_matches_lookup(&items.neutral0.name, item_name) {
-        return settings.get_key_for_slot("neutral0");
-    }
-
-    None
+) -> Option<KeyBinding> {
+    event
+        .items
+        .all_slots()
+        .into_iter()
+        .find(|(_, item)| item_name_matches_lookup(&item.name, item_name))
+        .and_then(|(slot, _)| settings.get_key_for_slot(slot))
 }
 
 /// Snapshot-aware helpers for danger-aware gating used by survivability paths
@@ -266,7 +251,7 @@ impl DefensiveGates {
 struct DefensiveItemPress {
     item_name: String,
     slot: String,
-    key: char,
+    key: KeyBinding,
 }
 
 /// Slot and key for an item that is in the inventory and off cooldown.
@@ -274,7 +259,7 @@ fn ready_item_key<'a>(
     event: &'a GsiWebhookEvent,
     settings: &Settings,
     item_name: &str,
-) -> Option<(&'a str, char)> {
+) -> Option<(&'a str, KeyBinding)> {
     let (slot, _) = event
         .items
         .all_slots()
@@ -556,7 +541,7 @@ fn advance_movement_snapshot(
 fn eligible_low_mana_item(
     event: &GsiWebhookEvent,
     settings: &Settings,
-) -> Option<(&'static ItemAutomationSpec, char)> {
+) -> Option<(&'static ItemAutomationSpec, KeyBinding)> {
     if !settings.mana_automation.enabled {
         return None;
     }
@@ -599,7 +584,7 @@ fn eligible_low_mana_item(
 fn eligible_movement_item(
     event: &GsiWebhookEvent,
     settings: &Settings,
-) -> Option<(&'static ItemAutomationSpec, char)> {
+) -> Option<(&'static ItemAutomationSpec, KeyBinding)> {
     if !settings.phase_boots_automation.enabled {
         return None;
     }
@@ -723,7 +708,7 @@ impl SurvivabilityActions {
                 ActivityCategory::Action,
                 format!("Healing item used: {}", item_name.replace("item_", "")),
             );
-            crate::input::press_key(key);
+            crate::input::press_binding(&key);
         }
     }
 
@@ -762,7 +747,7 @@ impl SurvivabilityActions {
             return;
         }
 
-        let ready_items: Vec<(String, char)> = plan
+        let ready_items: Vec<(String, KeyBinding)> = plan
             .into_iter()
             .map(|press| {
                 info!(
@@ -785,7 +770,7 @@ impl SurvivabilityActions {
             .position(|(item_name, _)| defensive_item_needs_self_cast(item_name))
         {
             for (_item_name, key) in &ready_items[..self_cast_index] {
-                crate::input::press_key(*key);
+                crate::input::press_binding(key);
             }
 
             let sequence = plan_defensive_item_key_sequence(&ready_items[self_cast_index..]);
@@ -797,7 +782,7 @@ impl SurvivabilityActions {
         }
 
         for (_item_name, key) in ready_items {
-            crate::input::press_key(key);
+            crate::input::press_binding(&key);
         }
     }
 
@@ -828,8 +813,8 @@ impl SurvivabilityActions {
         let neutral_item = &event.items.neutral0;
 
         // Get keybindings
-        let neutral_key = settings.keybindings.neutral0;
-        let self_cast_key = settings.neutral_items.self_cast_key;
+        let neutral_key = settings.keybindings.neutral0.clone();
+        let self_cast_key = settings.neutral_items.self_cast_key.clone();
         let lockout_key = format!("danger:{}", neutral_item.name);
         let now_ms = current_time_millis();
 
@@ -876,7 +861,7 @@ impl SurvivabilityActions {
             return;
         };
 
-        let self_cast_key = settings.neutral_items.self_cast_key;
+        let self_cast_key = settings.neutral_items.self_cast_key.clone();
         let item_name = spec.item_name.to_string();
         let lockout_key = format!("mana:{}", item_name);
         let now_ms = current_time_millis();
@@ -947,7 +932,7 @@ impl SurvivabilityActions {
         let sequence = plan_automation_key_sequence(
             spec.cast_mode,
             item_key,
-            settings.neutral_items.self_cast_key,
+            settings.neutral_items.self_cast_key.clone(),
         );
         write_movement_snapshot(new_movement_snapshot(event));
         drop(settings);
@@ -1096,10 +1081,10 @@ mod tests {
     #[test]
     fn glimmer_plan_double_taps_for_self_cast() {
         assert_eq!(
-            plan_item_key_sequence("item_glimmer_cape", '4'),
+            plan_item_key_sequence("item_glimmer_cape", &'4'.into()),
             vec![
-                PlannedKeyPress::new('4', SELF_CAST_DELAY_MS),
-                PlannedKeyPress::new('4', 0),
+                PlannedKeyPress::new('4'.into(), SELF_CAST_DELAY_MS),
+                PlannedKeyPress::new('4'.into(), 0),
             ]
         );
     }
@@ -1107,10 +1092,10 @@ mod tests {
     #[test]
     fn mjollnir_plan_double_taps_for_self_cast() {
         assert_eq!(
-            plan_item_key_sequence("item_mjollnir", '2'),
+            plan_item_key_sequence("item_mjollnir", &'2'.into()),
             vec![
-                PlannedKeyPress::new('2', SELF_CAST_DELAY_MS),
-                PlannedKeyPress::new('2', 0),
+                PlannedKeyPress::new('2'.into(), SELF_CAST_DELAY_MS),
+                PlannedKeyPress::new('2'.into(), 0),
             ]
         );
     }
@@ -1118,19 +1103,19 @@ mod tests {
     #[test]
     fn defensive_item_plan_double_taps_every_self_cast_item() {
         let items = vec![
-            ("item_mjollnir".to_string(), '2'),
-            ("item_glimmer_cape".to_string(), '4'),
-            ("item_ghost".to_string(), '5'),
+            ("item_mjollnir".to_string(), '2'.into()),
+            ("item_glimmer_cape".to_string(), '4'.into()),
+            ("item_ghost".to_string(), '5'.into()),
         ];
 
         assert_eq!(
             plan_defensive_item_key_sequence(&items),
             vec![
-                PlannedKeyPress::new('2', SELF_CAST_DELAY_MS),
-                PlannedKeyPress::new('2', 0),
-                PlannedKeyPress::new('4', SELF_CAST_DELAY_MS),
-                PlannedKeyPress::new('4', 0),
-                PlannedKeyPress::new('5', 0),
+                PlannedKeyPress::new('2'.into(), SELF_CAST_DELAY_MS),
+                PlannedKeyPress::new('2'.into(), 0),
+                PlannedKeyPress::new('4'.into(), SELF_CAST_DELAY_MS),
+                PlannedKeyPress::new('4'.into(), 0),
+                PlannedKeyPress::new('5'.into(), 0),
             ]
         );
     }
@@ -1138,10 +1123,10 @@ mod tests {
     #[test]
     fn lotus_orb_plan_double_taps_for_self_cast() {
         assert_eq!(
-            plan_item_key_sequence("item_lotus_orb", '5'),
+            plan_item_key_sequence("item_lotus_orb", &'5'.into()),
             vec![
-                PlannedKeyPress::new('5', SELF_CAST_DELAY_MS),
-                PlannedKeyPress::new('5', 0),
+                PlannedKeyPress::new('5'.into(), SELF_CAST_DELAY_MS),
+                PlannedKeyPress::new('5'.into(), 0),
             ]
         );
     }
@@ -1149,24 +1134,24 @@ mod tests {
     #[test]
     fn non_self_cast_item_plan_is_single_press() {
         assert_eq!(
-            plan_item_key_sequence("item_black_king_bar", '3'),
-            vec![PlannedKeyPress::new('3', 0)]
+            plan_item_key_sequence("item_black_king_bar", &'3'.into()),
+            vec![PlannedKeyPress::new('3'.into(), 0)]
         );
     }
 
     #[test]
     fn defensive_item_plan_keeps_glimmer_follow_up_before_later_items() {
         let items = vec![
-            ("item_glimmer_cape".to_string(), '4'),
-            ("item_ghost".to_string(), '5'),
+            ("item_glimmer_cape".to_string(), '4'.into()),
+            ("item_ghost".to_string(), '5'.into()),
         ];
 
         assert_eq!(
             plan_defensive_item_key_sequence(&items),
             vec![
-                PlannedKeyPress::new('4', SELF_CAST_DELAY_MS),
-                PlannedKeyPress::new('4', 0),
-                PlannedKeyPress::new('5', 0),
+                PlannedKeyPress::new('4'.into(), SELF_CAST_DELAY_MS),
+                PlannedKeyPress::new('4'.into(), 0),
+                PlannedKeyPress::new('5'.into(), 0),
             ]
         );
     }
@@ -1174,10 +1159,10 @@ mod tests {
     #[test]
     fn automation_plan_for_self_cast_waits_before_tail() {
         assert_eq!(
-            plan_automation_key_sequence(CastMode::SelfCast, 'n', 'a'),
+            plan_automation_key_sequence(CastMode::SelfCast, 'n'.into(), 'a'.into()),
             vec![
-                PlannedKeyPress::new('n', SELF_CAST_DELAY_MS),
-                PlannedKeyPress::new('a', 0),
+                PlannedKeyPress::new('n'.into(), SELF_CAST_DELAY_MS),
+                PlannedKeyPress::new('a'.into(), 0),
             ]
         );
     }
@@ -1185,16 +1170,16 @@ mod tests {
     #[test]
     fn automation_plan_for_no_target_is_single_press() {
         assert_eq!(
-            plan_automation_key_sequence(CastMode::NoTarget, 'n', 'a'),
-            vec![PlannedKeyPress::new('n', 0)]
+            plan_automation_key_sequence(CastMode::NoTarget, 'n'.into(), 'a'.into()),
+            vec![PlannedKeyPress::new('n'.into(), 0)]
         );
     }
 
     #[test]
     fn automation_plan_for_cursor_targeted_is_single_press() {
         assert_eq!(
-            plan_automation_key_sequence(CastMode::CursorTargeted, 'n', 'a'),
-            vec![PlannedKeyPress::new('n', 0)]
+            plan_automation_key_sequence(CastMode::CursorTargeted, 'n'.into(), 'a'.into()),
+            vec![PlannedKeyPress::new('n'.into(), 0)]
         );
     }
 

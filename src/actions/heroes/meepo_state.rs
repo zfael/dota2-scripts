@@ -1,5 +1,6 @@
 use crate::actions::common::find_item_slot;
 use crate::config::Settings;
+use crate::input::binding::KeyBinding;
 use crate::models::{GsiWebhookEvent, Hero, Item};
 use lazy_static::lazy_static;
 use std::sync::Mutex;
@@ -31,8 +32,8 @@ pub struct MeepoObservedState {
     pub megameepo_ready: bool,
     pub has_shard: bool,
     pub has_scepter: bool,
-    pub blink_slot_key: Option<char>,
-    pub combo_item_keys: Vec<(String, char)>,
+    pub blink_slot_key: Option<KeyBinding>,
+    pub combo_item_keys: Vec<(String, KeyBinding)>,
     pub clone_state: KnownCloneState,
 }
 
@@ -48,7 +49,7 @@ fn find_combo_item_key(
     event: &GsiWebhookEvent,
     settings: &Settings,
     partial_item_name: &str,
-) -> Option<char> {
+) -> Option<KeyBinding> {
     event
         .items
         .all_slots()

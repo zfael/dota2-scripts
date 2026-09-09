@@ -1,4 +1,6 @@
 use enigo::{Button, Coordinate, Direction, Enigo, Key, Keyboard, Mouse, Settings};
+
+use crate::input::binding::{KeyBinding, PressableKey};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -44,15 +46,18 @@ pub enum ModifierKey {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SyntheticAction {
-    KeyClick(char),
-    KeyDown(char),
-    KeyUp(char),
+    KeyClick(PressableKey),
+    KeyDown(PressableKey),
+    KeyUp(PressableKey),
     RightClick,
     #[allow(dead_code)]
     LeftClick,
     ModifierDown(ModifierKey),
     ModifierUp(ModifierKey),
-    ArmletChord { slot_key: char, modifier: ModifierKey },
+    ArmletChord {
+        slot_key: PressableKey,
+        modifier: ModifierKey,
+    },
     /// Cast a point-target ability wherever the cursor already is: press the
     /// key to enter targeting mode, then left-click to resolve it.
     ///
@@ -60,7 +65,7 @@ enum SyntheticAction {
     /// cast on your own hero, but a synthetic click there does not resolve the
     /// targeting — so this aims where the player is already pointing, which
     /// mid-fight is close enough to be useful and never lands on the HUD.
-    CastAtCursor { key: char },
+    CastAtCursor { key: PressableKey },
     /// Park the cursor somewhere and leave it there. Used by the HUD anchor
     /// Test button, which must never click.
     MoveCursor { x: i32, y: i32 },
@@ -119,6 +124,27 @@ pub fn press_key(key_char: char) {
     enqueue_command_and_wait(press_key_command(key_char), SyntheticInputPriority::Normal);
 }
 
+/// Press whatever the user bound to a slot — a key, or a mouse button.
+///
+/// Does nothing for a binding we could not parse, rather than guessing: a stray
+/// press in Dota is a real action. The warning names the slot's configured text
+/// so the log says which setting to fix.
+pub fn press_binding(binding: &KeyBinding) {
+    let Some(target) = binding.pressable() else {
+        warn!(
+            "Skipping press: '{}' is not a key this app can send. \
+             Rebind it in Settings.",
+            binding
+        );
+        return;
+    };
+
+    enqueue_command_and_wait(
+        press_target_command(target),
+        SyntheticInputPriority::Normal,
+    );
+}
+
 /// Press a key down (hold)
 #[allow(dead_code)]
 pub fn key_down(key_char: char) {
@@ -173,9 +199,17 @@ pub fn move_cursor_to(x: i32, y: i32) {
     enqueue_command_and_wait(move_cursor_command(x, y), SyntheticInputPriority::Normal);
 }
 
-pub fn armlet_chord(slot_key: char, modifier: ModifierKey) {
+pub fn armlet_chord(slot_key: &KeyBinding, modifier: ModifierKey) {
+    let Some(target) = slot_key.pressable() else {
+        warn!(
+            "Skipping armlet chord: '{}' is not a key this app can send.",
+            slot_key
+        );
+        return;
+    };
+
     enqueue_command_and_wait(
-        armlet_chord_command(slot_key, modifier),
+        armlet_chord_command(target, modifier),
         SyntheticInputPriority::Armlet,
     );
 }
@@ -186,13 +220,17 @@ pub fn armlet_chord(slot_key: char, modifier: ModifierKey) {
 /// Shift+ability queues the ability instead of casting it. Config written by
 /// hand is lowercase, but the UI's `KeyInput` uppercases single characters, so
 /// any key rebound through a hero config panel would arrive shifted.
-fn normalize_key_char(key_char: char) -> char {
-    key_char.to_ascii_lowercase()
+fn normalize_key_char(key_char: char) -> PressableKey {
+    PressableKey::Key(Key::Unicode(key_char.to_ascii_lowercase()))
 }
 
 fn press_key_command(key_char: char) -> SyntheticInputCommand {
+    press_target_command(normalize_key_char(key_char))
+}
+
+fn press_target_command(target: PressableKey) -> SyntheticInputCommand {
     SyntheticInputCommand {
-        action: SyntheticAction::KeyClick(normalize_key_char(key_char)),
+        action: SyntheticAction::KeyClick(target),
         guard_behavior: GuardBehavior::Pulse {
             delay_ms: POST_ACTION_GUARD_DELAY_MS,
         },
@@ -278,7 +316,7 @@ fn modifier_up_command(modifier: ModifierKey) -> SyntheticInputCommand {
     }
 }
 
-fn armlet_chord_command(slot_key: char, modifier: ModifierKey) -> SyntheticInputCommand {
+fn armlet_chord_command(slot_key: PressableKey, modifier: ModifierKey) -> SyntheticInputCommand {
     SyntheticInputCommand {
         action: SyntheticAction::ArmletChord { slot_key, modifier },
         guard_behavior: GuardBehavior::Pulse {
@@ -550,7 +588,7 @@ fn perform_action(enigo: &mut Enigo, action: SyntheticAction) {
             perform_single_action(enigo, SyntheticAction::KeyClick(key));
             thread::sleep(Duration::from_millis(CAST_TARGET_SETTLE_MS));
             perform_single_action(enigo, SyntheticAction::LeftClick);
-            debug!("Cast '{key}' resolved at the cursor");
+            debug!("Cast {key:?} resolved at the cursor");
         }
         SyntheticAction::MoveCursor { x, y } => {
             if let Err(e) = enigo.move_mouse(x, y, Coordinate::Abs) {
@@ -561,7 +599,7 @@ fn perform_action(enigo: &mut Enigo, action: SyntheticAction) {
             let started = Instant::now();
             let steps = armlet_chord_steps(slot_key, modifier);
             debug!(
-                "Synthetic armlet chord starting for '{}' with {:?}: {:?}",
+                "Synthetic armlet chord starting for {:?} with {:?}: {:?}",
                 slot_key, modifier, steps
             );
 
@@ -583,20 +621,14 @@ fn perform_action(enigo: &mut Enigo, action: SyntheticAction) {
 
 fn perform_single_action(enigo: &mut Enigo, action: SyntheticAction) {
     match action {
-        SyntheticAction::KeyClick(key_char) => {
-            if let Err(e) = enigo.key(Key::Unicode(key_char), Direction::Click) {
-                warn!("Failed to press key '{}': {}", key_char, e);
-            }
+        SyntheticAction::KeyClick(target) => {
+            perform_pressable(enigo, target, Direction::Click, "press");
         }
-        SyntheticAction::KeyDown(key_char) => {
-            if let Err(e) = enigo.key(Key::Unicode(key_char), Direction::Press) {
-                warn!("Failed to press down key '{}': {}", key_char, e);
-            }
+        SyntheticAction::KeyDown(target) => {
+            perform_pressable(enigo, target, Direction::Press, "press down");
         }
-        SyntheticAction::KeyUp(key_char) => {
-            if let Err(e) = enigo.key(Key::Unicode(key_char), Direction::Release) {
-                warn!("Failed to release key '{}': {}", key_char, e);
-            }
+        SyntheticAction::KeyUp(target) => {
+            perform_pressable(enigo, target, Direction::Release, "release");
         }
         SyntheticAction::RightClick => {
             if let Err(e) = enigo.button(Button::Right, Direction::Click) {
@@ -628,8 +660,27 @@ fn perform_single_action(enigo: &mut Enigo, action: SyntheticAction) {
     }
 }
 
-fn armlet_chord_steps(slot_key: char, modifier: ModifierKey) -> [SyntheticAction; 4] {
-    let slot_key = normalize_key_char(slot_key);
+/// Send one press, whichever kind of input it turned out to be.
+///
+/// Mouse buttons and keys take different enigo calls, which is the only reason
+/// the press path had to learn about bindings at all.
+fn perform_pressable(
+    enigo: &mut Enigo,
+    target: PressableKey,
+    direction: Direction,
+    verb: &str,
+) {
+    let result = match target {
+        PressableKey::Key(key) => enigo.key(key, direction),
+        PressableKey::Button(button) => enigo.button(button, direction),
+    };
+
+    if let Err(e) = result {
+        warn!("Failed to {} {:?}: {}", verb, target, e);
+    }
+}
+
+fn armlet_chord_steps(slot_key: PressableKey, modifier: ModifierKey) -> [SyntheticAction; 4] {
     [
         SyntheticAction::KeyClick(slot_key),
         SyntheticAction::ModifierDown(modifier),
@@ -692,6 +743,11 @@ mod tests {
 
     static METRICS_TEST_LOCK: Mutex<()> = Mutex::new(());
 
+    /// The plain-character press these tests were written against.
+    fn key(ch: char) -> PressableKey {
+        normalize_key_char(ch)
+    }
+
     fn test_job(command: SyntheticInputCommand) -> SyntheticInputJob {
         test_job_with_priority(command, SyntheticInputPriority::Normal)
     }
@@ -735,7 +791,7 @@ mod tests {
             }
         );
         assert_eq!(
-            armlet_chord_command('x', ModifierKey::Alt).guard_behavior,
+            armlet_chord_command(key('x'), ModifierKey::Alt).guard_behavior,
             GuardBehavior::Pulse {
                 delay_ms: POST_ACTION_GUARD_DELAY_MS,
             }
@@ -749,13 +805,13 @@ mod tests {
         // ability" rather than "cast it".
         assert_eq!(
             press_key_command('W').action,
-            SyntheticAction::KeyClick('w')
+            SyntheticAction::KeyClick(key('w'))
         );
-        assert_eq!(key_down_command('R').action, SyntheticAction::KeyDown('r'));
-        assert_eq!(key_up_command('R').action, SyntheticAction::KeyUp('r'));
+        assert_eq!(key_down_command('R').action, SyntheticAction::KeyDown(key('r')));
+        assert_eq!(key_up_command('R').action, SyntheticAction::KeyUp(key('r')));
         assert_eq!(
-            armlet_chord_steps('X', ModifierKey::Alt)[0],
-            SyntheticAction::KeyClick('x')
+            armlet_chord_steps(key('X'), ModifierKey::Alt)[0],
+            SyntheticAction::KeyClick(key('x'))
         );
     }
 
@@ -763,7 +819,7 @@ mod tests {
     fn key_commands_leave_non_alphabetic_chars_alone() {
         assert_eq!(
             press_key_command('1').action,
-            SyntheticAction::KeyClick('1')
+            SyntheticAction::KeyClick(key('1'))
         );
     }
 
@@ -816,7 +872,7 @@ mod tests {
         assert!(enqueue_with_sender(
             &tx,
             test_job(press_key_command('q')),
-            SyntheticAction::KeyClick('q')
+            SyntheticAction::KeyClick(key('q'))
         ));
         assert!(enqueue_with_sender(
             &tx,
@@ -842,13 +898,13 @@ mod tests {
 
     #[test]
     fn dual_trigger_trace_places_modifier_between_the_two_casts() {
-        let trace = trace_low_level_sequence(&[armlet_chord_command('x', ModifierKey::Alt)]);
+        let trace = trace_low_level_sequence(&[armlet_chord_command(key('x'), ModifierKey::Alt)]);
 
         assert_eq!(
             trace,
             vec![
                 SyntheticLowLevelTraceEntry {
-                    action: SyntheticAction::KeyClick('x'),
+                    action: SyntheticAction::KeyClick(key('x')),
                     started_at_ms: 0,
                 },
                 SyntheticLowLevelTraceEntry {
@@ -856,7 +912,7 @@ mod tests {
                     started_at_ms: 0,
                 },
                 SyntheticLowLevelTraceEntry {
-                    action: SyntheticAction::KeyClick('x'),
+                    action: SyntheticAction::KeyClick(key('x')),
                     started_at_ms: 0,
                 },
                 SyntheticLowLevelTraceEntry {
@@ -870,7 +926,7 @@ mod tests {
     #[test]
     fn armlet_chord_keeps_only_one_guard_delay_for_follow_up_commands() {
         let trace = trace_low_level_sequence(&[
-            armlet_chord_command('x', ModifierKey::Alt),
+            armlet_chord_command(key('x'), ModifierKey::Alt),
             press_key_command('q'),
         ]);
 
@@ -878,7 +934,7 @@ mod tests {
             trace,
             vec![
                 SyntheticLowLevelTraceEntry {
-                    action: SyntheticAction::KeyClick('x'),
+                    action: SyntheticAction::KeyClick(key('x')),
                     started_at_ms: 0,
                 },
                 SyntheticLowLevelTraceEntry {
@@ -886,7 +942,7 @@ mod tests {
                     started_at_ms: 0,
                 },
                 SyntheticLowLevelTraceEntry {
-                    action: SyntheticAction::KeyClick('x'),
+                    action: SyntheticAction::KeyClick(key('x')),
                     started_at_ms: 0,
                 },
                 SyntheticLowLevelTraceEntry {
@@ -894,7 +950,7 @@ mod tests {
                     started_at_ms: 0,
                 },
                 SyntheticLowLevelTraceEntry {
-                    action: SyntheticAction::KeyClick('q'),
+                    action: SyntheticAction::KeyClick(key('q')),
                     started_at_ms: POST_ACTION_GUARD_DELAY_MS,
                 },
             ]
@@ -1052,7 +1108,7 @@ mod tests {
         );
         queue_job(
             test_job_with_priority(
-                armlet_chord_command('x', ModifierKey::Alt),
+                armlet_chord_command(key('x'), ModifierKey::Alt),
                 SyntheticInputPriority::Armlet,
             ),
             &mut armlet_backlog,
@@ -1063,7 +1119,7 @@ mod tests {
             .expect("armlet job should be scheduled first");
         assert_eq!(
             first.command,
-            armlet_chord_command('x', ModifierKey::Alt)
+            armlet_chord_command(key('x'), ModifierKey::Alt)
         );
 
         let second = dequeue_next_job(&mut armlet_backlog, &mut normal_backlog)

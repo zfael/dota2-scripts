@@ -213,8 +213,8 @@ mod tests {
             megameepo_ready: true,
             has_shard: true,
             has_scepter: true,
-            blink_slot_key: Some('z'),
-            combo_item_keys: vec![("sheepstick".to_string(), 'x')],
+            blink_slot_key: Some('z'.into()),
+            combo_item_keys: vec![("sheepstick".to_string(), 'x'.into())],
             clone_state: KnownCloneState::Unavailable,
         }
     }

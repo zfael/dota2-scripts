@@ -174,6 +174,37 @@ pub fn persist_live_config(
     Ok(live_path)
 }
 
+/// Write back only the section that was edited, leaving the rest of the file alone.
+///
+/// [`persist_live_config`] serialises the whole in-memory `Settings` over the
+/// file, so any edit made to `config.toml` by hand while the app is running is
+/// silently reverted by the next toggle in the UI — the app has no file watch,
+/// so its copy is whatever it read at startup (issue #20).
+///
+/// Narrowing the write to one section does not fix stale reads, but it bounds
+/// the damage to the section the user is actually editing.
+pub fn persist_config_section(
+    paths: &ConfigPaths,
+    section: &str,
+    section_value: &toml::Value,
+    embedded_template: &str,
+) -> Result<PathBuf, String> {
+    let live_path = bootstrap_live_config(paths, embedded_template)?;
+    let existing_contents = fs::read_to_string(&live_path).unwrap_or_default();
+
+    let mut fragment = toml::value::Table::new();
+    fragment.insert(section.to_string(), section_value.clone());
+    let desired_contents = toml::to_string_pretty(&toml::Value::Table(fragment))
+        .map_err(|e| format!("TOML serialization error: {e}"))?;
+
+    let merged_contents = merge_saved_settings_with_existing(&existing_contents, &desired_contents)?;
+
+    fs::write(&live_path, merged_contents)
+        .map_err(|e| format!("Failed to write live config: {e}"))?;
+
+    Ok(live_path)
+}
+
 fn merge_values(base: &mut toml::Value, overlay: &toml::Value) {
     match (base, overlay) {
         (toml::Value::Table(base_table), toml::Value::Table(overlay_table)) => {
