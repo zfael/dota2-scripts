@@ -2,8 +2,8 @@
 
 ## Purpose
 
-Two independent features: a hotkey **remnant chase**, and a GSI-driven **Flame Guard auto-cast**.
-**Read this when:** changing the Ember Spirit combo keys, the delay between the two presses, the trigger path, or the Flame Guard thresholds.
+Three independent features: a hotkey **remnant chase**, a **Sleight activate** that follows every Sleight of Fist press with Activate Fire Remnant, and a GSI-driven **Flame Guard auto-cast**.
+**Read this when:** changing the Ember Spirit combo keys, the delay between the two presses, the trigger path, the Sleight activate, or the Flame Guard thresholds.
 
 ## Feature Summary
 
@@ -14,6 +14,14 @@ Two independent features: a hotkey **remnant chase**, and a GSI-driven **Flame G
 - **The wait drops to the shorter `scepter_activate_delay_ms` while Ember holds an Aghanim's Scepter**, which places the remnant instantly. Shorter, not zero — the activate still has to land after the remnant registers server-side. `use_scepter_activate_delay = false` keeps the plain delay regardless.
 - Fire Remnant (R) places a remnant at the cursor; Activate Fire Remnant (D) dashes to every remnant on the map. Pairing them turns a two-key chase into one.
 - **No readiness gate.** Unlike the facing combos (Magnus, Mirana, Slark), a wasted press costs nothing here: Dota ignores a Fire Remnant press with no charges banked, and the activate that follows is still worth sending because it dashes to remnants already on the map.
+
+### Sleight activate (keyboard hook)
+
+- **Off by default** (`sleight_activate_enabled`). When on, every press of `sleight_key` (default `W`) is followed by `activate_key` after `sleight_activate_delay_ms`.
+- The Sleight press is **watched, not blocked** — it reaches Dota unchanged, and only the activate is synthesized. It also still flows through Soul Ring; when Soul Ring replays the Sleight, the activate waits `delay_before_ability_ms` longer so it stays behind it.
+- One physical press, one activate: OS autorepeat while the key is held is ignored until release.
+- No readiness gate, for the same reason as the chase: an activate with no Sleight behind it still dashes to remnants already on the map.
+- Independent of `enabled` (the chase) and of the Flame Guard auto-cast.
 
 ### Flame Guard auto-cast (GSI)
 
@@ -38,6 +46,9 @@ event, as with every other hero.
 | `activate_delay_ms` | u64 | `150` | Delay between the two presses. |
 | `use_scepter_activate_delay` | bool | `true` | Use the shorter scepter delay while Ember holds an Aghanim's Scepter. |
 | `scepter_activate_delay_ms` | u64 | `40` | Delay between the two presses while Ember holds an Aghanim's Scepter. |
+| `sleight_activate_enabled` | bool | `false` | Press `activate_key` after every Sleight of Fist press. |
+| `sleight_key` | char | `"w"` | Sleight of Fist key the hook watches (never blocked). |
+| `sleight_activate_delay_ms` | u64 | `100` | Delay between the Sleight press and the activate press. |
 | `auto_flame_guard_on_danger` | bool | `true` | Master toggle for the Flame Guard auto-cast. |
 | `flame_guard_key` | char | `"e"` | Flame Guard ability key pressed by the auto-cast. |
 | `flame_guard_hp_threshold_percent` | u32 | `65` | Only auto-cast at or below this health percentage. |
@@ -51,13 +62,16 @@ activate_key = "d"
 activate_delay_ms = 150
 use_scepter_activate_delay = true
 scepter_activate_delay_ms = 40
+sleight_activate_enabled = false
+sleight_key = "w"
+sleight_activate_delay_ms = 100
 auto_flame_guard_on_danger = true
 flame_guard_key = "e"
 flame_guard_hp_threshold_percent = 65
 flame_guard_trigger_cooldown_ms = 2000
 ```
 
-All ten fields are exposed in the React UI under **Heroes → Ember Spirit**.
+All thirteen fields are exposed in the React UI under **Heroes → Ember Spirit**.
 
 ## Related Files
 
@@ -76,8 +90,23 @@ All ten fields are exposed in the React UI under **Heroes → Ember Spirit**.
 or the manual-override selection. The `ComboTrigger` hero-name match in
 `src/main.rs` and `src-tauri/src/lib.rs` routes the trigger to
 `dispatch_standalone_trigger("npc_dota_hero_ember_spirit")`. No dedicated
-`Arc<Mutex<bool>>` flag and no keyboard-snapshot entry — the hook never
-intercepts a key for this hero.
+`Arc<Mutex<bool>>` flag.
+
+The Sleight activate is the one keyboard-snapshot entry:
+`KeyboardSnapshot.ember_spirit_enabled` is derived from
+`selected_hero == Some(HeroType::EmberSpirit)`, and
+`EmberSpiritKeyboardSnapshot` carries the toggle, the pre-parsed Sleight key,
+the activate key, and the delay. The hook never *blocks* a key for this hero.
+
+### Sleight activate sequence
+
+1. The hook sees a `KeyPress` for `sleight_key` and asks `plan_ember_sleight_activate(...)` in `src/input/keyboard.rs`, which returns the delay only for a fresh press (not autorepeat) while Ember is active and the toggle is on.
+2. The delay is `sleight_activate_delay_ms`, plus Soul Ring's `delay_before_ability_ms` when Soul Ring is about to replay that same press.
+3. `EmberSpiritState::execute_sleight_activate(...)` enqueues it on the Ember worker, which sleeps (skipped at `0`) and presses `activate_key`.
+4. The hook does not return: the Sleight press continues down the normal path and reaches Dota, directly or via the Soul Ring replay.
+
+Because the worker is shared and sequential, a Sleight activate queued behind a
+running remnant chase waits for that chase to finish first.
 
 ## Details
 
@@ -157,6 +186,14 @@ indices are already shifted relative to keys in a real payload.
   follows cancels the targeting instead of resolving it. The app does not read
   Dota's keybindings or cast settings, so it cannot detect this — the symptom is
   a dash with no new remnant placed.
+- **Quickcast must be on for Sleight of Fist**, for the Sleight activate. Same
+  failure as the chase: without it the Sleight press only arms the cursor, and
+  the activate cancels the targeting — Ember dashes and never Sleights.
+- **`sleight_activate_delay_ms` is unmeasured.** `100` is a starting guess, not a
+  probe result. Raise it if the dash goes out before the Sleight does; lower it
+  if Ember spends longer in the Sleight than you want.
+- **The Sleight activate fires whether or not the Sleight cast.** A press on
+  cooldown, out of mana, or while silenced still sends the activate.
 - **The remnant lands wherever the cursor is.** The combo does not move the
   mouse, so the chase goes where you were already pointing. Cursor parked on the
   minimap places the remnant across the map.
@@ -183,6 +220,7 @@ indices are already shifted relative to keys in a real payload.
 ## Logging
 
 Look for `🔥 Ember Spirit` log lines (combo triggered, skipped when disabled,
+Sleight of Fist pressed with the resolved activate delay,
 Flame Guard auto-cast with the HP percentage that triggered it, worker
 start/exit, queue fallback).
 

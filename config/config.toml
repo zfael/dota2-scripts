@@ -460,6 +460,17 @@ use_scepter_activate_delay = true
 # not zero: the activate still has to land after the remnant registers
 # server-side. Raise it if the scepter chase dashes without placing.
 scepter_activate_delay_ms = 40
+# Press the activate key above after every Sleight of Fist press, so Ember
+# dashes back to his remnants out of the Sleight. The Sleight key itself still
+# goes through untouched. Independent of `enabled` above. Needs quickcast on
+# Sleight of Fist: without it the press only arms the cursor, and the activate
+# that follows cancels the targeting.
+sleight_activate_enabled = false
+# Sleight of Fist ability key the hook watches.
+sleight_key = "w"
+# Delay between the Sleight of Fist press and the activate press (ms). Raise it
+# if the dash goes out before the Sleight does.
+sleight_activate_delay_ms = 100
 # Cast Flame Guard automatically when the danger detector trips and HP is at or
 # below the threshold. Independent of `enabled` above, which only gates the
 # remnant chase.

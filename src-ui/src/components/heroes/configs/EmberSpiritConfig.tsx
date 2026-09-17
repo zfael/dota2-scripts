@@ -35,6 +35,28 @@ export default function EmberSpiritConfig() {
       </div>
 
       <div className="space-y-4">
+        <Card title="Sleight Activate">
+          <Toggle label="Activate Remnant After Sleight" checked={config.sleight_activate_enabled} onChange={(v) => set({ sleight_activate_enabled: v })} />
+          <KeyInput label="Sleight of Fist Key" value={config.sleight_key} onChange={(v) => set({ sleight_key: v })} />
+          <NumberInput label="Activate Delay" value={config.sleight_activate_delay_ms} onChange={(v) => set({ sleight_activate_delay_ms: v })} suffix="ms" />
+          <p className="text-xs text-muted">
+            Every Sleight of Fist press is followed by the Activate Remnant key
+            set above, so Ember dashes back to his remnants out of the Sleight.
+            The Sleight press itself goes through untouched.
+          </p>
+          <p className="text-xs text-muted">
+            <strong>Quickcast must be on for Sleight of Fist.</strong> Without
+            it the press only arms the cursor, and the activate that follows
+            cancels the targeting. Raise the delay if the dash goes out before
+            the Sleight does.
+          </p>
+          <p className="text-xs text-muted">
+            Independent of the remnant chase toggle above.
+          </p>
+        </Card>
+      </div>
+
+      <div className="space-y-4">
         <Card title="Auto Flame Guard">
           <Toggle label="Flame Guard On Danger" checked={config.auto_flame_guard_on_danger} onChange={(v) => set({ auto_flame_guard_on_danger: v })} />
           <KeyInput label="Flame Guard Key" value={config.flame_guard_key} onChange={(v) => set({ flame_guard_key: v })} />

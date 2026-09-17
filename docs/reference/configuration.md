@@ -691,15 +691,19 @@ See `docs/heroes/earth_spirit.md` and `docs/features/keyboard-interception.md`.
 | `activate_delay_ms` | `150` | `150` | Delay between the two presses. The remnant must exist server-side before the activate can pick it up. |
 | `use_scepter_activate_delay` | `true` | `true` | Use the shorter scepter delay while Ember holds an Aghanim's Scepter, which places the remnant instantly. |
 | `scepter_activate_delay_ms` | `40` | `40` | Delay between the two presses while Ember holds an Aghanim's Scepter. Shorter than `activate_delay_ms`, but not zero — the activate still has to land after the remnant registers. |
+| `sleight_activate_enabled` | `false` | `false` | Press `activate_key` after every Sleight of Fist press. Independent of `enabled`. Assumes quickcast is on for Sleight of Fist. |
+| `sleight_key` | `"w"` | `"w"` | Sleight of Fist key the hook watches. The press itself is not blocked. |
+| `sleight_activate_delay_ms` | `100` | `100` | Delay between the Sleight press and the activate press. Unmeasured starting point. |
 | `auto_flame_guard_on_danger` | `true` | `true` | Cast Flame Guard when the danger detector trips and HP is at or below the threshold. Independent of `enabled`. |
 | `flame_guard_key` | `"e"` | `"e"` | Flame Guard ability key pressed by the auto-cast. |
 | `flame_guard_hp_threshold_percent` | `65` | `65` | Only auto-cast at or below this health percentage. Higher than OD's `55` because Flame Guard is a shield, not a nuke — it is worth most before the burst lands. |
 | `flame_guard_trigger_cooldown_ms` | `2000` | `2000` | Minimum gap between two auto-casts, so one burst of payloads cannot spam the key. |
 
-All ten fields are exposed in the React UI under **Heroes → Ember Spirit**.
+All thirteen fields are exposed in the React UI under **Heroes → Ember Spirit**.
 
 The remnant chase is fired by the global standalone combo trigger key, not by a
-key of its own, so there is no keyboard-interception entry for this hero. The
+key of its own. The Sleight activate is the one keyboard-hook entry for this
+hero, and it watches the Sleight of Fist key without blocking it. The
 Flame Guard auto-cast is GSI-driven and reads `in_danger` from
 `src/actions/danger_detector.rs`.
 

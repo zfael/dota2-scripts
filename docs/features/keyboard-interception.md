@@ -64,7 +64,7 @@ so these are the rebuild triggers:
 The GSI rebuild is what makes hero intercepts go live without any UI
 interaction. It is gated on `AppState::update_from_gsi` reporting a hero change,
 so it costs nothing on the steady-state event stream. Without it, picking a hero
-in-game leaves Shadow Fiend / Magnus / Slark / Mirana / Earth Spirit / Snapfire intercepts inert until an
+in-game leaves Shadow Fiend / Magnus / Slark / Mirana / Earth Spirit / Ember Spirit / Snapfire intercepts inert until an
 unrelated UI toggle happens to refresh the cache — the failure mode covered by
 `process_gsi_events_rebuilds_the_keyboard_snapshot_on_hero_detection`.
 
@@ -78,6 +78,7 @@ The snapshot holds only static keyboard-facing facts:
 - Slark intercept flags, pre-parsed Pounce key, and turn delay
 - Mirana intercept flags, pre-parsed Leap key, and turn delay
 - Earth Spirit intercept flags, pre-parsed grip and roll keys, the shared remnant key, the silence remnant delay, and the roll's double-tap, delay, and remnant self-cast settings
+- Ember Spirit Sleight activate flag, pre-parsed Sleight of Fist key, activate key, and delay
 - Soul Ring thresholds, ability keys, and item-slot keys
 - Armlet Roshan toggle key when `[armlet.roshan].enabled = true`
 - HUD portrait capture key from `[hud]`
@@ -161,27 +162,38 @@ Current callback order on key/button input:
       windup is spent aiming a remnant into the path it already committed to
     - each combo has its own toggle, key, delay, and gate; a failed readiness
       check falls through and that key reaches Dota
-14. **Outworld Destroyer intercepts**
+14. **Ember Spirit Sleight activate**
+    - if `snapshot.ember_spirit_enabled` and `sleight_activate_enabled`, and the
+      key is the configured Sleight of Fist key (default `W`)
+    - enqueue `wait sleight_activate_delay_ms -> press activate_key` onto the
+      dedicated Ember Spirit worker
+    - **does not block and does not return**: the Sleight press falls through to
+      the Soul Ring path below. When Soul Ring is replaying it, the activate
+      waits an extra `delay_before_ability_ms` so it stays behind the Sleight
+    - autorepeat presses are ignored until the key is released, via a
+      `held_follow_up_keys` set local to the callback
+    - planned in `plan_ember_sleight_activate`
+15. **Outworld Destroyer intercepts**
     - if `snapshot.od_enabled` and `heroes.outworld_destroyer.ultimate_intercept_enabled`
     - block `R` only when `Sanity's Eclipse` is ready
     - enqueue `BKB -> Objurgation -> R` onto the dedicated OD worker
     - optionally block the configured self-Astral panic hotkey and double-tap Astral on self
-15. **Armlet Roshan toggle**
+16. **Armlet Roshan toggle**
     - if `[armlet.roshan].enabled = true` and the configured hotkey matches
     - emit `HotkeyEvent::ArmletRoshanToggle`
     - block the original key so it does not also reach Dota 2
-16. **HUD portrait capture**
+17. **HUD portrait capture**
     - if `[hud] capture_portrait_key` matches (default `F9`)
     - emit `HotkeyEvent::CaptureHudPortrait`
     - block the original key: it is ours while calibrating
     - planned alongside the other global hotkeys in `plan_global_hotkey_press_event`
-17. **Largo / generic ability-key path**
+18. **Largo / generic ability-key path**
     - emit `HotkeyEvent::LargoQ/W/E/R`
     - if Soul Ring should trigger, block and replay
     - otherwise pass through
-18. **Item-slot Soul Ring interception**
+19. **Item-slot Soul Ring interception**
      - blocks configured item keys when the item is mana-using and Soul Ring should fire first
-19. **Standalone combo key**
+20. **Standalone combo key**
      - sends `HotkeyEvent::ComboTrigger`
      - does not block the original key
 
@@ -461,6 +473,14 @@ These are still part of the interception surface even though this page centers o
 - `roll_double_tap` exists because Rolling Boulder is commonly left off quickcast, where the first press only arms the cursor. With it off the combo sends a single press and the double-tap delay is skipped entirely
 - Boulder Smash and Magnetize are never intercepted
 
+### Ember Spirit
+
+- activation is gated on `snapshot.ember_spirit_enabled`, derived from `selected_hero == Some(HeroType::EmberSpirit)`, and on `sleight_activate_enabled` (default off)
+- **the Sleight of Fist key is watched, not intercepted.** The press reaches Dota unchanged; the hook only schedules `activate_key` on the Ember worker after `sleight_activate_delay_ms`
+- no GSI gate: a Sleight press on cooldown still sends the activate, which dashes to any remnants already on the map
+- one physical press sends one activate — autorepeat presses are swallowed until release
+- the remnant chase is not a key intercept; it rides the global combo trigger (see `docs/heroes/ember_spirit.md`)
+
 ### Broodmother
 
 - Broodmother callback actions now queue to one dedicated worker instead of spawning raw threads from the callback
@@ -492,6 +512,7 @@ These are still part of the interception surface even though this page centers o
 | Slark | `config/config.toml` -> `[heroes.slark]` | `enabled`, `pounce_key`, `turn_delay_ms`, `require_ability_ready` |
 | Mirana | `config/config.toml` -> `[heroes.mirana]` | `enabled`, `leap_key`, `turn_delay_ms`, `require_ability_ready` |
 | Earth Spirit | `config/config.toml` -> `[heroes.earth_spirit]` | `enabled`, `remnant_key`, `silence_combo_enabled`, `grip_key`, `silence_remnant_delay_ms`, `require_grip_ready`, `roll_combo_enabled`, `roll_key`, `roll_double_tap`, `roll_double_tap_delay_ms`, `roll_to_remnant_delay_ms`, `roll_remnant_alt`, `roll_remnant_double_tap`, `roll_remnant_double_tap_delay_ms`, `require_roll_ready` |
+| Ember Spirit | `config/config.toml` -> `[heroes.ember_spirit]` | `sleight_activate_enabled`, `sleight_key`, `activate_key`, `sleight_activate_delay_ms` |
 | HUD anchors | `config/config.toml` -> `[hud]` | `capture_portrait_key` (blocked from reaching Dota), plus the stored portrait fractions |
 | Global hotkey | `config/config.toml` -> `[keybindings]` | slot key mappings; the live standalone trigger is read from `AppState.trigger_key` and cached as a parsed `snapshot.trigger_key` |
 

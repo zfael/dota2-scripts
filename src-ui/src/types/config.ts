@@ -260,6 +260,9 @@ export interface EmberSpiritConfig {
   activate_delay_ms: number;
   use_scepter_activate_delay: boolean;
   scepter_activate_delay_ms: number;
+  sleight_activate_enabled: boolean;
+  sleight_key: string;
+  sleight_activate_delay_ms: number;
   auto_flame_guard_on_danger: boolean;
   flame_guard_key: string;
   flame_guard_hp_threshold_percent: number;

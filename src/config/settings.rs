@@ -412,6 +412,17 @@ pub struct EmberSpiritConfig {
     /// the remnant exists server-side.
     #[serde(default = "default_ember_spirit_scepter_activate_delay_ms")]
     pub scepter_activate_delay_ms: u64,
+    /// Press `activate_key` after every Sleight of Fist press, so Ember dashes
+    /// back to his remnants out of the Sleight. Independent of `enabled`, which
+    /// only gates the remnant chase.
+    #[serde(default = "default_ember_spirit_sleight_activate_enabled")]
+    pub sleight_activate_enabled: bool,
+    /// Sleight of Fist ability key. The hook watches it and lets it through.
+    #[serde(default = "default_ember_spirit_sleight_key")]
+    pub sleight_key: char,
+    /// Delay between the Sleight of Fist press and the activate press (ms).
+    #[serde(default = "default_ember_spirit_sleight_activate_delay_ms")]
+    pub sleight_activate_delay_ms: u64,
     /// Cast Flame Guard automatically while the danger detector is tripped and
     /// HP is at or below the threshold below. Independent of `enabled`, which
     /// only gates the remnant chase.
@@ -1828,6 +1839,19 @@ fn default_ember_spirit_use_scepter_activate_delay() -> bool {
 fn default_ember_spirit_scepter_activate_delay_ms() -> u64 {
     40
 }
+/// Off by default: it changes what the Sleight of Fist key does.
+fn default_ember_spirit_sleight_activate_enabled() -> bool {
+    false
+}
+fn default_ember_spirit_sleight_key() -> char {
+    'w'
+}
+/// Unmeasured starting point. The activate has to arrive after Sleight of Fist
+/// has started server-side, or it resolves first and the Sleight goes out after
+/// the dash instead of before it.
+fn default_ember_spirit_sleight_activate_delay_ms() -> u64 {
+    100
+}
 fn default_ember_spirit_auto_flame_guard_on_danger() -> bool {
     true
 }
@@ -2968,6 +2992,9 @@ impl Default for EmberSpiritConfig {
             activate_delay_ms: default_ember_spirit_activate_delay_ms(),
             use_scepter_activate_delay: default_ember_spirit_use_scepter_activate_delay(),
             scepter_activate_delay_ms: default_ember_spirit_scepter_activate_delay_ms(),
+            sleight_activate_enabled: default_ember_spirit_sleight_activate_enabled(),
+            sleight_key: default_ember_spirit_sleight_key(),
+            sleight_activate_delay_ms: default_ember_spirit_sleight_activate_delay_ms(),
             auto_flame_guard_on_danger: default_ember_spirit_auto_flame_guard_on_danger(),
             flame_guard_key: default_ember_spirit_flame_guard_key(),
             flame_guard_hp_threshold_percent:
@@ -3641,6 +3668,15 @@ mod tests {
         assert_eq!(cfg.activate_delay_ms, 150);
         assert!(cfg.use_scepter_activate_delay);
         assert_eq!(cfg.scepter_activate_delay_ms, 40);
+    }
+
+    /// Opt-in: turning it on changes what the Sleight of Fist key does.
+    #[test]
+    fn ember_spirit_config_defaults_sleight_activate_off_on_w() {
+        let cfg = EmberSpiritConfig::default();
+        assert!(!cfg.sleight_activate_enabled);
+        assert_eq!(cfg.sleight_key, 'w');
+        assert_eq!(cfg.sleight_activate_delay_ms, 100);
     }
 
     #[test]

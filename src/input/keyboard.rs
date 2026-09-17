@@ -16,6 +16,7 @@ use crate::actions::heroes::outworld_destroyer::{
 use crate::actions::heroes::shadow_fiend::ShadowFiendState;
 use crate::actions::heroes::magnus::MagnusState;
 use crate::actions::heroes::earth_spirit::EarthSpiritState;
+use crate::actions::heroes::ember_spirit::EmberSpiritState;
 use crate::actions::heroes::mirana::MiranaState;
 use crate::actions::heroes::slark::SlarkState;
 use crate::actions::heroes::snapfire::SnapfireState;
@@ -350,10 +351,12 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
     thread::spawn(move || {
         info!("Starting keyboard listener with key interception (grab)...");
         let pressed_hotkeys = RefCell::new(HashSet::new());
+        let held_follow_up_keys = RefCell::new(HashSet::new());
 
         let callback = move |event: Event| -> Option<Event> {
             if let EventType::KeyRelease(key) = &event.event_type {
                 handle_global_hotkey_key_release(*key, &mut pressed_hotkeys.borrow_mut());
+                held_follow_up_keys.borrow_mut().remove(key);
             }
 
             // Pass through all events while we're simulating keys
@@ -641,6 +644,26 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                     }
                 }
 
+                // Handle Ember Spirit's Sleight activate: Sleight of Fist, then
+                // Activate Fire Remnant. The Sleight press is not blocked — it
+                // falls through so Soul Ring can still intercept it — and only
+                // the activate is scheduled.
+                if let Some(activate_delay_ms) = plan_ember_sleight_activate(
+                    key,
+                    &snapshot,
+                    should_intercept_for_soul_ring,
+                    &mut held_follow_up_keys.borrow_mut(),
+                ) {
+                    info!(
+                        "🔥 Ember Spirit Sleight of Fist pressed - activate in {}ms",
+                        activate_delay_ms
+                    );
+                    EmberSpiritState::execute_sleight_activate(
+                        snapshot.ember_spirit.activate_char,
+                        activate_delay_ms,
+                    );
+                }
+
                 if snapshot.od_enabled {
                     if snapshot.outworld_destroyer.ultimate_intercept_enabled && key == Key::KeyR {
                         if OutworldDestroyerState::can_intercept_ultimate() {
@@ -863,6 +886,20 @@ pub struct EarthSpiritKeyboardSnapshot {
     pub require_roll_ready: bool,
 }
 
+/// Snapshot of the Ember Spirit keyboard-relevant config.
+///
+/// Only the Sleight activate lives here; the remnant chase is fired by the
+/// global combo trigger and never intercepts a key.
+#[derive(Debug, Clone)]
+pub struct EmberSpiritKeyboardSnapshot {
+    pub sleight_activate_enabled: bool,
+    /// Pre-parsed Sleight of Fist key, used to match the watched press.
+    pub sleight_key: Option<Key>,
+    /// Activate Fire Remnant key, pressed after the Sleight.
+    pub activate_char: char,
+    pub sleight_activate_delay_ms: u64,
+}
+
 /// Snapshot of the Magnus keyboard-relevant config.
 #[derive(Debug, Clone)]
 pub struct MagnusKeyboardSnapshot {
@@ -955,6 +992,9 @@ pub struct KeyboardSnapshot {
     /// Whether Earth Spirit is the active hero (drives both remnant combos).
     pub earth_spirit_enabled: bool,
     pub earth_spirit: EarthSpiritKeyboardSnapshot,
+    /// Whether Ember Spirit is the active hero (drives the Sleight activate).
+    pub ember_spirit_enabled: bool,
+    pub ember_spirit: EmberSpiritKeyboardSnapshot,
     /// Static Soul Ring keyboard config (thresholds, key sets, delays).
     pub soul_ring: SoulRingKeyboardConfig,
     pub invoker_profiles: Vec<InvokerHotkeyProfileSnapshot>,
@@ -1091,6 +1131,7 @@ impl KeyboardSnapshot {
         let sk = &settings.heroes.slark;
         let mi = &settings.heroes.mirana;
         let es = &settings.heroes.earth_spirit;
+        let em = &settings.heroes.ember_spirit;
 
         Self {
             selected_hero: state.selected_hero.clone(),
@@ -1192,6 +1233,13 @@ impl KeyboardSnapshot {
                 roll_remnant_double_tap: es.roll_remnant_double_tap,
                 roll_remnant_double_tap_delay_ms: es.roll_remnant_double_tap_delay_ms,
                 require_roll_ready: es.require_roll_ready,
+            },
+            ember_spirit_enabled: state.selected_hero == Some(crate::state::HeroType::EmberSpirit),
+            ember_spirit: EmberSpiritKeyboardSnapshot {
+                sleight_activate_enabled: em.sleight_activate_enabled,
+                sleight_key: char_to_key(em.sleight_key),
+                activate_char: em.activate_key,
+                sleight_activate_delay_ms: em.sleight_activate_delay_ms,
             },
             soul_ring: SoulRingKeyboardConfig::from_settings(settings),
             invoker_profiles: settings
@@ -1298,10 +1346,54 @@ impl Default for KeyboardSnapshot {
                 roll_remnant_double_tap_delay_ms: 0,
                 require_roll_ready: true,
             },
+            ember_spirit_enabled: false,
+            ember_spirit: EmberSpiritKeyboardSnapshot {
+                sleight_activate_enabled: false,
+                sleight_key: None,
+                activate_char: 'd',
+                sleight_activate_delay_ms: 0,
+            },
             soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
             invoker_profiles: vec![],
         }
     }
+}
+
+/// Decide whether a key press should be followed by Activate Fire Remnant, and
+/// after how long.
+///
+/// Returns `None` for anything but a fresh Sleight of Fist press while Ember
+/// Spirit is active and the toggle is on. Holding the key sends OS autorepeat
+/// presses; `held_keys` swallows those until the release clears it, so one
+/// physical press gets one activate.
+///
+/// When Soul Ring is replaying the Sleight press, the Sleight itself reaches
+/// the game `delay_before_ability_ms` late, so the activate waits that much
+/// longer to keep its gap behind it.
+fn plan_ember_sleight_activate(
+    key: Key,
+    snapshot: &KeyboardSnapshot,
+    soul_ring_replays_key: bool,
+    held_keys: &mut HashSet<Key>,
+) -> Option<u64> {
+    let ember = &snapshot.ember_spirit;
+    if !snapshot.ember_spirit_enabled
+        || !ember.sleight_activate_enabled
+        || ember.sleight_key != Some(key)
+    {
+        return None;
+    }
+
+    if !held_keys.insert(key) {
+        return None;
+    }
+
+    let soul_ring_delay_ms = if soul_ring_replays_key {
+        snapshot.soul_ring.delay_before_ability_ms
+    } else {
+        0
+    };
+    Some(ember.sleight_activate_delay_ms + soul_ring_delay_ms)
 }
 
 fn plan_broodmother_callback_action(
@@ -1517,6 +1609,13 @@ mod tests {
                 roll_remnant_double_tap_delay_ms: 0,
                 require_roll_ready: true,
             },
+            ember_spirit_enabled: false,
+            ember_spirit: EmberSpiritKeyboardSnapshot {
+                sleight_activate_enabled: false,
+                sleight_key: None,
+                activate_char: 'd',
+                sleight_activate_delay_ms: 0,
+            },
             soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
             invoker_profiles: vec![],
         }
@@ -1704,6 +1803,108 @@ mod tests {
 
         let other = KeyboardSnapshot::from_runtime(&Settings::default(), &AppState::default());
         assert!(!other.earth_spirit_enabled);
+    }
+
+    #[test]
+    fn keyboard_snapshot_populates_ember_spirit_fields_for_ember_spirit() {
+        let mut settings = Settings::default();
+        settings.heroes.ember_spirit.sleight_activate_enabled = true;
+        let mut state = AppState::default();
+        state.selected_hero = Some(HeroType::EmberSpirit);
+        let snapshot = KeyboardSnapshot::from_runtime(&settings, &state);
+
+        assert!(snapshot.ember_spirit_enabled);
+        assert!(snapshot.ember_spirit.sleight_activate_enabled);
+        assert_eq!(snapshot.ember_spirit.sleight_key, Some(Key::KeyW));
+        assert_eq!(snapshot.ember_spirit.activate_char, 'd');
+        assert_eq!(snapshot.ember_spirit.sleight_activate_delay_ms, 100);
+
+        let other = KeyboardSnapshot::from_runtime(&settings, &AppState::default());
+        assert!(!other.ember_spirit_enabled);
+    }
+
+    fn ember_sleight_snapshot() -> KeyboardSnapshot {
+        let mut settings = Settings::default();
+        settings.heroes.ember_spirit.sleight_activate_enabled = true;
+        let mut state = AppState::default();
+        state.selected_hero = Some(HeroType::EmberSpirit);
+        KeyboardSnapshot::from_runtime(&settings, &state)
+    }
+
+    #[test]
+    fn ember_sleight_press_schedules_the_activate_after_the_configured_delay() {
+        let snapshot = ember_sleight_snapshot();
+        let mut held = HashSet::new();
+
+        assert_eq!(
+            plan_ember_sleight_activate(Key::KeyW, &snapshot, false, &mut held),
+            Some(100)
+        );
+    }
+
+    #[test]
+    fn ember_sleight_activate_ignores_other_keys() {
+        let snapshot = ember_sleight_snapshot();
+        let mut held = HashSet::new();
+
+        assert_eq!(
+            plan_ember_sleight_activate(Key::KeyQ, &snapshot, false, &mut held),
+            None
+        );
+    }
+
+    #[test]
+    fn ember_sleight_activate_holds_when_the_toggle_is_off() {
+        let mut snapshot = ember_sleight_snapshot();
+        snapshot.ember_spirit.sleight_activate_enabled = false;
+        let mut held = HashSet::new();
+
+        assert_eq!(
+            plan_ember_sleight_activate(Key::KeyW, &snapshot, false, &mut held),
+            None
+        );
+    }
+
+    /// W is Pounce, Cookie and Rolling Boulder on other heroes — the toggle
+    /// must not follow those with a D.
+    #[test]
+    fn ember_sleight_activate_holds_for_other_heroes() {
+        let mut snapshot = ember_sleight_snapshot();
+        snapshot.ember_spirit_enabled = false;
+        let mut held = HashSet::new();
+
+        assert_eq!(
+            plan_ember_sleight_activate(Key::KeyW, &snapshot, false, &mut held),
+            None
+        );
+    }
+
+    /// Holding W sends autorepeat presses; one physical press gets one
+    /// activate.
+    #[test]
+    fn ember_sleight_activate_ignores_autorepeat_until_release() {
+        let snapshot = ember_sleight_snapshot();
+        let mut held = HashSet::new();
+
+        assert!(plan_ember_sleight_activate(Key::KeyW, &snapshot, false, &mut held).is_some());
+        assert!(plan_ember_sleight_activate(Key::KeyW, &snapshot, false, &mut held).is_none());
+
+        held.remove(&Key::KeyW);
+
+        assert!(plan_ember_sleight_activate(Key::KeyW, &snapshot, false, &mut held).is_some());
+    }
+
+    /// Soul Ring replays the Sleight press late, so the activate waits the
+    /// same extra time to stay behind it.
+    #[test]
+    fn ember_sleight_activate_waits_out_a_soul_ring_replay() {
+        let snapshot = ember_sleight_snapshot();
+        let mut held = HashSet::new();
+
+        assert_eq!(
+            plan_ember_sleight_activate(Key::KeyW, &snapshot, true, &mut held),
+            Some(100 + snapshot.soul_ring.delay_before_ability_ms)
+        );
     }
 
     #[test]

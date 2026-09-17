@@ -215,6 +215,8 @@ export const mockConfig: Settings = {
       enabled: true, remnant_key: "r",
       activate_key: "d", activate_delay_ms: 150,
       use_scepter_activate_delay: true, scepter_activate_delay_ms: 40,
+      sleight_activate_enabled: false, sleight_key: "w",
+      sleight_activate_delay_ms: 100,
       auto_flame_guard_on_danger: true, flame_guard_key: "e",
       flame_guard_hp_threshold_percent: 65,
       flame_guard_trigger_cooldown_ms: 2000,

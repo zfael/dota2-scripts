@@ -126,6 +126,10 @@ enum EmberSpiritRequest {
         activate_key: char,
         activate_delay_ms: u64,
     },
+    SleightActivate {
+        activate_key: char,
+        activate_delay_ms: u64,
+    },
 }
 
 fn build_remnant_chase_request(
@@ -163,6 +167,10 @@ fn run_ember_spirit_request(request: EmberSpiritRequest) {
             activate_key,
             activate_delay_ms,
         } => run_remnant_chase_request(remnant_key, activate_key, activate_delay_ms),
+        EmberSpiritRequest::SleightActivate {
+            activate_key,
+            activate_delay_ms,
+        } => run_sleight_activate_request(activate_key, activate_delay_ms),
     }
 }
 
@@ -182,6 +190,19 @@ fn run_ember_spirit_request(request: EmberSpiritRequest) {
 fn run_remnant_chase_request(remnant_key: char, activate_key: char, activate_delay_ms: u64) {
     crate::input::simulation::press_key(remnant_key);
 
+    if activate_delay_ms > 0 {
+        thread::sleep(Duration::from_millis(activate_delay_ms));
+    }
+    crate::input::simulation::press_key(activate_key);
+}
+
+/// Sleight activate: dash to the remnants after a Sleight of Fist press.
+///
+/// Unlike the chase, the first key is the player's own press, which the hook
+/// lets through — so this only waits and presses the activate key. The wait
+/// lets the Sleight start server-side first; without it the activate can
+/// resolve ahead of the Sleight.
+fn run_sleight_activate_request(activate_key: char, activate_delay_ms: u64) {
     if activate_delay_ms > 0 {
         thread::sleep(Duration::from_millis(activate_delay_ms));
     }
@@ -217,6 +238,16 @@ impl EmberSpiritState {
             activate_delay_ms,
         ));
     }
+
+    /// Follow a Sleight of Fist press with the activate key after
+    /// `activate_delay_ms`. Called from the keyboard hook, which has already
+    /// let the Sleight press through.
+    pub fn execute_sleight_activate(activate_key: char, activate_delay_ms: u64) {
+        enqueue_ember_spirit_request(EmberSpiritRequest::SleightActivate {
+            activate_key,
+            activate_delay_ms,
+        });
+    }
 }
 
 /// Ember Spirit script.
@@ -231,6 +262,10 @@ impl EmberSpiritState {
 ///    while Ember holds an Aghanim's Scepter, which places the remnant
 ///    instantly. `use_scepter_activate_delay` turns that off for anyone who
 ///    wants the configured delay regardless.
+///
+/// The Sleight activate (`sleight_activate_enabled`) is not routed through this
+/// script: the keyboard hook watches the Sleight of Fist key, lets it through,
+/// and calls `EmberSpiritState::execute_sleight_activate` itself.
 ///
 /// There is no readiness gate. Unlike the facing combos (Magnus, Mirana,
 /// Slark), a wasted press here costs nothing: Dota ignores a Fire Remnant press
