@@ -3,7 +3,7 @@ pub mod events;
 pub mod ipc_types;
 
 use dota2_scripts::actions::executor::{ActionExecutor, ExecutorMetrics};
-use dota2_scripts::actions::heroes::{LargoScript, MeepoScript};
+use dota2_scripts::actions::heroes::MeepoScript;
 use dota2_scripts::actions::activity::{push_activity, ActivityCategory};
 use dota2_scripts::actions::ActionDispatcher;
 use dota2_scripts::config::settings::InvokerProfileMode;
@@ -409,32 +409,6 @@ fn handle_hotkey_events(
                     format!("Invoker active combo profile set to {}", next_profile_id),
                 );
             }
-            HotkeyEvent::LargoQ => {
-                dispatch_largo_song(&app_state, &dispatcher, |largo| {
-                    largo.select_song_manually(
-                        dota2_scripts::actions::heroes::largo::Song::Bullbelly,
-                    );
-                });
-            }
-            HotkeyEvent::LargoW => {
-                dispatch_largo_song(&app_state, &dispatcher, |largo| {
-                    largo.select_song_manually(
-                        dota2_scripts::actions::heroes::largo::Song::Hotfeet,
-                    );
-                });
-            }
-            HotkeyEvent::LargoE => {
-                dispatch_largo_song(&app_state, &dispatcher, |largo| {
-                    largo.select_song_manually(
-                        dota2_scripts::actions::heroes::largo::Song::IslandElixir,
-                    );
-                });
-            }
-            HotkeyEvent::LargoR => {
-                dispatch_largo_song(&app_state, &dispatcher, |largo| {
-                    largo.deactivate_ultimate();
-                });
-            }
             HotkeyEvent::InvokerProfile(profile_id) => {
                 let settings_snapshot = settings.lock().unwrap().clone();
                 let activity_message = {
@@ -451,23 +425,6 @@ fn handle_hotkey_events(
                     push_activity(ActivityCategory::System, activity_message);
                 }
                 dispatcher.dispatch_invoker_profile(&profile_id);
-            }
-        }
-    }
-}
-
-/// Helper to dispatch Largo-specific song/ultimate actions when conditions are met.
-fn dispatch_largo_song(
-    app_state: &Arc<Mutex<AppState>>,
-    dispatcher: &Arc<ActionDispatcher>,
-    action: impl FnOnce(&LargoScript),
-) {
-    let state = app_state.lock().unwrap();
-    if state.standalone_enabled && state.selected_hero == Some(HeroType::Largo) {
-        drop(state);
-        if let Some(script) = dispatcher.hero_scripts.get(Hero::Largo.to_game_name()) {
-            if let Some(largo_script) = script.as_any().downcast_ref::<LargoScript>() {
-                action(largo_script);
             }
         }
     }

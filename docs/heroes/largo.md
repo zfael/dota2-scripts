@@ -8,10 +8,11 @@ Learn how the Largo hero script automates **Amphibian Rhapsody** (ultimate) with
 ## Feature Summary
 
 - **GSI-based ultimate detection** – Monitors `largo_song_*` ability names to auto-enable ultimate mode
+- **Song-key interception** – While the ultimate is up, a song press is swallowed and played on the beat instead of reaching Dota off-beat
 - **Beat timing system** – Absolute anchor timing with periodic corrections to prevent drift
-- **Song queuing** – Switches songs on next beat to preserve rhythm
-- **Aghanim's Scepter support** – Plays two songs simultaneously
-- **R key handling** – Stops beat loop immediately to prevent stale key presses
+- **Song queuing** – Switches songs on next beat to preserve rhythm; the last press before a beat wins
+- **Aghanim's Scepter support** – Plays two songs on the same beat; a third press evicts the one pressed longest ago
+- **Ultimate key handling** – Passes through to Dota, but stops the beat loop on the press rather than a GSI tick later
 - **Survivability actions** – Auto-use healing/defensive items when HP is low
 
 ## Configuration
@@ -38,7 +39,9 @@ r_ability_key = "r"             # Amphibian Rhapsody toggle
 standalone_key = "Home"         # Field exists in config, but current runtime does not read a Largo-specific value
 ```
 
-**Important runtime note:** `heroes.largo.standalone_key` exists in config, but the current runtime does not wire Largo through `Settings::get_standalone_key(...)`. Manual Largo control still flows through the shared `AppState.trigger_key` plus the direct `Q/W/E/R` hotkey events described in `src/main.rs` and `src/input/keyboard.rs`.
+**Important runtime note:** `heroes.largo.standalone_key` exists in config, but the current runtime does not wire Largo through `Settings::get_standalone_key(...)`. Manual Largo control flows through the shared `AppState.trigger_key` plus the song-key intercept in `src/input/keyboard.rs`.
+
+The ability keys above are **read by the intercept**, not just by the beat worker. Rebinding `w_ability_key` moves which physical key Hotfeet Hustle is captured from; nothing is hardcoded to `Q/W/E/R` any more.
 
 ### Tuning Beat Timing
 
@@ -54,7 +57,9 @@ standalone_key = "Home"         # Field exists in config, but current runtime do
 
 | File | Purpose |
 |------|---------|
-| `src/actions/heroes/largo.rs` | Main Largo script implementation |
+| `src/actions/heroes/largo.rs` | Song schedule, beat worker, `ULTIMATE_ACTIVE`, `queue_song`, `stop_ultimate` |
+| `src/input/keyboard.rs` | `plan_largo_key_action` — which presses are swallowed, and which pass through |
+| `examples/largo_song_sync_control.rs` | Offline proof of the intercept's timing; re-run it after a patch changes the beat |
 | `src/config/settings.rs` | LargoConfig struct and defaults |
 | `config/config.toml` | User configuration |
 
@@ -101,7 +106,7 @@ Example with default settings (`beat_interval_ms=995`, `beat_correction_ms=30`, 
 
 ### Song Selection
 
-Songs are selected via Q/W/E hotkeys:
+Songs are selected via the configured ability keys (Dota defaults shown):
 
 | Key | Song | Effect |
 |-----|------|--------|
@@ -109,32 +114,77 @@ Songs are selected via Q/W/E hotkeys:
 | W | Hotfeet Hustle | Movement Speed |
 | E | Island Elixir | Healing |
 
+#### The intercept
+
+**While the ultimate is up, a song key never reaches Dota.** The keyboard hook
+blocks it and records which song you asked for; the beat worker presses it on the
+grid.
+
+That is the whole point. A song cast between beats is cast off the beat, and with
+Aghanim's it is also off the *other* song of the pair — the desync the rest of
+this page is about. Passing the press through and *also* queuing it, which is
+what the script did before, produced both: one off-beat cast from your finger and
+one on-beat cast from the worker.
+
+Outside the ultimate the song keys are ordinary abilities and pass through
+untouched. That includes the window between pressing the ultimate key and GSI
+confirming the cast (~226ms, one tick): during it the hook has no reason to
+believe the ultimate is up, so it does not swallow anything. **A song pressed in
+that window starts the song in-game but does not start the beat loop.** Press it
+again once the ultimate registers and the loop picks it up.
+
+Soul Ring deliberately does not see a swallowed press either — replaying the key
+a few hundred milliseconds later is the same desync by another route.
+
 #### Song Queuing
 
-When switching songs mid-ultimate, the new song is **queued** and applied on the next beat. This maintains perfect rhythm instead of resetting timing:
+When switching songs mid-ultimate, the new song is **queued** and applied on the
+next beat. This maintains perfect rhythm instead of resetting timing:
 
 1. You're playing Bullbelly (Q)
-2. At T=400ms, you press W
-3. Song is queued: `pending_song = Hotfeet`
-4. At T=995ms (next beat), switch happens and W is pressed
-5. Rhythm continues uninterrupted
+2. At T=400ms, you press W — the press is swallowed, `pending_song = Hotfeet`
+3. At T=995ms (next beat), the switch happens and W is pressed
+4. Rhythm continues uninterrupted
+
+Two rules fall out of holding the press rather than passing it on:
+
+- **The last press before a beat is the one that lands.** Pressing W then E in
+  the same beat queues E; W never plays. Changing your mind is free.
+- **Pressing the song already playing cancels a queued switch.** Playing Q,
+  pressing W, then pressing Q again keeps you on Q. Previously the W still
+  landed on the next beat.
 
 ### Aghanim's Scepter Support
 
-With Aghanim's Scepter, you can play **two songs simultaneously**. The script detects Aghs via GSI and:
+With Aghanim's Scepter, you play **two songs at once**. The script detects the
+scepter via GSI and presses both keys on the same beat: `current_song` first,
+then `previous_song` one synthetic press later (~10ms, the
+`POST_ACTION_GUARD_DELAY_MS` the input worker pays per key).
 
-- Stores the `previous_song` when switching
-- Presses the `current_song` key first, then the `previous_song` key on each beat
+The pair is **the last two distinct songs you pressed, newest first**, so a third
+press evicts the one pressed longest ago:
 
-### R Key Handling
+| You press | Playing | Dropped |
+|---|---|---|
+| Q | Q | — |
+| then W | W + Q | — |
+| then E | E + W | Q |
 
-When you press R to end the ultimate:
+Losing or gaining the scepter mid-game clears `previous_song`. Gaining it never
+starts a song you did not press, and losing it never leaves a stale one queued
+behind the current one.
 
-1. Beat loop **immediately stops** (prevents stale key presses)
-2. All state is cleared (songs, pending, beat count)
-3. GSI confirms the state change shortly after
+### Ultimate Key Handling
 
-This prevents Q/W/E presses during the window between R press and GSI confirmation.
+When you press the ultimate key to end Amphibian Rhapsody:
+
+1. The press **reaches Dota** — it is what actually ends the ultimate
+2. The beat loop **stops on the press**, not when GSI confirms
+3. All state is cleared (songs, pending, beat count)
+
+Stopping on the press is what prevents song presses during the ~226ms between
+your key and GSI's confirmation. The ultimate key is matched before the song keys,
+so a config that binds a song to it cannot make the ultimate unstoppable.
 
 ### State Machine
 
@@ -149,10 +199,11 @@ This prevents Q/W/E presses during the window between R press and GSI confirmati
 ┌─────────────────────────────────────────────────────────────┐
 │                    ACTIVE (No Song)                          │
 │              (active = true, current_song = None)            │
-│                  Waiting for Q/W/E press                     │
+│          Song keys are now swallowed by the hook             │
 └─────────────────────────────────────────────────────────────┘
                               │
-                              │ Q/W/E pressed (first song)
+                              │ song key swallowed (first song)
+                              │ → anchors the beat grid, fires now
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    ACTIVE (Playing)                          │
@@ -160,12 +211,14 @@ This prevents Q/W/E presses during the window between R press and GSI confirmati
 │   Scheduled worker waits for beat deadline or wake-up        │
 │                                                              │
 │   ┌─────────────────────────────────────────────────────┐   │
-│   │  Q/W/E pressed → pending_song = new_song            │   │
+│   │  song key swallowed → pending_song = new_song       │   │
+│   │  same song again    → pending_song = None           │   │
 │   │  Next beat → switch current_song, press new key     │   │
 │   └─────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
                               │
-                              │ R pressed OR GSI detects normal abilities
+                              │ ultimate key pressed (passes through)
+                              │ OR GSI detects normal abilities
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                         INACTIVE                             │
@@ -188,4 +241,19 @@ A dedicated Largo worker uses a timed wait instead of polling every few millisec
    - Press `previous_song` after it when Aghanim's Scepter is active
    - Increment `beat_count`
 
-The first manual song selection still wakes the worker so the first beat fires immediately, and pressing `R` still clears the schedule immediately so no stale Q/W/E presses happen while waiting for GSI confirmation.
+The first manual song selection still wakes the worker so the first beat fires immediately, and the ultimate key still clears the schedule immediately so no stale song presses happen while waiting for GSI confirmation.
+
+**The state lock is never held across a key press.** `crate::input::press_key`
+blocks the caller until the synthetic input worker is done, including
+`POST_ACTION_GUARD_DELAY_MS`. The keyboard hook calls `queue_song` on that same
+lock, so holding it there would stall the global hook — and therefore every
+keystroke in the game — for the length of a beat's emission.
+
+### Re-measuring after a patch
+
+`cargo run --example largo_song_sync_control` replays presses at chosen offsets
+against the beat grid and asserts what reaches Dota. It covers the ugly cases: a
+press arriving mid-emission, a stop landing between the two halves of an
+Aghanim's pair, the GSI confirmation window, and thirty beats of drift. Run it
+after any gameplay patch that changes the beat, and after any edit to the
+schedule or the hook planner. Add `--verbose` for an event-by-event trace.

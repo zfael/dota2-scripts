@@ -128,6 +128,7 @@ broken test build there once went unnoticed.
 | `actions/activity.rs` | Activity feed entries surfaced in the UI |
 | `actions/heroes/earth_spirit.rs` | Earth Spirit remnant combos: grip key remapped to Stone Remnant then Geomagnetic Grip (the silence), roll key to Rolling Boulder then Stone Remnant, dropped into the path during the windup |
 | `actions/heroes/ember_spirit.rs` | Ember Spirit remnant chase worker (Fire Remnant then Activate Fire Remnant) and Flame Guard auto-cast on danger |
+| `actions/heroes/largo.rs` | Largo song schedule and beat worker; the keyboard hook swallows song presses while the ultimate is up and lands them on the beat |
 | `actions/heroes/magnus.rs` | Magnus directional Reverse Polarity worker and GSI readiness gate |
 | `actions/heroes/mirana.rs` | Mirana directional Leap worker and GSI readiness gate |
 | `actions/heroes/morphling.rs` | Morphling Attribute Shift controller: strength on danger, gated shift back, all read from `max_health` |
@@ -221,6 +222,7 @@ evidence a feature was built on and the tool for re-measuring after a patch. See
 |---|---|
 | `examples/morphling_shift_probe.rs` | Records GSI on its own port and replays a capture; measures what an Attribute Shift looks like in the payload |
 | `examples/morphling_shift_control.rs` | Simulates the shift from those measurements and runs the decision loop against 16 scenario checks |
+| `examples/largo_song_sync_control.rs` | Plays song presses at chosen offsets against Largo's beat grid; asserts what is swallowed, what reaches Dota, and on which beat |
 | `examples/minimap_capture.rs` | Captures minimap PNGs for offline analysis |
 | `examples/minimap_analyze.rs` | Runs hero detection over captured PNGs |
 | `examples/mouse_test.rs` | Inspects raw `rdev` mouse button events |

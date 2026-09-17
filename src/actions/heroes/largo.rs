@@ -4,6 +4,7 @@ use crate::actions::heroes::traits::HeroScript;
 use crate::config::Settings;
 use crate::models::{GsiWebhookEvent, Hero};
 use lazy_static::lazy_static;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -21,11 +22,41 @@ lazy_static! {
     static ref BEAT_THREAD_STARTED: Mutex<bool> = Mutex::new(false);
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// True while Amphibian Rhapsody is up.
+///
+/// This mirrors `UltimateState::active`, which stays the authority — it exists
+/// as an atomic because the keyboard hook reads it on **every** keystroke in the
+/// game to decide whether a song key is its business. A miss costs one load
+/// instead of a mutex acquisition, and the hook never waits on the beat worker.
+pub static ULTIMATE_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Song {
     Bullbelly,    // Q - Damage
     Hotfeet,      // W - Movement
     IslandElixir, // E - Healing
+}
+
+/// What a song key press did to the beat schedule.
+///
+/// Returned so the keyboard hook's decision is observable in tests without a
+/// beat worker running.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SongRequest {
+    /// The ultimate is not up, so the press was not ours to take.
+    Ignored,
+    /// First song of this ultimate — the press anchors the beat grid.
+    Started(Song),
+    /// Held until the next beat, so the switch lands on the rhythm.
+    Queued(Song),
+    /// Pressed the song already playing, which cancels a queued switch.
+    Cancelled(Song),
+}
+
+impl SongRequest {
+    fn changed_schedule(self) -> bool {
+        !matches!(self, SongRequest::Ignored)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -45,7 +76,6 @@ struct UltimateState {
 struct LargoWorkerControl {
     state: Mutex<UltimateState>,
     wake_worker: Condvar,
-    emission_guard: Mutex<()>,
 }
 
 impl LargoWorkerControl {
@@ -64,7 +94,6 @@ impl LargoWorkerControl {
                 beat_config: LargoBeatConfigSnapshot::from_settings(&Settings::default()),
             }),
             wake_worker: Condvar::new(),
-            emission_guard: Mutex::new(()),
         }
     }
 
@@ -152,6 +181,10 @@ fn plan_beat(state: &mut UltimateState, config: &LargoBeatConfigSnapshot) -> Bea
 
     let mut keys_to_press = vec![song_key(current_song, config)];
 
+    // Aghanim's plays two songs at once. The pair is the last two distinct
+    // songs pressed, newest first, so a third press evicts the one pressed
+    // longest ago. Both keys go out on this beat, not one now and one whenever
+    // the player's next press happens to land.
     if state.has_aggs {
         if let Some(previous_song) = state.previous_song {
             keys_to_press.push(song_key(previous_song, config));
@@ -211,6 +244,94 @@ fn reset_song_schedule(state: &mut UltimateState) {
     state.groovin_stacks = 0;
 }
 
+/// Keep the hook-facing flag in step with the state the worker reasons about.
+fn set_active(state: &mut UltimateState, active: bool) {
+    state.active = active;
+    ULTIMATE_ACTIVE.store(active, Ordering::SeqCst);
+}
+
+/// Fold a song key press into the beat schedule.
+///
+/// Called straight from the keyboard hook, so it must not block. The state lock
+/// is never held across a key press — the beat worker drops it before emitting —
+/// so acquiring it here costs microseconds, and the condvar notify happens after
+/// the state is already updated, which is what makes the worker's wait loop safe.
+pub fn queue_song(song: Song) -> SongRequest {
+    let mut state = LARGO_WORKER_CONTROL.state.lock().unwrap();
+    let outcome = if state.active {
+        queue_song_in_state(&mut state, song)
+    } else {
+        SongRequest::Ignored
+    };
+    drop(state);
+
+    match outcome {
+        SongRequest::Ignored => debug!("Largo: ignoring song press - ultimate is not active"),
+        SongRequest::Started(song) => info!("🎵 Starting with song: {:?}", song),
+        SongRequest::Queued(song) => {
+            info!("🎵 Queued song switch to: {:?} (applies on the next beat)", song)
+        }
+        SongRequest::Cancelled(song) => {
+            info!("🎵 Cancelled queued switch - staying on {:?}", song)
+        }
+    }
+
+    if outcome.changed_schedule() {
+        LARGO_WORKER_CONTROL.notify_worker();
+    }
+
+    outcome
+}
+
+fn queue_song_in_state(state: &mut UltimateState, song: Song) -> SongRequest {
+    match state.current_song {
+        // First song of the ultimate. The press itself anchors the beat grid,
+        // so hitting beat one by ear stays the player's job and every beat
+        // after it is measured from that press.
+        None => {
+            cancel_planned_beats(state);
+            reset_song_schedule(state);
+            state.current_song = Some(song);
+            SongRequest::Started(song)
+        }
+        // Already playing it. The press means "never mind" to a switch queued
+        // earlier in this same beat, which would otherwise still land.
+        Some(current) if current == song => {
+            state.pending_song = None;
+            SongRequest::Cancelled(song)
+        }
+        // Held for the next beat. Pressing the song now is what desyncs it from
+        // the rhythm; the last press before the beat is the one that wins.
+        Some(_) => {
+            state.pending_song = Some(song);
+            SongRequest::Queued(song)
+        }
+    }
+}
+
+/// Stop the beat loop the moment the ultimate key is pressed.
+///
+/// GSI only confirms the ultimate ended a tick later, and every beat in that
+/// window would press a song key that no longer exists. Returns whether there
+/// was an active ultimate to stop.
+pub fn stop_ultimate() -> bool {
+    let mut state = LARGO_WORKER_CONTROL.state.lock().unwrap();
+    let was_active = state.active;
+    if was_active {
+        set_active(&mut state, false);
+        cancel_planned_beats(&mut state);
+        reset_song_schedule(&mut state);
+    }
+    drop(state);
+
+    if was_active {
+        info!("🎵 Amphibian Rhapsody STOPPED (ultimate key pressed - awaiting GSI confirmation)");
+        LARGO_WORKER_CONTROL.notify_worker();
+    }
+
+    was_active
+}
+
 pub struct LargoScript {
     settings: Arc<Mutex<Settings>>,
     executor: Arc<ActionExecutor>,
@@ -266,6 +387,10 @@ impl LargoScript {
                             .unwrap();
                         state = guard;
 
+                        // A wake-up that is not the deadline is a schedule
+                        // change — a queued switch, a config edit, the ultimate
+                        // ending. Recompute from the anchor rather than beating
+                        // early; the deadline never moves because of it.
                         if !timeout_result.timed_out() {
                             continue;
                         }
@@ -302,6 +427,9 @@ impl LargoScript {
                     let beat_count = state.beat_count;
                     let switched_song =
                         had_pending_song && state.current_song != previous_current_song;
+                    // Dropped before any key goes out: `press_key` blocks until
+                    // the synthetic input worker is done, and the keyboard hook
+                    // calls `queue_song` on this same lock.
                     drop(state);
 
                     if switched_song {
@@ -326,22 +454,20 @@ impl LargoScript {
                     }
 
                     for key in plan.keys_to_press {
-                        let emission_guard = LARGO_WORKER_CONTROL.emission_guard.lock().unwrap();
-                        let should_emit = {
+                        let live_generation = {
                             let state = LARGO_WORKER_CONTROL.state.lock().unwrap();
-                            should_emit_planned_beat(
-                                captured_generation,
-                                state.schedule_generation,
-                                state.active,
-                            )
+                            state.schedule_generation
                         };
 
-                        if !should_emit {
+                        if !should_emit_planned_beat(
+                            captured_generation,
+                            live_generation,
+                            ULTIMATE_ACTIVE.load(Ordering::SeqCst),
+                        ) {
                             break;
                         }
 
                         crate::input::press_key(key);
-                        drop(emission_guard);
                     }
                 }
             })
@@ -389,66 +515,6 @@ impl LargoScript {
         }
 
         false
-    }
-
-    // Public method to immediately stop the beat loop when R is pressed
-    // This prevents pressing Q/W/E during the window between R press and GSI confirmation
-    pub fn deactivate_ultimate(&self) {
-        let emission_guard = LARGO_WORKER_CONTROL.emission_guard.lock().unwrap();
-        let mut state = LARGO_WORKER_CONTROL.state.lock().unwrap();
-
-        if state.active {
-            info!("🎵 Amphibian Rhapsody STOPPED (R key pressed - awaiting GSI confirmation)");
-            state.active = false;
-            cancel_planned_beats(&mut state);
-            reset_song_schedule(&mut state);
-        }
-        drop(state);
-        drop(emission_guard);
-        LARGO_WORKER_CONTROL.notify_worker();
-    }
-
-    // Public method to manually select a song from keyboard input
-    // The song is queued and will be switched on the next beat to maintain rhythm
-    pub fn select_song_manually(&self, song: Song) {
-        let mut should_wake_worker = false;
-        let emission_guard = LARGO_WORKER_CONTROL.emission_guard.lock().unwrap();
-        let mut state = LARGO_WORKER_CONTROL.state.lock().unwrap();
-
-        // If ultimate is not active, don't allow song selection
-        if !state.active {
-            debug!("Largo: Cannot select song - ultimate is not active");
-            drop(state);
-            drop(emission_guard);
-            return;
-        }
-
-        // If no current song yet (first selection), set it immediately and start beat
-        if state.current_song.is_none() {
-            cancel_planned_beats(&mut state);
-            state.current_song = Some(song);
-            state.previous_song = None;
-            state.pending_song = None;
-            state.beat_start_time = None; // Will set anchor on first beat
-            state.beat_count = 0;
-            state.groovin_stacks = 0;
-            info!("🎵 Starting with song: {:?}", song);
-            should_wake_worker = true;
-        } else if state.current_song != Some(song) {
-            // Queue the song for switch on next beat (maintains rhythm)
-            state.pending_song = Some(song);
-            info!(
-                "🎵 Queued song switch to: {:?} (will apply on next beat)",
-                song
-            );
-            should_wake_worker = true;
-        }
-
-        drop(state);
-        drop(emission_guard);
-        if should_wake_worker {
-            LARGO_WORKER_CONTROL.notify_worker();
-        }
     }
 
     // Detect if ultimate is active from GSI ability names
@@ -502,7 +568,6 @@ impl LargoScript {
             LargoBeatConfigSnapshot::from_settings(&settings)
         };
 
-        let emission_guard = LARGO_WORKER_CONTROL.emission_guard.lock().unwrap();
         let mut state = LARGO_WORKER_CONTROL.state.lock().unwrap();
         state.beat_config = config_snapshot;
         let r_key = state.beat_config.r_key;
@@ -511,21 +576,23 @@ impl LargoScript {
 
         if enable && !state.active {
             info!("🎵 Enabling Amphibian Rhapsody - waiting for manual song selection (Q/W/E)");
+            // Deliberately does not mark the ultimate active here. That flag
+            // gates the song-key intercept, and a press that fails — on
+            // cooldown, silenced, out of mana — would swallow the player's
+            // abilities until GSI corrected it. GSI confirms the cast instead.
             should_press_r = true;
-            state.active = true;
             cancel_planned_beats(&mut state);
             reset_song_schedule(&mut state);
             should_wake_worker = true;
         } else if !enable && state.active {
             info!("🎵 Disabling Amphibian Rhapsody");
             should_press_r = true;
-            state.active = false;
+            set_active(&mut state, false);
             cancel_planned_beats(&mut state);
             reset_song_schedule(&mut state);
             should_wake_worker = true;
         }
         drop(state);
-        drop(emission_guard);
 
         if should_wake_worker {
             LARGO_WORKER_CONTROL.notify_worker();
@@ -548,7 +615,6 @@ impl HeroScript for LargoScript {
         let is_ult_active = Self::is_ultimate_active_from_gsi(event);
         let has_aggs = has_dual_song_scepter(event);
 
-        let emission_guard = LARGO_WORKER_CONTROL.emission_guard.lock().unwrap();
         let mut state = LARGO_WORKER_CONTROL.state.lock().unwrap();
         let mut should_wake_worker = false;
 
@@ -557,7 +623,7 @@ impl HeroScript for LargoScript {
             should_wake_worker = true;
         }
         if is_ult_active != state.active {
-            state.active = is_ult_active;
+            set_active(&mut state, is_ult_active);
             if is_ult_active {
                 info!("🎵 Amphibian Rhapsody ACTIVATED (detected from GSI)");
             } else {
@@ -570,6 +636,11 @@ impl HeroScript for LargoScript {
         }
         if state.has_aggs != has_aggs {
             state.has_aggs = has_aggs;
+            // The second song of the pair is only meaningful with the scepter.
+            // Dropping it on either edge means acquiring the scepter mid-song
+            // never starts a song the player did not press, and losing it never
+            // leaves a stale one queued behind the current song.
+            state.previous_song = None;
             if has_aggs {
                 info!("🎵 Aghanim's detected - dual song mode enabled!");
             } else {
@@ -577,7 +648,6 @@ impl HeroScript for LargoScript {
             }
         }
         drop(state);
-        drop(emission_guard);
 
         if should_wake_worker {
             LARGO_WORKER_CONTROL.notify_worker();
@@ -849,36 +919,137 @@ mod tests {
     }
 
     #[test]
-    fn select_song_manually_releases_locks_when_ultimate_is_inactive() {
-        let script = LargoScript {
-            settings: Arc::new(Mutex::new(Settings::default())),
-            executor: ActionExecutor::new(),
+    fn first_song_press_anchors_the_beat_grid() {
+        let mut state = test_ultimate_state();
+        reset_song_schedule(&mut state);
+        let generation_before = state.schedule_generation;
+
+        let outcome = queue_song_in_state(&mut state, Song::Hotfeet);
+
+        assert_eq!(outcome, SongRequest::Started(Song::Hotfeet));
+        assert_eq!(state.current_song, Some(Song::Hotfeet));
+        assert_eq!(state.previous_song, None);
+        assert_eq!(state.pending_song, None);
+        // No anchor yet: the worker stamps it as it emits, so the very next
+        // beat fires immediately rather than one interval from now.
+        assert_eq!(state.beat_start_time, None);
+        assert_eq!(state.beat_count, 0);
+        assert_ne!(state.schedule_generation, generation_before);
+    }
+
+    #[test]
+    fn switching_song_is_held_for_the_next_beat_rather_than_pressed_now() {
+        let mut state = test_ultimate_state();
+        state.current_song = Some(Song::Bullbelly);
+        state.beat_start_time = Some(Instant::now());
+        state.beat_count = 4;
+        let generation_before = state.schedule_generation;
+
+        let outcome = queue_song_in_state(&mut state, Song::Hotfeet);
+
+        assert_eq!(outcome, SongRequest::Queued(Song::Hotfeet));
+        assert_eq!(state.pending_song, Some(Song::Hotfeet));
+        // The grid must not move, or the switch itself becomes the desync.
+        assert_eq!(state.current_song, Some(Song::Bullbelly));
+        assert_eq!(state.beat_count, 4);
+        assert_eq!(state.schedule_generation, generation_before);
+    }
+
+    #[test]
+    fn last_press_before_the_beat_is_the_one_that_lands() {
+        let mut state = test_ultimate_state();
+        state.current_song = Some(Song::Bullbelly);
+
+        assert_eq!(
+            queue_song_in_state(&mut state, Song::Hotfeet),
+            SongRequest::Queued(Song::Hotfeet)
+        );
+        assert_eq!(
+            queue_song_in_state(&mut state, Song::IslandElixir),
+            SongRequest::Queued(Song::IslandElixir)
+        );
+
+        assert_eq!(state.pending_song, Some(Song::IslandElixir));
+
+        let config = test_beat_config();
+        let plan = plan_beat(&mut state, &config);
+        assert_eq!(plan.keys_to_press, vec!['e']);
+        assert_eq!(state.current_song, Some(Song::IslandElixir));
+        assert_eq!(state.previous_song, Some(Song::Bullbelly));
+    }
+
+    #[test]
+    fn pressing_the_playing_song_again_cancels_a_queued_switch() {
+        let mut state = test_ultimate_state();
+        state.current_song = Some(Song::Bullbelly);
+
+        queue_song_in_state(&mut state, Song::Hotfeet);
+        let outcome = queue_song_in_state(&mut state, Song::Bullbelly);
+
+        assert_eq!(outcome, SongRequest::Cancelled(Song::Bullbelly));
+        assert_eq!(state.pending_song, None);
+
+        let config = test_beat_config();
+        let plan = plan_beat(&mut state, &config);
+        assert_eq!(plan.keys_to_press, vec!['q']);
+        assert_eq!(state.current_song, Some(Song::Bullbelly));
+    }
+
+    #[test]
+    fn aghs_third_song_evicts_the_one_pressed_longest_ago() {
+        let config = test_beat_config();
+        let mut state = test_ultimate_state();
+        state.has_aggs = true;
+        reset_song_schedule(&mut state);
+
+        queue_song_in_state(&mut state, Song::Bullbelly);
+        assert_eq!(plan_beat(&mut state, &config).keys_to_press, vec!['q']);
+
+        queue_song_in_state(&mut state, Song::Hotfeet);
+        assert_eq!(plan_beat(&mut state, &config).keys_to_press, vec!['w', 'q']);
+
+        queue_song_in_state(&mut state, Song::IslandElixir);
+        // Bullbelly was pressed longest ago, so it is the one that drops.
+        assert_eq!(plan_beat(&mut state, &config).keys_to_press, vec!['e', 'w']);
+    }
+
+    #[test]
+    fn song_presses_are_ignored_while_the_ultimate_is_down() {
+        // Mirrors `queue_song`'s gate without touching the process-wide worker
+        // state, which other tests share.
+        let mut state = test_ultimate_state();
+        state.active = false;
+        reset_song_schedule(&mut state);
+
+        let outcome = if state.active {
+            queue_song_in_state(&mut state, Song::Bullbelly)
+        } else {
+            SongRequest::Ignored
         };
 
-        {
-            let emission_guard = LARGO_WORKER_CONTROL.emission_guard.lock().unwrap();
-            let mut state = LARGO_WORKER_CONTROL.state.lock().unwrap();
-            state.active = false;
-            cancel_planned_beats(&mut state);
-            reset_song_schedule(&mut state);
-            drop(state);
-            drop(emission_guard);
-        }
-
-        script.select_song_manually(Song::Bullbelly);
-
-        let emission_guard = LARGO_WORKER_CONTROL
-            .emission_guard
-            .try_lock()
-            .expect("emission guard should be released on inactive early return");
-        drop(emission_guard);
-
-        let state = LARGO_WORKER_CONTROL
-            .state
-            .try_lock()
-            .expect("state lock should be released on inactive early return");
-        assert!(!state.active);
+        assert_eq!(outcome, SongRequest::Ignored);
+        assert!(!outcome.changed_schedule());
         assert_eq!(state.current_song, None);
-        assert_eq!(state.pending_song, None);
+    }
+
+    #[test]
+    fn stopping_the_ultimate_cancels_the_beat_in_flight() {
+        let mut state = test_ultimate_state();
+        state.beat_start_time = Some(Instant::now());
+        state.beat_count = 7;
+        let captured_generation = state.schedule_generation;
+
+        set_active(&mut state, false);
+        cancel_planned_beats(&mut state);
+        reset_song_schedule(&mut state);
+
+        assert!(!should_emit_planned_beat(
+            captured_generation,
+            state.schedule_generation,
+            ULTIMATE_ACTIVE.load(Ordering::SeqCst),
+        ));
+        assert_eq!(state.current_song, None);
+        assert_eq!(state.beat_start_time, None);
+        assert_eq!(state.beat_count, 0);
     }
 }

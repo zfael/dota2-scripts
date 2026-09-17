@@ -24,7 +24,7 @@
 
 Related but not primary owners:
 
-- `src/actions/heroes/largo.rs` receives `HotkeyEvent::LargoQ/W/E/R`
+- `src/actions/heroes/largo.rs` owns the song schedule, the beat worker, and `ULTIMATE_ACTIVE`; the hook calls `queue_song` / `stop_ultimate` on it directly
 - `src/actions/heroes/broodmother.rs` uses mouse interception plus `BROODMOTHER_ACTIVE`
 - `src/state/app_state.rs` exposes `trigger_key`, `sf_enabled`, and `od_enabled`
 
@@ -79,6 +79,7 @@ The snapshot holds only static keyboard-facing facts:
 - Mirana intercept flags, pre-parsed Leap key, and turn delay
 - Earth Spirit intercept flags, pre-parsed grip and roll keys, the shared remnant key, the silence remnant delay, and the roll's double-tap, delay, and remnant self-cast settings
 - Ember Spirit Sleight activate flag, pre-parsed Sleight of Fist key, activate key, and delay
+- Largo intercept flag and the pre-parsed song and ultimate keys
 - Soul Ring thresholds, ability keys, and item-slot keys
 - Armlet Roshan toggle key when `[armlet.roshan].enabled = true`
 - HUD portrait capture key from `[hud]`
@@ -187,13 +188,22 @@ Current callback order on key/button input:
     - emit `HotkeyEvent::CaptureHudPortrait`
     - block the original key: it is ours while calibrating
     - planned alongside the other global hotkeys in `plan_global_hotkey_press_event`
-18. **Largo / generic ability-key path**
-    - emit `HotkeyEvent::LargoQ/W/E/R`
+18. **Largo song intercept**
+    - if `snapshot.largo_enabled` and `largo::ULTIMATE_ACTIVE`
+    - block the configured song key and hand the song to `largo::queue_song`,
+      which holds it for the next beat
+    - the configured ultimate key is **not** blocked — it is what ends the
+      ultimate — but `largo::stop_ultimate()` kills the beat loop on the press
+    - outside the ultimate this branch returns `None` and every key falls
+      through, including in the window after the ultimate key is pressed and
+      before GSI confirms the cast
+    - planned in `plan_largo_key_action`
+19. **Generic ability-key path**
     - if Soul Ring should trigger, block and replay
     - otherwise pass through
-19. **Item-slot Soul Ring interception**
+20. **Item-slot Soul Ring interception**
      - blocks configured item keys when the item is mana-using and Soul Ring should fire first
-20. **Standalone combo key**
+21. **Standalone combo key**
      - sends `HotkeyEvent::ComboTrigger`
      - does not block the original key
 
@@ -417,9 +427,29 @@ These are still part of the interception surface even though this page centers o
 
 ### Largo
 
-- `Q/W/E/R` emit `HotkeyEvent::LargoQ/W/E/R`
-- the original key is only blocked when Soul Ring also needs to fire first
-- `main.rs` downcasts to `LargoScript` for manual song selection / beat-loop stop
+- activation is gated on `snapshot.largo_enabled`, derived from
+  `selected_hero == Some(HeroType::Largo) && standalone_enabled`, **and** on
+  `largo::ULTIMATE_ACTIVE`, which mirrors the GSI-detected ultimate state
+- **song keys are blocked while the ultimate is up.** Amphibian Rhapsody is a
+  rhythm: a song cast between beats is off the beat, and with Aghanim's it is
+  also off the *other* song of the pair. The press is swallowed and kept as
+  intent; the beat worker presses it on the grid
+- the keys come from `heroes.largo.{q,w,e,r}_ability_key`, not from physical
+  `Q/W/E/R`. The ultimate key is matched first, so binding a song to it cannot
+  make the ultimate unstoppable
+- **the ultimate key is never blocked.** It is what ends the ultimate; the hook
+  only calls `stop_ultimate()` alongside it, which cancels the in-flight beat
+  rather than waiting the ~226ms for GSI to confirm
+- **Soul Ring deliberately never sees a swallowed song press.** Replaying the
+  key a few hundred milliseconds later is the same desync by another route. Soul
+  Ring still fires on Largo's keys outside the ultimate
+- `queue_song` and `stop_ultimate` are called **synchronously from the hook**,
+  not over the `HotkeyEvent` channel, so the song is recorded before the next
+  beat can plan. They take the Largo state lock, which is never held across a
+  key press — `press_key` blocks for `POST_ACTION_GUARD_DELAY_MS` plus the enigo
+  call, and holding it there would stall the global hook on every keystroke
+- the timing contract is proved offline by
+  `cargo run --example largo_song_sync_control`
 
 ### Snapfire
 
@@ -513,6 +543,7 @@ These are still part of the interception surface even though this page centers o
 | Mirana | `config/config.toml` -> `[heroes.mirana]` | `enabled`, `leap_key`, `turn_delay_ms`, `require_ability_ready` |
 | Earth Spirit | `config/config.toml` -> `[heroes.earth_spirit]` | `enabled`, `remnant_key`, `silence_combo_enabled`, `grip_key`, `silence_remnant_delay_ms`, `require_grip_ready`, `roll_combo_enabled`, `roll_key`, `roll_double_tap`, `roll_double_tap_delay_ms`, `roll_to_remnant_delay_ms`, `roll_remnant_alt`, `roll_remnant_double_tap`, `roll_remnant_double_tap_delay_ms`, `require_roll_ready` |
 | Ember Spirit | `config/config.toml` -> `[heroes.ember_spirit]` | `sleight_activate_enabled`, `sleight_key`, `activate_key`, `sleight_activate_delay_ms` |
+| Largo | `config/config.toml` -> `[heroes.largo]` | `q_ability_key`, `w_ability_key`, `e_ability_key`, `r_ability_key`, `beat_interval_ms`, `beat_correction_ms`, `beat_correction_every_n_beats` |
 | HUD anchors | `config/config.toml` -> `[hud]` | `capture_portrait_key` (blocked from reaching Dota), plus the stored portrait fractions |
 | Global hotkey | `config/config.toml` -> `[keybindings]` | slot key mappings; the live standalone trigger is read from `AppState.trigger_key` and cached as a parsed `snapshot.trigger_key` |
 
@@ -536,5 +567,6 @@ Related docs:
 - `docs/heroes/slark.md`
 - `docs/heroes/mirana.md`
 - `docs/heroes/earth_spirit.md`
+- `docs/heroes/largo.md`
 - `docs/features/hud-anchors.md`
 - `docs/architecture/runtime-flow.md`

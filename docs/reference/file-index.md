@@ -72,7 +72,7 @@
 | `src/actions/heroes/broodmother.rs` | Broodmother spider micro and auto-items/abilities | `docs/heroes/broodmother.md` |
 | `src/actions/heroes/huskar.rs` | Huskar Berserker Blood cleanse plus shared armlet-survivability wiring | `docs/heroes/huskar.md` |
 | `src/actions/heroes/invoker.rs` | Invoker combo profiles, invoke planning, panic Ghost Walk, and prep sequences | `docs/heroes/invoker.md` |
-| `src/actions/heroes/largo.rs` | Largo ultimate state, beat timing, manual song hooks | `docs/heroes/largo.md` |
+| `src/actions/heroes/largo.rs` | Largo ultimate state, beat timing, song schedule the keyboard hook writes into | `docs/heroes/largo.md` |
 | `src/actions/heroes/legion_commander.rs` | Legion Commander combo automation | `docs/heroes/legion_commander.md` |
 | `src/actions/heroes/magnus.rs` | Magnus directional Reverse Polarity automation (ultimate-key intercept + GSI readiness gate) | `docs/heroes/magnus.md`, `docs/features/keyboard-interception.md` |
 | `src/actions/heroes/meepo_macro.rs` | Meepo farm-assist macro state, gating, and pulse decisions | `docs/heroes/meepo.md` |
@@ -227,6 +227,7 @@ a gameplay patch. See `docs/workflows/probe-first.md`.
 | `examples/mouse_test.rs` | Local helper binary for inspecting `rdev` mouse button events | `docs/workflows/testing-and-debugging.md` |
 | `examples/morphling_shift_probe.rs` | GSI probe that measured what a Morphling shift looks like; also replays a capture | `docs/heroes/morphling.md` |
 | `examples/morphling_shift_control.rs` | Simulator the Morphling shift decision loop was proved against before it reached `src/` | `docs/heroes/morphling.md` |
+| `examples/largo_song_sync_control.rs` | Simulator proving the Largo song intercept's timing: what is swallowed, what reaches Dota, and on which beat | `docs/heroes/largo.md` |
 | `examples/minimap_analyze.rs` | Standalone CLI for running hero detection on PNG captures | `docs/superpowers/specs/2026-03-31-minimap-hero-detection-design.md` |
 
 ## `docs/`

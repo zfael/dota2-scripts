@@ -17,6 +17,7 @@ use crate::actions::heroes::shadow_fiend::ShadowFiendState;
 use crate::actions::heroes::magnus::MagnusState;
 use crate::actions::heroes::earth_spirit::EarthSpiritState;
 use crate::actions::heroes::ember_spirit::EmberSpiritState;
+use crate::actions::heroes::largo::{self, Song};
 use crate::actions::heroes::mirana::MiranaState;
 use crate::actions::heroes::slark::SlarkState;
 use crate::actions::heroes::snapfire::SnapfireState;
@@ -37,10 +38,6 @@ pub enum HotkeyEvent {
     /// Record the cursor's current position as the HUD hero portrait.
     CaptureHudPortrait,
     InvokerCycleComboProfile,
-    LargoQ,
-    LargoW,
-    LargoE,
-    LargoR,
     InvokerProfile(String),
 }
 
@@ -704,26 +701,42 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                     }
                 }
 
-                // Handle Largo Q/W/E/R keys and other ability keys with Soul Ring
+                // Handle Largo's songs while Amphibian Rhapsody is up.
+                //
+                // The songs are a rhythm, not a queue of casts: a key pressed
+                // between beats casts the song off the beat, which is exactly
+                // what desyncs it — and with Aghanim's, desyncs it from the
+                // other song of the pair. So the press is swallowed and kept as
+                // the song the player wants, and the beat worker puts it on the
+                // grid. Soul Ring deliberately never sees these presses:
+                // replaying the key a few hundred ms later is the same desync
+                // by another route.
+                if let Some(action) = plan_largo_key_action(
+                    key,
+                    &snapshot.largo,
+                    snapshot.largo_enabled,
+                    largo::ULTIMATE_ACTIVE.load(Ordering::SeqCst),
+                ) {
+                    match action {
+                        LargoKeyAction::SelectSong(song) => {
+                            debug!("🎵 {:?} captured as Largo song {:?}", key, song);
+                            largo::queue_song(song);
+                            // Blocked: the beat worker presses it on the beat.
+                            return None;
+                        }
+                        LargoKeyAction::StopUltimate => {
+                            // Not blocked — this press is what ends the
+                            // ultimate. Stopping the loop here rather than
+                            // waiting for GSI is what keeps the beat after it
+                            // from pressing a song that no longer exists.
+                            largo::stop_ultimate();
+                        }
+                    }
+                }
+
+                // Handle ability keys with Soul Ring
                 match key {
                     Key::KeyQ | Key::KeyW | Key::KeyE | Key::KeyR | Key::KeyD | Key::KeyF => {
-                        // Send Largo events for beat timing
-                        match key {
-                            Key::KeyQ => {
-                                let _ = event_tx.send(HotkeyEvent::LargoQ);
-                            }
-                            Key::KeyW => {
-                                let _ = event_tx.send(HotkeyEvent::LargoW);
-                            }
-                            Key::KeyE => {
-                                let _ = event_tx.send(HotkeyEvent::LargoE);
-                            }
-                            Key::KeyR => {
-                                let _ = event_tx.send(HotkeyEvent::LargoR);
-                            }
-                            _ => {}
-                        }
-
                         // If Soul Ring should trigger, spawn handler and block original
                         if should_intercept_for_soul_ring {
                             spawn_soul_ring_then_key(key, snapshot.soul_ring.clone());
@@ -900,6 +913,66 @@ pub struct EmberSpiritKeyboardSnapshot {
     pub sleight_activate_delay_ms: u64,
 }
 
+/// Snapshot of the Largo keyboard-relevant config.
+///
+/// The song keys are the ability keys the player actually bound, pre-parsed
+/// once per snapshot so the hook compares `Key`s rather than re-parsing config
+/// on every keystroke.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct LargoKeyboardSnapshot {
+    pub bullbelly_key: Option<Key>,
+    pub hotfeet_key: Option<Key>,
+    pub island_elixir_key: Option<Key>,
+    /// Amphibian Rhapsody. Pressed while the ultimate is up, it ends it.
+    pub ultimate_key: Option<Key>,
+}
+
+/// What the hook does with a Largo key while the ultimate is up.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LargoKeyAction {
+    /// Swallow the press; the beat worker emits this song on the beat.
+    SelectSong(Song),
+    /// Let the press through — it is what ends the ultimate — but stop the
+    /// beat loop now rather than waiting a GSI tick for confirmation.
+    StopUltimate,
+}
+
+/// Decide what a keystroke means to Largo.
+///
+/// Returns `None` whenever the press is not ours, which is every keystroke in
+/// the game except a song or ultimate key during Amphibian Rhapsody. Outside
+/// the ultimate the song keys are ordinary abilities and must reach Dota
+/// untouched — including in the window after the ultimate key is pressed but
+/// before GSI confirms the cast, where the safe answer is to pass through.
+fn plan_largo_key_action(
+    key: Key,
+    snapshot: &LargoKeyboardSnapshot,
+    largo_enabled: bool,
+    ultimate_active: bool,
+) -> Option<LargoKeyAction> {
+    if !largo_enabled || !ultimate_active {
+        return None;
+    }
+
+    // Checked first so binding a song to the ultimate key cannot make the
+    // ultimate unstoppable.
+    if snapshot.ultimate_key == Some(key) {
+        return Some(LargoKeyAction::StopUltimate);
+    }
+
+    if snapshot.bullbelly_key == Some(key) {
+        return Some(LargoKeyAction::SelectSong(Song::Bullbelly));
+    }
+    if snapshot.hotfeet_key == Some(key) {
+        return Some(LargoKeyAction::SelectSong(Song::Hotfeet));
+    }
+    if snapshot.island_elixir_key == Some(key) {
+        return Some(LargoKeyAction::SelectSong(Song::IslandElixir));
+    }
+
+    None
+}
+
 /// Snapshot of the Magnus keyboard-relevant config.
 #[derive(Debug, Clone)]
 pub struct MagnusKeyboardSnapshot {
@@ -995,6 +1068,9 @@ pub struct KeyboardSnapshot {
     /// Whether Ember Spirit is the active hero (drives the Sleight activate).
     pub ember_spirit_enabled: bool,
     pub ember_spirit: EmberSpiritKeyboardSnapshot,
+    /// Whether Largo is the active hero (drives the song-key intercept).
+    pub largo_enabled: bool,
+    pub largo: LargoKeyboardSnapshot,
     /// Static Soul Ring keyboard config (thresholds, key sets, delays).
     pub soul_ring: SoulRingKeyboardConfig,
     pub invoker_profiles: Vec<InvokerHotkeyProfileSnapshot>,
@@ -1132,6 +1208,7 @@ impl KeyboardSnapshot {
         let mi = &settings.heroes.mirana;
         let es = &settings.heroes.earth_spirit;
         let em = &settings.heroes.ember_spirit;
+        let lg = &settings.heroes.largo;
 
         Self {
             selected_hero: state.selected_hero.clone(),
@@ -1240,6 +1317,17 @@ impl KeyboardSnapshot {
                 sleight_key: char_to_key(em.sleight_key),
                 activate_char: em.activate_key,
                 sleight_activate_delay_ms: em.sleight_activate_delay_ms,
+            },
+            // Gated the same way the hotkey handler used to be: Largo selected
+            // and standalone control on. Swallowing a song key for a hero the
+            // operator is not playing would eat an ordinary ability press.
+            largo_enabled: state.selected_hero == Some(crate::state::HeroType::Largo)
+                && state.standalone_enabled,
+            largo: LargoKeyboardSnapshot {
+                bullbelly_key: char_to_key(lg.q_ability_key),
+                hotfeet_key: char_to_key(lg.w_ability_key),
+                island_elixir_key: char_to_key(lg.e_ability_key),
+                ultimate_key: char_to_key(lg.r_ability_key),
             },
             soul_ring: SoulRingKeyboardConfig::from_settings(settings),
             invoker_profiles: settings
@@ -1353,6 +1441,8 @@ impl Default for KeyboardSnapshot {
                 activate_char: 'd',
                 sleight_activate_delay_ms: 0,
             },
+            largo_enabled: false,
+            largo: LargoKeyboardSnapshot::default(),
             soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
             invoker_profiles: vec![],
         }
@@ -1522,6 +1612,96 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Mutex;
 
+    /// Largo on Dota's default binds.
+    fn largo_test_snapshot() -> LargoKeyboardSnapshot {
+        LargoKeyboardSnapshot {
+            bullbelly_key: Some(Key::KeyQ),
+            hotfeet_key: Some(Key::KeyW),
+            island_elixir_key: Some(Key::KeyE),
+            ultimate_key: Some(Key::KeyR),
+        }
+    }
+
+    #[test]
+    fn largo_song_keys_are_captured_only_while_the_ultimate_is_up() {
+        let snapshot = largo_test_snapshot();
+
+        assert_eq!(
+            plan_largo_key_action(Key::KeyW, &snapshot, true, true),
+            Some(LargoKeyAction::SelectSong(Song::Hotfeet))
+        );
+        // Outside the ultimate these are ordinary abilities. Swallowing one
+        // would stop the hero casting it at all.
+        assert_eq!(plan_largo_key_action(Key::KeyW, &snapshot, true, false), None);
+        // Another hero is selected, or standalone control is off.
+        assert_eq!(plan_largo_key_action(Key::KeyW, &snapshot, false, true), None);
+    }
+
+    #[test]
+    fn largo_intercept_follows_the_configured_binds_not_qwer() {
+        let rebound = LargoKeyboardSnapshot {
+            bullbelly_key: Some(Key::KeyZ),
+            hotfeet_key: Some(Key::KeyX),
+            island_elixir_key: Some(Key::KeyC),
+            ultimate_key: Some(Key::KeyV),
+        };
+
+        assert_eq!(
+            plan_largo_key_action(Key::KeyX, &rebound, true, true),
+            Some(LargoKeyAction::SelectSong(Song::Hotfeet))
+        );
+        assert_eq!(
+            plan_largo_key_action(Key::KeyV, &rebound, true, true),
+            Some(LargoKeyAction::StopUltimate)
+        );
+        // The physical W is somebody else's bind now.
+        assert_eq!(plan_largo_key_action(Key::KeyW, &rebound, true, true), None);
+    }
+
+    #[test]
+    fn largo_maps_each_song_key_to_its_own_song() {
+        let snapshot = largo_test_snapshot();
+
+        assert_eq!(
+            plan_largo_key_action(Key::KeyQ, &snapshot, true, true),
+            Some(LargoKeyAction::SelectSong(Song::Bullbelly))
+        );
+        assert_eq!(
+            plan_largo_key_action(Key::KeyE, &snapshot, true, true),
+            Some(LargoKeyAction::SelectSong(Song::IslandElixir))
+        );
+        assert_eq!(
+            plan_largo_key_action(Key::KeyR, &snapshot, true, true),
+            Some(LargoKeyAction::StopUltimate)
+        );
+        assert_eq!(plan_largo_key_action(Key::KeyD, &snapshot, true, true), None);
+    }
+
+    #[test]
+    fn largo_ultimate_key_wins_over_a_song_bound_to_the_same_key() {
+        // A config that binds a song to the ultimate key would otherwise make
+        // the ultimate impossible to end: the press would be swallowed.
+        let clashing = LargoKeyboardSnapshot {
+            bullbelly_key: Some(Key::KeyR),
+            ..largo_test_snapshot()
+        };
+
+        assert_eq!(
+            plan_largo_key_action(Key::KeyR, &clashing, true, true),
+            Some(LargoKeyAction::StopUltimate)
+        );
+    }
+
+    #[test]
+    fn largo_unparseable_binds_capture_nothing() {
+        // `char_to_key` returns None for a key we cannot match, and a None bind
+        // must never collide with another None bind.
+        let unparsed = LargoKeyboardSnapshot::default();
+
+        assert_eq!(plan_largo_key_action(Key::KeyQ, &unparsed, true, true), None);
+        assert_eq!(plan_largo_key_action(Key::KeyR, &unparsed, true, true), None);
+    }
+
     fn broodmother_test_snapshot() -> KeyboardSnapshot {
         KeyboardSnapshot {
             selected_hero: None,
@@ -1616,6 +1796,8 @@ mod tests {
                 activate_char: 'd',
                 sleight_activate_delay_ms: 0,
             },
+            largo_enabled: false,
+            largo: LargoKeyboardSnapshot::default(),
             soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
             invoker_profiles: vec![],
         }
