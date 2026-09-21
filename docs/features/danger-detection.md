@@ -73,6 +73,20 @@ Rules:
 The cost of this is a bounded blind spot: for up to 1.5 s after a Soul Ring press, up to
 170 HP of real burst reads as ours. Anything past that still registers.
 
+### A shrinking pool is not damage
+
+When `max_health` changes between events, current HP moves with it at the same fraction.
+A Power Treads switch out of STR takes 220 max HP and, at full health, 220 current HP in one
+tick. The loss is therefore measured against the previous HP **rescaled to the new pool**
+(`last_hp × max_hp / last_max_hp`), not the raw previous HP.
+
+The first real Power Treads game found this. Every switch out of STR read as a 220 HP
+burst, the treads' danger switch sent them back to STR, and the two looped for as long as
+the feature was on. The rescale is generic, so the same applies to a Morphling shift, a
+sold Heart, or an expiring max-HP buff. Real damage on the same tick still counts in full.
+See `a_shrinking_pool_is_not_damage` and
+`damage_on_the_same_tick_as_a_shrinking_pool_still_triggers_danger`.
+
 ### Entering danger
 
 Danger turns on when **either** condition is true, using the discounted `hp_delta` above:

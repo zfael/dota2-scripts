@@ -22,6 +22,7 @@ const SELF_DAMAGE_WINDOW: Duration = Duration::from_millis(1500);
 #[derive(Debug, Default)]
 struct HpTracker {
     last_hp: Option<u32>,
+    last_max_hp: Option<u32>,
     last_hp_percent: Option<u32>,
     last_update: Option<Instant>,
     danger_detected: bool,
@@ -143,6 +144,7 @@ pub fn update(event: &GsiWebhookEvent, config: &DangerDetectionConfig) -> bool {
         // First event - initialize
         if tracker.last_hp.is_none() {
             tracker.last_hp = Some(current_hp);
+            tracker.last_max_hp = Some(max_hp);
             tracker.last_hp_percent = Some(current_hp_percent);
             tracker.last_update = Some(now);
             return false;
@@ -151,8 +153,21 @@ pub fn update(event: &GsiWebhookEvent, config: &DangerDetectionConfig) -> bool {
         let last_hp = tracker.last_hp.unwrap();
         let time_delta_ms = tracker.last_update.unwrap().elapsed().as_millis();
 
+        // A max-HP change carries current HP with it at the same fraction —
+        // a Power Treads switch out of STR takes 220 of each in one tick. That
+        // is the pool shrinking, not damage, so measure the loss against the
+        // previous HP rescaled to the new pool. Without this, our own treads
+        // switch read as a 220HP burst and the danger switch sent the treads
+        // straight back to STR, forever.
+        let comparable_last_hp = match tracker.last_max_hp {
+            Some(last_max) if last_max > 0 && last_max != max_hp => {
+                (last_hp as u64 * max_hp as u64 / last_max as u64) as u32
+            }
+            _ => last_hp,
+        };
+
         // Calculate HP change (positive = HP loss)
-        let observed_delta = last_hp as i32 - current_hp as i32;
+        let observed_delta = comparable_last_hp as i32 - current_hp as i32;
 
         // Subtract anything we spent on ourselves since the last event - a Soul Ring
         // sacrifice is not an enemy. Only the surplus counts as incoming damage.
@@ -209,6 +224,7 @@ pub fn update(event: &GsiWebhookEvent, config: &DangerDetectionConfig) -> bool {
 
         // Update tracker
         tracker.last_hp = Some(current_hp);
+        tracker.last_max_hp = Some(max_hp);
         tracker.last_hp_percent = Some(current_hp_percent);
         tracker.last_update = Some(now);
 
@@ -258,6 +274,44 @@ mod tests {
         event.hero.health = hp;
         event.hero.health_percent = hp / 10;
         event
+    }
+
+    /// The reported bug from the first Power Treads game: leaving STR takes 220
+    /// max HP and 220 current HP in one tick. That read as a 220HP burst, the
+    /// danger switch sent the treads back to STR, and the loop never ended.
+    #[test]
+    fn a_shrinking_pool_is_not_damage() {
+        let _lock = guard();
+        let config = config();
+
+        let mut str_tick = at_hp(912);
+        str_tick.hero.max_health = 912;
+        str_tick.hero.health_percent = 100;
+        assert!(!update(&str_tick, &config));
+
+        let mut int_tick = at_hp(692);
+        int_tick.hero.max_health = 692;
+        int_tick.hero.health_percent = 100;
+        assert!(!update(&int_tick, &config));
+        assert!(!is_in_danger());
+    }
+
+    /// Rescaling must not hide real damage landing on the same tick as a switch.
+    #[test]
+    fn damage_on_the_same_tick_as_a_shrinking_pool_still_triggers_danger() {
+        let _lock = guard();
+        let config = config();
+
+        let mut str_tick = at_hp(912);
+        str_tick.hero.max_health = 912;
+        str_tick.hero.health_percent = 100;
+        assert!(!update(&str_tick, &config));
+
+        // Pool 912 → 692 (full HP would be 692), and 300 damage on top.
+        let mut int_tick = at_hp(392);
+        int_tick.hero.max_health = 692;
+        int_tick.hero.health_percent = 56;
+        assert!(update(&int_tick, &config));
     }
 
     /// The reported bug: buying mana with Soul Ring read as a 170HP burst, which tripped
