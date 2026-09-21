@@ -1062,6 +1062,77 @@ impl Default for SoulRingConfig {
     }
 }
 
+/// Power Treads switching. See `docs/features/power-treads.md` and
+/// `src/actions/power_treads.rs`.
+///
+/// Thresholds are in units GSI reports (percent, milliseconds) — never HP per
+/// attribute point or switch sizes, which the module learns in game.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PowerTreadsConfig {
+    /// Master switch. Off until the feature has proven itself in real games.
+    pub enabled: bool,
+    /// Before a spell or item that costs mana, switch to the attribute with
+    /// the most mana (INT for most heroes, STR for Ogre Magi).
+    pub cast_switch: bool,
+    /// Hold STR while the danger detector is firing. Beats every other
+    /// behaviour, casts included.
+    pub danger_switch: bool,
+    /// Use Bottle, Salve, Clarity and friends in the smallest pool.
+    pub heal_switch: bool,
+    /// Press through a full cycle, when idle and safe, to find or confirm the
+    /// state. Off: the state is only learned from purchases and your switches.
+    pub auto_verify: bool,
+    /// A switch you make yourself while idle becomes the new home.
+    pub manual_switch_sets_home: bool,
+    /// Never leave a higher-HP attribute for a cast below this health %.
+    pub min_health_percent: u32,
+    /// A press that shows nothing after this long was dropped (or moved
+    /// neither pool, like Ogre Magi's INT→AGI).
+    pub confirm_timeout_ms: u64,
+    /// Stay on the cast attribute this long after the mana is spent.
+    pub cast_linger_ms: u64,
+    /// Stop waiting for the mana to be spent after this long.
+    pub cast_timeout_ms: u64,
+    /// Re-verify a confident state this often; 0 turns the periodic check off.
+    pub verify_interval_ms: u64,
+    /// Verify only after this long without an ability, item or treads key.
+    pub verify_quiet_ms: u64,
+    /// Wait this long after a failed verify before retrying.
+    pub verify_retry_ms: u64,
+    /// A heal has this long to show up before "not rising" ends it.
+    pub heal_grace_ms: u64,
+    /// End the heal once the pool has stopped rising for this long.
+    pub heal_settle_ms: u64,
+    pub heal_max_ms: u64,
+    /// Gap between successive treads presses, and before the original key.
+    pub press_gap_ms: u64,
+}
+
+impl Default for PowerTreadsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            cast_switch: true,
+            danger_switch: true,
+            heal_switch: true,
+            auto_verify: true,
+            manual_switch_sets_home: true,
+            min_health_percent: 30,
+            confirm_timeout_ms: 700,
+            cast_linger_ms: 800,
+            cast_timeout_ms: 3000,
+            verify_interval_ms: 120_000,
+            verify_quiet_ms: 3000,
+            verify_retry_ms: 5000,
+            heal_grace_ms: 700,
+            heal_settle_ms: 700,
+            heal_max_ms: 15_000,
+            press_gap_ms: 30,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GsiLoggingConfig {
     #[serde(default = "default_gsi_logging_enabled")]
@@ -1589,6 +1660,8 @@ pub struct Settings {
     pub invisibility: InvisibilityConfig,
     #[serde(default)]
     pub soul_ring: SoulRingConfig,
+    #[serde(default)]
+    pub power_treads: PowerTreadsConfig,
     #[serde(default)]
     pub gsi_logging: GsiLoggingConfig,
     #[serde(default)]
@@ -3312,6 +3385,7 @@ impl Default for Settings {
             phase_boots_automation: PhaseBootsAutomationConfig::default(),
             invisibility: InvisibilityConfig::default(),
             soul_ring: SoulRingConfig::default(),
+            power_treads: PowerTreadsConfig::default(),
             gsi_logging: GsiLoggingConfig::default(),
             updates: UpdateConfig::default(),
             rune_alerts: RuneAlertConfig::default(),

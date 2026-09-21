@@ -80,6 +80,7 @@ broken test build there once went unnoticed.
 | Tune danger heuristics, healing thresholds, or defensive items | `docs/features/danger-detection.md` |
 | Trace blocked keys, Soul Ring replay, or SF interception | `docs/features/keyboard-interception.md` |
 | Understand Soul Ring automation | `docs/features/soul-ring.md` |
+| Understand Power Treads switching | `docs/features/power-treads.md` |
 | Understand shared survivability / dispel / neutral-item behavior | `docs/features/survivability.md` |
 | Work on creep wave prediction or the minimap overlay | `docs/features/wave-tracker.md` |
 | Work on objective audio alerts, cues, or voice packs | `docs/features/objective-alerts.md` |
@@ -123,6 +124,7 @@ broken test build there once went unnoticed.
 | `actions/item_automation.rs` | Item automation helpers |
 | `actions/dispel.rs` | Silence dispel / cleanse logic (Manta, Lotus) |
 | `actions/soul_ring.rs` | Soul Ring shared state, intercept rules, and combo helper |
+| `actions/power_treads.rs` | Power Treads state inference (max HP / max mana deltas) and switching |
 | `actions/armlet.rs` | Armlet toggle logic, including Roshan mode |
 | `actions/executor.rs` | Action queue workers and delayed scheduling |
 | `actions/activity.rs` | Activity feed entries surfaced in the UI |
@@ -256,6 +258,7 @@ built the way it was; the feature docs above describe what it does now.
 | `src/actions/auto_items.rs` | `docs/features/survivability.md` |
 | `src/actions/dispel.rs` | `docs/features/survivability.md`, `docs/features/danger-detection.md` |
 | `src/actions/soul_ring.rs` | `docs/features/keyboard-interception.md`, `docs/features/soul-ring.md` |
+| `src/actions/power_treads.rs` | `docs/features/power-treads.md`, `docs/features/keyboard-interception.md` |
 | `src/input/keyboard.rs` | `docs/features/keyboard-interception.md` |
 | `src/observability/wave_tracker.rs` or `wave_overlay.rs` | `docs/features/wave-tracker.md` |
 | `src/observability/alerts.rs` or `src/audio/` | `docs/features/objective-alerts.md` |
@@ -326,6 +329,7 @@ tool when a patch changes the numbers.
 | `docs/features/keyboard-interception.md` | Global hook ordering, Soul Ring replay, SF interception |
 | `docs/features/survivability.md` | Shared healing, dispel, neutral items, common item state |
 | `docs/features/soul-ring.md` | Soul Ring feature doc |
+| `docs/features/power-treads.md` | Power Treads switching feature doc |
 | `docs/features/wave-tracker.md` | Wave prediction model, coordinate space, accuracy limits, minimap overlay |
 | `docs/features/objective-alerts.md` | Alert schedules, cue design, procedural synthesis, voice packs |
 | `docs/features/updates.md` | Startup checks, update banner, download/apply/restart |

@@ -99,4 +99,50 @@ describe("Boots page phase boots automation controls", () => {
     });
   });
 
+  it("ships Power Treads off, with its behaviour toggles disabled until enabled", () => {
+    render(
+      <MemoryRouter>
+        <Boots />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Power Treads")).toBeInTheDocument();
+    expect(
+      screen.getByRole("switch", { name: "Enable Power Treads Switching" }),
+    ).toHaveAttribute("aria-checked", "false");
+    for (const name of [
+      "Switch for Mana Spells and Items",
+      "Hold STR in Danger",
+      "Heal in the Smallest Pool",
+      "Verify State When Idle",
+      "My Switches Set Home",
+    ]) {
+      expect(screen.getByRole("switch", { name })).toBeDisabled();
+    }
+  });
+
+  it("persists the Power Treads master switch to its own section", async () => {
+    invokeMock.mockResolvedValue(undefined);
+
+    render(
+      <MemoryRouter>
+        <Boots />
+      </MemoryRouter>,
+    );
+
+    await fireEvent.click(
+      screen.getByRole("switch", { name: "Enable Power Treads Switching" }),
+    );
+
+    await vi.advanceTimersByTimeAsync(300);
+    await vi.waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("update_config", {
+        section: "power_treads",
+        updates: {
+          enabled: true,
+        },
+      });
+    });
+  });
+
 });

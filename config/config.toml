@@ -999,6 +999,44 @@ ability_keys = ["q", "w", "e", "r", "d", "f"]
 # Also trigger Soul Ring before item key presses (items that cost mana)
 intercept_item_keys = true
 
+# Power Treads switching. GSI never reports the treads attribute, so it is
+# inferred from how max HP / max mana move. See docs/features/power-treads.md.
+[power_treads]
+# Master toggle. Off until the feature has proven itself in real games.
+enabled = false
+# Switch to the most-mana attribute (INT; STR for Ogre Magi) before a spell or item that costs mana
+cast_switch = true
+# Hold STR while the danger detector is firing (beats every other behaviour)
+danger_switch = true
+# Use Bottle, Salve, Clarity, Wand... in the smallest pool
+heal_switch = true
+# Cycle the treads when idle and safe to find or confirm the state
+auto_verify = true
+# A switch you make yourself while idle becomes the new home
+manual_switch_sets_home = true
+# Never leave a higher-HP attribute for a cast below this health %
+min_health_percent = 30
+# A press that shows nothing in GSI after this long was dropped
+confirm_timeout_ms = 700
+# Stay on the cast attribute this long after the mana is spent (chained casts)
+cast_linger_ms = 800
+# Stop waiting for a cast to spend its mana after this long
+cast_timeout_ms = 3000
+# Re-verify a confident state this often (0 = never)
+verify_interval_ms = 120000
+# Verify only after this long without an ability, item or treads key
+verify_quiet_ms = 3000
+# Wait this long after a failed verify before retrying
+verify_retry_ms = 5000
+# A heal has this long to show up before "not rising" ends it
+heal_grace_ms = 700
+# End the heal once the pool has stopped rising for this long
+heal_settle_ms = 700
+# Longest a heal can hold the treads away from home
+heal_max_ms = 15000
+# Gap between treads presses, and before the original key
+press_gap_ms = 30
+
 [minimap_analysis]
 enabled = false
 baseline_frames = 10

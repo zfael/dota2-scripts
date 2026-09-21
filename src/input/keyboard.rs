@@ -220,11 +220,28 @@ fn plan_soul_ring_replay(
     SoulRingReplayPlan::OriginalOnly { original_key }
 }
 
-/// Request to replay Soul Ring + original key
+/// Request to replay treads presses + Soul Ring + original key
 #[derive(Debug, Clone)]
 struct SoulRingReplayRequest {
     original_key: Key,
     config: SoulRingKeyboardConfig,
+    treads: Option<crate::actions::power_treads::TreadsPrefix>,
+}
+
+/// Send the treads switch planned for this key, before Soul Ring and the key
+/// itself. Items are not interrupted by a treads press, and orders are
+/// processed in sequence, so the switch lands before the cast spends mana.
+fn press_treads_prefix(prefix: &Option<crate::actions::power_treads::TreadsPrefix>) {
+    let Some(prefix) = prefix else {
+        return;
+    };
+    let Some(input) = rdev_input_for(&prefix.binding) else {
+        return;
+    };
+    for _ in 0..prefix.presses {
+        simulate_input(input);
+        thread::sleep(Duration::from_millis(prefix.gap_ms));
+    }
 }
 
 /// Lazy-initialized Soul Ring replay worker queue.
@@ -237,6 +254,7 @@ static SOUL_RING_REPLAY_QUEUE: LazyLock<Sender<SoulRingReplayRequest>> = LazyLoc
         info!("Soul Ring replay worker started");
 
         while let Ok(request) = rx.recv() {
+            press_treads_prefix(&request.treads);
             // Lock state and compute the replay plan
             let soul_ring_state = SOUL_RING_STATE.lock().unwrap();
             let plan =
@@ -317,10 +335,15 @@ fn execute_soul_ring_plan_with_context(
 /// Enqueue Soul Ring trigger + ability key simulation to the dedicated worker thread.
 /// This is necessary because grab() callback must return quickly.
 /// Falls back to spawning a thread if the queue is unexpectedly closed.
-fn spawn_soul_ring_then_key(original_key: Key, sr_config: SoulRingKeyboardConfig) {
+fn spawn_soul_ring_then_key(
+    original_key: Key,
+    sr_config: SoulRingKeyboardConfig,
+    treads: Option<crate::actions::power_treads::TreadsPrefix>,
+) {
     let request = SoulRingReplayRequest {
         original_key,
         config: sr_config.clone(),
+        treads: treads.clone(),
     };
 
     if let Err(e) = SOUL_RING_REPLAY_QUEUE.send(request) {
@@ -331,6 +354,7 @@ fn spawn_soul_ring_then_key(original_key: Key, sr_config: SoulRingKeyboardConfig
         );
 
         thread::spawn(move || {
+            press_treads_prefix(&treads);
             let soul_ring_state = SOUL_RING_STATE.lock().unwrap();
             let plan = plan_soul_ring_replay(&soul_ring_state, original_key, &sr_config);
 
@@ -645,12 +669,13 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                 // Activate Fire Remnant. The Sleight press is not blocked — it
                 // falls through so Soul Ring can still intercept it — and only
                 // the activate is scheduled.
-                if let Some(activate_delay_ms) = plan_ember_sleight_activate(
-                    key,
-                    &snapshot,
-                    should_intercept_for_soul_ring,
-                    &mut held_follow_up_keys.borrow_mut(),
-                ) {
+                let ember_activate_scheduled = if let Some(activate_delay_ms) =
+                    plan_ember_sleight_activate(
+                        key,
+                        &snapshot,
+                        should_intercept_for_soul_ring,
+                        &mut held_follow_up_keys.borrow_mut(),
+                    ) {
                     info!(
                         "🔥 Ember Spirit Sleight of Fist pressed - activate in {}ms",
                         activate_delay_ms
@@ -659,7 +684,10 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                         snapshot.ember_spirit.activate_char,
                         activate_delay_ms,
                     );
-                }
+                    true
+                } else {
+                    false
+                };
 
                 if snapshot.od_enabled {
                     if snapshot.outworld_destroyer.ultimate_intercept_enabled && key == Key::KeyR {
@@ -734,12 +762,29 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                     }
                 }
 
+                // Power Treads. The treads key itself is reported and passes
+                // through; a key that spends mana or heals may get a treads
+                // switch sent ahead of it. Asked only here, past every hero
+                // intercept that blocks the key, so a switch is never planned
+                // for a press that will not go out. Ember's Sleight is skipped:
+                // its activate is already timed from this press.
+                let treads_prefix = if ember_activate_scheduled {
+                    None
+                } else {
+                    KeyBinding::from_event(&event.event_type)
+                        .and_then(|binding| crate::actions::power_treads::on_key_press(&binding))
+                };
+
                 // Handle ability keys with Soul Ring
                 match key {
                     Key::KeyQ | Key::KeyW | Key::KeyE | Key::KeyR | Key::KeyD | Key::KeyF => {
-                        // If Soul Ring should trigger, spawn handler and block original
-                        if should_intercept_for_soul_ring {
-                            spawn_soul_ring_then_key(key, snapshot.soul_ring.clone());
+                        // If Soul Ring or treads should go first, spawn handler and block original
+                        if should_intercept_for_soul_ring || treads_prefix.is_some() {
+                            spawn_soul_ring_then_key(
+                                key,
+                                snapshot.soul_ring.clone(),
+                                treads_prefix,
+                            );
                             return None; // Block original
                         }
 
@@ -750,8 +795,8 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                 }
 
                 // Check for item slot keys (for Soul Ring triggering on non-ability keys)
-                if should_intercept_for_soul_ring {
-                    spawn_soul_ring_then_key(key, snapshot.soul_ring.clone());
+                if should_intercept_for_soul_ring || treads_prefix.is_some() {
+                    spawn_soul_ring_then_key(key, snapshot.soul_ring.clone(), treads_prefix);
                     return None; // Block original
                 }
 

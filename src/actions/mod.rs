@@ -7,10 +7,12 @@ pub mod defensive_windows;
 pub mod dispel;
 pub mod dispatcher;
 pub mod executor;
+pub mod hero_attributes;
 pub mod heroes;
 pub mod invisibility;
 pub mod item_automation;
 pub mod mana_costs;
+pub mod power_treads;
 pub mod soul_ring;
 
 pub use dispatcher::ActionDispatcher;

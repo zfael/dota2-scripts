@@ -312,7 +312,7 @@ dropped by the game anyway.
 
 ### Replay flow
 
-`spawn_soul_ring_then_key(original_key, snapshot.soul_ring.clone())`:
+`spawn_soul_ring_then_key(original_key, snapshot.soul_ring.clone(), treads_prefix)`:
 
 1. enqueues a `SoulRingReplayRequest` onto one dedicated lazy worker queue
 2. the callback returns immediately
@@ -320,14 +320,30 @@ dropped by the game anyway.
 The lazy worker thread:
 
 1. receives the request from the unbounded FIFO queue
-2. locks `SOUL_RING_STATE`
-3. computes the replay plan (`TriggerThenOriginal` or `OriginalOnly`) while still holding the lock
-4. if eligible, marks state as triggered, then releases the lock
-5. replays Soul Ring's slot key via `rdev::simulate`
-6. waits `delay_before_ability_ms`
-7. replays the original blocked key via `rdev::simulate`
+2. presses the Power Treads prefix, if any (`press_treads_prefix`, see below)
+3. locks `SOUL_RING_STATE`
+4. computes the replay plan (`TriggerThenOriginal` or `OriginalOnly`) while still holding the lock
+5. if eligible, marks state as triggered, then releases the lock
+6. replays Soul Ring's slot key via `rdev::simulate`
+7. waits `delay_before_ability_ms`
+8. replays the original blocked key via `rdev::simulate`
 
 If the worker queue is unexpectedly closed, `spawn_soul_ring_then_key` falls back to spawning a short-lived thread with identical replay logic.
+
+### Power Treads prefix
+
+The generic ability/item branch also asks `power_treads::on_key_press(&binding)`,
+after every hero intercept that blocks the key and before Soul Ring's own branch:
+
+- the treads slot key is reported to the treads machine as a manual switch and passes
+  through untouched
+- a key that spends mana or uses a heal may come back with a `TreadsPrefix` (the treads
+  binding, a press count, and a gap); the key is then blocked and replayed through the
+  Soul Ring worker, so the order is always **treads × n → Soul Ring → key**
+- Ember Spirit's Sleight key is skipped when its Fire Remnant activate was scheduled,
+  because that activate is timed from the physical press
+
+See `docs/features/power-treads.md`.
 
 ---
 

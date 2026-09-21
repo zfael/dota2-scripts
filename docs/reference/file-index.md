@@ -62,6 +62,8 @@
 | `src/actions/defensive_windows.rs` | Glimmer Cape / Ghost Scepter windows inferred from cooldown edges, holding the items behind them | `docs/features/survivability.md`, `docs/features/danger-detection.md` |
 | `src/actions/soul_ring.rs` | Soul Ring shared state, gating rules, and replay helpers | `docs/features/soul-ring.md`, `docs/features/keyboard-interception.md`, `docs/reference/gsi-schema-and-usage.md` |
 | `src/actions/mana_costs.rs` | **Generated** item/ability mana cost tables; regenerate with `scripts/generate-mana-costs.ps1` | `docs/features/soul-ring.md` |
+| `src/actions/power_treads.rs` | Power Treads state machine (state inferred from max HP / max mana), GSI observation, key planning | `docs/features/power-treads.md`, `docs/features/keyboard-interception.md` |
+| `src/actions/hero_attributes.rs` | **Generated** hero → primary attribute table; regenerate with `scripts/generate-hero-attributes.ps1` | `docs/features/power-treads.md` |
 
 ## `src/actions/heroes/`
 
@@ -192,6 +194,7 @@
 | `src/audio/player.rs` | rodio output: PCM and file playback for alert cues | `docs/features/objective-alerts.md` |
 | `src/audio/voice_pack.rs` | Voice pack discovery and per-event sound resolution order | `docs/features/objective-alerts.md` |
 | `scripts/generate-voice-pack.ps1` | Generates a spoken voice pack using the Windows speech synthesiser | `docs/features/objective-alerts.md` |
+| `scripts/generate-hero-attributes.ps1` | Regenerates `src/actions/hero_attributes.rs` from odota/dotaconstants `heroes.json` | `docs/features/power-treads.md` |
 | `scripts/dota-bug-watch.ps1` | Pulls new ValveSoftware/Dota2-Gameplay issues since a stored cursor and tiers them by relevance to our automation | `.claude/skills/dota-bug-watch/SKILL.md` |
 | `src-tauri/src/commands/alerts.rs` | Tauri commands for alert countdowns and test playback | `docs/features/objective-alerts.md` |
 | `src-ui/src/types/alerts.ts` | Alert event keys, catalogue metadata, and countdown formatting | `docs/features/objective-alerts.md` |
@@ -227,6 +230,8 @@ a gameplay patch. See `docs/workflows/probe-first.md`.
 | `examples/mouse_test.rs` | Local helper binary for inspecting `rdev` mouse button events | `docs/workflows/testing-and-debugging.md` |
 | `examples/morphling_shift_probe.rs` | GSI probe that measured what a Morphling shift looks like; also replays a capture | `docs/heroes/morphling.md` |
 | `examples/morphling_shift_control.rs` | Simulator the Morphling shift decision loop was proved against before it reached `src/` | `docs/heroes/morphling.md` |
+| `examples/power_treads_probe.rs` | GSI probe that measured what a treads switch looks like (max HP / max mana deltas); also replays a capture | `docs/features/power-treads.md` |
+| `examples/power_treads_control.rs` | Simulator that runs the real `power_treads` machine against a simulated game | `docs/features/power-treads.md` |
 | `examples/largo_song_sync_control.rs` | Simulator proving the Largo song intercept's timing: what is swallowed, what reaches Dota, and on which beat | `docs/heroes/largo.md` |
 | `examples/minimap_analyze.rs` | Standalone CLI for running hero detection on PNG captures | `docs/superpowers/specs/2026-03-31-minimap-hero-detection-design.md` |
 

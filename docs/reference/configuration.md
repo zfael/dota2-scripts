@@ -228,6 +228,29 @@ See `docs/reference/gsi-schema-and-usage.md`.
 
 See `docs/features/soul-ring.md` and `docs/features/keyboard-interception.md`.
 
+## `[power_treads]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `enabled` | `false` | `false` | Master switch for `src/actions/power_treads.rs`. Off until proven in games; the state is tracked while off. UI: Boots. |
+| `cast_switch` | `true` | `true` | Most-mana attribute before a mana-costing spell or item. UI: Boots. |
+| `danger_switch` | `true` | `true` | Hold STR while the danger detector fires. UI: Boots. |
+| `heal_switch` | `true` | `true` | Heals in the smallest pool. UI: Boots. |
+| `auto_verify` | `true` | `true` | Cycle the treads when idle to find or confirm the state. UI: Boots. |
+| `manual_switch_sets_home` | `true` | `true` | The player's own idle switch becomes home. UI: Boots. |
+| `min_health_percent` | `30` | `30` | Never leave a higher-HP attribute for a cast below this HP%. UI: Boots. |
+| `confirm_timeout_ms` | `700` | `700` | Config only. A press with no visible change after this long was dropped. |
+| `cast_linger_ms` | `800` | `800` | Config only. Stay on the cast attribute after the mana is spent. |
+| `cast_timeout_ms` | `3000` | `3000` | Config only. Stop waiting for the spend. |
+| `verify_interval_ms` | `120000` | `120000` | Config only. `0` disables the periodic re-check. |
+| `verify_quiet_ms` | `3000` | `3000` | Config only. Idle time required before a verify. |
+| `verify_retry_ms` | `5000` | `5000` | Config only. Back-off after a failed verify. |
+| `heal_grace_ms` / `heal_settle_ms` / `heal_max_ms` | `700` / `700` / `15000` | same | Config only. When a heal window closes. |
+| `press_gap_ms` | `30` | `30` | Config only. Gap between treads presses and before the original key. |
+
+The whole struct is `#[serde(default)]`, so any omitted field takes the fallback.
+See `docs/features/power-treads.md`.
+
 ## `[rune_alerts]`
 
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |

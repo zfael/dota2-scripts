@@ -198,6 +198,10 @@ impl ActionDispatcher {
         // Check for silence dispel with Manta Style
         crate::actions::dispel::check_and_dispel_silence(event, &settings, &self.executor);
 
+        // Treads state is inferred from consecutive payloads, so it tracks every
+        // event even with the feature off; it only presses when enabled.
+        crate::actions::power_treads::observe_event(event, &settings);
+
         drop(settings); // Release lock before further processing
 
         // Shared low-mana automation is global, unlike hero-specific survivability calls.

@@ -414,6 +414,28 @@ export interface SoulRingConfig {
   intercept_item_keys: boolean;
 }
 
+/// Power Treads switching. Timings (`*_ms`) are config.toml-only; the UI
+/// exposes the master switch, the behaviour toggles and the HP gate.
+export interface PowerTreadsConfig {
+  enabled: boolean;
+  cast_switch: boolean;
+  danger_switch: boolean;
+  heal_switch: boolean;
+  auto_verify: boolean;
+  manual_switch_sets_home: boolean;
+  min_health_percent: number;
+  confirm_timeout_ms: number;
+  cast_linger_ms: number;
+  cast_timeout_ms: number;
+  verify_interval_ms: number;
+  verify_quiet_ms: number;
+  verify_retry_ms: number;
+  heal_grace_ms: number;
+  heal_settle_ms: number;
+  heal_max_ms: number;
+  press_gap_ms: number;
+}
+
 export interface RuneAlertConfig {
   enabled: boolean;
   alert_lead_seconds: number;
@@ -510,6 +532,7 @@ export interface Settings {
   phase_boots_automation: PhaseBootsAutomationConfig;
   invisibility: InvisibilityConfig;
   soul_ring: SoulRingConfig;
+  power_treads: PowerTreadsConfig;
   updates: UpdateConfig;
   rune_alerts: RuneAlertConfig;
   minimap_capture: MinimapCaptureConfig;

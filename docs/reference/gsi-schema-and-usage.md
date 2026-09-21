@@ -135,6 +135,12 @@ Fields such as `hero.magicimmune`, `hero.break`, talents, and buyback data are m
 > Attribute Shift that is the `hero.max_health` delta. See
 > `docs/heroes/morphling.md` and `examples/morphling_shift_probe.rs`.
 
+> **No item reports a toggle state either.** `item_power_treads` is byte-identical
+> in STR, INT and AGI (`can_cast`, `cooldown`, `item_level`, `max_cooldown`,
+> `passive`, `purchaser` never change). The attribute is inferred from exact
+> `hero.max_health` / `hero.max_mana` deltas — see `docs/features/power-treads.md`
+> and `examples/power_treads_probe.rs`.
+
 ### `items`
 
 `src/models/gsi_event.rs::Items::all_slots()` intentionally narrows most runtime checks to:
