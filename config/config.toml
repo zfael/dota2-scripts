@@ -462,6 +462,15 @@ select_other_units_key = "F3"
 select_hero_key = "1"
 # Gap (ms) between the steps, so Dota registers each selection change.
 illusion_send_step_ms = 30
+# Latch indicator: a click-through box over Dota, green while latched, red
+# while not. Shown while Phantom Lancer is the hero and Dota is in front.
+latch_indicator_enabled = true
+# Shift from the centre of Dota's window, in pixels. Positive x moves it right,
+# positive y moves it down. The default sits left of and below the hero.
+latch_indicator_offset_x = -560
+latch_indicator_offset_y = 500
+# Keep the box on screen while you position it from the app.
+latch_indicator_preview = false
 
 [heroes.ember_spirit]
 # One combo-key press drops a Fire Remnant and immediately dashes to it, so

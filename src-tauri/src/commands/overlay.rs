@@ -108,7 +108,7 @@ fn ensure_overlay_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String
 /// property of the window, but an overlay that eats clicks is still a better
 /// outcome than the previous behaviour, where this error aborted the show and left
 /// a created-but-invisible window that every later toggle then tried to re-show.
-fn apply_click_through(window: &tauri::WebviewWindow) {
+pub(crate) fn apply_click_through(window: &tauri::WebviewWindow) {
     if let Err(e) = window.set_ignore_cursor_events(true) {
         warn!(
             "wave overlay: failed to make the overlay click-through: {}",
@@ -117,7 +117,10 @@ fn apply_click_through(window: &tauri::WebviewWindow) {
     }
 }
 
-fn apply_bounds(window: &tauri::WebviewWindow, bounds: OverlayBounds) -> Result<(), String> {
+pub(crate) fn apply_bounds(
+    window: &tauri::WebviewWindow,
+    bounds: OverlayBounds,
+) -> Result<(), String> {
     window
         .set_position(PhysicalPosition::new(bounds.x, bounds.y))
         .map_err(|e| format!("Failed to position overlay: {}", e))?;

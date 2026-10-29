@@ -342,6 +342,14 @@ pub fn plan_illusion_send(send: &IllusionSendConfig) -> Vec<Step> {
 
 static LATCH: LazyLock<Mutex<CtrlLatch>> = LazyLock::new(|| Mutex::new(CtrlLatch::default()));
 
+/// Whether the latch is on right now, for the on-screen indicator.
+pub fn is_latched() -> bool {
+    LATCH
+        .lock()
+        .map(|latch| latch.is_latched())
+        .unwrap_or(false)
+}
+
 // ───────────────────────────── the injector ─────────────────────────────
 
 /// Jobs sent to the injector and not yet finished.

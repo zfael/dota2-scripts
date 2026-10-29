@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyOverlayBodyStyles, isOverlayWindow } from "./overlay";
+import { applyOverlayBodyStyles, isOverlayWindow, overlayKind } from "./overlay";
 
 describe("isOverlayWindow", () => {
   it("detects the overlay query parameter", () => {
@@ -14,6 +14,22 @@ describe("isOverlayWindow", () => {
 
   it("does not match a merely similar parameter name", () => {
     expect(isOverlayWindow("?overlayed=1")).toBe(false);
+  });
+});
+
+describe("overlayKind", () => {
+  it("keeps the wave overlay's existing URL as the wave overlay", () => {
+    expect(overlayKind("?overlay=1")).toBe("wave");
+    expect(overlayKind("?overlay")).toBe("wave");
+  });
+
+  it("tells the latch indicator apart", () => {
+    expect(overlayKind("?overlay=latch")).toBe("latch");
+  });
+
+  it("is null for the main window", () => {
+    expect(overlayKind("")).toBeNull();
+    expect(overlayKind("?overlayed=latch")).toBeNull();
   });
 });
 

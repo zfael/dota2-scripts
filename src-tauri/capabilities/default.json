@@ -1,7 +1,7 @@
 {
   "identifier": "default",
   "description": "Default capability set for Dota 2 Scripts",
-  "windows": ["main", "wave-overlay"],
+  "windows": ["main", "wave-overlay", "pl-latch-indicator"],
   "permissions": [
     "core:default",
     "shell:allow-open"

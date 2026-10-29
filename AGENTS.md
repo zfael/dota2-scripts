@@ -132,7 +132,7 @@ broken test build there once went unnoticed.
 | `actions/heroes/largo.rs` | Largo song schedule and beat worker; the keyboard hook swallows song presses while the ultimate is up and lands them on the beat |
 | `actions/heroes/magnus.rs` | Magnus directional Reverse Polarity worker and GSI readiness gate |
 | `actions/heroes/mirana.rs` | Mirana directional Leap worker and GSI readiness gate |
-| `actions/heroes/phantom_lancer.rs` | Phantom Lancer Ctrl latch (a Ctrl tap wraps every right-click in an injected Ctrl for unified orders; physical keys wait behind it so nothing levels up) and middle-mouse illusion send |
+| `actions/heroes/phantom_lancer.rs` | Phantom Lancer Ctrl latch (a Ctrl tap wraps every right-click in an injected Ctrl for unified orders; physical keys wait behind it so nothing levels up) and middle-mouse illusion send; `is_latched` feeds the on-screen indicator |
 | `actions/heroes/morphling.rs` | Morphling Attribute Shift controller: strength on danger, gated shift back, all read from `max_health` |
 | `actions/heroes/slark.rs` | Slark directional Pounce worker, Dark Pact cleanse, and low-HP escape |
 | `actions/heroes/traits.rs` | `HeroScript` trait — implement this to add a hero |
@@ -146,6 +146,7 @@ Situational awareness. No input simulation lives here.
 |---|---|
 | `observability/wave_tracker.rs` | Clock-driven creep wave spawn cadence, lane interpolation, clash prediction |
 | `observability/wave_overlay.rs` | Screen-space placement maths for the click-through minimap overlay |
+| `observability/latch_indicator.rs` | Placement and show/hide rule for Phantom Lancer's on-screen latch box |
 | `observability/hud_anchors.rs` | Calibrated HUD positions (hero portrait) for abilities Dota will not self-cast |
 | `observability/alerts.rs` | Objective alert schedules, cue assignment, fire-once scheduling |
 | `observability/rune_alerts.rs` | Legacy generic rune timer; drives the status-header countdown |
@@ -191,6 +192,7 @@ Situational awareness. No input simulation lives here.
 | `src-tauri/src/ipc_types.rs` | Serde DTOs; each mirrors a type in `src-ui/src/types/` |
 | `src-tauri/src/commands/waves.rs` | Lane geometry and wave snapshots |
 | `src-tauri/src/commands/overlay.rs` | Overlay window lifecycle, click-through, follow-Dota loop |
+| `src-tauri/src/commands/latch_indicator.rs` | Phantom Lancer latch indicator window: shown, placed and hidden by its own worker thread |
 | `src-tauri/src/commands/alerts.rs` | Alert countdowns, test playback, voice pack listing |
 | `src-tauri/src/commands/config.rs` | Config read/write and validation |
 | `src-tauri/src/commands/state.rs` | Hero selection and runtime toggles |
@@ -204,10 +206,11 @@ manipulate windows must stay sync (main thread) — see `commands/overlay.rs`.
 
 | Path | Purpose |
 |---|---|
-| `src-ui/src/main.tsx` | Entry; picks the main app or the overlay view via `?overlay=1` |
+| `src-ui/src/main.tsx` | Entry; picks the main app, the wave overlay (`?overlay=1`) or the latch indicator (`?overlay=latch`) |
 | `src-ui/src/App.tsx` | Shell: stores, routing, layout |
 | `src-ui/src/pages/` | One file per route (`WaveTracker`, `Alerts`, `MinimapIntelligence`, `Settings`, hero pages, …) |
 | `src-ui/src/pages/WaveOverlay.tsx` | Chrome-free view rendered in the overlay window |
+| `src-ui/src/pages/LatchIndicator.tsx` | Phantom Lancer's green/red latch box, rendered in its own overlay window |
 | `src-ui/src/stores/` | Zustand stores; `mockData.ts` backs non-Tauri browser runs |
 | `src-ui/src/components/common/` | Shared inputs (`Toggle`, `Slider`, `NumberInput`, `Dropdown`, …) |
 | `src-ui/src/components/waves/WaveMap.tsx` | Vector map renderer, shared by the page and the overlay |

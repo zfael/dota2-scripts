@@ -477,6 +477,22 @@ pub struct PhantomLancerConfig {
     /// selection change before the next input.
     #[serde(default = "default_phantom_lancer_illusion_send_step_ms")]
     pub illusion_send_step_ms: u64,
+    /// A click-through box over Dota showing the latch: green on, red off.
+    /// Shown while Phantom Lancer is the hero and Dota is in front.
+    #[serde(default = "default_phantom_lancer_latch_indicator_enabled")]
+    pub latch_indicator_enabled: bool,
+    /// Horizontal shift of the box from the centre of Dota's window, in
+    /// physical pixels. Positive moves it right.
+    #[serde(default = "default_phantom_lancer_latch_indicator_offset_x")]
+    pub latch_indicator_offset_x: i32,
+    /// Vertical shift from the centre, in physical pixels. Positive moves it
+    /// down.
+    #[serde(default = "default_phantom_lancer_latch_indicator_offset_y")]
+    pub latch_indicator_offset_y: i32,
+    /// Keep the box on screen whatever the hero or the window in front, so it
+    /// can be positioned from the app.
+    #[serde(default)]
+    pub latch_indicator_preview: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1942,6 +1958,17 @@ fn default_phantom_lancer_select_hero_key() -> KeyBinding {
 fn default_phantom_lancer_illusion_send_step_ms() -> u64 {
     30
 }
+fn default_phantom_lancer_latch_indicator_enabled() -> bool {
+    true
+}
+/// Where the player put it in game: left of and below the hero, clear of the
+/// action. Clamped inside Dota's window, so a smaller one cannot lose it.
+fn default_phantom_lancer_latch_indicator_offset_x() -> i32 {
+    -560
+}
+fn default_phantom_lancer_latch_indicator_offset_y() -> i32 {
+    500
+}
 fn default_mirana_enabled() -> bool {
     true
 }
@@ -3093,6 +3120,10 @@ impl Default for PhantomLancerConfig {
             select_other_units_key: default_phantom_lancer_select_other_units_key(),
             select_hero_key: default_phantom_lancer_select_hero_key(),
             illusion_send_step_ms: default_phantom_lancer_illusion_send_step_ms(),
+            latch_indicator_enabled: default_phantom_lancer_latch_indicator_enabled(),
+            latch_indicator_offset_x: default_phantom_lancer_latch_indicator_offset_x(),
+            latch_indicator_offset_y: default_phantom_lancer_latch_indicator_offset_y(),
+            latch_indicator_preview: false,
         }
     }
 }
@@ -3820,6 +3851,15 @@ mod tests {
     }
 
     #[test]
+    fn phantom_lancer_config_defaults_the_indicator_on_where_the_player_put_it() {
+        let cfg = PhantomLancerConfig::default();
+        assert!(cfg.latch_indicator_enabled);
+        assert_eq!(cfg.latch_indicator_offset_x, -560);
+        assert_eq!(cfg.latch_indicator_offset_y, 500);
+        assert!(!cfg.latch_indicator_preview);
+    }
+
+    #[test]
     fn the_embedded_config_template_ships_the_phantom_lancer_section() {
         assert!(EMBEDDED_CONFIG_TEMPLATE.contains("[heroes.phantom_lancer]"));
 
@@ -3835,6 +3875,10 @@ mod tests {
             settings.heroes.phantom_lancer.select_other_units_key.to_string(),
             "F3"
         );
+        assert!(settings.heroes.phantom_lancer.latch_indicator_enabled);
+        assert_eq!(settings.heroes.phantom_lancer.latch_indicator_offset_x, -560);
+        assert_eq!(settings.heroes.phantom_lancer.latch_indicator_offset_y, 500);
+        assert!(!settings.heroes.phantom_lancer.latch_indicator_preview);
     }
 
     #[test]

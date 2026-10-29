@@ -300,6 +300,10 @@ export const mockConfig: Settings = {
       illusion_send_enabled: true, illusion_send_trigger: "Mouse3",
       select_other_units_key: "F3", select_hero_key: "1",
       illusion_send_step_ms: 30,
+      latch_indicator_enabled: true,
+      latch_indicator_offset_x: -560,
+      latch_indicator_offset_y: 500,
+      latch_indicator_preview: false,
     },
   },
   danger_detection: {

@@ -130,6 +130,25 @@ fn find_dota2_client_screen_rect_win32() -> Option<WindowRect> {
     })
 }
 
+/// Whether Dota 2's window is the one in front, taking keyboard input.
+pub fn is_dota2_foreground() -> bool {
+    #[cfg(windows)]
+    {
+        use windows::core::w;
+        use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, GetForegroundWindow};
+
+        let Ok(hwnd) = (unsafe { FindWindowW(None, w!("Dota 2")) }) else {
+            return false;
+        };
+        let foreground = unsafe { GetForegroundWindow() };
+        foreground == hwnd
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
 /// Best-effort read of how Dota 2 is presenting. See [`Dota2WindowMode`].
 pub fn detect_dota2_window_mode() -> Dota2WindowMode {
     #[cfg(windows)]

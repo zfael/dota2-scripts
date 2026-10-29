@@ -11,6 +11,19 @@ export function isOverlayWindow(search: string = window.location.search): boolea
   return new URLSearchParams(search).has("overlay");
 }
 
+/** Which overlay this window is: the wave map, or Phantom Lancer's latch box. */
+export type OverlayKind = "wave" | "latch";
+
+/**
+ * `?overlay=latch` is the latch indicator. Any other value is the wave
+ * overlay, which predates the distinction and is created with `?overlay=1`.
+ */
+export function overlayKind(search: string = window.location.search): OverlayKind | null {
+  const params = new URLSearchParams(search);
+  if (!params.has("overlay")) return null;
+  return params.get("overlay") === "latch" ? "latch" : "wave";
+}
+
 /**
  * Strip the main window's chrome from `<body>`.
  *

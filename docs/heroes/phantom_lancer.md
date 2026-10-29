@@ -13,6 +13,8 @@ branch of the keyboard hook.
 - **Ctrl latch** – Tap Ctrl and every right-click becomes a unified order, so
   all illusions follow it; tap again to stop
 - **Audio cue** – Rising when the latch turns on, falling when it turns off
+- **On-screen indicator** – A click-through box over Dota, green "LATCH ON" or
+  red "LATCH OFF", left of and below the hero by default, and movable
 - **Illusion send** – Middle mouse selects every other unit, right-clicks at
   the cursor and reselects the hero: the illusions go, the hero stays. It
   turns the latch off, so the hero's next right-click is its own
@@ -38,6 +40,10 @@ illusion_send_trigger = "Mouse3"
 select_other_units_key = "F3"
 select_hero_key = "1"
 illusion_send_step_ms = 30
+latch_indicator_enabled = true
+latch_indicator_offset_x = -560
+latch_indicator_offset_y = 500
+latch_indicator_preview = false
 ```
 
 | Option | Type | Default | Description |
@@ -52,8 +58,12 @@ illusion_send_step_ms = 30
 | `select_other_units_key` | key binding | `"F3"` | Your Dota bind for "Select All Other Units" |
 | `select_hero_key` | key binding | `"1"` | Your Dota bind for selecting the hero |
 | `illusion_send_step_ms` | u64 | `30` | Gap between the send's steps |
+| `latch_indicator_enabled` | bool | `true` | Show the on-screen latch box |
+| `latch_indicator_offset_x` | i32 | `-560` | Pixels right of the centre of Dota's window (negative is left) |
+| `latch_indicator_offset_y` | i32 | `500` | Pixels below the centre (negative is up) |
+| `latch_indicator_preview` | bool | `false` | Keep the box on screen while positioning it |
 
-All ten are exposed under **Heroes → Phantom Lancer**. Key bindings accept a
+All fourteen are exposed under **Heroes → Phantom Lancer**. Key bindings accept a
 letter, a named key (`"F3"`) or a mouse button (`"Mouse3"`–`"Mouse5"`). If any
 of the three send bindings does not resolve, the send is off and a warning is
 logged, rather than firing half a sequence.
@@ -70,6 +80,9 @@ unit.
 | `src/input/keyboard.rs` | Calls the latch first on every key and button event |
 | `src/config/settings.rs` | `PhantomLancerConfig` struct and defaults |
 | `src-ui/src/components/heroes/configs/PhantomLancerConfig.tsx` | Config panel |
+| `src/observability/latch_indicator.rs` | Indicator placement and show/hide rule |
+| `src-tauri/src/commands/latch_indicator.rs` | Indicator window and the worker that drives it |
+| `src-ui/src/pages/LatchIndicator.tsx` | The green/red box itself |
 | `examples/phantom_lancer_input_probe.rs` | In-game probe: re-measure after a patch |
 | `examples/phantom_lancer_control.rs` | Offline proof that Ctrl never lands under a key |
 
@@ -152,6 +165,34 @@ select_other_units_key ▸ step ▸ right-click at the cursor ▸ step ▸ selec
 - No GSI gate: there may be no illusions to send, and the cost is two
   selection changes.
 
+### 🟩 Latch Indicator
+
+A small click-through window over Dota: green with **LATCH ON** while latched,
+red with **LATCH OFF** while not. The cue says the state changed; the box says
+what it is now.
+
+- **When it shows.** While Phantom Lancer is the hero, the latch and the
+  indicator are both enabled, and Dota is the window in front. Alt-tab away
+  and it hides, so it never floats over the desktop. `latch_indicator_preview`
+  drops the hero and the window-in-front conditions so it can be positioned
+  from the app; it still needs Dota's window to centre on.
+- **Where.** The centre of Dota's client area, shifted by
+  `latch_indicator_offset_x` / `_y` in physical pixels, and clamped so it
+  stays inside the window. Its height is 3% of Dota's (43px at 1440p, 32px at
+  1080p), so it reads the same at any resolution.
+- **How fast.** A worker thread reads the latch every 30ms and broadcasts
+  changes (`pl_latch_update`); it re-reads Dota's window position every
+  300ms. The view also asks for the state every 500ms, so a lost event can
+  never leave the box wrong for long.
+- **Click-through.** Like the wave overlay it ignores the mouse, so a click
+  on it reaches the game.
+- The window is built the first time it is needed, not at startup, and is
+  closed with the main window.
+- **Its label, `pl-latch-indicator`, must be in
+  `src-tauri/capabilities/default.json`.** A window missing from it gets no
+  IPC: the view can neither listen nor ask, and sits on LATCH OFF. A test in
+  `commands/latch_indicator.rs` checks both overlay windows are listed.
+
 ### 🛡️ Survivability Actions
 
 Phantom Lancer's script calls `SurvivabilityActions::execute_default_strategy`,
@@ -209,8 +250,8 @@ protocol) before trusting the latch again.
 
 1. Turn on **Unified Orders with Ctrl** in Dota's options
 2. Pick Phantom Lancer (auto-detected via GSI)
-3. Tap Ctrl — rising cue — and right-click as normal
-4. Tap Ctrl again — falling cue — for single-unit orders
+3. Tap Ctrl — rising cue, green box — and right-click as normal
+4. Tap Ctrl again — falling cue, red box — for single-unit orders
 5. Middle-click where the illusions should go; you keep control of the hero,
    and the latch turns off (falling cue)
 
@@ -224,6 +265,9 @@ protocol) before trusting the latch again.
 - **`illusion_send_step_ms`**: raise it if the hero moves instead of the
   illusions, or the hero is not reselected. Every millisecond is added twice
   to the window in which keys are deferred.
+- **`latch_indicator_offset_x` / `_y`**: turn on Preview, move the box off the
+  hero (the default, `-560` / `500`, was placed in game left of and below it), then turn
+  Preview off.
 
 ### Logging
 
@@ -256,8 +300,8 @@ With `level = "debug"`:
   right-click in that instant goes out unwrapped.
 - **Hold-to-move is not unified.** Holding the right button down sends one
   wrapped click, not a held one.
-- **No in-game indicator.** The cue is the only signal; with it off, the state
-  is invisible.
+- **The indicator needs Borderless or Windowed.** Like the wave overlay, no
+  window can draw over exclusive fullscreen.
 - **The send's order is a plain right-click**: move, or attack whatever is
   under the cursor. There is no attack-move option; an attack key before the
   click did not work in the probe.

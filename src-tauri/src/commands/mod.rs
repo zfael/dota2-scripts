@@ -3,6 +3,7 @@ pub mod config;
 pub mod diagnostics;
 pub mod game;
 pub mod hud;
+pub mod latch_indicator;
 pub mod meepo;
 pub mod minimap;
 pub mod overlay;

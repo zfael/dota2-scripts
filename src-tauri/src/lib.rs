@@ -160,19 +160,23 @@ pub fn run() {
             commands::overlay::register_app_handle(handle.clone());
             commands::hud::register_app_handle(handle.clone());
             events::start_game_state_emitter(handle.clone());
+            commands::latch_indicator::start(handle.clone());
 
-            // Closing the main window must also close the overlay. Tauri exits
-            // when its last window closes, and the overlay is transparent,
-            // click-through, and hidden from the taskbar — so on its own it
+            // Closing the main window must also close the overlays. Tauri exits
+            // when its last window closes, and the overlays are transparent,
+            // click-through, and hidden from the taskbar — so on their own they
             // would keep the process alive as a ghost with no way to close it
             // except Task Manager.
             if let Some(main_window) = app.get_webview_window("main") {
                 main_window.on_window_event(move |event| {
                     if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
-                        if let Some(overlay) =
-                            handle.get_webview_window(commands::overlay::OVERLAY_LABEL)
-                        {
-                            let _ = overlay.close();
+                        for label in [
+                            commands::overlay::OVERLAY_LABEL,
+                            commands::latch_indicator::LATCH_INDICATOR_LABEL,
+                        ] {
+                            if let Some(overlay) = handle.get_webview_window(label) {
+                                let _ = overlay.close();
+                            }
                         }
                     }
                 });
@@ -186,6 +190,7 @@ pub fn run() {
             commands::config::update_hero_config,
             commands::hud::capture_hud_portrait,
             commands::hud::test_hud_portrait,
+            commands::latch_indicator::get_pl_latch_state,
             commands::state::get_app_state,
             commands::state::set_gsi_enabled,
             commands::state::set_standalone_enabled,

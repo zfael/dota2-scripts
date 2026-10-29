@@ -138,13 +138,13 @@
 | `src-ui/src/components/waves/WaveMap.tsx` | Presentational SVG map rendering lane paths, wave dots, and clash markers | `docs/features/wave-tracker.md` |
 | `src-ui/src/pages/WaveTracker.tsx` | Wave tracker page: map, per-lane clash countdowns, and overlay/calibration controls | `docs/features/wave-tracker.md` |
 | `src-ui/src/pages/WaveOverlay.tsx` | Chrome-free overlay view rendered in the click-through overlay window | `docs/features/wave-tracker.md` |
-| `src-ui/src/lib/overlay.ts` | Overlay-window detection and pre-paint body style stripping | `docs/features/wave-tracker.md` |
+| `src-ui/src/pages/LatchIndicator.tsx` | Phantom Lancer latch indicator view: a green LATCH ON or red LATCH OFF box, fed by the `pl_latch_update` event | `docs/heroes/phantom_lancer.md` |
+| `src-ui/src/lib/overlay.ts` | Overlay-window detection (`?overlay=1` wave map, `?overlay=latch` latch indicator) and pre-paint body style stripping | `docs/features/wave-tracker.md`, `docs/heroes/phantom_lancer.md` |
 | `src-ui/src/components/heroes/configs/MagnusConfig.tsx` | Magnus directional-ultimate config panel: intercept toggle, ultimate key, turn delay, readiness gate, camera recentre | `docs/heroes/magnus.md` |
 | `src-ui/src/components/heroes/configs/MiranaConfig.tsx` | Mirana directional-leap config panel: intercept toggle, Leap key, turn delay, readiness gate | `docs/heroes/mirana.md` |
 | `src-ui/src/components/heroes/configs/EarthSpiritConfig.tsx` | Earth Spirit config panel: both remnant combos' keys and delays, the roll double-tap toggle, and the two readiness gates | `docs/heroes/earth_spirit.md` |
-| `src-ui/src/components/heroes/configs/PhantomLancerConfig.tsx` | Phantom Lancer config panel: Ctrl latch toggle, tap threshold, Ctrl gap, cue toggle and volume, plus the illusion send's toggle, trigger, two select keys and step delay | `docs/heroes/phantom_lancer.md` |
-| `src-ui/src/components/heroes/configs/EmberSpiritConfig.tsx` | Ember Spirit config panel: remnant-chase keys and delay, plus Flame Guard auto-cast toggle, key, HP threshold, and retry cooldown | `docs/heroes/phantom_lancer.md` | Phantom Lancer automation doc: Ctrl latch, illusion send, and the probe evidence behind both |
-| `docs/heroes/ember_spirit.md` |
+| `src-ui/src/components/heroes/configs/PhantomLancerConfig.tsx` | Phantom Lancer config panel: Ctrl latch toggle, tap threshold, Ctrl gap, cue toggle and volume, the illusion send's toggle, trigger, two select keys and step delay, plus the latch indicator's toggle, X/Y offsets and preview | `docs/heroes/phantom_lancer.md` |
+| `src-ui/src/components/heroes/configs/EmberSpiritConfig.tsx` | Ember Spirit config panel: remnant-chase keys and delay, plus Flame Guard auto-cast toggle, key, HP threshold, and retry cooldown | `docs/heroes/ember_spirit.md` |
 | `src-ui/src/components/heroes/configs/SlarkConfig.tsx` | Slark config panel: Pounce intercept toggle, Pounce key, turn delay, readiness gate, and auto Dark Pact cleanse | `docs/heroes/slark.md` |
 | `src-ui/src/components/heroes/configs/MorphlingConfig.tsx` | Morphling Attribute Shift config panel: shift keys, HP target, shift-back gates, timing | `docs/heroes/morphling.md` |
 | `src-ui/src/components/heroes/configs/SnapfireConfig.tsx` | Snapfire directional-cookie config panel: intercept toggle, trigger key, turn delay, cookie key | `docs/heroes/snapfire.md` |
@@ -188,6 +188,7 @@
 | `src/observability/lane_heat.rs` | Zone activity classifier, rolling lane heat tracker, and event detection | `docs/superpowers/specs/2026-03-31-lane-heat-analysis-design.md` |
 | `src/observability/wave_tracker.rs` | Clock-driven creep wave spawn cadence, lane path interpolation, and clash prediction | `docs/features/wave-tracker.md` |
 | `src/observability/wave_overlay.rs` | Screen-space placement maths for the click-through minimap overlay | `docs/features/wave-tracker.md` |
+| `src/observability/latch_indicator.rs` | Phantom Lancer latch indicator: centred placement with offsets, kept inside Dota's window, and the show/hide rule | `docs/heroes/phantom_lancer.md` |
 | `src/observability/hud_anchors.rs` | Calibrated HUD positions (hero portrait), cursor capture, and client-rect fraction maths | `docs/features/hud-anchors.md` |
 | `src/logging.rs` | Tracing setup: console plus the rotating log file under `%LOCALAPPDATA%` | `docs/reference/configuration.md` |
 | `src/observability/alerts.rs` | Objective alert schedules, cue assignments, and fire-once scheduling | `docs/features/objective-alerts.md` |
@@ -202,6 +203,7 @@
 | `src-ui/src/pages/Alerts.tsx` | Alerts page: master controls and per-event settings with test buttons | `docs/features/objective-alerts.md` |
 | `src-tauri/src/commands/waves.rs` | Tauri commands exposing lane geometry and wave snapshots to the UI | `docs/features/wave-tracker.md` |
 | `src-tauri/src/commands/overlay.rs` | Overlay window lifecycle, click-through setup, and the follow-Dota reposition loop | `docs/features/wave-tracker.md` |
+| `src-tauri/src/commands/latch_indicator.rs` | Phantom Lancer latch indicator window: the worker that shows, places and hides it, sends the latch state, and the `get_pl_latch_state` command | `docs/heroes/phantom_lancer.md` |
 | `src-tauri/src/commands/hud.rs` | HUD anchor capture and test commands, plus the hotkey entry point | `docs/features/hud-anchors.md` |
 
 ## `tests/`

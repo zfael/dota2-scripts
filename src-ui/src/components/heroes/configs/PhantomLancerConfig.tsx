@@ -62,8 +62,27 @@ export default function PhantomLancerConfig() {
           <Slider label="Volume" value={config.latch_cue_volume} min={0} max={1} step={0.05} onChange={(v) => set({ latch_cue_volume: v })} />
           <p className="text-xs text-muted">
             Rising when the latch turns on, falling when it turns off. Dota
-            shows nothing for it, so this is the only way to know which mode
-            you are in.
+            shows nothing for it; the sound and the indicator below are how you
+            know which mode you are in.
+          </p>
+        </Card>
+      </div>
+
+      <div className="space-y-4">
+        <Card title="Latch Indicator">
+          <Toggle label="Show Indicator" checked={config.latch_indicator_enabled} onChange={(v) => set({ latch_indicator_enabled: v })} />
+          <NumberInput label="Offset X" value={config.latch_indicator_offset_x} onChange={(v) => set({ latch_indicator_offset_x: Math.round(v) })} step={10} suffix="px" />
+          <NumberInput label="Offset Y" value={config.latch_indicator_offset_y} onChange={(v) => set({ latch_indicator_offset_y: Math.round(v) })} step={10} suffix="px" />
+          <Toggle label="Preview (keep it on screen)" checked={config.latch_indicator_preview} onChange={(v) => set({ latch_indicator_preview: v })} />
+          <p className="text-xs text-muted">
+            A box over Dota: green with LATCH ON, red with LATCH OFF. It shows
+            while Phantom Lancer is your hero and Dota is in front, and clicks
+            go straight through it.
+          </p>
+          <p className="text-xs text-muted">
+            Offsets are from the centre of Dota's window. Positive X moves it right,
+            positive Y moves it down. Turn on Preview to see it while you
+            adjust, then turn it off.
           </p>
         </Card>
       </div>

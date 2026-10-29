@@ -1,5 +1,6 @@
 #[allow(dead_code)]
 pub mod hud_anchors;
+pub mod latch_indicator;
 #[allow(dead_code)]
 pub mod minimap_artifacts;
 pub mod minimap_analysis;

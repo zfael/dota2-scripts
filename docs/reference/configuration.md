@@ -723,13 +723,18 @@ See `docs/heroes/ember_spirit.md` and `docs/features/danger-detection.md`.
 | `select_other_units_key` | `"F3"` | `"F3"` | The player's Dota bind for "Select All Other Units". |
 | `select_hero_key` | `"1"` | `"1"` | The player's Dota bind for selecting the hero. |
 | `illusion_send_step_ms` | `30` | `30` | Gap between the send's steps. Worked in game; the minimum is unmeasured. |
+| `latch_indicator_enabled` | `true` | `true` | Click-through box over Dota: green LATCH ON, red LATCH OFF. Shown while Phantom Lancer is the hero and Dota is in front. |
+| `latch_indicator_offset_x` | `-560` | `-560` | Physical pixels from the centre of Dota's window; positive moves right. The default, left of and below the hero, was placed in game. Clamped inside the window. |
+| `latch_indicator_offset_y` | `500` | `500` | Physical pixels from the centre; positive moves down. Clamped inside the window. |
+| `latch_indicator_preview` | `false` | `false` | Keep the box on screen for any hero and any window in front, for positioning. |
 
-All ten fields are exposed in the React UI under **Heroes → Phantom Lancer**.
+All fourteen fields are exposed in the React UI under **Heroes → Phantom Lancer**.
 The three send bindings are `KeyBinding`s; if any does not resolve, the send is
 off and a warning is logged.
 
 Both features are keyboard-hook entries that run ahead of every other branch;
-see `docs/features/keyboard-interception.md`.
+see `docs/features/keyboard-interception.md`. The indicator is a second
+click-through overlay window, see `src-tauri/src/commands/latch_indicator.rs`.
 
 See `docs/heroes/phantom_lancer.md`.
 

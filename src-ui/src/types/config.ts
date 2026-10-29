@@ -309,6 +309,12 @@ export interface PhantomLancerConfig {
   select_other_units_key: string;
   select_hero_key: string;
   illusion_send_step_ms: number;
+  latch_indicator_enabled: boolean;
+  /** Physical pixels from the centre of Dota's window; positive is right. */
+  latch_indicator_offset_x: number;
+  /** Physical pixels from the centre; positive is down. */
+  latch_indicator_offset_y: number;
+  latch_indicator_preview: boolean;
 }
 
 export interface MiranaConfig {

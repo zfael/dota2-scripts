@@ -214,7 +214,8 @@ hand after any change to window creation.
 ### Transparency
 
 The overlay shares the main bundle, selected by an `?overlay=1` query parameter (a
-parameter rather than a route because the app uses `BrowserRouter`). `main.tsx` applies
+parameter rather than a route because the app uses `BrowserRouter`; Phantom Lancer's
+latch indicator is a second overlay window, on `?overlay=latch`). `main.tsx` applies
 `body.overlay-mode` **before first paint**, which drops the global stylesheet's opaque
 background and its 900×650 minimum — either one would hide the minimap underneath.
 
