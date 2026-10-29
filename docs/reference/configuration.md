@@ -709,6 +709,30 @@ Flame Guard auto-cast is GSI-driven and reads `in_danger` from
 
 See `docs/heroes/ember_spirit.md` and `docs/features/danger-detection.md`.
 
+## `[heroes.phantom_lancer]`
+
+| Field | `config/config.toml` | Rust fallback if omitted | Notes |
+|---|---:|---:|---|
+| `ctrl_latch_enabled` | `true` | `true` | Tap Ctrl to make every right-click a unified order; tap again to stop. Needs Dota's "Unified Orders with Ctrl". |
+| `latch_tap_ms` | `200` | `200` | Longest Ctrl press that counts as a tap. Natural taps measured 81–121ms. |
+| `latch_ctrl_gap_ms` | `15` | `15` | Gap between the injected Ctrl and the replayed click, on each side. Worked in game; the minimum is unmeasured. |
+| `latch_cue_enabled` | `true` | `true` | Rising cue on, falling cue off. |
+| `latch_cue_volume` | `0.5` | `0.5` | Cue volume, `0.0`–`1.0`. |
+| `illusion_send_enabled` | `true` | `true` | One press selects every other unit, right-clicks at the cursor, and reselects the hero. |
+| `illusion_send_trigger` | `"Mouse3"` | `"Mouse3"` | What fires the send. Swallowed: with the default, no middle-mouse camera drag while Phantom Lancer is the hero. |
+| `select_other_units_key` | `"F3"` | `"F3"` | The player's Dota bind for "Select All Other Units". |
+| `select_hero_key` | `"1"` | `"1"` | The player's Dota bind for selecting the hero. |
+| `illusion_send_step_ms` | `30` | `30` | Gap between the send's steps. Worked in game; the minimum is unmeasured. |
+
+All ten fields are exposed in the React UI under **Heroes → Phantom Lancer**.
+The three send bindings are `KeyBinding`s; if any does not resolve, the send is
+off and a warning is logged.
+
+Both features are keyboard-hook entries that run ahead of every other branch;
+see `docs/features/keyboard-interception.md`.
+
+See `docs/heroes/phantom_lancer.md`.
+
 ## `[heroes.slark]`
 
 | Field | `config/config.toml` | Rust fallback if omitted | Notes |

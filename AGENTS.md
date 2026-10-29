@@ -21,7 +21,7 @@ Start here. Follow links to the source or doc file relevant to your task.
 | Config template | `config/config.toml` (embedded into the binary at build time) |
 | Live config | `%LOCALAPPDATA%\dota2-scripts\config\config.toml` |
 
-Supported heroes: **Broodmother, Earth Spirit, Ember Spirit, Huskar, Invoker, Largo, Legion Commander, Magnus, Meepo, Mirana, Morphling, Outworld Destroyer, Shadow Fiend, Slark, Snapfire, Tiny**
+Supported heroes: **Broodmother, Earth Spirit, Ember Spirit, Huskar, Invoker, Largo, Legion Commander, Magnus, Meepo, Mirana, Morphling, Outworld Destroyer, Phantom Lancer, Shadow Fiend, Slark, Snapfire, Tiny**
 
 ---
 
@@ -103,6 +103,7 @@ broken test build there once went unnoticed.
 | Mirana | `npc_dota_hero_mirana` | `docs/heroes/mirana.md` | `src/actions/heroes/mirana.rs` |
 | Morphling | `npc_dota_hero_morphling` | `docs/heroes/morphling.md` | `src/actions/heroes/morphling.rs` |
 | Outworld Destroyer | `npc_dota_hero_obsidian_destroyer` | `docs/heroes/outworld_destroyer.md` | `src/actions/heroes/outworld_destroyer.rs` |
+| Phantom Lancer | `npc_dota_hero_phantom_lancer` | `docs/heroes/phantom_lancer.md` | `src/actions/heroes/phantom_lancer.rs` |
 | Shadow Fiend | `npc_dota_hero_nevermore` | `docs/heroes/shadow_fiend.md` | `src/actions/heroes/shadow_fiend.rs` |
 | Slark | `npc_dota_hero_slark` | `docs/heroes/slark.md` | `src/actions/heroes/slark.rs` |
 | Snapfire | `npc_dota_hero_snapfire` | `docs/heroes/snapfire.md` | `src/actions/heroes/snapfire.rs` |
@@ -131,6 +132,7 @@ broken test build there once went unnoticed.
 | `actions/heroes/largo.rs` | Largo song schedule and beat worker; the keyboard hook swallows song presses while the ultimate is up and lands them on the beat |
 | `actions/heroes/magnus.rs` | Magnus directional Reverse Polarity worker and GSI readiness gate |
 | `actions/heroes/mirana.rs` | Mirana directional Leap worker and GSI readiness gate |
+| `actions/heroes/phantom_lancer.rs` | Phantom Lancer Ctrl latch (a Ctrl tap wraps every right-click in an injected Ctrl for unified orders; physical keys wait behind it so nothing levels up) and middle-mouse illusion send |
 | `actions/heroes/morphling.rs` | Morphling Attribute Shift controller: strength on danger, gated shift back, all read from `max_health` |
 | `actions/heroes/slark.rs` | Slark directional Pounce worker, Dark Pact cleanse, and low-HP escape |
 | `actions/heroes/traits.rs` | `HeroScript` trait — implement this to add a hero |
@@ -223,6 +225,8 @@ evidence a feature was built on and the tool for re-measuring after a patch. See
 | `examples/morphling_shift_probe.rs` | Records GSI on its own port and replays a capture; measures what an Attribute Shift looks like in the payload |
 | `examples/morphling_shift_control.rs` | Simulates the shift from those measurements and runs the decision loop against 16 scenario checks |
 | `examples/largo_song_sync_control.rs` | Plays song presses at chosen offsets against Largo's beat grid; asserts what is swallowed, what reaches Dota, and on which beat |
+| `examples/phantom_lancer_input_probe.rs` | Sends the inputs the Phantom Lancer automation needs into a live game and records whether they worked |
+| `examples/phantom_lancer_control.rs` | Proves the Phantom Lancer Ctrl latch and illusion send never leave Ctrl under a key |
 | `examples/minimap_capture.rs` | Captures minimap PNGs for offline analysis |
 | `examples/minimap_analyze.rs` | Runs hero detection over captured PNGs |
 | `examples/mouse_test.rs` | Inspects raw `rdev` mouse button events |

@@ -317,6 +317,7 @@ fn handle_hotkey_events(
                                 Hero::ObsidianDestroyer.to_game_name()
                             }
                             HeroType::Morphling => Hero::Morphling.to_game_name(),
+                            HeroType::PhantomLancer => Hero::PhantomLancer.to_game_name(),
                             HeroType::ShadowFiend => Hero::Nevermore.to_game_name(),
                             HeroType::Slark => Hero::Slark.to_game_name(),
                             HeroType::Snapfire => Hero::Snapfire.to_game_name(),

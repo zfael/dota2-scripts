@@ -196,6 +196,11 @@ async fn main() {
                                 state::HeroType::OutworldDestroyer => {
                                     models::Hero::ObsidianDestroyer.to_game_name()
                                 }
+                                // Routed for completeness; the Ctrl latch lives in
+                                // the keyboard hook, so the handler is a no-op.
+                                state::HeroType::PhantomLancer => {
+                                    models::Hero::PhantomLancer.to_game_name()
+                                }
                                 state::HeroType::ShadowFiend => {
                                     models::Hero::Nevermore.to_game_name()
                                 }

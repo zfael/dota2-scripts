@@ -14,6 +14,7 @@ const configs: Record<HeroType, () => Promise<{ default: ComponentType }>> = {
   mirana: () => import("./MiranaConfig"),
   morphling: () => import("./MorphlingConfig"),
   outworld_destroyer: () => import("./OutworldDestroyerConfig"),
+  phantom_lancer: () => import("./PhantomLancerConfig"),
   shadow_fiend: () => import("./ShadowFiendConfig"),
   slark: () => import("./SlarkConfig"),
   snapfire: () => import("./SnapfireConfig"),

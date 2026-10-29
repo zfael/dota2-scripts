@@ -80,6 +80,7 @@
 | `src/actions/heroes/meepo_state.rs` | Read-only Meepo observed-state derivation and cache | `docs/heroes/meepo.md`, `docs/reference/gsi-schema-and-usage.md` |
 | `src/actions/heroes/mirana.rs` | Mirana directional Leap automation (Leap-key intercept + GSI readiness gate) | `docs/heroes/mirana.md`, `docs/features/keyboard-interception.md` |
 | `src/actions/heroes/earth_spirit.rs` | Earth Spirit remnant combos: grip key remapped to Stone Remnant then Geomagnetic Grip (the silence), roll key to Rolling Boulder then Stone Remnant, dropped into the path during the windup | `docs/heroes/earth_spirit.md`, `docs/features/keyboard-interception.md` |
+| `src/actions/heroes/phantom_lancer.rs` | Phantom Lancer Ctrl latch and illusion send: tap/hold state machine, serial injector that wraps right-clicks in Ctrl, runs the select-others/right-click/select-hero send and defers physical input behind both, echo matching, death unlatch | `docs/heroes/phantom_lancer.md`, `docs/features/keyboard-interception.md` |
 | `src/actions/heroes/ember_spirit.rs` | Ember Spirit remnant chase (Fire Remnant then Activate Fire Remnant) and GSI-driven Flame Guard auto-cast on danger | `docs/heroes/ember_spirit.md`, `docs/features/danger-detection.md` |
 | `src/actions/heroes/outworld_destroyer.rs` | Outworld Destroyer barrier, combo worker, ultimate interception support, and self-Astral helper | `docs/heroes/outworld_destroyer.md`, `docs/features/keyboard-interception.md` |
 | `src/actions/heroes/slark.rs` | Slark directional Pounce automation (Pounce-key intercept + GSI readiness gate), GSI-driven Dark Pact debuff cleanse, and the low-HP Shadow Dance escape with shard fallback | `docs/heroes/slark.md`, `docs/features/keyboard-interception.md`, `docs/features/hud-anchors.md` |
@@ -141,7 +142,9 @@
 | `src-ui/src/components/heroes/configs/MagnusConfig.tsx` | Magnus directional-ultimate config panel: intercept toggle, ultimate key, turn delay, readiness gate, camera recentre | `docs/heroes/magnus.md` |
 | `src-ui/src/components/heroes/configs/MiranaConfig.tsx` | Mirana directional-leap config panel: intercept toggle, Leap key, turn delay, readiness gate | `docs/heroes/mirana.md` |
 | `src-ui/src/components/heroes/configs/EarthSpiritConfig.tsx` | Earth Spirit config panel: both remnant combos' keys and delays, the roll double-tap toggle, and the two readiness gates | `docs/heroes/earth_spirit.md` |
-| `src-ui/src/components/heroes/configs/EmberSpiritConfig.tsx` | Ember Spirit config panel: remnant-chase keys and delay, plus Flame Guard auto-cast toggle, key, HP threshold, and retry cooldown | `docs/heroes/ember_spirit.md` |
+| `src-ui/src/components/heroes/configs/PhantomLancerConfig.tsx` | Phantom Lancer config panel: Ctrl latch toggle, tap threshold, Ctrl gap, cue toggle and volume, plus the illusion send's toggle, trigger, two select keys and step delay | `docs/heroes/phantom_lancer.md` |
+| `src-ui/src/components/heroes/configs/EmberSpiritConfig.tsx` | Ember Spirit config panel: remnant-chase keys and delay, plus Flame Guard auto-cast toggle, key, HP threshold, and retry cooldown | `docs/heroes/phantom_lancer.md` | Phantom Lancer automation doc: Ctrl latch, illusion send, and the probe evidence behind both |
+| `docs/heroes/ember_spirit.md` |
 | `src-ui/src/components/heroes/configs/SlarkConfig.tsx` | Slark config panel: Pounce intercept toggle, Pounce key, turn delay, readiness gate, and auto Dark Pact cleanse | `docs/heroes/slark.md` |
 | `src-ui/src/components/heroes/configs/MorphlingConfig.tsx` | Morphling Attribute Shift config panel: shift keys, HP target, shift-back gates, timing | `docs/heroes/morphling.md` |
 | `src-ui/src/components/heroes/configs/SnapfireConfig.tsx` | Snapfire directional-cookie config panel: intercept toggle, trigger key, turn delay, cookie key | `docs/heroes/snapfire.md` |
@@ -228,6 +231,8 @@ a gameplay patch. See `docs/workflows/probe-first.md`.
 | `examples/morphling_shift_probe.rs` | GSI probe that measured what a Morphling shift looks like; also replays a capture | `docs/heroes/morphling.md` |
 | `examples/morphling_shift_control.rs` | Simulator the Morphling shift decision loop was proved against before it reached `src/` | `docs/heroes/morphling.md` |
 | `examples/largo_song_sync_control.rs` | Simulator proving the Largo song intercept's timing: what is swallowed, what reaches Dota, and on which beat | `docs/heroes/largo.md` |
+| `examples/phantom_lancer_input_probe.rs` | Input probe: sends Ctrl-wrapped clicks and the middle-mouse illusion send into a live game, records the player's verdicts and Ctrl tap timing; re-measure tool after a patch | `docs/heroes/phantom_lancer.md` |
+| `examples/phantom_lancer_control.rs` | Simulator proving the Phantom Lancer Ctrl latch and illusion send never leave Ctrl under a key; `--without <rule>` shows each safeguard is load-bearing | `docs/heroes/phantom_lancer.md` |
 | `examples/minimap_analyze.rs` | Standalone CLI for running hero detection on PNG captures | `docs/superpowers/specs/2026-03-31-minimap-hero-detection-design.md` |
 
 ## `docs/`
@@ -252,6 +257,7 @@ a gameplay patch. See `docs/workflows/probe-first.md`.
 | `docs/heroes/mirana.md` | Mirana automation doc: directional Leap |
 | `docs/heroes/morphling.md` | Morphling automation doc: Attribute Shift on danger |
 | `docs/heroes/earth_spirit.md` | Earth Spirit automation doc: silence combo, enhanced roll |
+| `docs/heroes/phantom_lancer.md` | Phantom Lancer automation doc: Ctrl latch, illusion send, and the probe evidence behind both |
 | `docs/heroes/ember_spirit.md` | Ember Spirit automation doc: remnant chase, Flame Guard auto-cast |
 | `docs/heroes/outworld_destroyer.md` | Outworld Destroyer automation doc |
 | `docs/heroes/shadow_fiend.md` | Shadow Fiend automation doc |

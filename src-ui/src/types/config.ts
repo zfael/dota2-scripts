@@ -297,6 +297,20 @@ export interface EarthSpiritConfig {
   petrify_to_smash_delay_ms: number;
 }
 
+export interface PhantomLancerConfig {
+  ctrl_latch_enabled: boolean;
+  latch_tap_ms: number;
+  latch_ctrl_gap_ms: number;
+  latch_cue_enabled: boolean;
+  /** 0.0-1.0 */
+  latch_cue_volume: number;
+  illusion_send_enabled: boolean;
+  illusion_send_trigger: string;
+  select_other_units_key: string;
+  select_hero_key: string;
+  illusion_send_step_ms: number;
+}
+
 export interface MiranaConfig {
   enabled: boolean;
   leap_key: string;
@@ -362,6 +376,7 @@ export interface HeroesConfig {
   largo: LargoConfig;
   broodmother: BroodmotherConfig;
   meepo: MeepoConfig;
+  phantom_lancer: PhantomLancerConfig;
 }
 
 export interface DangerDetectionConfig {

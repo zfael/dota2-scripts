@@ -23,6 +23,7 @@ pub enum HeroType {
     Mirana,
     Morphling,
     OutworldDestroyer,
+    PhantomLancer,
     ShadowFiend,
     Slark,
     Snapfire,
@@ -65,6 +66,7 @@ impl HeroType {
             name if name == Hero::ObsidianDestroyer.to_game_name() => {
                 Some(HeroType::OutworldDestroyer)
             }
+            name if name == Hero::PhantomLancer.to_game_name() => Some(HeroType::PhantomLancer),
             name if name == Hero::Nevermore.to_game_name() => Some(HeroType::ShadowFiend),
             name if name == Hero::Slark.to_game_name() => Some(HeroType::Slark),
             name if name == Hero::Snapfire.to_game_name() => Some(HeroType::Snapfire),
@@ -86,6 +88,7 @@ impl HeroType {
             HeroType::Mirana => "Mirana",
             HeroType::Morphling => "Morphling",
             HeroType::OutworldDestroyer => "Outworld Destroyer",
+            HeroType::PhantomLancer => "Phantom Lancer",
             HeroType::ShadowFiend => "Shadow Fiend",
             HeroType::Slark => "Slark",
             HeroType::Snapfire => "Snapfire",
@@ -289,6 +292,15 @@ mod tests {
             Some(HeroType::EmberSpirit)
         );
         assert_eq!(HeroType::EmberSpirit.to_display_name(), "Ember Spirit");
+    }
+
+    #[test]
+    fn phantom_lancer_hero_type_maps_name_and_display() {
+        assert_eq!(
+            HeroType::from_hero_name(crate::models::Hero::PhantomLancer.to_game_name()),
+            Some(HeroType::PhantomLancer)
+        );
+        assert_eq!(HeroType::PhantomLancer.to_display_name(), "Phantom Lancer");
     }
 
     #[test]

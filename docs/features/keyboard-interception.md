@@ -16,6 +16,7 @@
 | `src/actions/heroes/slark.rs` | Slark directional Pounce planning, GSI readiness gate, and dedicated request worker |
 | `src/actions/heroes/mirana.rs` | Mirana directional Leap planning, GSI readiness gate, and dedicated request worker |
 | `src/actions/heroes/earth_spirit.rs` | Earth Spirit remnant-combo planning, two GSI readiness gates, and dedicated request worker |
+| `src/actions/heroes/phantom_lancer.rs` | Phantom Lancer Ctrl latch and illusion send state machine, its own serial injector, and echo matching |
 | `src/actions/heroes/invoker.rs` | Invoker combo profiles, invoke planning, dedicated request worker (panic Ghost Walk, prep pairs, primary combo) |
 | `src/input/simulation.rs` | High-level synthetic keys/mouse emission + `SIMULATING_KEYS` guard |
 | `src/gsi/handler.rs` | Rebuilds the shared `KeyboardSnapshot` when GSI detection changes the hero |
@@ -97,7 +98,19 @@ This feature assumes the app can install a global keyboard hook on Windows. If i
 Current callback order on key/button input:
 
 1. **Ignore our own simulated input**
+   - `phantom_lancer::is_own_echo` -> pass-through for events the Phantom
+     Lancer injector sent (it does not use `SIMULATING_KEYS`; see below)
    - `SIMULATING_KEYS` -> immediate pass-through
+   - **Phantom Lancer Ctrl latch and illusion send** -> runs on every key
+     press, key release and mouse button (not mouse moves), ahead of
+     everything below. It reads only `snapshot.phantom_lancer_enabled` and
+     `snapshot.phantom_lancer` under the read lock, without cloning the
+     snapshot. It blocks the send trigger and runs the send, blocks a latched
+     right-click (and its release) and replays it under Ctrl, and while its
+     Ctrl is down
+     or its injector is busy it blocks *every* physical key and click and
+     replays it behind that Ctrl — so a deferred key never reaches the
+     branches below
 2. **Read snapshot once**
    - clone `KeyboardSnapshot` from the shared `RwLock`
 3. **Track Space**
@@ -421,6 +434,41 @@ The standalone combo itself runs on the OD worker and currently sequences Blink,
 
 ---
 
+## Phantom Lancer Ctrl latch and illusion send
+
+Tap Ctrl and every right-click reaches Dota inside an injected Ctrl, which
+Dota's "Unified Orders with Ctrl" turns into an order for every illusion. A
+separate trigger (default middle mouse, swallowed) selects every other unit,
+right-clicks at the cursor, and reselects the hero. Full behaviour, evidence and
+limits: `docs/heroes/phantom_lancer.md`.
+
+What matters for this hook:
+
+- **It runs before every other branch, on releases and buttons too.** Ctrl +
+  an ability key levels the ability and Ctrl + a number key reassigns a
+  control group, so while the latch's Ctrl is down no key may reach Dota.
+  Physical events in that window are blocked and replayed behind the Ctrl-up
+  by the Phantom Lancer injector. A key deferred this way skips every branch
+  below it — no Soul Ring, no app hotkey — for the ~35ms after a latched
+  right-click.
+- **It does not use `SIMULATING_KEYS`.** That guard passes every event while
+  it is set, the player's included, which is precisely the window the latch
+  has to catch. Instead the injector queues each event it is about to send,
+  and `is_own_echo` at the top of the callback matches the front of that
+  queue. Echoes older than 500ms are dropped.
+- **Ctrl itself is never blocked.** A tap is only known on release, and a bare
+  Ctrl does nothing in Dota.
+- **The flip side of the shared guard:** while another feature's enigo input or
+  Soul Ring replay holds `SIMULATING_KEYS`, a right-click passes before the
+  latch sees it and goes out unwrapped.
+- **Keys the illusion send presses lift the player's held Ctrl around
+  themselves**, or the hero-select key would land as "assign control group".
+- Gated on `snapshot.phantom_lancer_enabled`
+  (`selected_hero == Some(HeroType::PhantomLancer)`); each feature is `None` in
+  `snapshot.phantom_lancer` when turned off, and the send is also `None` when
+  one of its bindings does not resolve.
+- Proved offline by `cargo run --example phantom_lancer_control`.
+
 ## Largo and Broodmother notes
 
 These are still part of the interception surface even though this page centers on `keyboard.rs`, `soul_ring.rs`, and `shadow_fiend.rs`.
@@ -543,6 +591,7 @@ These are still part of the interception surface even though this page centers o
 | Mirana | `config/config.toml` -> `[heroes.mirana]` | `enabled`, `leap_key`, `turn_delay_ms`, `require_ability_ready` |
 | Earth Spirit | `config/config.toml` -> `[heroes.earth_spirit]` | `enabled`, `remnant_key`, `silence_combo_enabled`, `grip_key`, `silence_remnant_delay_ms`, `require_grip_ready`, `roll_combo_enabled`, `roll_key`, `roll_double_tap`, `roll_double_tap_delay_ms`, `roll_to_remnant_delay_ms`, `roll_remnant_alt`, `roll_remnant_double_tap`, `roll_remnant_double_tap_delay_ms`, `require_roll_ready` |
 | Ember Spirit | `config/config.toml` -> `[heroes.ember_spirit]` | `sleight_activate_enabled`, `sleight_key`, `activate_key`, `sleight_activate_delay_ms` |
+| Phantom Lancer | `config/config.toml` -> `[heroes.phantom_lancer]` | `ctrl_latch_enabled`, `latch_tap_ms`, `latch_ctrl_gap_ms`, `latch_cue_enabled`, `latch_cue_volume`, `illusion_send_enabled`, `illusion_send_trigger`, `select_other_units_key`, `select_hero_key`, `illusion_send_step_ms` |
 | Largo | `config/config.toml` -> `[heroes.largo]` | `q_ability_key`, `w_ability_key`, `e_ability_key`, `r_ability_key`, `beat_interval_ms`, `beat_correction_ms`, `beat_correction_every_n_beats` |
 | HUD anchors | `config/config.toml` -> `[hud]` | `capture_portrait_key` (blocked from reaching Dota), plus the stored portrait fractions |
 | Global hotkey | `config/config.toml` -> `[keybindings]` | slot key mappings; the live standalone trigger is read from `AppState.trigger_key` and cached as a parsed `snapshot.trigger_key` |
@@ -568,5 +617,6 @@ Related docs:
 - `docs/heroes/mirana.md`
 - `docs/heroes/earth_spirit.md`
 - `docs/heroes/largo.md`
+- `docs/heroes/phantom_lancer.md`
 - `docs/features/hud-anchors.md`
 - `docs/architecture/runtime-flow.md`

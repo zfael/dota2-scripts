@@ -111,6 +111,7 @@ pub fn select_hero(
                 "Mirana" => "npc_dota_hero_mirana",
                 "Outworld Destroyer" => "npc_dota_hero_obsidian_destroyer",
                 "Morphling" => "npc_dota_hero_morphling",
+                "Phantom Lancer" => "npc_dota_hero_phantom_lancer",
                 "Shadow Fiend" => "npc_dota_hero_nevermore",
                 "Slark" => "npc_dota_hero_slark",
                 "Snapfire" => "npc_dota_hero_snapfire",

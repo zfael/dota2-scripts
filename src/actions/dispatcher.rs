@@ -2,8 +2,8 @@ use crate::actions::executor::ActionExecutor;
 use crate::actions::heroes::{
     BroodmotherScript, EarthSpiritScript, EmberSpiritScript, HeroScript, HuskarScript,
     InvokerScript, LargoScript, LegionCommanderScript, MagnusScript, MeepoScript, MiranaScript,
-    MorphlingScript, OutworldDestroyerScript, ShadowFiendScript, SlarkScript, SnapfireScript,
-    TinyScript,
+    MorphlingScript, OutworldDestroyerScript, PhantomLancerScript, ShadowFiendScript, SlarkScript,
+    SnapfireScript, TinyScript,
 };
 use crate::actions::{armlet, common::SurvivabilityActions};
 use crate::config::Settings;
@@ -169,6 +169,9 @@ impl ActionDispatcher {
 
         let earth_spirit = Arc::new(EarthSpiritScript::new(settings.clone(), executor.clone()));
         hero_scripts.insert(earth_spirit.hero_name().to_string(), earth_spirit);
+
+        let phantom_lancer = Arc::new(PhantomLancerScript::new(settings.clone(), executor.clone()));
+        hero_scripts.insert(phantom_lancer.hero_name().to_string(), phantom_lancer);
 
         Self {
             hero_scripts,

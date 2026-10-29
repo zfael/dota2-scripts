@@ -293,6 +293,14 @@ export const mockConfig: Settings = {
       },
       armlet: {},
     },
+    phantom_lancer: {
+      ctrl_latch_enabled: true, latch_tap_ms: 200,
+      latch_ctrl_gap_ms: 15, latch_cue_enabled: true,
+      latch_cue_volume: 0.5,
+      illusion_send_enabled: true, illusion_send_trigger: "Mouse3",
+      select_other_units_key: "F3", select_hero_key: "1",
+      illusion_send_step_ms: 30,
+    },
   },
   danger_detection: {
     enabled: true, hp_threshold_percent: 70, rapid_loss_hp: 100,

@@ -11,6 +11,7 @@ export type HeroType =
   | "mirana"
   | "morphling"
   | "outworld_destroyer"
+  | "phantom_lancer"
   | "shadow_fiend"
   | "slark"
   | "snapfire"
@@ -37,6 +38,7 @@ export const HEROES: HeroInfo[] = [
   { id: "mirana", displayName: "Mirana", internalName: "npc_dota_hero_mirana", icon: "🌙", role: "Carry / Escape" },
   { id: "morphling", displayName: "Morphling", internalName: "npc_dota_hero_morphling", icon: "💧", role: "Carry / Escape" },
   { id: "outworld_destroyer", displayName: "Outworld Destroyer", internalName: "npc_dota_hero_obsidian_destroyer", icon: "🌀", role: "Carry / Nuker" },
+  { id: "phantom_lancer", displayName: "Phantom Lancer", internalName: "npc_dota_hero_phantom_lancer", icon: "🔱", role: "Carry / Escape" },
   { id: "shadow_fiend", displayName: "Shadow Fiend", internalName: "npc_dota_hero_nevermore", icon: "👻", role: "Carry / Nuker" },
   { id: "slark", displayName: "Slark", internalName: "npc_dota_hero_slark", icon: "🐟", role: "Carry / Escape" },
   { id: "snapfire", displayName: "Snapfire", internalName: "npc_dota_hero_snapfire", icon: "🍪", role: "Support / Nuker" },

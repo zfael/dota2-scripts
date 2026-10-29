@@ -440,6 +440,45 @@ pub struct EmberSpiritConfig {
     pub flame_guard_trigger_cooldown_ms: u64,
 }
 
+/// Phantom Lancer's Ctrl latch. See `src/actions/heroes/phantom_lancer.rs`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PhantomLancerConfig {
+    /// Tap Ctrl to make every right-click a unified order (Dota's "Unified
+    /// Orders with Ctrl" must be on), tap again to stop.
+    #[serde(default = "default_phantom_lancer_ctrl_latch_enabled")]
+    pub ctrl_latch_enabled: bool,
+    /// Longest Ctrl press (ms) that counts as a tap. Anything longer, or Ctrl
+    /// with any other key or click, is the player's own Ctrl.
+    #[serde(default = "default_phantom_lancer_latch_tap_ms")]
+    pub latch_tap_ms: u64,
+    /// Gap (ms) between the injected Ctrl and the replayed click, on each side.
+    #[serde(default = "default_phantom_lancer_latch_ctrl_gap_ms")]
+    pub latch_ctrl_gap_ms: u64,
+    /// Rising cue when the latch turns on, falling when it turns off.
+    #[serde(default = "default_phantom_lancer_latch_cue_enabled")]
+    pub latch_cue_enabled: bool,
+    /// Cue volume, `0.0`-`1.0`.
+    #[serde(default = "default_phantom_lancer_latch_cue_volume")]
+    pub latch_cue_volume: f32,
+    /// One press selects every other unit, right-clicks at the cursor, and
+    /// reselects the hero: the illusions go, the hero stays.
+    #[serde(default = "default_phantom_lancer_illusion_send_enabled")]
+    pub illusion_send_enabled: bool,
+    /// What fires the illusion send. Swallowed: Dota never sees it.
+    #[serde(default = "default_phantom_lancer_illusion_send_trigger")]
+    pub illusion_send_trigger: KeyBinding,
+    /// The player's Dota bind for "Select All Other Units".
+    #[serde(default = "default_phantom_lancer_select_other_units_key")]
+    pub select_other_units_key: KeyBinding,
+    /// The player's Dota bind for selecting the hero.
+    #[serde(default = "default_phantom_lancer_select_hero_key")]
+    pub select_hero_key: KeyBinding,
+    /// Gap (ms) between the illusion send's steps, so Dota registers each
+    /// selection change before the next input.
+    #[serde(default = "default_phantom_lancer_illusion_send_step_ms")]
+    pub illusion_send_step_ms: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MiranaConfig {
     /// Master toggle for the directional Leap intercept.
@@ -923,6 +962,8 @@ pub struct HeroesConfig {
     pub earth_spirit: EarthSpiritConfig,
     #[serde(default)]
     pub slark: SlarkConfig,
+    #[serde(default)]
+    pub phantom_lancer: PhantomLancerConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1866,6 +1907,40 @@ fn default_ember_spirit_flame_guard_hp_threshold_percent() -> u32 {
 }
 fn default_ember_spirit_flame_guard_trigger_cooldown_ms() -> u64 {
     2000
+}
+fn default_phantom_lancer_ctrl_latch_enabled() -> bool {
+    true
+}
+/// The probe measured natural taps at 81–121ms and quick Ctrl+key presses at
+/// 74–98ms; the chord rule, not this number, is what keeps the latter out.
+fn default_phantom_lancer_latch_tap_ms() -> u64 {
+    200
+}
+/// Measured working in game (181 latched clicks); the minimum is unmeasured.
+fn default_phantom_lancer_latch_ctrl_gap_ms() -> u64 {
+    15
+}
+fn default_phantom_lancer_latch_cue_enabled() -> bool {
+    true
+}
+fn default_phantom_lancer_latch_cue_volume() -> f32 {
+    0.5
+}
+fn default_phantom_lancer_illusion_send_enabled() -> bool {
+    true
+}
+fn default_phantom_lancer_illusion_send_trigger() -> KeyBinding {
+    KeyBinding::parse("Mouse3")
+}
+fn default_phantom_lancer_select_other_units_key() -> KeyBinding {
+    KeyBinding::parse("F3")
+}
+fn default_phantom_lancer_select_hero_key() -> KeyBinding {
+    KeyBinding::Char('1')
+}
+/// Worked in game; the minimum is unmeasured.
+fn default_phantom_lancer_illusion_send_step_ms() -> u64 {
+    30
 }
 fn default_mirana_enabled() -> bool {
     true
@@ -3005,6 +3080,23 @@ impl Default for EmberSpiritConfig {
     }
 }
 
+impl Default for PhantomLancerConfig {
+    fn default() -> Self {
+        Self {
+            ctrl_latch_enabled: default_phantom_lancer_ctrl_latch_enabled(),
+            latch_tap_ms: default_phantom_lancer_latch_tap_ms(),
+            latch_ctrl_gap_ms: default_phantom_lancer_latch_ctrl_gap_ms(),
+            latch_cue_enabled: default_phantom_lancer_latch_cue_enabled(),
+            latch_cue_volume: default_phantom_lancer_latch_cue_volume(),
+            illusion_send_enabled: default_phantom_lancer_illusion_send_enabled(),
+            illusion_send_trigger: default_phantom_lancer_illusion_send_trigger(),
+            select_other_units_key: default_phantom_lancer_select_other_units_key(),
+            select_hero_key: default_phantom_lancer_select_hero_key(),
+            illusion_send_step_ms: default_phantom_lancer_illusion_send_step_ms(),
+        }
+    }
+}
+
 impl Default for MiranaConfig {
     fn default() -> Self {
         Self {
@@ -3226,6 +3318,7 @@ impl Default for HeroesConfig {
             ember_spirit: EmberSpiritConfig::default(),
             earth_spirit: EarthSpiritConfig::default(),
             slark: SlarkConfig::default(),
+            phantom_lancer: PhantomLancerConfig::default(),
         }
     }
 }
@@ -3703,6 +3796,44 @@ mod tests {
         assert_eq!(
             settings.heroes.ember_spirit.flame_guard_hp_threshold_percent,
             65
+        );
+    }
+
+    #[test]
+    fn phantom_lancer_config_defaults_latch_on_with_the_measured_numbers() {
+        let cfg = PhantomLancerConfig::default();
+        assert!(cfg.ctrl_latch_enabled);
+        assert_eq!(cfg.latch_tap_ms, 200);
+        assert_eq!(cfg.latch_ctrl_gap_ms, 15);
+        assert!(cfg.latch_cue_enabled);
+        assert_eq!(cfg.latch_cue_volume, 0.5);
+    }
+
+    #[test]
+    fn phantom_lancer_config_defaults_the_illusion_send_to_middle_mouse() {
+        let cfg = PhantomLancerConfig::default();
+        assert!(cfg.illusion_send_enabled);
+        assert_eq!(cfg.illusion_send_trigger.to_string(), "Mouse3");
+        assert_eq!(cfg.select_other_units_key.to_string(), "F3");
+        assert_eq!(cfg.select_hero_key, KeyBinding::Char('1'));
+        assert_eq!(cfg.illusion_send_step_ms, 30);
+    }
+
+    #[test]
+    fn the_embedded_config_template_ships_the_phantom_lancer_section() {
+        assert!(EMBEDDED_CONFIG_TEMPLATE.contains("[heroes.phantom_lancer]"));
+
+        let settings: Settings = toml::from_str(EMBEDDED_CONFIG_TEMPLATE)
+            .expect("config/config.toml should parse into Settings");
+        assert!(settings.heroes.phantom_lancer.ctrl_latch_enabled);
+        assert_eq!(settings.heroes.phantom_lancer.latch_tap_ms, 200);
+        assert_eq!(
+            settings.heroes.phantom_lancer.illusion_send_trigger.to_string(),
+            "Mouse3"
+        );
+        assert_eq!(
+            settings.heroes.phantom_lancer.select_other_units_key.to_string(),
+            "F3"
         );
     }
 

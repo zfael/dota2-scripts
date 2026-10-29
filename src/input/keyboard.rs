@@ -19,6 +19,7 @@ use crate::actions::heroes::earth_spirit::EarthSpiritState;
 use crate::actions::heroes::ember_spirit::EmberSpiritState;
 use crate::actions::heroes::largo::{self, Song};
 use crate::actions::heroes::mirana::MiranaState;
+use crate::actions::heroes::phantom_lancer::{self, HookVerdict};
 use crate::actions::heroes::slark::SlarkState;
 use crate::actions::heroes::snapfire::SnapfireState;
 use crate::actions::soul_ring::{SoulRingKeyboardConfig, SoulRingState};
@@ -356,10 +357,34 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                 held_follow_up_keys.borrow_mut().remove(key);
             }
 
+            // Phantom Lancer's injector does not use SIMULATING_KEYS (see its
+            // module doc), so its echoes are recognised before anything else.
+            if phantom_lancer::is_own_echo(&event.event_type) {
+                return Some(event);
+            }
+
             // Pass through all events while we're simulating keys
             // This prevents re-interception of our own simulated keypresses
             if SIMULATING_KEYS.load(Ordering::SeqCst) {
                 return Some(event);
+            }
+
+            // Phantom Lancer's Ctrl latch runs ahead of every other branch: while
+            // its Ctrl is down, any key another branch would pass to Dota would
+            // land under that Ctrl, so it has to see them first.
+            if !matches!(
+                event.event_type,
+                EventType::MouseMove { .. } | EventType::Wheel { .. }
+            ) {
+                let (active, latch) = {
+                    let snapshot = config.snapshot.read().unwrap();
+                    (snapshot.phantom_lancer_enabled, snapshot.phantom_lancer)
+                };
+                if phantom_lancer::handle_physical_event(&event.event_type, active, &latch)
+                    == HookVerdict::Block
+                {
+                    return None;
+                }
             }
 
             // Track Space key (modifier for auto-items)
@@ -1071,6 +1096,9 @@ pub struct KeyboardSnapshot {
     /// Whether Largo is the active hero (drives the song-key intercept).
     pub largo_enabled: bool,
     pub largo: LargoKeyboardSnapshot,
+    /// Whether Phantom Lancer is the active hero (drives the latch and the send).
+    pub phantom_lancer_enabled: bool,
+    pub phantom_lancer: phantom_lancer::HookConfig,
     /// Static Soul Ring keyboard config (thresholds, key sets, delays).
     pub soul_ring: SoulRingKeyboardConfig,
     pub invoker_profiles: Vec<InvokerHotkeyProfileSnapshot>,
@@ -1209,6 +1237,7 @@ impl KeyboardSnapshot {
         let es = &settings.heroes.earth_spirit;
         let em = &settings.heroes.ember_spirit;
         let lg = &settings.heroes.largo;
+        let pl = &settings.heroes.phantom_lancer;
 
         Self {
             selected_hero: state.selected_hero.clone(),
@@ -1329,6 +1358,9 @@ impl KeyboardSnapshot {
                 island_elixir_key: char_to_key(lg.e_ability_key),
                 ultimate_key: char_to_key(lg.r_ability_key),
             },
+            phantom_lancer_enabled: state.selected_hero
+                == Some(crate::state::HeroType::PhantomLancer),
+            phantom_lancer: phantom_lancer_hook_config(pl),
             soul_ring: SoulRingKeyboardConfig::from_settings(settings),
             invoker_profiles: settings
                 .heroes
@@ -1443,9 +1475,56 @@ impl Default for KeyboardSnapshot {
             },
             largo_enabled: false,
             largo: LargoKeyboardSnapshot::default(),
+            phantom_lancer_enabled: false,
+            phantom_lancer: phantom_lancer::HookConfig::default(),
             soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
             invoker_profiles: vec![],
         }
+    }
+}
+
+/// Resolve the Phantom Lancer config into what the hook reads. A send whose
+/// bindings do not all resolve is off, rather than half-working.
+fn phantom_lancer_hook_config(
+    pl: &crate::config::settings::PhantomLancerConfig,
+) -> phantom_lancer::HookConfig {
+    use phantom_lancer::{IllusionSendConfig, LatchConfig, PressInput};
+
+    let latch = pl.ctrl_latch_enabled.then(|| LatchConfig {
+        tap_ms: pl.latch_tap_ms,
+        ctrl_gap_ms: pl.latch_ctrl_gap_ms,
+        cue_enabled: pl.latch_cue_enabled,
+        cue_volume: pl.latch_cue_volume,
+    });
+
+    let illusion_send = if pl.illusion_send_enabled {
+        let resolved = (
+            PressInput::from_binding(&pl.illusion_send_trigger),
+            PressInput::from_binding(&pl.select_other_units_key),
+            PressInput::from_binding(&pl.select_hero_key),
+        );
+        match resolved {
+            (Some(trigger), Some(select_others), Some(select_hero)) => Some(IllusionSendConfig {
+                trigger,
+                select_others,
+                select_hero,
+                step_ms: pl.illusion_send_step_ms,
+            }),
+            _ => {
+                warn!(
+                    "🔱 Phantom Lancer illusion send off: a binding did not resolve (trigger {}, select others {}, select hero {})",
+                    pl.illusion_send_trigger, pl.select_other_units_key, pl.select_hero_key
+                );
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    phantom_lancer::HookConfig {
+        latch,
+        illusion_send,
     }
 }
 
@@ -1798,6 +1877,8 @@ mod tests {
             },
             largo_enabled: false,
             largo: LargoKeyboardSnapshot::default(),
+            phantom_lancer_enabled: false,
+            phantom_lancer: crate::actions::heroes::phantom_lancer::HookConfig::default(),
             soul_ring: SoulRingKeyboardConfig::from_settings(&Settings::default()),
             invoker_profiles: vec![],
         }
@@ -2003,6 +2084,46 @@ mod tests {
 
         let other = KeyboardSnapshot::from_runtime(&settings, &AppState::default());
         assert!(!other.ember_spirit_enabled);
+    }
+
+    #[test]
+    fn keyboard_snapshot_arms_phantom_lancer_only_for_phantom_lancer() {
+        use crate::actions::heroes::phantom_lancer::PressInput;
+        let mut settings = Settings::default();
+        settings.heroes.phantom_lancer.latch_tap_ms = 180;
+        settings.heroes.phantom_lancer.latch_ctrl_gap_ms = 20;
+        let mut state = AppState::default();
+        state.selected_hero = Some(HeroType::PhantomLancer);
+        let snapshot = KeyboardSnapshot::from_runtime(&settings, &state);
+
+        assert!(snapshot.phantom_lancer_enabled);
+        let latch = snapshot.phantom_lancer.latch.expect("latch on by default");
+        assert_eq!(latch.tap_ms, 180);
+        assert_eq!(latch.ctrl_gap_ms, 20);
+        let send = snapshot
+            .phantom_lancer
+            .illusion_send
+            .expect("send on by default");
+        assert_eq!(send.trigger, PressInput::Button(Button::Middle));
+        assert_eq!(send.select_others, PressInput::Key(Key::F3));
+        assert_eq!(send.select_hero, PressInput::Key(Key::Num1));
+
+        settings.heroes.phantom_lancer.ctrl_latch_enabled = false;
+        settings.heroes.phantom_lancer.illusion_send_enabled = false;
+        let off = KeyboardSnapshot::from_runtime(&settings, &state);
+        assert!(off.phantom_lancer.latch.is_none());
+        assert!(off.phantom_lancer.illusion_send.is_none());
+
+        // An unresolvable binding turns the send off rather than half-firing.
+        let mut broken = Settings::default();
+        broken.heroes.phantom_lancer.select_hero_key = KeyBinding::parse("Ctrl+Shift+Q");
+        assert!(KeyboardSnapshot::from_runtime(&broken, &state)
+            .phantom_lancer
+            .illusion_send
+            .is_none());
+
+        let other = KeyboardSnapshot::from_runtime(&Settings::default(), &AppState::default());
+        assert!(!other.phantom_lancer_enabled);
     }
 
     fn ember_sleight_snapshot() -> KeyboardSnapshot {

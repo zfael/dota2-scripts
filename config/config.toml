@@ -435,6 +435,34 @@ turn_delay_ms = 200
 # skipped while Leap is visibly castable, set this false and report it.
 require_ability_ready = true
 
+[heroes.phantom_lancer]
+# Ctrl latch. Tap Ctrl and every right-click becomes a unified order, so all
+# your illusions follow it; tap again to stop. Needs Dota's "Unified Orders
+# with Ctrl" option on. Only the right-click gets Ctrl: abilities, items and
+# number keys never do, so nothing levels up and no control group changes.
+# Holding Ctrl, or Ctrl with any other key or click, is your own Ctrl and never
+# toggles the latch. It turns off when you die.
+ctrl_latch_enabled = true
+# Longest Ctrl press (ms) that counts as a tap. Natural taps measured 81-121ms.
+latch_tap_ms = 200
+# Gap (ms) between the injected Ctrl and the replayed click, on each side.
+# Raise it if some illusions miss a latched order.
+latch_ctrl_gap_ms = 15
+# Rising sound when the latch turns on, falling when it turns off.
+latch_cue_enabled = true
+latch_cue_volume = 0.5
+# Illusion send. One press of the trigger selects every other unit, right-clicks
+# at the cursor, and reselects your hero: the illusions go, the hero stays.
+# The trigger is swallowed, so Dota never sees it (default middle mouse, which
+# means no middle-mouse camera drag while Phantom Lancer is the hero).
+illusion_send_enabled = true
+illusion_send_trigger = "Mouse3"
+# Your Dota binds for "Select All Other Units" and for selecting your hero.
+select_other_units_key = "F3"
+select_hero_key = "1"
+# Gap (ms) between the steps, so Dota registers each selection change.
+illusion_send_step_ms = 30
+
 [heroes.ember_spirit]
 # One combo-key press drops a Fire Remnant and immediately dashes to it, so
 # chasing costs one key instead of two. Fired by the global combo trigger key
