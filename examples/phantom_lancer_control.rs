@@ -30,7 +30,8 @@
 //!
 //! 1. A Ctrl tap toggles the latch; a hold, or Ctrl with anything else, is the
 //!    player's own Ctrl and toggles nothing. Ctrl itself is never blocked.
-//! 2. While latched, a right-click reaches Dota with Ctrl down.
+//! 2. While latched, a right-click reaches Dota with Ctrl down. An illusion
+//!    send turns the latch off.
 //! 3. **No key the player did not chord with their own Ctrl ever reaches Dota
 //!    under Ctrl.** Physical keys pressed while an injected Ctrl is down are
 //!    deferred behind it; macro keys lift the player's own Ctrl around
@@ -207,6 +208,9 @@ impl Hook {
                 if self.ctrl_down_at.is_some() {
                     self.ctrl_chorded = true;
                 }
+                // The illusions have their order; the next right-click is the
+                // hero's alone.
+                self.latched = false;
                 Plan::Replace(plan_illusion_send(binds))
             }
             Input::ButtonUp(Button::Middle) => Plan::Swallow,
@@ -871,6 +875,23 @@ fn main() {
                     .any(|d| d.input == Input::ButtonDown(Button::Middle)),
                 || String::from("the middle click leaked to Dota"),
             )
+        },
+    );
+
+    suite.check(
+        "illusion send turns the latch off; the next click is raw",
+        |w| {
+            w.ctrl_tap(0);
+            w.click(300, Button::Middle, 40);
+            w.click(800, Button::Right, 40);
+            w.run(1_500);
+            expect(!w.hook.latched, || {
+                String::from("the latch survived the send")
+            })?;
+            let clicks = w.clicks_down(Button::Right);
+            expect(clicks.len() == 1 && !clicks[0].ctrl, || {
+                format!("the hero's click after the send went out unified: {clicks:?}")
+            })
         },
     );
 

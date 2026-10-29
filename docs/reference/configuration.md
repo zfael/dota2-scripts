@@ -718,7 +718,7 @@ See `docs/heroes/ember_spirit.md` and `docs/features/danger-detection.md`.
 | `latch_ctrl_gap_ms` | `15` | `15` | Gap between the injected Ctrl and the replayed click, on each side. Worked in game; the minimum is unmeasured. |
 | `latch_cue_enabled` | `true` | `true` | Rising cue on, falling cue off. |
 | `latch_cue_volume` | `0.5` | `0.5` | Cue volume, `0.0`–`1.0`. |
-| `illusion_send_enabled` | `true` | `true` | One press selects every other unit, right-clicks at the cursor, and reselects the hero. |
+| `illusion_send_enabled` | `true` | `true` | One press selects every other unit, right-clicks at the cursor, and reselects the hero. Turns the latch off. |
 | `illusion_send_trigger` | `"Mouse3"` | `"Mouse3"` | What fires the send. Swallowed: with the default, no middle-mouse camera drag while Phantom Lancer is the hero. |
 | `select_other_units_key` | `"F3"` | `"F3"` | The player's Dota bind for "Select All Other Units". |
 | `select_hero_key` | `"1"` | `"1"` | The player's Dota bind for selecting the hero. |

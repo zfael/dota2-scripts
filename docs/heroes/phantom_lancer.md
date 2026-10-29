@@ -14,7 +14,8 @@ branch of the keyboard hook.
   all illusions follow it; tap again to stop
 - **Audio cue** – Rising when the latch turns on, falling when it turns off
 - **Illusion send** – Middle mouse selects every other unit, right-clicks at
-  the cursor and reselects the hero: the illusions go, the hero stays
+  the cursor and reselects the hero: the illusions go, the hero stays. It
+  turns the latch off, so the hero's next right-click is its own
 - **GSI-based detection** – Auto-enables when `npc_dota_hero_phantom_lancer` is
   detected; turns the latch off on death
 - **Survivability actions** – The shared default strategy, unchanged from
@@ -104,7 +105,8 @@ held Ctrl would turn every spell in a fight into a skill point.
 5. **Lift.** A key the injector presses for the illusion send releases the
    player's held Ctrl first and puts it back after. Windows tracks left and
    right Ctrl separately, so it lifts whichever one is held.
-6. **Off.** Death, another hero, or the latch disabled turns it off.
+6. **Off.** Death, another hero, the latch disabled, or an illusion send
+   turns it off. The send plays the falling cue like a tap does.
 
 Left-clicks, keys and items are never wrapped.
 
@@ -136,6 +138,8 @@ select_other_units_key ▸ step ▸ right-click at the cursor ▸ step ▸ selec
 
 - **The trigger is swallowed**, press and release. With the default that costs
   the middle-mouse camera drag while Phantom Lancer is the hero.
+- **It turns the latch off.** The illusions have their order; left on, the
+  hero's next right-click would call them all back. Tap Ctrl to latch again.
 - **A keyboard trigger fires once per press**: autorepeat is ignored until the
   key is released.
 - **Your own Ctrl is lifted around each key** (rule 5 below). Without it,
@@ -163,7 +167,7 @@ items, neutral items and danger detection. Shared `[common]`,
    │   OFF   │                        │ LATCHED │
    └─────────┘ ◄───────────────────── └─────────┘
               death / other hero /           │ right-click
-              latch disabled                 ▼
+              latch disabled / send          ▼
                                    Ctrl ▸ gap ▸ click ▸ gap ▸ Ctrl up
                                    (physical input queued behind it)
 ```
@@ -207,7 +211,8 @@ protocol) before trusting the latch again.
 2. Pick Phantom Lancer (auto-detected via GSI)
 3. Tap Ctrl — rising cue — and right-click as normal
 4. Tap Ctrl again — falling cue — for single-unit orders
-5. Middle-click where the illusions should go; you keep control of the hero
+5. Middle-click where the illusions should go; you keep control of the hero,
+   and the latch turns off (falling cue)
 
 ### Tuning
 

@@ -21,7 +21,7 @@ export default function PhantomLancerConfig() {
             Tap Ctrl and every right-click becomes a unified order, so all your
             illusions follow it. Tap again to stop. Holding Ctrl, or Ctrl with
             any other key or click, is your own Ctrl and never toggles it. It
-            turns off when you die.
+            turns off when you die or use the illusion send.
           </p>
           <p className="text-xs text-muted">
             Only the right-click gets Ctrl. Abilities, items and number keys
@@ -44,7 +44,8 @@ export default function PhantomLancerConfig() {
           <NumberInput label="Step Delay" value={config.illusion_send_step_ms} onChange={(v) => set({ illusion_send_step_ms: v })} suffix="ms" />
           <p className="text-xs text-muted">
             One press selects every other unit, right-clicks at the cursor, and
-            selects your hero again: the illusions go, you stay.
+            selects your hero again: the illusions go, you stay. It also turns
+            the Ctrl latch off, so your next right-click moves only the hero.
           </p>
           <p className="text-xs text-muted">
             The two select keys must match your Dota hotkeys. The trigger is

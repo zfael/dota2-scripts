@@ -439,7 +439,8 @@ The standalone combo itself runs on the OD worker and currently sequences Blink,
 Tap Ctrl and every right-click reaches Dota inside an injected Ctrl, which
 Dota's "Unified Orders with Ctrl" turns into an order for every illusion. A
 separate trigger (default middle mouse, swallowed) selects every other unit,
-right-clicks at the cursor, and reselects the hero. Full behaviour, evidence and
+right-clicks at the cursor, reselects the hero, and turns the latch off. Full
+behaviour, evidence and
 limits: `docs/heroes/phantom_lancer.md`.
 
 What matters for this hook:

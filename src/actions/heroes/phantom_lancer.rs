@@ -45,7 +45,8 @@
 //!    already does the job.
 //! 5. A key the injector presses for the illusion send lifts the player's own
 //!    Ctrl around itself, or the hero-select key becomes "assign group 1".
-//! 6. Death, another hero, or the latch disabled turns the latch off.
+//! 6. Death, another hero, the latch disabled, or an illusion send turns the
+//!    latch off.
 //!
 //! ## Telling our input from the player's
 //!
@@ -235,7 +236,13 @@ impl CtrlLatch {
                 if std::mem::replace(&mut self.trigger_held, true) {
                     return (Plan::Swallow, None);
                 }
-                return (Plan::Replace(plan_illusion_send(&send)), None);
+                // The illusions have their order; the next right-click is the
+                // hero's alone.
+                let was_latched = std::mem::replace(&mut self.latched, false);
+                return (
+                    Plan::Replace(plan_illusion_send(&send)),
+                    was_latched.then_some(false),
+                );
             }
             if *event == send.trigger.release() && std::mem::take(&mut self.trigger_held) {
                 return (Plan::Swallow, None);
@@ -860,6 +867,43 @@ mod tests {
                 release(Key::Num1),
             ]
         );
+    }
+
+    /// After a send the illusions have their order: the hero's next
+    /// right-click is its own, and the toggle reports off so the cue plays.
+    #[test]
+    fn the_send_turns_the_latch_off() {
+        let mut latch = CtrlLatch::default();
+        run(&mut latch, &tap_ctrl(), true);
+        let (_, toggled) = latch.on_physical(
+            Instant::now(),
+            &EventType::ButtonPress(Button::Middle),
+            &both(),
+            true,
+        );
+        assert_eq!(toggled, Some(false));
+        assert!(!latch.is_latched());
+        let plans = run(
+            &mut latch,
+            &[
+                (0, EventType::ButtonRelease(Button::Middle)),
+                (100, EventType::ButtonPress(Button::Right)),
+            ],
+            true,
+        );
+        assert_eq!(plans, vec![Plan::Swallow, Plan::Pass]);
+    }
+
+    #[test]
+    fn a_send_while_unlatched_reports_no_toggle() {
+        let mut latch = CtrlLatch::default();
+        let (_, toggled) = latch.on_physical(
+            Instant::now(),
+            &EventType::ButtonPress(Button::Middle),
+            &both(),
+            true,
+        );
+        assert_eq!(toggled, None);
     }
 
     /// A keyboard trigger autorepeats while held; one hold is one send.

@@ -441,7 +441,7 @@ require_ability_ready = true
 # with Ctrl" option on. Only the right-click gets Ctrl: abilities, items and
 # number keys never do, so nothing levels up and no control group changes.
 # Holding Ctrl, or Ctrl with any other key or click, is your own Ctrl and never
-# toggles the latch. It turns off when you die.
+# toggles the latch. It turns off when you die or use the illusion send.
 ctrl_latch_enabled = true
 # Longest Ctrl press (ms) that counts as a tap. Natural taps measured 81-121ms.
 latch_tap_ms = 200
