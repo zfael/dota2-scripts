@@ -57,11 +57,9 @@ Earth Spirit abilities take a point and neither cares where he is facing.
 | `roll_combo_enabled` | bool | `true` | Remap the roll key. |
 | `roll_key` | char | `"w"` | Rolling Boulder key; also the key intercepted. |
 | `roll_double_tap` | bool | `true` | Press the roll key twice, for a roll key left off quickcast. |
-| `roll_double_tap_delay_ms` | u64 | `60` | Gap between the two roll presses. Ignored when the toggle is off. |
 | `roll_to_remnant_delay_ms` | u64 | `120` | Gap between the roll firing and the remnant press. Measured from the press that casts the roll, so from the second tap when double-tap is on. |
 | `roll_remnant_alt` | bool | `true` | Hold ALT across the remnant press — Dota's self-cast modifier, and the route that survives quickcast. |
 | `roll_remnant_double_tap` | bool | `true` | Press the remnant key twice — Dota's default self-cast binding. |
-| `roll_remnant_double_tap_delay_ms` | u64 | `60` | Gap between the two remnant presses. Ignored when the toggle is off. |
 | `require_roll_ready` | bool | `true` | Pass the roll key through when Rolling Boulder is unlevelled or on cooldown. |
 | `auto_petrify_on_danger` | bool | `true` | Self-cast Enchant Remnant when the danger detector fires below the HP threshold. Not gated by `enabled`. |
 | `petrify_key` | char | `"f"` | Enchant Remnant key — the scepter ability slot. |
@@ -69,10 +67,15 @@ Earth Spirit abilities take a point and neither cares where he is facing.
 | `petrify_trigger_cooldown_ms` | u64 | `5000` | Minimum gap between two escapes. |
 | `petrify_alt` | bool | `true` | Hold ALT across the Enchant Remnant press — Dota's self-cast modifier. |
 | `petrify_double_tap` | bool | `true` | Press the Enchant Remnant key twice — Dota's default self-cast binding. |
-| `petrify_double_tap_delay_ms` | u64 | `60` | Gap between the two Enchant Remnant presses. Ignored when the toggle is off. |
 | `petrify_smash_enabled` | bool | `true` | Kick the resulting remnant — Earth Spirit himself — with Boulder Smash. |
 | `smash_key` | char | `"q"` | Boulder Smash key. Pressed once, plain; never intercepted. |
 | `petrify_to_smash_delay_ms` | u64 | `250` | Gap between the petrify and the kick. Waits on the cast resolving, not on the key clearing. |
+
+Every double tap here uses the shared `[common].self_cast_tap_gap_ms` (default
+`30`) and goes out as one input job with the player's left and right clicks held
+until the second press lands — see `docs/features/keyboard-interception.md`.
+The per-ability `*_double_tap_delay_ms` keys are gone; old config files that
+still carry them load fine and ignore them.
 
 ```toml
 [heroes.earth_spirit]
@@ -85,11 +88,9 @@ require_grip_ready = true
 roll_combo_enabled = true
 roll_key = "w"
 roll_double_tap = true
-roll_double_tap_delay_ms = 60
 roll_to_remnant_delay_ms = 120
 roll_remnant_alt = true
 roll_remnant_double_tap = true
-roll_remnant_double_tap_delay_ms = 60
 require_roll_ready = true
 auto_petrify_on_danger = true
 petrify_key = "f"
@@ -97,7 +98,6 @@ petrify_hp_threshold_percent = 22
 petrify_trigger_cooldown_ms = 5000
 petrify_alt = true
 petrify_double_tap = true
-petrify_double_tap_delay_ms = 60
 petrify_smash_enabled = true
 smash_key = "q"
 petrify_to_smash_delay_ms = 250
@@ -156,15 +156,14 @@ Sequence, on the hero's own worker (it sleeps between presses, like both combos)
 
 ```
 alt_down()
-  → press_key(petrify)
-  → sleep(petrify_double_tap_delay_ms) → press_key(petrify)
+  → double_tap_key(petrify, self_cast_tap_gap_ms)
   → alt_up()
   → sleep(petrify_to_smash_delay_ms)
   → press_key(smash)
 ```
 
-The ALT pair is omitted when `petrify_alt = false`, the second petrify press and
-its sleep when `petrify_double_tap = false`, and the whole tail — sleep included
+The ALT pair is omitted when `petrify_alt = false`, the double tap becomes a
+single `press_key(petrify)` when `petrify_double_tap = false`, and the whole tail — sleep included
 — when `petrify_smash_enabled = false`. The request carries `smash_key:
 Option<char>`, so a disabled kick is unrepresentable rather than a stray press
 waiting to come out when Earth Spirit is solid again.
@@ -188,8 +187,9 @@ turned him to stone.
 ### The windup is a shared budget
 
 Every press in the roll combo has to land inside the ~600ms windup, so all three
-of its delays — `roll_double_tap_delay_ms`, `roll_to_remnant_delay_ms` and
-`roll_remnant_double_tap_delay_ms` — sum against one ceiling
+of its gaps — the roll's double tap, `roll_to_remnant_delay_ms` and the
+remnant's double tap (both taps use `[common].self_cast_tap_gap_ms`) — sum
+against one ceiling
 (`ROLLING_BOULDER_WINDUP_MS` in `settings.rs`, asserted by a unit test). Past it
 the boulder is already rolling and a remnant placed behind it does nothing —
 which looks exactly like the combo firing and having no effect.
@@ -245,19 +245,18 @@ Magnus, and Slark.
 `can_intercept_roll()`, then:
 
 ```
-press_key(roll) → sleep(roll_double_tap_delay_ms) → press_key(roll)
+double_tap_key(roll, self_cast_tap_gap_ms)
                 → sleep(roll_to_remnant_delay_ms)
                 → alt_down()
-                → press_key(remnant)
-                → sleep(roll_remnant_double_tap_delay_ms) → press_key(remnant)
+                → double_tap_key(remnant, self_cast_tap_gap_ms)
                 → alt_up()
 ```
 
-The second roll press and its sleep are skipped entirely when
+The roll's double tap becomes a single `press_key(roll)` when
 `roll_double_tap = false`; nothing stray is sent, and the wait to the remnant is
 then measured from the single press. Likewise the `alt_down`/`alt_up` pair is
-omitted when `roll_remnant_alt = false`, and the second remnant press and its
-sleep when `roll_remnant_double_tap = false`.
+omitted when `roll_remnant_alt = false`, and the remnant's double tap becomes a
+single press when `roll_remnant_double_tap = false`.
 
 ALT is held across **both** remnant taps rather than pulsed per press: Dota
 reads the modifier when the cast resolves, so releasing between taps would leave

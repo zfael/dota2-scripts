@@ -215,7 +215,7 @@ Details:
 
 - each item is independently enabled/disabled in `[danger_detection]`
 - Mjollnir (Static Charge), Glimmer and Lotus Orb are unit-targeted, so all three are self-cast by double-tapping the bound key — `defensive_item_needs_self_cast()` in `common.rs` is the single list
-- from the first self-cast item onwards, `common.rs` queues the rest of the sequence on the shared `ActionExecutor`, so the synchronous GSI lane does not sleep for the 50ms follow-up timing and later defensive items still stay behind that item's second tap
+- from the first self-cast item onwards, `common.rs` queues the rest of the sequence on the shared `ActionExecutor`, so the synchronous GSI lane does not wait on the double tap and later defensive items still stay behind that item's second tap. Each double tap is one input job, `[common].self_cast_tap_gap_ms` apart, with the player's clicks held in between — see "Self-cast double taps hold your clicks" in `docs/features/keyboard-interception.md`
 - Satanic has a separate HP gate: `satanic_hp_threshold`
 
 Three items are held back rather than fired blind (see "Defensive item windows"
@@ -403,7 +403,7 @@ Current rules:
   point), then `item_lotus_orb`
 - only cast if `can_cast == true` and cooldown is `0`
 - add random human-like jitter of `30..100ms`
-- Lotus self-casts by double-tapping
+- Lotus self-casts by double-tapping, through the same one-job, click-holding double tap as the danger kit (`[common].self_cast_tap_gap_ms`)
 - after a press, wait `PRESS_SETTLE_MS` (600ms) for GSI to confirm it. The
   pressed item going on cooldown is the confirmation; if it is still ready after
   the window, the press never reached the game and it is pressed again

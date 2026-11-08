@@ -102,7 +102,8 @@
 | File | Purpose | Linked Doc |
 |---|---|---|
 | `src/input/keyboard.rs` | Global `rdev::grab` hook and the interception decision tree | `docs/features/keyboard-interception.md`, `docs/workflows/troubleshooting.md` |
-| `src/input/simulation.rs` | Synthetic key and mouse emission helpers | `docs/features/keyboard-interception.md` |
+| `src/input/simulation.rs` | Synthetic key and mouse emission helpers, including the one-job self-cast double tap | `docs/features/keyboard-interception.md` |
+| `src/input/click_hold.rs` | Holds and replays the player's left/right clicks while a self-cast double tap is in flight | `docs/features/keyboard-interception.md` |
 | `src/input/mod.rs` | Module re-exports | — |
 
 ## `src/config/`

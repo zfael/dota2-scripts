@@ -11,13 +11,11 @@ use crate::config::{DangerDetectionConfig, Settings};
 use crate::input::binding::KeyBinding;
 use crate::models::{GsiWebhookEvent, Item};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 use tracing::{debug, info};
 
 #[cfg(test)]
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-const SELF_CAST_DELAY_MS: u64 = 50;
 const ITEM_AUTOMATION_LOCKOUT_MS: u64 = 120;
 const MOVEMENT_IDLE_TOLERANCE_UNITS: f64 = 5.0;
 const MOVEMENT_IDLE_RESET_SAMPLES: u8 = 2;
@@ -29,16 +27,23 @@ lazy_static::lazy_static! {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct PlannedKeyPress {
-    key: KeyBinding,
-    delay_after_ms: u64,
+enum PlannedKeyPress {
+    Single(KeyBinding),
+    /// Arm with `first`, resolve on our own hero with `second`. Sent as one
+    /// uninterruptible job, see `simulation::self_cast_taps`.
+    SelfCast {
+        first: KeyBinding,
+        second: KeyBinding,
+        gap_ms: u64,
+    },
 }
 
 impl PlannedKeyPress {
-    fn new(key: KeyBinding, delay_after_ms: u64) -> Self {
-        Self {
-            key,
-            delay_after_ms,
+    fn double_tap(key: KeyBinding, gap_ms: u64) -> Self {
+        Self::SelfCast {
+            first: key.clone(),
+            second: key,
+            gap_ms,
         }
     }
 }
@@ -52,21 +57,21 @@ fn defensive_item_needs_self_cast(item_name: &str) -> bool {
     )
 }
 
-fn plan_item_key_sequence(item_name: &str, key: &KeyBinding) -> Vec<PlannedKeyPress> {
+fn plan_item_key_sequence(item_name: &str, key: &KeyBinding, tap_gap_ms: u64) -> PlannedKeyPress {
     if defensive_item_needs_self_cast(item_name) {
-        vec![
-            PlannedKeyPress::new(key.clone(), SELF_CAST_DELAY_MS),
-            PlannedKeyPress::new(key.clone(), 0),
-        ]
+        PlannedKeyPress::double_tap(key.clone(), tap_gap_ms)
     } else {
-        vec![PlannedKeyPress::new(key.clone(), 0)]
+        PlannedKeyPress::Single(key.clone())
     }
 }
 
-fn plan_defensive_item_key_sequence(items: &[(String, KeyBinding)]) -> Vec<PlannedKeyPress> {
+fn plan_defensive_item_key_sequence(
+    items: &[(String, KeyBinding)],
+    tap_gap_ms: u64,
+) -> Vec<PlannedKeyPress> {
     items
         .iter()
-        .flat_map(|(item_name, key)| plan_item_key_sequence(item_name, key))
+        .map(|(item_name, key)| plan_item_key_sequence(item_name, key, tap_gap_ms))
         .collect()
 }
 
@@ -74,21 +79,27 @@ fn plan_automation_key_sequence(
     cast_mode: CastMode,
     item_key: KeyBinding,
     self_cast_key: KeyBinding,
+    tap_gap_ms: u64,
 ) -> Vec<PlannedKeyPress> {
     match cast_mode {
-        CastMode::SelfCast => vec![
-            PlannedKeyPress::new(item_key, SELF_CAST_DELAY_MS),
-            PlannedKeyPress::new(self_cast_key, 0),
-        ],
-        CastMode::NoTarget | CastMode::CursorTargeted => vec![PlannedKeyPress::new(item_key, 0)],
+        CastMode::SelfCast => vec![PlannedKeyPress::SelfCast {
+            first: item_key,
+            second: self_cast_key,
+            gap_ms: tap_gap_ms,
+        }],
+        CastMode::NoTarget | CastMode::CursorTargeted => vec![PlannedKeyPress::Single(item_key)],
     }
 }
 
 fn execute_key_sequence(sequence: Vec<PlannedKeyPress>) {
     for press in sequence {
-        crate::input::press_binding(&press.key);
-        if press.delay_after_ms > 0 {
-            std::thread::sleep(Duration::from_millis(press.delay_after_ms));
+        match press {
+            PlannedKeyPress::Single(key) => crate::input::press_binding(&key),
+            PlannedKeyPress::SelfCast {
+                first,
+                second,
+                gap_ms,
+            } => crate::input::simulation::self_cast_taps(&first, &second, gap_ms),
         }
     }
 }
@@ -728,7 +739,7 @@ impl SurvivabilityActions {
         // settings lock rather than under it.
         let gates = DefensiveGates::current();
 
-        let plan = {
+        let (plan, tap_gap_ms) = {
             let settings = self.settings.lock().unwrap();
 
             if !should_consider_defensive_items(event, &settings, in_danger) {
@@ -740,7 +751,10 @@ impl SurvivabilityActions {
 
             debug!("In danger - checking defensive items");
 
-            plan_defensive_items(event, &settings, gates)
+            (
+                plan_defensive_items(event, &settings, gates),
+                settings.common.self_cast_tap_gap_ms,
+            )
         }; // Lock released here
 
         if plan.is_empty() {
@@ -773,7 +787,8 @@ impl SurvivabilityActions {
                 crate::input::press_binding(key);
             }
 
-            let sequence = plan_defensive_item_key_sequence(&ready_items[self_cast_index..]);
+            let sequence =
+                plan_defensive_item_key_sequence(&ready_items[self_cast_index..], tap_gap_ms);
             self.executor
                 .enqueue("common-defensive-self-cast-tail", move || {
                     execute_key_sequence(sequence);
@@ -815,6 +830,7 @@ impl SurvivabilityActions {
         // Get keybindings
         let neutral_key = settings.keybindings.neutral0.clone();
         let self_cast_key = settings.neutral_items.self_cast_key.clone();
+        let tap_gap_ms = settings.common.self_cast_tap_gap_ms;
         let lockout_key = format!("danger:{}", neutral_item.name);
         let now_ms = current_time_millis();
 
@@ -841,7 +857,8 @@ impl SurvivabilityActions {
         // Release lock before input simulation
         drop(settings);
 
-        let sequence = plan_automation_key_sequence(spec.cast_mode, neutral_key, self_cast_key);
+        let sequence =
+            plan_automation_key_sequence(spec.cast_mode, neutral_key, self_cast_key, tap_gap_ms);
         self.executor.enqueue("common-danger-neutral", move || {
             execute_key_sequence(sequence);
         });
@@ -870,7 +887,12 @@ impl SurvivabilityActions {
             return;
         }
 
-        let sequence = plan_automation_key_sequence(spec.cast_mode, item_key, self_cast_key);
+        let sequence = plan_automation_key_sequence(
+            spec.cast_mode,
+            item_key,
+            self_cast_key,
+            settings.common.self_cast_tap_gap_ms,
+        );
         drop(settings);
 
         info!("💧 Using low-mana automation item: {}", item_name);
@@ -933,6 +955,7 @@ impl SurvivabilityActions {
             spec.cast_mode,
             item_key,
             settings.neutral_items.self_cast_key.clone(),
+            settings.common.self_cast_tap_gap_ms,
         );
         write_movement_snapshot(new_movement_snapshot(event));
         drop(settings);
@@ -976,7 +999,7 @@ pub fn movement_check_call_count_for_tests() -> usize {
 mod tests {
     use super::{
         find_item_slot, plan_automation_key_sequence, plan_defensive_item_key_sequence,
-        plan_item_key_sequence, PlannedKeyPress, SELF_CAST_DELAY_MS,
+        plan_item_key_sequence, PlannedKeyPress,
     };
     use crate::actions::item_automation::CastMode;
     use crate::config::Settings;
@@ -1078,25 +1101,21 @@ mod tests {
         }
     }
 
+    const GAP: u64 = 30;
+
     #[test]
     fn glimmer_plan_double_taps_for_self_cast() {
         assert_eq!(
-            plan_item_key_sequence("item_glimmer_cape", &'4'.into()),
-            vec![
-                PlannedKeyPress::new('4'.into(), SELF_CAST_DELAY_MS),
-                PlannedKeyPress::new('4'.into(), 0),
-            ]
+            plan_item_key_sequence("item_glimmer_cape", &'4'.into(), GAP),
+            PlannedKeyPress::double_tap('4'.into(), GAP)
         );
     }
 
     #[test]
     fn mjollnir_plan_double_taps_for_self_cast() {
         assert_eq!(
-            plan_item_key_sequence("item_mjollnir", &'2'.into()),
-            vec![
-                PlannedKeyPress::new('2'.into(), SELF_CAST_DELAY_MS),
-                PlannedKeyPress::new('2'.into(), 0),
-            ]
+            plan_item_key_sequence("item_mjollnir", &'2'.into(), GAP),
+            PlannedKeyPress::double_tap('2'.into(), GAP)
         );
     }
 
@@ -1109,13 +1128,11 @@ mod tests {
         ];
 
         assert_eq!(
-            plan_defensive_item_key_sequence(&items),
+            plan_defensive_item_key_sequence(&items, GAP),
             vec![
-                PlannedKeyPress::new('2'.into(), SELF_CAST_DELAY_MS),
-                PlannedKeyPress::new('2'.into(), 0),
-                PlannedKeyPress::new('4'.into(), SELF_CAST_DELAY_MS),
-                PlannedKeyPress::new('4'.into(), 0),
-                PlannedKeyPress::new('5'.into(), 0),
+                PlannedKeyPress::double_tap('2'.into(), GAP),
+                PlannedKeyPress::double_tap('4'.into(), GAP),
+                PlannedKeyPress::Single('5'.into()),
             ]
         );
     }
@@ -1123,19 +1140,28 @@ mod tests {
     #[test]
     fn lotus_orb_plan_double_taps_for_self_cast() {
         assert_eq!(
-            plan_item_key_sequence("item_lotus_orb", &'5'.into()),
-            vec![
-                PlannedKeyPress::new('5'.into(), SELF_CAST_DELAY_MS),
-                PlannedKeyPress::new('5'.into(), 0),
-            ]
+            plan_item_key_sequence("item_lotus_orb", &'5'.into(), GAP),
+            PlannedKeyPress::double_tap('5'.into(), GAP)
+        );
+    }
+
+    #[test]
+    fn the_configured_gap_reaches_the_double_tap() {
+        assert_eq!(
+            plan_item_key_sequence("item_lotus_orb", &'5'.into(), 12),
+            PlannedKeyPress::SelfCast {
+                first: '5'.into(),
+                second: '5'.into(),
+                gap_ms: 12,
+            }
         );
     }
 
     #[test]
     fn non_self_cast_item_plan_is_single_press() {
         assert_eq!(
-            plan_item_key_sequence("item_black_king_bar", &'3'.into()),
-            vec![PlannedKeyPress::new('3'.into(), 0)]
+            plan_item_key_sequence("item_black_king_bar", &'3'.into(), GAP),
+            PlannedKeyPress::Single('3'.into())
         );
     }
 
@@ -1147,39 +1173,39 @@ mod tests {
         ];
 
         assert_eq!(
-            plan_defensive_item_key_sequence(&items),
+            plan_defensive_item_key_sequence(&items, GAP),
             vec![
-                PlannedKeyPress::new('4'.into(), SELF_CAST_DELAY_MS),
-                PlannedKeyPress::new('4'.into(), 0),
-                PlannedKeyPress::new('5'.into(), 0),
+                PlannedKeyPress::double_tap('4'.into(), GAP),
+                PlannedKeyPress::Single('5'.into()),
             ]
         );
     }
 
     #[test]
-    fn automation_plan_for_self_cast_waits_before_tail() {
+    fn automation_plan_for_self_cast_pairs_item_and_self_cast_key() {
         assert_eq!(
-            plan_automation_key_sequence(CastMode::SelfCast, 'n'.into(), 'a'.into()),
-            vec![
-                PlannedKeyPress::new('n'.into(), SELF_CAST_DELAY_MS),
-                PlannedKeyPress::new('a'.into(), 0),
-            ]
+            plan_automation_key_sequence(CastMode::SelfCast, 'n'.into(), 'a'.into(), GAP),
+            vec![PlannedKeyPress::SelfCast {
+                first: 'n'.into(),
+                second: 'a'.into(),
+                gap_ms: GAP,
+            }]
         );
     }
 
     #[test]
     fn automation_plan_for_no_target_is_single_press() {
         assert_eq!(
-            plan_automation_key_sequence(CastMode::NoTarget, 'n'.into(), 'a'.into()),
-            vec![PlannedKeyPress::new('n'.into(), 0)]
+            plan_automation_key_sequence(CastMode::NoTarget, 'n'.into(), 'a'.into(), GAP),
+            vec![PlannedKeyPress::Single('n'.into())]
         );
     }
 
     #[test]
     fn automation_plan_for_cursor_targeted_is_single_press() {
         assert_eq!(
-            plan_automation_key_sequence(CastMode::CursorTargeted, 'n'.into(), 'a'.into()),
-            vec![PlannedKeyPress::new('n'.into(), 0)]
+            plan_automation_key_sequence(CastMode::CursorTargeted, 'n'.into(), 'a'.into(), GAP),
+            vec![PlannedKeyPress::Single('n'.into())]
         );
     }
 

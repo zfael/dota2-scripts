@@ -66,6 +66,16 @@ enum SyntheticAction {
     /// targeting — so this aims where the player is already pointing, which
     /// mid-fight is close enough to be useful and never lands on the HUD.
     CastAtCursor { key: PressableKey },
+    /// Self-cast a targeted item or ability: press `first` to arm targeting,
+    /// wait `gap_ms`, press `second` to resolve it on our own hero — the same
+    /// key again for Dota's double-tap binding, or a dedicated self-cast key.
+    /// One job, so nothing else queued can land between the presses, and the
+    /// player's clicks are held for its duration (see `click_hold`).
+    SelfCastTaps {
+        first: PressableKey,
+        second: PressableKey,
+        gap_ms: u64,
+    },
     /// Park the cursor somewhere and leave it there. Used by the HUD anchor
     /// Test button, which must never click.
     MoveCursor { x: i32, y: i32 },
@@ -141,6 +151,44 @@ pub fn press_binding(binding: &KeyBinding) {
 
     enqueue_command_and_wait(
         press_target_command(target),
+        SyntheticInputPriority::Normal,
+    );
+}
+
+/// Self-cast through Dota's double-tap binding: two presses `gap_ms` apart,
+/// sent as one uninterruptible job with the player's clicks held in between.
+///
+/// `gap_ms` is `[common].self_cast_tap_gap_ms`; every double tap in the app
+/// goes through here so that one setting governs them all.
+pub fn double_tap_binding(binding: &KeyBinding, gap_ms: u64) {
+    self_cast_taps(binding, binding, gap_ms);
+}
+
+/// [`double_tap_binding`] for a hero config key.
+pub fn double_tap_key(key_char: char, gap_ms: u64) {
+    let key = normalize_key_char(key_char);
+    enqueue_command_and_wait(
+        self_cast_taps_command(key, key, gap_ms),
+        SyntheticInputPriority::Normal,
+    );
+}
+
+/// Arm a targeted item with `first`, then resolve it on our own hero with
+/// `second` — the dedicated self-cast key route. Same guarantees as
+/// [`double_tap_binding`].
+pub fn self_cast_taps(first: &KeyBinding, second: &KeyBinding, gap_ms: u64) {
+    let (Some(first_target), Some(second_target)) = (first.pressable(), second.pressable())
+    else {
+        warn!(
+            "Skipping self-cast: '{}' then '{}' is not a pair of keys this app \
+             can send. Rebind it in Settings.",
+            first, second
+        );
+        return;
+    };
+
+    enqueue_command_and_wait(
+        self_cast_taps_command(first_target, second_target, gap_ms),
         SyntheticInputPriority::Normal,
     );
 }
@@ -231,6 +279,23 @@ fn press_key_command(key_char: char) -> SyntheticInputCommand {
 fn press_target_command(target: PressableKey) -> SyntheticInputCommand {
     SyntheticInputCommand {
         action: SyntheticAction::KeyClick(target),
+        guard_behavior: GuardBehavior::Pulse {
+            delay_ms: POST_ACTION_GUARD_DELAY_MS,
+        },
+    }
+}
+
+fn self_cast_taps_command(
+    first: PressableKey,
+    second: PressableKey,
+    gap_ms: u64,
+) -> SyntheticInputCommand {
+    SyntheticInputCommand {
+        action: SyntheticAction::SelfCastTaps {
+            first,
+            second,
+            gap_ms,
+        },
         guard_behavior: GuardBehavior::Pulse {
             delay_ms: POST_ACTION_GUARD_DELAY_MS,
         },
@@ -590,6 +655,19 @@ fn perform_action(enigo: &mut Enigo, action: SyntheticAction) {
             perform_single_action(enigo, SyntheticAction::LeftClick);
             debug!("Cast {key:?} resolved at the cursor");
         }
+        SyntheticAction::SelfCastTaps {
+            first,
+            second,
+            gap_ms,
+        } => {
+            let _held = crate::input::click_hold::hold_clicks();
+            perform_single_action(enigo, SyntheticAction::KeyClick(first));
+            if gap_ms > 0 {
+                thread::sleep(Duration::from_millis(gap_ms));
+            }
+            perform_single_action(enigo, SyntheticAction::KeyClick(second));
+            debug!("Self-cast {first:?} then {second:?}, {gap_ms}ms apart");
+        }
         SyntheticAction::MoveCursor { x, y } => {
             if let Err(e) = enigo.move_mouse(x, y, Coordinate::Abs) {
                 warn!("Failed to move cursor to ({x}, {y}): {e}");
@@ -653,7 +731,9 @@ fn perform_single_action(enigo: &mut Enigo, action: SyntheticAction) {
         SyntheticAction::ArmletChord { .. } => {
             warn!("Armlet chord should be expanded before single-action execution");
         }
-        SyntheticAction::CastAtCursor { .. } | SyntheticAction::MoveCursor { .. } => {
+        SyntheticAction::CastAtCursor { .. }
+        | SyntheticAction::SelfCastTaps { .. }
+        | SyntheticAction::MoveCursor { .. } => {
             // Composites and cursor moves are handled in perform_action.
             warn!("Composite actions should be expanded before single-action execution");
         }

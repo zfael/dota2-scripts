@@ -1,4 +1,5 @@
 pub mod binding;
+pub mod click_hold;
 pub mod keyboard;
 pub mod simulation;
 

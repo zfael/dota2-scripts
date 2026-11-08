@@ -36,12 +36,12 @@ enum EarthSpiritRequest {
     RollCombo {
         roll_key: char,
         double_tap: bool,
-        double_tap_delay_ms: u64,
         remnant_key: char,
         roll_to_remnant_delay_ms: u64,
         remnant_alt: bool,
         remnant_double_tap: bool,
-        remnant_double_tap_delay_ms: u64,
+        /// `[common].self_cast_tap_gap_ms`, for both double taps.
+        tap_gap_ms: u64,
     },
     /// Scepter panic button: self-cast Enchant Remnant, then kick the remnant
     /// — which is now Earth Spirit himself — away.
@@ -49,7 +49,7 @@ enum EarthSpiritRequest {
         petrify_key: char,
         petrify_alt: bool,
         petrify_double_tap: bool,
-        petrify_double_tap_delay_ms: u64,
+        tap_gap_ms: u64,
         /// `None` when the smash follow-up is off, so a disabled kick cannot be
         /// confused with a key that happens to be unset.
         smash_key: Option<char>,
@@ -73,33 +73,31 @@ fn build_silence_combo_request(
 fn build_roll_combo_request(
     roll_key: char,
     double_tap: bool,
-    double_tap_delay_ms: u64,
     remnant_key: char,
     roll_to_remnant_delay_ms: u64,
     remnant_alt: bool,
     remnant_double_tap: bool,
-    remnant_double_tap_delay_ms: u64,
+    tap_gap_ms: u64,
 ) -> EarthSpiritRequest {
     EarthSpiritRequest::RollCombo {
         roll_key,
         double_tap,
-        double_tap_delay_ms,
         remnant_key,
         roll_to_remnant_delay_ms,
         remnant_alt,
         remnant_double_tap,
-        remnant_double_tap_delay_ms,
+        tap_gap_ms,
     }
 }
 
-/// The escape takes every field from config, so it is built from the config
-/// rather than from eleven positional arguments.
-fn build_scepter_escape_request(config: &EarthSpiritConfig) -> EarthSpiritRequest {
+/// The escape takes every hero field from config, so it is built from the
+/// config rather than from eleven positional arguments.
+fn build_scepter_escape_request(config: &EarthSpiritConfig, tap_gap_ms: u64) -> EarthSpiritRequest {
     EarthSpiritRequest::ScepterEscape {
         petrify_key: config.petrify_key,
         petrify_alt: config.petrify_alt,
         petrify_double_tap: config.petrify_double_tap,
-        petrify_double_tap_delay_ms: config.petrify_double_tap_delay_ms,
+        tap_gap_ms,
         smash_key: config.petrify_smash_enabled.then_some(config.smash_key),
         petrify_to_smash_delay_ms: config.petrify_to_smash_delay_ms,
     }
@@ -132,34 +130,32 @@ fn run_earth_spirit_request(request: EarthSpiritRequest) {
         EarthSpiritRequest::RollCombo {
             roll_key,
             double_tap,
-            double_tap_delay_ms,
             remnant_key,
             roll_to_remnant_delay_ms,
             remnant_alt,
             remnant_double_tap,
-            remnant_double_tap_delay_ms,
+            tap_gap_ms,
         } => run_roll_combo_request(
             roll_key,
             double_tap,
-            double_tap_delay_ms,
             remnant_key,
             roll_to_remnant_delay_ms,
             remnant_alt,
             remnant_double_tap,
-            remnant_double_tap_delay_ms,
+            tap_gap_ms,
         ),
         EarthSpiritRequest::ScepterEscape {
             petrify_key,
             petrify_alt,
             petrify_double_tap,
-            petrify_double_tap_delay_ms,
+            tap_gap_ms,
             smash_key,
             petrify_to_smash_delay_ms,
         } => run_scepter_escape_request(
             petrify_key,
             petrify_alt,
             petrify_double_tap,
-            petrify_double_tap_delay_ms,
+            tap_gap_ms,
             smash_key,
             petrify_to_smash_delay_ms,
         ),
@@ -214,8 +210,8 @@ fn run_silence_combo_request(remnant_key: char, grip_key: char, remnant_delay_ms
 /// Both default on. Turning both off puts the remnant back at the cursor, which
 /// then needs a real aiming window — raise `roll_to_remnant_delay_ms` if so.
 ///
-/// Every press has to land inside the windup, so all three delays here are one
-/// shared budget against `ROLLING_BOULDER_WINDUP_MS`.
+/// Every press has to land inside the windup, so both double-tap gaps and the
+/// wait to the remnant are one shared budget against `ROLLING_BOULDER_WINDUP_MS`.
 ///
 /// Rolling Boulder is the one key the operator does **not** run on quickcast,
 /// so the first press only arms the cursor and a second press is what fires it.
@@ -227,21 +223,13 @@ fn run_silence_combo_request(remnant_key: char, grip_key: char, remnant_delay_ms
 fn run_roll_combo_request(
     roll_key: char,
     double_tap: bool,
-    double_tap_delay_ms: u64,
     remnant_key: char,
     roll_to_remnant_delay_ms: u64,
     remnant_alt: bool,
     remnant_double_tap: bool,
-    remnant_double_tap_delay_ms: u64,
+    tap_gap_ms: u64,
 ) {
-    crate::input::simulation::press_key(roll_key);
-
-    if double_tap {
-        if double_tap_delay_ms > 0 {
-            thread::sleep(Duration::from_millis(double_tap_delay_ms));
-        }
-        crate::input::simulation::press_key(roll_key);
-    }
+    press_maybe_double(roll_key, double_tap, tap_gap_ms);
 
     if roll_to_remnant_delay_ms > 0 {
         thread::sleep(Duration::from_millis(roll_to_remnant_delay_ms));
@@ -254,17 +242,19 @@ fn run_roll_combo_request(
         crate::input::simulation::alt_down();
     }
 
-    crate::input::simulation::press_key(remnant_key);
-
-    if remnant_double_tap {
-        if remnant_double_tap_delay_ms > 0 {
-            thread::sleep(Duration::from_millis(remnant_double_tap_delay_ms));
-        }
-        crate::input::simulation::press_key(remnant_key);
-    }
+    press_maybe_double(remnant_key, remnant_double_tap, tap_gap_ms);
 
     if remnant_alt {
         crate::input::simulation::alt_up();
+    }
+}
+
+/// One press, or the shared self-cast double tap when `double` is on.
+fn press_maybe_double(key: char, double: bool, tap_gap_ms: u64) {
+    if double {
+        crate::input::simulation::double_tap_key(key, tap_gap_ms);
+    } else {
+        crate::input::simulation::press_key(key);
     }
 }
 
@@ -295,7 +285,7 @@ fn run_scepter_escape_request(
     petrify_key: char,
     petrify_alt: bool,
     petrify_double_tap: bool,
-    petrify_double_tap_delay_ms: u64,
+    tap_gap_ms: u64,
     smash_key: Option<char>,
     petrify_to_smash_delay_ms: u64,
 ) {
@@ -306,14 +296,7 @@ fn run_scepter_escape_request(
         crate::input::simulation::alt_down();
     }
 
-    crate::input::simulation::press_key(petrify_key);
-
-    if petrify_double_tap {
-        if petrify_double_tap_delay_ms > 0 {
-            thread::sleep(Duration::from_millis(petrify_double_tap_delay_ms));
-        }
-        crate::input::simulation::press_key(petrify_key);
-    }
+    press_maybe_double(petrify_key, petrify_double_tap, tap_gap_ms);
 
     if petrify_alt {
         crate::input::simulation::alt_up();
@@ -454,30 +437,28 @@ impl EarthSpiritState {
     pub fn execute_roll_combo(
         roll_key: char,
         double_tap: bool,
-        double_tap_delay_ms: u64,
         remnant_key: char,
         roll_to_remnant_delay_ms: u64,
         remnant_alt: bool,
         remnant_double_tap: bool,
-        remnant_double_tap_delay_ms: u64,
+        tap_gap_ms: u64,
     ) {
         enqueue_earth_spirit_request(build_roll_combo_request(
             roll_key,
             double_tap,
-            double_tap_delay_ms,
             remnant_key,
             roll_to_remnant_delay_ms,
             remnant_alt,
             remnant_double_tap,
-            remnant_double_tap_delay_ms,
+            tap_gap_ms,
         ));
     }
 
     /// Run the scepter escape: self-cast Enchant Remnant, then — unless the
     /// follow-up is off — wait `petrify_to_smash_delay_ms` and kick the
     /// resulting remnant, which is Earth Spirit himself, with Boulder Smash.
-    pub fn execute_scepter_escape(config: &EarthSpiritConfig) {
-        enqueue_earth_spirit_request(build_scepter_escape_request(config));
+    pub fn execute_scepter_escape(config: &EarthSpiritConfig, tap_gap_ms: u64) {
+        enqueue_earth_spirit_request(build_scepter_escape_request(config, tap_gap_ms));
     }
 }
 
@@ -526,6 +507,7 @@ impl EarthSpiritScript {
         &self,
         event: &GsiWebhookEvent,
         config: &EarthSpiritConfig,
+        tap_gap_ms: u64,
         in_danger: bool,
     ) {
         let now = Instant::now();
@@ -546,7 +528,7 @@ impl EarthSpiritScript {
                 String::new()
             }
         );
-        EarthSpiritState::execute_scepter_escape(config);
+        EarthSpiritState::execute_scepter_escape(config, tap_gap_ms);
     }
 }
 
@@ -563,7 +545,12 @@ impl HeroScript for EarthSpiritScript {
         // this hero does off GSI, on top of shared survivability.
         let survivability = SurvivabilityActions::new(self.settings.clone(), self.executor.clone());
         let in_danger = crate::actions::danger_detector::update(event, &settings.danger_detection);
-        self.maybe_trigger_petrify(event, &settings.heroes.earth_spirit, in_danger);
+        self.maybe_trigger_petrify(
+            event,
+            &settings.heroes.earth_spirit,
+            settings.common.self_cast_tap_gap_ms,
+            in_danger,
+        );
         drop(settings);
         survivability.check_and_use_healing_items_with_danger(event, in_danger);
         survivability.use_defensive_items_if_danger_with_snapshot(event, in_danger);
@@ -629,18 +616,17 @@ mod tests {
 
     #[test]
     fn build_roll_combo_request_preserves_keys_delays_and_double_tap() {
-        let request = build_roll_combo_request('w', true, 60, 'd', 120, true, true, 60);
+        let request = build_roll_combo_request('w', true, 'd', 120, true, true, 30);
         assert_eq!(
             request,
             EarthSpiritRequest::RollCombo {
                 roll_key: 'w',
                 double_tap: true,
-                double_tap_delay_ms: 60,
                 remnant_key: 'd',
                 roll_to_remnant_delay_ms: 120,
                 remnant_alt: true,
                 remnant_double_tap: true,
-                remnant_double_tap_delay_ms: 60,
+                tap_gap_ms: 30,
             }
         );
     }
@@ -649,18 +635,17 @@ mod tests {
     /// survive into the request rather than being resolved away at build time.
     #[test]
     fn the_double_tap_toggles_reach_the_request() {
-        let request = build_roll_combo_request('w', false, 60, 'd', 120, false, false, 60);
+        let request = build_roll_combo_request('w', false, 'd', 120, false, false, 30);
         assert_eq!(
             request,
             EarthSpiritRequest::RollCombo {
                 roll_key: 'w',
                 double_tap: false,
-                double_tap_delay_ms: 60,
                 remnant_key: 'd',
                 roll_to_remnant_delay_ms: 120,
                 remnant_alt: false,
                 remnant_double_tap: false,
-                remnant_double_tap_delay_ms: 60,
+                tap_gap_ms: 30,
             }
         );
     }
@@ -671,7 +656,7 @@ mod tests {
     /// regression: the roll would still fire and just stop extending.
     #[test]
     fn only_the_roll_combo_carries_the_self_cast_flags() {
-        let roll = build_roll_combo_request('w', true, 60, 'd', 120, true, true, 60);
+        let roll = build_roll_combo_request('w', true, 'd', 120, true, true, 30);
 
         match roll {
             EarthSpiritRequest::RollCombo {
@@ -700,7 +685,7 @@ mod tests {
     #[test]
     fn the_two_combos_order_the_remnant_on_opposite_sides() {
         let silence = build_silence_combo_request('d', 'e', 120);
-        let roll = build_roll_combo_request('w', true, 60, 'd', 120, true, true, 60);
+        let roll = build_roll_combo_request('w', true, 'd', 120, true, true, 30);
 
         // Silence: remnant is named first, and its delay precedes the grip.
         match silence {
@@ -749,14 +734,14 @@ mod tests {
 
     #[test]
     fn build_scepter_escape_request_carries_the_self_cast_and_the_kick() {
-        let request = build_scepter_escape_request(&EarthSpiritConfig::default());
+        let request = build_scepter_escape_request(&EarthSpiritConfig::default(), 30);
         assert_eq!(
             request,
             EarthSpiritRequest::ScepterEscape {
                 petrify_key: 'f',
                 petrify_alt: true,
                 petrify_double_tap: true,
-                petrify_double_tap_delay_ms: 60,
+                tap_gap_ms: 30,
                 smash_key: Some('q'),
                 petrify_to_smash_delay_ms: 250,
             }
@@ -771,7 +756,7 @@ mod tests {
         let mut config = EarthSpiritConfig::default();
         config.petrify_smash_enabled = false;
 
-        match build_scepter_escape_request(&config) {
+        match build_scepter_escape_request(&config, 30) {
             EarthSpiritRequest::ScepterEscape { smash_key, .. } => assert_eq!(smash_key, None),
             other => panic!("expected a scepter escape, got {other:?}"),
         }
@@ -787,7 +772,7 @@ mod tests {
         config.petrify_alt = false;
         config.petrify_double_tap = false;
 
-        match build_scepter_escape_request(&config) {
+        match build_scepter_escape_request(&config, 30) {
             EarthSpiritRequest::ScepterEscape {
                 petrify_alt,
                 petrify_double_tap,

@@ -1,9 +1,9 @@
 use crate::actions::heroes::HeroScript;
 use crate::actions::common::{find_item_slot, SurvivabilityActions};
 use crate::actions::executor::ActionExecutor;
-use crate::actions::soul_ring::press_ability_with_soul_ring;
+use crate::actions::soul_ring::double_tap_ability_with_soul_ring;
 use crate::config::Settings;
-use crate::input::simulation::{press_binding, press_key};
+use crate::input::simulation::{double_tap_binding, press_binding, press_key};
 use crate::models::{GsiWebhookEvent, Hero, Item};
 use std::any::Any;
 use std::sync::{Arc, Mutex};
@@ -37,38 +37,31 @@ impl LegionCommanderScript {
         
         let event = event.as_ref().unwrap();
         let settings = self.settings.lock().unwrap();
+        let tap_gap_ms = settings.common.self_cast_tap_gap_ms;
         
         // 1. Press The Attack (W) - with Soul Ring on first press, then double tap
         info!("Using Press The Attack (W)");
-        press_ability_with_soul_ring('w', &settings);
-        thread::sleep(Duration::from_millis(30));
-        press_key('w');
+        double_tap_ability_with_soul_ring('w', &settings);
         thread::sleep(Duration::from_millis(220));
         
         // 3. Blade Mail (if present) - double tap
         if let Some(key) = find_item_slot(event, &settings, Item::BladeMail) {
             info!("Using Blade Mail ({})", key);
-            press_binding(&key);
-            thread::sleep(Duration::from_millis(30));
-            press_binding(&key);
+            double_tap_binding(&key, tap_gap_ms);
             thread::sleep(Duration::from_millis(50));
         }
         
         // 4. Mjollnir (if present) - double tap
         if let Some(key) = find_item_slot(event, &settings, Item::Mjollnir) {
             info!("Using Mjollnir ({})", key);
-            press_binding(&key);
-            thread::sleep(Duration::from_millis(30));
-            press_binding(&key);
+            double_tap_binding(&key, tap_gap_ms);
             thread::sleep(Duration::from_millis(50));
         }
         
         // 5. BKB (if present) - double tap
         if let Some(key) = find_item_slot(event, &settings, Item::BlackKingBar) {
             info!("Using BKB ({})", key);
-            press_binding(&key);
-            thread::sleep(Duration::from_millis(30));
-            press_binding(&key);
+            double_tap_binding(&key, tap_gap_ms);
             thread::sleep(Duration::from_millis(50));
         }
         

@@ -27,6 +27,7 @@ use crate::actions::SOUL_RING_STATE;
 use crate::config::settings::InvokerProfileMode;
 use crate::config::{AutoAbilityConfig, Settings};
 use crate::input::binding::KeyBinding;
+use crate::input::click_hold::ClickVerdict;
 use crate::input::simulation::SIMULATING_KEYS;
 use crate::state::app_state::AppState;
 
@@ -363,6 +364,15 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                 return Some(event);
             }
 
+            // Ahead of the SIMULATING_KEYS pass-through on purpose: that flag is
+            // up for most of a double tap, which is exactly when a physical click
+            // has to be held rather than let through to break the self-cast.
+            match crate::input::click_hold::intercept(&event.event_type) {
+                ClickVerdict::Hold => return None,
+                ClickVerdict::PassReplay => return Some(event),
+                ClickVerdict::Continue => {}
+            }
+
             // Pass through all events while we're simulating keys
             // This prevents re-interception of our own simulated keypresses
             if SIMULATING_KEYS.load(Ordering::SeqCst) {
@@ -501,6 +511,7 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
 
                     ShadowFiendState::execute_ultimate_combo(
                         snapshot.shadow_fiend.auto_d_on_ultimate,
+                        snapshot.self_cast_tap_gap_ms,
                     );
 
                     // Block original key (will be pressed by execute_ultimate_combo)
@@ -651,12 +662,11 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                                     EarthSpiritState::execute_roll_combo(
                                         snapshot.earth_spirit.roll_char,
                                         snapshot.earth_spirit.roll_double_tap,
-                                        snapshot.earth_spirit.roll_double_tap_delay_ms,
                                         snapshot.earth_spirit.remnant_char,
                                         snapshot.earth_spirit.roll_to_remnant_delay_ms,
                                         snapshot.earth_spirit.roll_remnant_alt,
                                         snapshot.earth_spirit.roll_remnant_double_tap,
-                                        snapshot.earth_spirit.roll_remnant_double_tap_delay_ms,
+                                        snapshot.self_cast_tap_gap_ms,
                                     );
                                     // Block original key (combo re-presses it).
                                     return None;
@@ -712,6 +722,7 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                                             .outworld_destroyer
                                             .combo_config
                                             .astral_imprisonment_key,
+                                        snapshot.self_cast_tap_gap_ms,
                                     );
                                 } else {
                                     info!(
@@ -913,14 +924,12 @@ pub struct EarthSpiritKeyboardSnapshot {
     /// The same key as a char, used to press it after the remnant.
     pub roll_char: char,
     pub roll_double_tap: bool,
-    pub roll_double_tap_delay_ms: u64,
     /// Gap between the roll firing and the remnant press.
     pub roll_to_remnant_delay_ms: u64,
     /// Hold ALT across the remnant press (Dota's self-cast modifier).
     pub roll_remnant_alt: bool,
     /// Press the remnant key twice (Dota's default self-cast binding).
     pub roll_remnant_double_tap: bool,
-    pub roll_remnant_double_tap_delay_ms: u64,
     pub require_roll_ready: bool,
 }
 
@@ -1067,6 +1076,9 @@ pub struct KeyboardSnapshot {
     pub wave_overlay_toggle_key: Option<Key>,
     /// Parsed hotkey that captures the HUD hero portrait anchor.
     pub hud_capture_portrait_key: Option<Key>,
+    /// `[common].self_cast_tap_gap_ms`, for the self-cast double taps the hook
+    /// triggers (SF and OD BKB, OD Astral, Earth Spirit's remnants).
+    pub self_cast_tap_gap_ms: u64,
     /// Hardcoded Invoker combo-cycle key for v1.
     pub invoker_cycle_hotkey: Option<Key>,
     /// Whether Shadow Fiend raze interception is active.
@@ -1261,6 +1273,7 @@ impl KeyboardSnapshot {
                 None
             },
             hud_capture_portrait_key: parse_key_string(&settings.hud.capture_portrait_key),
+            self_cast_tap_gap_ms: settings.common.self_cast_tap_gap_ms,
             invoker_cycle_hotkey: parse_key_string(&settings.heroes.invoker.cycle_combo_profiles_hotkey),
             sf_enabled,
             od_enabled,
@@ -1333,11 +1346,9 @@ impl KeyboardSnapshot {
                 roll_key: char_to_key(es.roll_key),
                 roll_char: es.roll_key,
                 roll_double_tap: es.roll_double_tap,
-                roll_double_tap_delay_ms: es.roll_double_tap_delay_ms,
                 roll_to_remnant_delay_ms: es.roll_to_remnant_delay_ms,
                 roll_remnant_alt: es.roll_remnant_alt,
                 roll_remnant_double_tap: es.roll_remnant_double_tap,
-                roll_remnant_double_tap_delay_ms: es.roll_remnant_double_tap_delay_ms,
                 require_roll_ready: es.require_roll_ready,
             },
             ember_spirit_enabled: state.selected_hero == Some(crate::state::HeroType::EmberSpirit),
@@ -1387,6 +1398,7 @@ impl Default for KeyboardSnapshot {
             armlet_roshan_toggle_key: None,
             wave_overlay_toggle_key: None,
             hud_capture_portrait_key: None,
+            self_cast_tap_gap_ms: Settings::default().common.self_cast_tap_gap_ms,
             invoker_cycle_hotkey: None,
             sf_enabled: false,
             od_enabled: false,
@@ -1459,11 +1471,9 @@ impl Default for KeyboardSnapshot {
                 roll_key: None,
                 roll_char: 'w',
                 roll_double_tap: true,
-                roll_double_tap_delay_ms: 0,
                 roll_to_remnant_delay_ms: 0,
                 roll_remnant_alt: false,
                 roll_remnant_double_tap: true,
-                roll_remnant_double_tap_delay_ms: 0,
                 require_roll_ready: true,
             },
             ember_spirit_enabled: false,
@@ -1789,6 +1799,7 @@ mod tests {
             armlet_roshan_toggle_key: None,
             wave_overlay_toggle_key: None,
             hud_capture_portrait_key: None,
+            self_cast_tap_gap_ms: Settings::default().common.self_cast_tap_gap_ms,
             invoker_cycle_hotkey: None,
             sf_enabled: false,
             od_enabled: false,
@@ -1861,11 +1872,9 @@ mod tests {
                 roll_key: None,
                 roll_char: 'w',
                 roll_double_tap: true,
-                roll_double_tap_delay_ms: 0,
                 roll_to_remnant_delay_ms: 0,
                 roll_remnant_alt: false,
                 roll_remnant_double_tap: true,
-                roll_remnant_double_tap_delay_ms: 0,
                 require_roll_ready: true,
             },
             ember_spirit_enabled: false,
@@ -2057,11 +2066,9 @@ mod tests {
         assert_eq!(snapshot.earth_spirit.roll_key, Some(Key::KeyW));
         assert_eq!(snapshot.earth_spirit.roll_char, 'w');
         assert!(snapshot.earth_spirit.roll_double_tap);
-        assert_eq!(snapshot.earth_spirit.roll_double_tap_delay_ms, 60);
         assert_eq!(snapshot.earth_spirit.roll_to_remnant_delay_ms, 120);
         assert!(snapshot.earth_spirit.roll_remnant_alt);
         assert!(snapshot.earth_spirit.roll_remnant_double_tap);
-        assert_eq!(snapshot.earth_spirit.roll_remnant_double_tap_delay_ms, 60);
         assert!(snapshot.earth_spirit.require_roll_ready);
 
         let other = KeyboardSnapshot::from_runtime(&Settings::default(), &AppState::default());

@@ -3,7 +3,7 @@ use crate::actions::executor::ActionExecutor;
 use crate::actions::heroes::HeroScript;
 use crate::config::{OutworldDestroyerConfig, Settings};
 use crate::input::binding::KeyBinding;
-use crate::input::simulation::{press_binding, press_key};
+use crate::input::simulation::{double_tap_binding, double_tap_key, press_binding, press_key};
 use crate::models::{GsiWebhookEvent, Hero};
 use lazy_static::lazy_static;
 use std::sync::{mpsc, Arc, LazyLock, Mutex};
@@ -36,13 +36,18 @@ pub struct OutworldDestroyerComboConfig {
     pub combo_item_delay_ms: u64,
     pub post_ultimate_arcane_orb_presses: u32,
     pub arcane_orb_press_interval_ms: u64,
+    /// [common].self_cast_tap_gap_ms, for the BKB double tap.
+    pub tap_gap_ms: u64,
 }
 
 #[derive(Debug, Clone)]
 enum OutworldDestroyerRequest {
     Ultimate(OutworldDestroyerComboConfig),
     Standalone(OutworldDestroyerComboConfig),
-    SelfAstral { astral_imprisonment_key: char },
+    SelfAstral {
+        astral_imprisonment_key: char,
+        tap_gap_ms: u64,
+    },
 }
 
 static OD_REQUEST_QUEUE: LazyLock<mpsc::Sender<OutworldDestroyerRequest>> = LazyLock::new(|| {
@@ -155,9 +160,7 @@ fn maybe_cast_bkb(event: &GsiWebhookEvent, config: &OutworldDestroyerComboConfig
         find_castable_slot_key_by_name(event, &config.slot_keys, "black_king_bar")
     {
         info!("🌌 OD using BKB ({})", key);
-        press_binding(&key);
-        thread::sleep(Duration::from_millis(30));
-        press_binding(&key);
+        double_tap_binding(&key, config.tap_gap_ms);
         thread::sleep(Duration::from_millis(config.post_bkb_delay_ms));
     }
 }
@@ -267,6 +270,7 @@ fn run_standalone_request(request: OutworldDestroyerRequest) {
 fn run_self_astral_request(request: OutworldDestroyerRequest) {
     let OutworldDestroyerRequest::SelfAstral {
         astral_imprisonment_key,
+        tap_gap_ms,
     } = request
     else {
         return;
@@ -287,9 +291,7 @@ fn run_self_astral_request(request: OutworldDestroyerRequest) {
         "🌌 OD self-Astral via double-tap ({})",
         astral_imprisonment_key
     );
-    press_key(astral_imprisonment_key);
-    thread::sleep(Duration::from_millis(30));
-    press_key(astral_imprisonment_key);
+    double_tap_key(astral_imprisonment_key, tap_gap_ms);
 }
 
 fn build_combo_config(settings: &Settings) -> OutworldDestroyerComboConfig {
@@ -308,6 +310,7 @@ fn build_combo_config(settings: &Settings) -> OutworldDestroyerComboConfig {
         combo_item_delay_ms: od.combo_item_delay_ms,
         post_ultimate_arcane_orb_presses: od.post_ultimate_arcane_orb_presses,
         arcane_orb_press_interval_ms: od.arcane_orb_press_interval_ms,
+        tap_gap_ms: settings.common.self_cast_tap_gap_ms,
     }
 }
 
@@ -336,9 +339,10 @@ impl OutworldDestroyerState {
         enqueue_request(OutworldDestroyerRequest::Standalone(config));
     }
 
-    pub fn execute_self_astral(astral_imprisonment_key: char) {
+    pub fn execute_self_astral(astral_imprisonment_key: char, tap_gap_ms: u64) {
         enqueue_request(OutworldDestroyerRequest::SelfAstral {
             astral_imprisonment_key,
+            tap_gap_ms,
         });
     }
 }

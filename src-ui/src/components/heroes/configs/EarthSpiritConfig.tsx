@@ -42,11 +42,9 @@ export default function EarthSpiritConfig() {
           <Toggle label="Remap Roll Key" checked={config.roll_combo_enabled} onChange={(v) => set({ roll_combo_enabled: v })} />
           <KeyInput label="Rolling Boulder Key" value={config.roll_key} onChange={(v) => set({ roll_key: v })} />
           <Toggle label="Double-Tap Roll Key" checked={config.roll_double_tap} onChange={(v) => set({ roll_double_tap: v })} />
-          <NumberInput label="Double-Tap Delay" value={config.roll_double_tap_delay_ms} onChange={(v) => set({ roll_double_tap_delay_ms: v })} suffix="ms" />
           <NumberInput label="Delay Before Remnant" value={config.roll_to_remnant_delay_ms} onChange={(v) => set({ roll_to_remnant_delay_ms: v })} suffix="ms" />
           <Toggle label="Hold ALT For Remnant (Self-Cast)" checked={config.roll_remnant_alt} onChange={(v) => set({ roll_remnant_alt: v })} />
           <Toggle label="Double-Tap Remnant Key (Self-Cast)" checked={config.roll_remnant_double_tap} onChange={(v) => set({ roll_remnant_double_tap: v })} />
-          <NumberInput label="Remnant Double-Tap Delay" value={config.roll_remnant_double_tap_delay_ms} onChange={(v) => set({ roll_remnant_double_tap_delay_ms: v })} suffix="ms" />
           <p className="text-xs text-muted">
             A roll that passes through a remnant travels 1600 units instead of
             800 and moves much faster, so the good roll is always the two-key
@@ -87,7 +85,9 @@ export default function EarthSpiritConfig() {
             targeting instead of casting.
           </p>
           <p className="text-xs text-muted">
-            Keep all the delays in this card summing to well under ~600ms. Past
+            The gap between the two taps of every double-tap here is the shared
+            Self-Cast Tap Gap on the Survivability page. Keep the delay above
+            plus two of those gaps well under ~600ms. Past
             that the boulder is already rolling and a remnant placed behind it
             does nothing, which looks exactly like the combo firing with no
             effect.
@@ -103,7 +103,6 @@ export default function EarthSpiritConfig() {
           <NumberInput label="Retry Cooldown" value={config.petrify_trigger_cooldown_ms} onChange={(v) => set({ petrify_trigger_cooldown_ms: v })} suffix="ms" />
           <Toggle label="Hold ALT For Enchant Remnant (Self-Cast)" checked={config.petrify_alt} onChange={(v) => set({ petrify_alt: v })} />
           <Toggle label="Double-Tap Enchant Remnant Key (Self-Cast)" checked={config.petrify_double_tap} onChange={(v) => set({ petrify_double_tap: v })} />
-          <NumberInput label="Enchant Remnant Double-Tap Delay" value={config.petrify_double_tap_delay_ms} onChange={(v) => set({ petrify_double_tap_delay_ms: v })} suffix="ms" />
           <Toggle label="Kick Yourself Out With Boulder Smash" checked={config.petrify_smash_enabled} onChange={(v) => set({ petrify_smash_enabled: v })} />
           <KeyInput label="Boulder Smash Key" value={config.smash_key} onChange={(v) => set({ smash_key: v })} />
           <NumberInput label="Delay Before Smash" value={config.petrify_to_smash_delay_ms} onChange={(v) => set({ petrify_to_smash_delay_ms: v })} suffix="ms" />

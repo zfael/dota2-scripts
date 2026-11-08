@@ -143,6 +143,11 @@ artifact_output_dir = "logs/minimap_capture"
 survivability_hp_threshold = 30
 lane_phase_duration_seconds = 480
 lane_phase_healing_threshold = 12
+# Gap between the two presses of every self-cast double tap (ms): Lotus Orb,
+# Glimmer, Mjollnir, BKB, OD Astral, Earth Spirit's remnants, and the neutral
+# item self-cast key. Both presses go out as one job with your left and right
+# clicks held until the second lands, so a click can no longer split them.
+self_cast_tap_gap_ms = 30
 
 [armlet]
 enabled = true
@@ -624,8 +629,6 @@ roll_key = "w"
 # it. Turn this off if you enable quickcast for the roll key, or if the second
 # tap cancels the targeting instead of casting.
 roll_double_tap = true
-# Gap between the two roll presses (ms). Ignored when roll_double_tap is false.
-roll_double_tap_delay_ms = 60
 # Gap between the roll firing and the remnant press (ms). Measured from the
 # press that actually casts the roll, so from the second tap when
 # roll_double_tap is on. With the remnant self-cast there is nothing to aim, so
@@ -646,12 +649,11 @@ roll_to_remnant_delay_ms = 120
 roll_remnant_alt = true
 # Press the remnant key twice -- Dota's default self-cast binding.
 roll_remnant_double_tap = true
-# Gap between the two remnant presses (ms). Ignored when the above is false.
-roll_remnant_double_tap_delay_ms = 60
 # Turning BOTH self-cast options off puts the remnant back at your cursor, which
 # then needs real aiming time: raise roll_to_remnant_delay_ms to ~300 if you do.
 #
-# Whatever you set, keep the delays in this section summing to well under the
+# Whatever you set, keep roll_to_remnant_delay_ms plus two double-tap gaps
+# ([common] self_cast_tap_gap_ms) well under the
 # ~600ms windup. Past it the boulder is already rolling and a remnant placed
 # behind it does nothing, which looks exactly like the combo firing and having
 # no effect.
@@ -686,9 +688,6 @@ petrify_trigger_cooldown_ms = 5000
 # completely different spell.
 petrify_alt = true
 petrify_double_tap = true
-# Gap between the two Enchant Remnant presses (ms). Ignored when the above is
-# false.
-petrify_double_tap_delay_ms = 60
 # Follow the petrify with a Boulder Smash to kick the remnant -- you -- clear.
 # Turn this off to petrify in place and just wait the duration out.
 petrify_smash_enabled = true

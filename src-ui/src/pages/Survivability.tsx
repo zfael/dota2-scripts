@@ -129,6 +129,24 @@ export default function Survivability() {
             )}
           </Card>
 
+          <Card title="Self-Cast">
+            <NumberInput
+              label="Self-Cast Tap Gap"
+              value={common.self_cast_tap_gap_ms}
+              min={0}
+              max={200}
+              onChange={(v) => updateCommon({ self_cast_tap_gap_ms: v })}
+              suffix="ms"
+            />
+            <p className="text-xs text-subtle">
+              Time between the two presses of every self-cast double tap: Lotus
+              Orb, Glimmer, Mjollnir, BKB, OD Astral, Earth Spirit's remnants and
+              the neutral-item self-cast key. Your left and right clicks are held
+              until the second press lands, so a click mid-fight can no longer
+              split them.
+            </p>
+          </Card>
+
           <Card title="Invisibility">
             <Toggle
               label="Hold Automation While Invisible"

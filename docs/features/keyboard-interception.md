@@ -273,6 +273,36 @@ Used by:
 - Broodmother auto-items and spider control
 - self-cast item helpers like Glimmer double-tap
 
+### Self-cast double taps hold your clicks
+
+Every self-cast double tap in the app — the danger kit's Lotus Orb, Glimmer and
+Mjollnir, the silence-dispel Lotus, Legion Commander's and Shadow Fiend's and
+OD's BKB, OD's self-Astral, Earth Spirit's remnant and petrify taps — and the
+neutral-item "item key, then self-cast key" pair go through
+`simulation::self_cast_taps` (`double_tap_binding` / `double_tap_key` for the
+same key twice). Two guarantees:
+
+- **One job.** Both presses are a single `SyntheticAction::SelfCastTaps` on the
+  input worker, `[common].self_cast_tap_gap_ms` (default 30ms) apart, so no
+  other queued input can land between them. They used to be two jobs with a
+  sleep in the caller.
+- **Clicks are held.** `src/input/click_hold.rs` holds the player's physical
+  left and right button events for the duration and replays them, in order,
+  right after the second press. The hook checks it right after Phantom Lancer's
+  echo check and *before* the `SIMULATING_KEYS` pass-through, because that flag
+  is up for most of a double tap.
+
+Why: the first press arms targeting and the second resolves it on the hero. A
+right-click between them cancels the targeting (a left-click casts at the
+cursor), and the second press then re-arms it, leaving the item waiting for a
+click. Mid-fight right-clicks come every 100–150ms, so a 40–60ms gap caught one
+regularly.
+
+Limits: only left and right are held (middle and side buttons can be item
+bindings themselves). A held click is replayed plain — it skips the Phantom
+Lancer Ctrl wrap and the Broodmother Space+click remap. A hold older than 500ms
+stops catching new clicks, so a stalled worker cannot freeze the mouse.
+
 ---
 
 ## Soul Ring interception
@@ -549,7 +579,7 @@ These are still part of the interception surface even though this page centers o
 - unlike the Magnus / Slark / Mirana combos there is **no right-click**: both abilities take a point, and neither cares which way Earth Spirit is facing
 - each intercept is **gated on GSI** against its own ability: `can_intercept_grip()` requires `earth_spirit_geomagnetic_grip`, `can_intercept_roll()` requires `earth_spirit_rolling_boulder`, both with `level > 0 && can_cast`. A failed check leaves that key unblocked
 - **neither gate reads Stone Remnant.** It is charge-based, and GSI's `can_cast` is unreliable for charge abilities — the same trap flagged for Mirana's Leap above. Gating on it would leave both combos inert while remnants are visibly banked; the trade is that a zero-charge press still fires the combo
-- `roll_double_tap` exists because Rolling Boulder is commonly left off quickcast, where the first press only arms the cursor. With it off the combo sends a single press and the double-tap delay is skipped entirely
+- `roll_double_tap` exists because Rolling Boulder is commonly left off quickcast, where the first press only arms the cursor. With it off the combo sends a single press instead of the double tap
 - Boulder Smash and Magnetize are never intercepted
 
 ### Ember Spirit
@@ -590,7 +620,7 @@ These are still part of the interception surface even though this page centers o
 | Magnus | `config/config.toml` -> `[heroes.magnus]` | `enabled`, `ultimate_key`, `turn_delay_ms`, `require_ability_ready`, `center_camera_on_ultimate`, `camera_center_key`, `camera_center_delay_ms` |
 | Slark | `config/config.toml` -> `[heroes.slark]` | `enabled`, `pounce_key`, `turn_delay_ms`, `require_ability_ready` |
 | Mirana | `config/config.toml` -> `[heroes.mirana]` | `enabled`, `leap_key`, `turn_delay_ms`, `require_ability_ready` |
-| Earth Spirit | `config/config.toml` -> `[heroes.earth_spirit]` | `enabled`, `remnant_key`, `silence_combo_enabled`, `grip_key`, `silence_remnant_delay_ms`, `require_grip_ready`, `roll_combo_enabled`, `roll_key`, `roll_double_tap`, `roll_double_tap_delay_ms`, `roll_to_remnant_delay_ms`, `roll_remnant_alt`, `roll_remnant_double_tap`, `roll_remnant_double_tap_delay_ms`, `require_roll_ready` |
+| Earth Spirit | `config/config.toml` -> `[heroes.earth_spirit]` | `enabled`, `remnant_key`, `silence_combo_enabled`, `grip_key`, `silence_remnant_delay_ms`, `require_grip_ready`, `roll_combo_enabled`, `roll_key`, `roll_double_tap`, `roll_to_remnant_delay_ms`, `roll_remnant_alt`, `roll_remnant_double_tap`, `require_roll_ready` (double-tap gap: `[common].self_cast_tap_gap_ms`) |
 | Ember Spirit | `config/config.toml` -> `[heroes.ember_spirit]` | `sleight_activate_enabled`, `sleight_key`, `activate_key`, `sleight_activate_delay_ms` |
 | Phantom Lancer | `config/config.toml` -> `[heroes.phantom_lancer]` | `ctrl_latch_enabled`, `latch_tap_ms`, `latch_ctrl_gap_ms`, `latch_cue_enabled`, `latch_cue_volume`, `illusion_send_enabled`, `illusion_send_trigger`, `select_other_units_key`, `select_hero_key`, `illusion_send_step_ms` |
 | Largo | `config/config.toml` -> `[heroes.largo]` | `q_ability_key`, `w_ability_key`, `e_ability_key`, `r_ability_key`, `beat_interval_ms`, `beat_correction_ms`, `beat_correction_every_n_beats` |

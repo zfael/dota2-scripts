@@ -401,6 +401,17 @@ impl SoulRingState {
 /// Press an ability key with automatic Soul Ring triggering (for use in combos)
 /// This is the programmatic equivalent of the keyboard interception
 pub fn press_ability_with_soul_ring(key: char, settings: &Settings) {
+    soul_ring_before_ability(key, settings);
+    crate::input::simulation::press_key(key);
+}
+
+/// [`press_ability_with_soul_ring`] for an ability self-cast by double tap.
+pub fn double_tap_ability_with_soul_ring(key: char, settings: &Settings) {
+    soul_ring_before_ability(key, settings);
+    crate::input::simulation::double_tap_key(key, settings.common.self_cast_tap_gap_ms);
+}
+
+fn soul_ring_before_ability(key: char, settings: &Settings) {
     let mut state = SOUL_RING_STATE.lock().unwrap();
 
     // Same mana-cost gate as the keyboard hook: a combo must not spend 170 HP to cast
@@ -428,9 +439,6 @@ pub fn press_ability_with_soul_ring(key: char, settings: &Settings) {
     } else {
         drop(state);
     }
-
-    // Press the ability key
-    crate::input::simulation::press_key(key);
 }
 
 /// Update Soul Ring state from GSI event

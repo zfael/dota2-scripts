@@ -2,7 +2,7 @@ use crate::actions::common::SurvivabilityActions;
 use crate::actions::executor::ActionExecutor;
 use crate::actions::heroes::HeroScript;
 use crate::config::Settings;
-use crate::input::simulation::press_key;
+use crate::input::simulation::{double_tap_key, press_key};
 use crate::models::{GsiWebhookEvent, Hero};
 use lazy_static::lazy_static;
 use std::sync::{mpsc, Arc, LazyLock, Mutex};
@@ -20,8 +20,15 @@ lazy_static! {
 #[derive(Debug, PartialEq, Eq)]
 enum ShadowFiendRequest {
     Raze { raze_key: char, raze_delay_ms: u64 },
-    Ultimate { auto_d_on_ultimate: bool },
-    Standalone { auto_bkb_on_ultimate: bool, auto_d_on_ultimate: bool },
+    Ultimate {
+        auto_d_on_ultimate: bool,
+        tap_gap_ms: u64,
+    },
+    Standalone {
+        auto_bkb_on_ultimate: bool,
+        auto_d_on_ultimate: bool,
+        tap_gap_ms: u64,
+    },
 }
 
 /// Build a Raze request payload for the worker
@@ -33,8 +40,11 @@ fn build_raze_request(raze_key: char, raze_delay_ms: u64) -> ShadowFiendRequest 
 }
 
 /// Build an Ultimate request payload for the worker
-fn build_ultimate_request(auto_d_on_ultimate: bool) -> ShadowFiendRequest {
-    ShadowFiendRequest::Ultimate { auto_d_on_ultimate }
+fn build_ultimate_request(auto_d_on_ultimate: bool, tap_gap_ms: u64) -> ShadowFiendRequest {
+    ShadowFiendRequest::Ultimate {
+        auto_d_on_ultimate,
+        tap_gap_ms,
+    }
 }
 
 /// Build a Standalone request payload by copying relevant runtime flags from Settings
@@ -43,6 +53,7 @@ fn build_standalone_request(settings: &Settings) -> ShadowFiendRequest {
     ShadowFiendRequest::Standalone {
         auto_bkb_on_ultimate: sf.auto_bkb_on_ultimate,
         auto_d_on_ultimate: sf.auto_d_on_ultimate,
+        tap_gap_ms: settings.common.self_cast_tap_gap_ms,
     }
 }
 
@@ -119,7 +130,11 @@ fn run_raze_request(request: ShadowFiendRequest) {
 }
 
 fn run_ultimate_request(request: ShadowFiendRequest) {
-    let ShadowFiendRequest::Ultimate { auto_d_on_ultimate } = request else {
+    let ShadowFiendRequest::Ultimate {
+        auto_d_on_ultimate,
+        tap_gap_ms,
+    } = request
+    else {
         return;
     };
 
@@ -138,9 +153,7 @@ fn run_ultimate_request(request: ShadowFiendRequest) {
 
             if let Some(bkb_key) = key {
                 info!("👻 SF Ultimate: Using BKB ({}) before Requiem", bkb_key);
-                press_key(bkb_key);
-                thread::sleep(Duration::from_millis(30));
-                press_key(bkb_key);
+                double_tap_key(bkb_key, tap_gap_ms);
                 thread::sleep(Duration::from_millis(50));
             }
         } else {
@@ -166,6 +179,7 @@ fn run_standalone_request(request: ShadowFiendRequest) {
     let ShadowFiendRequest::Standalone {
         auto_bkb_on_ultimate,
         auto_d_on_ultimate,
+        tap_gap_ms,
     } = request
     else {
         return;
@@ -216,9 +230,7 @@ fn run_standalone_request(request: ShadowFiendRequest) {
 
         if let Some(key) = bkb_key {
             info!("👻 SF Standalone: Using BKB ({})", key);
-            press_key(key);
-            thread::sleep(Duration::from_millis(30));
-            press_key(key);
+            double_tap_key(key, tap_gap_ms);
             thread::sleep(Duration::from_millis(50));
         }
 
@@ -245,8 +257,8 @@ impl ShadowFiendState {
 
     /// Execute ultimate with optional D after the caller has decided to run the auto-BKB path.
     /// Sequence: BKB (if available) → D (if enabled) → R
-    pub fn execute_ultimate_combo(auto_d_on_ultimate: bool) {
-        enqueue_shadow_fiend_request(build_ultimate_request(auto_d_on_ultimate));
+    pub fn execute_ultimate_combo(auto_d_on_ultimate: bool, tap_gap_ms: u64) {
+        enqueue_shadow_fiend_request(build_ultimate_request(auto_d_on_ultimate, tap_gap_ms));
     }
 
     /// Execute standalone combo: Blink + Ultimate (with BKB/D if configured)
@@ -349,6 +361,7 @@ mod tests {
             ShadowFiendRequest::Standalone {
                 auto_bkb_on_ultimate: true,
                 auto_d_on_ultimate: true,
+                tap_gap_ms: settings.common.self_cast_tap_gap_ms,
             }
         );
     }
@@ -367,10 +380,13 @@ mod tests {
 
     #[test]
     fn build_ultimate_request_sets_auto_d_flag() {
-        let request = build_ultimate_request(true);
+        let request = build_ultimate_request(true, 30);
         assert_eq!(
             request,
-            ShadowFiendRequest::Ultimate { auto_d_on_ultimate: true },
+            ShadowFiendRequest::Ultimate {
+                auto_d_on_ultimate: true,
+                tap_gap_ms: 30,
+            },
         );
     }
 

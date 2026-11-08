@@ -112,6 +112,13 @@ pub struct CommonConfig {
     pub lane_phase_duration_seconds: u64,
     #[serde(default = "default_lane_phase_healing_threshold")]
     pub lane_phase_healing_threshold: u32,
+    /// Gap between the two presses of every self-cast double tap in the app
+    /// (ms): Lotus Orb, Glimmer, Mjollnir, BKB, Astral, Earth Spirit's
+    /// remnants. The taps go out as one job with the player's left and right
+    /// clicks held in between, so a click can no longer split them; this only
+    /// needs to be long enough for Dota to register two separate presses.
+    #[serde(default = "default_self_cast_tap_gap_ms")]
+    pub self_cast_tap_gap_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -547,13 +554,10 @@ pub struct EarthSpiritConfig {
     /// instead of firing.
     #[serde(default = "default_earth_spirit_roll_double_tap")]
     pub roll_double_tap: bool,
-    /// Gap between the two roll presses (ms). Ignored when `roll_double_tap` is
-    /// off.
-    #[serde(default = "default_earth_spirit_roll_double_tap_delay_ms")]
-    pub roll_double_tap_delay_ms: u64,
     /// Gap between the roll press and the remnant press (ms). Measured from the
     /// press that actually fires the roll, so from the second tap when
-    /// `roll_double_tap` is on. The whole remnant sequence must finish inside
+    /// `roll_double_tap` is on. The whole remnant sequence, including both
+    /// double-tap gaps (`[common].self_cast_tap_gap_ms`), must finish inside
     /// `ROLLING_BOULDER_WINDUP_MS`.
     #[serde(default = "default_earth_spirit_roll_to_remnant_delay_ms")]
     pub roll_to_remnant_delay_ms: u64,
@@ -567,10 +571,6 @@ pub struct EarthSpiritConfig {
     /// back to placing the remnant at the cursor.
     #[serde(default = "default_earth_spirit_roll_remnant_double_tap")]
     pub roll_remnant_double_tap: bool,
-    /// Gap between the two remnant presses (ms). Ignored when
-    /// `roll_remnant_double_tap` is off.
-    #[serde(default = "default_earth_spirit_roll_remnant_double_tap_delay_ms")]
-    pub roll_remnant_double_tap_delay_ms: u64,
     /// Pass the roll key through untouched when Rolling Boulder is not
     /// castable.
     #[serde(default = "default_earth_spirit_require_roll_ready")]
@@ -598,10 +598,6 @@ pub struct EarthSpiritConfig {
     /// Independent of the ALT route so either can be dropped.
     #[serde(default = "default_earth_spirit_petrify_double_tap")]
     pub petrify_double_tap: bool,
-    /// Gap between the two Enchant Remnant presses (ms). Ignored when
-    /// `petrify_double_tap` is off.
-    #[serde(default = "default_earth_spirit_petrify_double_tap_delay_ms")]
-    pub petrify_double_tap_delay_ms: u64,
     /// Follow the self-petrify with a Boulder Smash, kicking the remnant —
     /// which is Earth Spirit himself — away from whatever is killing him.
     #[serde(default = "default_earth_spirit_petrify_smash_enabled")]
@@ -1742,6 +1738,11 @@ fn default_lane_phase_duration_seconds() -> u64 {
 fn default_lane_phase_healing_threshold() -> u32 {
     12
 }
+/// The 30ms most double taps in the app already used. Earth Spirit's were 60,
+/// but shorter only tightens its roll combo inside the windup.
+fn default_self_cast_tap_gap_ms() -> u64 {
+    30
+}
 fn default_armlet_enabled() -> bool {
     true
 }
@@ -2042,18 +2043,12 @@ fn default_earth_spirit_roll_remnant_alt() -> bool {
 fn default_earth_spirit_roll_remnant_double_tap() -> bool {
     true
 }
-fn default_earth_spirit_roll_remnant_double_tap_delay_ms() -> u64 {
-    60
-}
 /// Rolling Boulder's windup, and therefore the hard ceiling on the aiming
 /// window above. Not configurable: it is a property of the ability, not a
 /// preference.
 pub const ROLLING_BOULDER_WINDUP_MS: u64 = 600;
 fn default_earth_spirit_roll_double_tap() -> bool {
     true
-}
-fn default_earth_spirit_roll_double_tap_delay_ms() -> u64 {
-    60
 }
 fn default_earth_spirit_require_roll_ready() -> bool {
     true
@@ -2090,9 +2085,6 @@ fn default_earth_spirit_petrify_alt() -> bool {
 /// scepter key left on normal cast.
 fn default_earth_spirit_petrify_double_tap() -> bool {
     true
-}
-fn default_earth_spirit_petrify_double_tap_delay_ms() -> u64 {
-    60
 }
 fn default_earth_spirit_petrify_smash_enabled() -> bool {
     true
@@ -2963,6 +2955,7 @@ impl Default for CommonConfig {
             survivability_hp_threshold: default_survivability_threshold(),
             lane_phase_duration_seconds: default_lane_phase_duration_seconds(),
             lane_phase_healing_threshold: default_lane_phase_healing_threshold(),
+            self_cast_tap_gap_ms: default_self_cast_tap_gap_ms(),
         }
     }
 }
@@ -3151,12 +3144,9 @@ impl Default for EarthSpiritConfig {
             roll_combo_enabled: default_earth_spirit_roll_combo_enabled(),
             roll_key: default_earth_spirit_roll_key(),
             roll_double_tap: default_earth_spirit_roll_double_tap(),
-            roll_double_tap_delay_ms: default_earth_spirit_roll_double_tap_delay_ms(),
             roll_to_remnant_delay_ms: default_earth_spirit_roll_to_remnant_delay_ms(),
             roll_remnant_alt: default_earth_spirit_roll_remnant_alt(),
             roll_remnant_double_tap: default_earth_spirit_roll_remnant_double_tap(),
-            roll_remnant_double_tap_delay_ms:
-                default_earth_spirit_roll_remnant_double_tap_delay_ms(),
             require_roll_ready: default_earth_spirit_require_roll_ready(),
             auto_petrify_on_danger: default_earth_spirit_auto_petrify_on_danger(),
             petrify_key: default_earth_spirit_petrify_key(),
@@ -3164,7 +3154,6 @@ impl Default for EarthSpiritConfig {
             petrify_trigger_cooldown_ms: default_earth_spirit_petrify_trigger_cooldown_ms(),
             petrify_alt: default_earth_spirit_petrify_alt(),
             petrify_double_tap: default_earth_spirit_petrify_double_tap(),
-            petrify_double_tap_delay_ms: default_earth_spirit_petrify_double_tap_delay_ms(),
             petrify_smash_enabled: default_earth_spirit_petrify_smash_enabled(),
             smash_key: default_earth_spirit_smash_key(),
             petrify_to_smash_delay_ms: default_earth_spirit_petrify_to_smash_delay_ms(),
@@ -3904,11 +3893,9 @@ mod tests {
         assert!(cfg.roll_combo_enabled);
         assert_eq!(cfg.roll_key, 'w');
         assert!(cfg.roll_double_tap);
-        assert_eq!(cfg.roll_double_tap_delay_ms, 60);
         assert_eq!(cfg.roll_to_remnant_delay_ms, 120);
         assert!(cfg.roll_remnant_alt);
         assert!(cfg.roll_remnant_double_tap);
-        assert_eq!(cfg.roll_remnant_double_tap_delay_ms, 60);
         assert!(cfg.require_roll_ready);
     }
 
@@ -3936,7 +3923,6 @@ mod tests {
             "petrify_trigger_cooldown_ms",
             "petrify_alt",
             "petrify_double_tap",
-            "petrify_double_tap_delay_ms",
             "petrify_smash_enabled",
             "smash_key",
             "petrify_to_smash_delay_ms",
@@ -3983,14 +3969,14 @@ mod tests {
     /// silently have no effect.
     ///
     /// This budgets the *whole* sequence, not one delay, because the combo now
-    /// has four gaps that stack: the roll double-tap, the wait to the remnant,
-    /// and the remnant's own double-tap.
+    /// has gaps that stack: the roll double-tap, the wait to the remnant, and
+    /// the remnant's own double-tap. Both double-taps use the shared
+    /// `[common].self_cast_tap_gap_ms`.
     #[test]
     fn the_whole_roll_combo_fits_inside_the_windup() {
         let cfg = EarthSpiritConfig::default();
-        let total = cfg.roll_double_tap_delay_ms
-            + cfg.roll_to_remnant_delay_ms
-            + cfg.roll_remnant_double_tap_delay_ms;
+        let tap_gap = CommonConfig::default().self_cast_tap_gap_ms;
+        let total = tap_gap + cfg.roll_to_remnant_delay_ms + tap_gap;
         assert!(
             total < ROLLING_BOULDER_WINDUP_MS,
             "roll combo spans {total}ms, which must stay inside the \

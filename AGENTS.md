@@ -174,7 +174,8 @@ Situational awareness. No input simulation lives here.
 | `src/gsi/server.rs` | axum HTTP server; owns the bounded event queue |
 | `src/gsi/handler.rs` | Deserialises `GsiWebhookEvent`, updates `AppState`, calls dispatcher and observability |
 | `src/input/keyboard.rs` | rdev hook; blocks/replays keys, `HotkeyEvent` planning |
-| `src/input/simulation.rs` | Emits synthetic key/mouse input, guards against re-interception |
+| `src/input/simulation.rs` | Emits synthetic key/mouse input, guards against re-interception; every self-cast double tap goes through its one-job `self_cast_taps` |
+| `src/input/click_hold.rs` | Holds the player's left/right clicks during a self-cast double tap and replays them after |
 | `src/config/settings.rs` | All config structs with `#[serde(default)]`; one struct per feature/hero area |
 | `src/config/storage.rs` | `ConfigPaths`: live config and voice pack locations, template seeding |
 | `src/config/constants.rs` | Compile-time constants |

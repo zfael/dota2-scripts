@@ -36,6 +36,8 @@ export interface CommonConfig {
   /** Length of the early-game window that overrides the normal healing threshold. 0 disables it. */
   lane_phase_duration_seconds: number;
   lane_phase_healing_threshold: number;
+  /** Gap between the two presses of every self-cast double tap in the app. */
+  self_cast_tap_gap_ms: number;
 }
 
 export interface ArmletConfig {
@@ -279,11 +281,9 @@ export interface EarthSpiritConfig {
   roll_combo_enabled: boolean;
   roll_key: string;
   roll_double_tap: boolean;
-  roll_double_tap_delay_ms: number;
   roll_to_remnant_delay_ms: number;
   roll_remnant_alt: boolean;
   roll_remnant_double_tap: boolean;
-  roll_remnant_double_tap_delay_ms: number;
   require_roll_ready: boolean;
   auto_petrify_on_danger: boolean;
   petrify_key: string;
@@ -291,7 +291,6 @@ export interface EarthSpiritConfig {
   petrify_trigger_cooldown_ms: number;
   petrify_alt: boolean;
   petrify_double_tap: boolean;
-  petrify_double_tap_delay_ms: number;
   petrify_smash_enabled: boolean;
   smash_key: string;
   petrify_to_smash_delay_ms: number;

@@ -102,6 +102,7 @@ same set:
 | `survivability_hp_threshold` | `30` | `30` | Base HP% threshold for shared healing when danger mode is not active. See `docs/features/survivability.md`. |
 | `lane_phase_duration_seconds` | `480` | `480` | Duration of the global lane-phase healing override. Set to `0` to disable it. |
 | `lane_phase_healing_threshold` | `12` | `12` | HP% threshold used during `0 <= map.clock_time < lane_phase_duration_seconds`, before normal or danger healing thresholds are considered. |
+| `self_cast_tap_gap_ms` | `30` | `30` | Gap between the two presses of every self-cast double tap in the app (Lotus Orb, Glimmer, Mjollnir, BKB, OD Astral, Earth Spirit's remnants, neutral-item self-cast key). Both presses go out as one input job with the player's left/right clicks held in between. Exposed on the Survivability page. |
 
 ## `[armlet]`
 
@@ -627,11 +628,9 @@ See `docs/heroes/mirana.md` and `docs/features/keyboard-interception.md`.
 | `roll_combo_enabled` | `true` | `true` | Remap the roll key to Rolling Boulder then Stone Remnant — the reverse of the silence, see below. |
 | `roll_key` | `"w"` | `"w"` | Rolling Boulder key. This is also the key intercepted. |
 | `roll_double_tap` | `true` | `true` | Press the roll key twice. Rolling Boulder is commonly left off quickcast, where the first press only arms the cursor. Off sends a single press. |
-| `roll_double_tap_delay_ms` | `60` | `60` | Gap between the two roll presses. Ignored when `roll_double_tap` is `false`. |
 | `roll_to_remnant_delay_ms` | `120` | `120` | Gap between the roll firing and the remnant press, measured from the press that casts the roll. |
 | `roll_remnant_alt` | `true` | `true` | Hold ALT across the remnant press — Dota's self-cast modifier, and the route that survives quickcast on the remnant key. |
 | `roll_remnant_double_tap` | `true` | `true` | Press the remnant key twice — Dota's default self-cast binding. |
-| `roll_remnant_double_tap_delay_ms` | `60` | `60` | Gap between the two remnant presses. Ignored when `roll_remnant_double_tap` is `false`. |
 | `require_roll_ready` | `true` | `true` | Only intercept when `earth_spirit_rolling_boulder` is levelled and castable. |
 | `auto_petrify_on_danger` | `true` | `true` | Self-cast Enchant Remnant (scepter) when the danger detector fires below the HP threshold. Fires off GSI, not off a key, and is **not** gated by `enabled`. |
 | `petrify_key` | `"f"` | `"f"` | Enchant Remnant key — the scepter ability slot. |
@@ -639,7 +638,6 @@ See `docs/heroes/mirana.md` and `docs/features/keyboard-interception.md`.
 | `petrify_trigger_cooldown_ms` | `5000` | `5000` | Minimum gap between two escapes. Longer than the other auto-casts: the petrify's own duration keeps reporting the HP that triggered it. |
 | `petrify_alt` | `true` | `true` | Hold ALT across the Enchant Remnant press — Dota's self-cast modifier, and the route that survives quickcast. |
 | `petrify_double_tap` | `true` | `true` | Press the Enchant Remnant key twice — Dota's default self-cast binding. |
-| `petrify_double_tap_delay_ms` | `60` | `60` | Gap between the two Enchant Remnant presses. Ignored when `petrify_double_tap` is `false`. |
 | `petrify_smash_enabled` | `true` | `true` | Follow the petrify with a Boulder Smash, kicking the remnant — Earth Spirit himself — clear. Off, he petrifies in place. |
 | `smash_key` | `"q"` | `"q"` | Boulder Smash key. Pressed once, plain: not self-cast and not aimed. Never intercepted. |
 | `petrify_to_smash_delay_ms` | `250` | `250` | Gap between the petrify and the kick. Waits on a *cast* resolving, not on a key press clearing — there is no remnant to kick until it does. |

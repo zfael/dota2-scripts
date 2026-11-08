@@ -12,7 +12,6 @@ use crate::models::GsiWebhookEvent;
 use lazy_static::lazy_static;
 use rand::Rng;
 use std::sync::{Arc, Mutex};
-use std::thread;
 use std::time::Duration;
 use tracing::{info, warn};
 
@@ -24,9 +23,6 @@ const PRESS_SETTLE_MS: u64 = 600;
 /// item is castable and no cast lock is up, so four losses in a row means the
 /// key is not reaching the game and retrying harder would just spam it.
 const MAX_PRESSES_PER_SILENCE: u8 = 4;
-
-/// Gap between the two taps that make Lotus Orb self-cast.
-const SELF_CAST_DELAY_MS: u64 = 30;
 
 lazy_static! {
     /// Bookkeeping for the silence currently being dispelled.
@@ -137,6 +133,7 @@ pub fn check_and_dispel_silence(
             state.presses += 1;
 
             let attempt = state.presses;
+            let tap_gap_ms = settings.common.self_cast_tap_gap_ms;
             let jitter = rand::rng().random_range(30..100);
             executor.enqueue_after(item.job_label(), Duration::from_millis(jitter), move || {
                 info!(
@@ -145,7 +142,7 @@ pub fn check_and_dispel_silence(
                     attempt,
                     jitter
                 );
-                press_dispel_item(&key, item);
+                press_dispel_item(&key, item, tap_gap_ms);
             });
         }
     }
@@ -244,11 +241,10 @@ fn is_castable(item: &Item) -> bool {
     item.can_cast.unwrap_or(false) && item.cooldown.unwrap_or(0) == 0
 }
 
-fn press_dispel_item(key: &KeyBinding, item: DispelItem) {
-    crate::input::simulation::press_binding(key);
-
+fn press_dispel_item(key: &KeyBinding, item: DispelItem, tap_gap_ms: u64) {
     if item.needs_self_cast_tap() {
-        thread::sleep(Duration::from_millis(SELF_CAST_DELAY_MS));
+        crate::input::simulation::double_tap_binding(key, tap_gap_ms);
+    } else {
         crate::input::simulation::press_binding(key);
     }
 }
