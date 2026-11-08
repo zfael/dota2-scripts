@@ -100,6 +100,9 @@ pub fn check_and_dispel_silence(
     // silenced hero can still walk away invisible, so the dispel is worth less
     // than the escape it would cost.
     let invisible = crate::actions::invisibility::suppresses_automation(settings);
+    let berserk = crate::actions::defensive_windows::is_active(
+        crate::actions::defensive_windows::MASK_OF_MADNESS_ITEM,
+    );
     let now_ms = current_time_millis();
 
     let mut state = DISPEL_STATE.lock().unwrap();
@@ -109,6 +112,7 @@ pub fn check_and_dispel_silence(
         settings.danger_detection.auto_manta_on_silence,
         settings.danger_detection.auto_lotus_on_silence,
         invisible,
+        berserk,
         &state,
         now_ms,
     );
@@ -156,6 +160,7 @@ fn plan_dispel<'a>(
     manta_enabled: bool,
     lotus_enabled: bool,
     invisible: bool,
+    berserk: bool,
     state: &DispelState,
     now_ms: u64,
 ) -> DispelDecision<'a> {
@@ -168,6 +173,13 @@ fn plan_dispel<'a>(
     }
 
     if invisible {
+        return DispelDecision::Hold;
+    }
+
+    // Our own Mask of Madness silenced us, and we chose that. `Hold` rather than
+    // `Idle`: an enemy silence that outlasts Berserk is still worth dispelling
+    // once the window closes, and nothing is spent in the meantime.
+    if berserk {
         return DispelDecision::Hold;
     }
 
@@ -303,7 +315,7 @@ mod tests {
         state: &DispelState,
         now_ms: u64,
     ) -> DispelDecision<'a> {
-        plan_dispel(event, true, true, false, state, now_ms)
+        plan_dispel(event, true, true, false, false, state, now_ms)
     }
 
     #[test]
@@ -381,6 +393,7 @@ mod tests {
                 false,
                 false,
                 false,
+                false,
                 &DispelState::default(),
                 1_000
             ),
@@ -393,8 +406,37 @@ mod tests {
         let payload = event(silenced_hero(), both_items_ready());
 
         assert_eq!(
-            plan_dispel(&payload, true, true, true, &DispelState::default(), 1_000),
+            plan_dispel(&payload, true, true, true, false, &DispelState::default(), 1_000),
             DispelDecision::Hold
+        );
+    }
+
+    #[test]
+    fn our_own_berserk_silence_is_not_dispelled() {
+        let payload = event(silenced_hero(), both_items_ready());
+
+        assert_eq!(
+            plan_dispel(&payload, true, true, false, true, &DispelState::default(), 1_000),
+            DispelDecision::Hold
+        );
+    }
+
+    #[test]
+    fn a_silence_that_outlasts_berserk_is_dispelled_once_it_ends() {
+        let payload = event(silenced_hero(), both_items_ready());
+        let state = DispelState::default();
+
+        assert_eq!(
+            plan_dispel(&payload, true, true, false, true, &state, 1_000),
+            DispelDecision::Hold
+        );
+        // Nothing was pressed during Berserk, so the first tick after it casts.
+        assert_eq!(
+            plan_dispel(&payload, true, true, false, false, &state, 7_000),
+            DispelDecision::Cast {
+                slot: "slot0",
+                item: DispelItem::Manta,
+            }
         );
     }
 

@@ -344,6 +344,11 @@ Tracked sources, in `WINDOW_SOURCES`:
 |---|---|
 | `item_glimmer_cape` | 5s |
 | `item_ghost` | 4s |
+| `item_mask_of_madness` | 6s (Berserk) |
+
+Mask of Madness is not a defensive item; it is tracked only because Berserk
+silences its own caster. Its window holds the silence dispel (see below), and
+nothing in the defensive planner reads it.
 
 These are deliberately **not** part of `invisibility::is_invisible()`. That gate
 holds every automation in the app; these only feed the defensive planner, which
@@ -390,6 +395,10 @@ Current rules:
   item orders issued through those, so a press would be thrown away. The silence
   stays tracked, so the dispel fires on the first tick the lock lifts instead of
   being lost for the rest of the silence
+- `Hold` while our own Mask of Madness window is open (6s from its `0 -> N`
+  cooldown edge): Berserk's silence is self-inflicted and chosen, so Manta or
+  Lotus must not answer it. An enemy silence that outlasts Berserk is still
+  dispelled on the first tick after the window closes
 - prefer `item_manta` across the whole inventory (it is instant; Lotus has a cast
   point), then `item_lotus_orb`
 - only cast if `can_cast == true` and cooldown is `0`

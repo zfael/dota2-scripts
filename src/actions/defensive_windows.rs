@@ -6,6 +6,9 @@
 //! Glimmer to run out. Blade Mail waits for both — it returns damage nobody is
 //! dealing us while we are hidden or ghosted.
 //!
+//! Mask of Madness rides along for a different reason: Berserk silences its own
+//! caster, and the silence dispel must not answer that with Manta or Lotus.
+//!
 //! GSI never reports modifiers, so these windows are inferred the way
 //! [`crate::actions::invisibility`] infers Shadow Blade: a `0 -> N` cooldown edge
 //! on the item is the cast, and the item's own cooldown is the clock. Cooldowns
@@ -32,6 +35,8 @@ use crate::models::gsi_event::GsiWebhookEvent;
 
 pub const GLIMMER_ITEM: &str = "item_glimmer_cape";
 pub const GHOST_ITEM: &str = "item_ghost";
+/// Berserk silences its own caster, so the silence dispel has to sit it out.
+pub const MASK_OF_MADNESS_ITEM: &str = "item_mask_of_madness";
 
 /// An item whose activation opens a window later items have to wait out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,6 +53,10 @@ pub const WINDOW_SOURCES: &[WindowSource] = &[
     WindowSource {
         item_name: GHOST_ITEM,
         duration_seconds: 4,
+    },
+    WindowSource {
+        item_name: MASK_OF_MADNESS_ITEM,
+        duration_seconds: 6,
     },
 ];
 
@@ -294,6 +303,28 @@ mod tests {
 
         assert_eq!(active_items(&snapshot), vec![GHOST_ITEM]);
         assert_eq!(snapshot.active[GHOST_ITEM].duration_seconds, 4);
+    }
+
+    #[test]
+    fn mask_of_madness_holds_its_window_for_the_whole_berserk() {
+        let berserk = |cooldown: u32| {
+            let mut event = event_with(0, 0, 0);
+            event.items.slot3 = item(MASK_OF_MADNESS_ITEM, cooldown);
+            event
+        };
+        let previous = seed(&berserk(0));
+
+        // Cast: cooldown 0 -> 16.
+        let mut snapshot = advance_window_snapshot(Some(&previous), &berserk(16), 1_000);
+        assert_eq!(active_items(&snapshot), vec![MASK_OF_MADNESS_ITEM]);
+
+        // 5 of 6 seconds spent: still silenced by our own item.
+        snapshot = advance_window_snapshot(Some(&snapshot), &berserk(11), 6_000);
+        assert_eq!(active_items(&snapshot), vec![MASK_OF_MADNESS_ITEM]);
+
+        // 6 seconds: Berserk is over.
+        snapshot = advance_window_snapshot(Some(&snapshot), &berserk(10), 7_000);
+        assert!(active_items(&snapshot).is_empty());
     }
 
     #[test]
