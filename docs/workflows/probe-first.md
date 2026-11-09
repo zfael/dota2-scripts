@@ -35,9 +35,13 @@ the name would have looked correct in review and never worked in a game.
 
 Write `examples/<hero>_<subject>_probe.rs` that:
 
-- **listens on its own port**, so it runs next to the real app. Dota supports
-  multiple `gamestate_integration` cfg files — a second one pointing at
-  `127.0.0.1:3100` gives the probe the same stream without disturbing anything.
+- **listens on port 3000 by default**, the app's GSI port, so it gets events
+  from the cfg the player already has installed. Close the app before running
+  it: the two cannot both bind 3000, and the app's keyboard hook would see the
+  probe's input anyway. Say so in the probe's setup notes, and print a hint
+  when the bind fails. Keep a `--port` flag for the rare run beside the app:
+  Dota supports several `gamestate_integration` cfg files, so a second one
+  pointing at another port gives the probe the same stream.
 - **records raw payloads verbatim** under `logs/`, so a session can be
   re-analysed without playing again. Dota pretty-prints its JSON, so a payload
   spans many lines: read captures back as a **stream of JSON values**, not line

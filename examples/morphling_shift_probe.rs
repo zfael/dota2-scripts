@@ -28,14 +28,14 @@
 //!
 //! ## Capture protocol
 //!
-//! Run it on its own port next to the real app, so both get the same stream:
-//! drop a second file in
-//! `steamapps/common/dota 2 beta/game/dota/cfg/gamestate_integration/`, say
-//! `gamestate_integration_morph_probe.cfg`, identical to the app's own but with
-//! `"uri" "http://127.0.0.1:3100/"` and its own `"name"`.
+//! Close the app first: the probe listens on the app's GSI port (3000), so it
+//! uses the cfg already installed, and the two cannot both bind it. To run it
+//! beside the app instead, add a second cfg in
+//! `steamapps/common/dota 2 beta/game/dota/cfg/gamestate_integration/` with
+//! `"uri" "http://127.0.0.1:3100/"` and its own `"name"`, and pass `--port 3100`.
 //!
 //! ```powershell
-//! cargo run --example morphling_shift_probe -- --port 3100 --keys d,f
+//! cargo run --example morphling_shift_probe -- --keys d,f
 //! ```
 //!
 //! Then take Morphling into a demo game (`-wait 0` lobby or hero demo) and run
@@ -807,7 +807,7 @@ struct Args {
 impl Args {
     fn parse() -> Self {
         let mut args = Self {
-            port: 3100,
+            port: 3000,
             keys: vec!['d', 'f'],
             replay: None,
             output_dir: String::from("logs/morphling_shift"),
@@ -868,11 +868,11 @@ fn usage() {
     println!("Morphling Attribute Shift probe — records GSI and reports what a shift looks like");
     println!();
     println!("Usage:");
-    println!("  cargo run --example morphling_shift_probe -- [--port 3100] [--keys d,f]");
+    println!("  cargo run --example morphling_shift_probe -- [--port 3000] [--keys d,f]");
     println!("  cargo run --example morphling_shift_probe -- --replay <file.jsonl> [--verbose]");
     println!();
     println!("Options:");
-    println!("  --port <N>           Listen port for a second GSI cfg (default: 3100)");
+    println!("  --port <N>           GSI listen port (default: 3000, the app's; close the app first)");
     println!("  --keys <a,b>         Shift keys to timestamp (default: d,f)");
     println!("  --no-keys            Skip the keyboard listener");
     println!("  --replay <PATH>      Analyse a capture instead of listening");

@@ -226,7 +226,7 @@ evidence a feature was built on and the tool for re-measuring after a patch. See
 
 | File | Purpose |
 |---|---|
-| `examples/morphling_shift_probe.rs` | Records GSI on its own port and replays a capture; measures what an Attribute Shift looks like in the payload |
+| `examples/morphling_shift_probe.rs` | Records GSI and replays a capture; measures what an Attribute Shift looks like in the payload |
 | `examples/morphling_shift_control.rs` | Simulates the shift from those measurements and runs the decision loop against 16 scenario checks |
 | `examples/largo_song_sync_control.rs` | Plays song presses at chosen offsets against Largo's beat grid; asserts what is swallowed, what reaches Dota, and on which beat |
 | `examples/phantom_lancer_input_probe.rs` | Sends the inputs the Phantom Lancer automation needs into a live game and records whether they worked |
