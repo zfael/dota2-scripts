@@ -75,6 +75,7 @@ broken test build there once went unnoticed.
 | Run or write tests | `docs/workflows/testing-and-debugging.md` |
 | Debug a broken feature | `docs/workflows/troubleshooting.md` |
 | Check Valve's tracker for newly reported gameplay bugs | `.claude/skills/dota-bug-watch/SKILL.md` — run `scripts/dota-bug-watch.ps1` |
+| Analyse a new gameplay patch (summary, meta forecast, repo impact) | `docs/patch-analysis/README.md` — run `scripts/patch-analysis.ps1`; skill `.claude/skills/patch-analysis/SKILL.md` |
 | Find a config key, fallback default, or section owner | `docs/reference/configuration.md` |
 | Trace which GSI fields the app actually consumes | `docs/reference/gsi-schema-and-usage.md` |
 | Tune danger heuristics, healing thresholds, or defensive items | `docs/features/danger-detection.md` |
@@ -246,6 +247,7 @@ evidence a feature was built on and the tool for re-measuring after a patch. See
 | `tests/fixtures/` | Sample GSI JSON payloads |
 | `scripts/generate-voice-pack.ps1` | Generates a spoken voice pack via the Windows speech synthesiser |
 | `scripts/generate-mana-costs.ps1` | Regenerates `src/actions/mana_costs.rs` from odota/dotaconstants; rerun after a gameplay patch |
+| `scripts/patch-analysis.ps1` | Pulls a patch's notes, measures hero win rates on OpenDota, and scores meta candidates into `docs/patch-analysis/<patch>/` |
 
 Archived design docs and implementation plans for larger efforts live under
 `docs/superpowers/specs/` and `docs/superpowers/plans/`. They record why something was
@@ -344,4 +346,5 @@ tool when a patch changes the numbers.
 | `docs/workflows/probe-first.md` | Probe-then-simulate method for uncertain game state and in-fight key presses |
 | `docs/workflows/testing-and-debugging.md` | Test, build, fixture, and logging workflow |
 | `docs/workflows/troubleshooting.md` | GSI connectivity, config drift, key intercept failures |
+| `docs/patch-analysis/README.md` | Per-patch analysis folders: notes, meta forecast, repo impact |
 | `README.md` | User-facing overview and installation |

@@ -1,0 +1,24 @@
+{
+  "patch": "7.42",
+  "release_utc": "2026-11-18 20:00:00Z",
+  "release_source": "argument",
+  "min_rank_tier": 70,
+  "game_mode": "All Pick (22)",
+  "measured_utc": "2026-11-18 21:09:25Z",
+  "windows": [
+    {
+      "window": "before",
+      "split": "all",
+      "from_utc": "2026-11-17 08:00:00Z",
+      "to_utc": "2026-11-18 20:00:00Z",
+      "matches": 793346
+    },
+    {
+      "window": "before",
+      "split": "high",
+      "from_utc": "2026-11-17 08:00:00Z",
+      "to_utc": "2026-11-18 20:00:00Z",
+      "matches": 79438
+    }
+  ]
+}
