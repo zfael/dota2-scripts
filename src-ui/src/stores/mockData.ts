@@ -282,7 +282,7 @@ export const mockConfig: Settings = {
       combo_item_delay_ms: 30, earthbind_press_count: 2,
       earthbind_press_interval_ms: 50, poof_press_count: 3,
       poof_press_interval_ms: 50, auto_dig_on_danger: true,
-      dig_hp_threshold_percent: 32, auto_megameepo_on_danger: true,
+      dig_hp_threshold_percent: 32, auto_megameepo_on_danger: false,
       megameepo_hp_threshold_percent: 45, defensive_trigger_cooldown_ms: 1500,
       farm_assist: {
         enabled: true, toggle_key: "End", pulse_interval_ms: 700,

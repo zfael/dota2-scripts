@@ -2326,8 +2326,9 @@ fn default_meepo_auto_dig_on_danger() -> bool {
 fn default_meepo_dig_hp_threshold_percent() -> u32 {
     32
 }
+// MegaMeepo was removed in 7.42. Off by default; the code stays in case it returns.
 fn default_meepo_auto_megameepo_on_danger() -> bool {
-    true
+    false
 }
 fn default_meepo_megameepo_hp_threshold_percent() -> u32 {
     45
@@ -4085,7 +4086,7 @@ mod tests {
         assert_eq!(settings.heroes.meepo.poof_press_interval_ms, 35);
         assert_eq!(settings.heroes.meepo.auto_dig_on_danger, true);
         assert_eq!(settings.heroes.meepo.dig_hp_threshold_percent, 32);
-        assert_eq!(settings.heroes.meepo.auto_megameepo_on_danger, true);
+        assert_eq!(settings.heroes.meepo.auto_megameepo_on_danger, false);
         assert_eq!(settings.heroes.meepo.megameepo_hp_threshold_percent, 45);
         assert_eq!(settings.heroes.meepo.defensive_trigger_cooldown_ms, 1500);
         assert!(settings.heroes.meepo.farm_assist.enabled);

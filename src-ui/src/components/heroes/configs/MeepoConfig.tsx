@@ -78,7 +78,7 @@ export default function MeepoConfig() {
                 </span>
               </div>
               <div>
-                <span className="text-muted">MegaMeepo:</span>{" "}
+                <span className="text-muted">MegaMeepo (removed in 7.42):</span>{" "}
                 <span className={meepoState.megameepoReady ? "text-terminal" : "text-muted"}>
                   {meepoState.megameepoReady ? "Ready" : "CD"}
                 </span>
@@ -115,7 +115,7 @@ export default function MeepoConfig() {
             <KeyInput label="Earthbind" value={config.earthbind_key} onChange={(v) => set({ earthbind_key: v })} />
             <KeyInput label="Poof" value={config.poof_key} onChange={(v) => set({ poof_key: v })} />
             <KeyInput label="Dig" value={config.dig_key} onChange={(v) => set({ dig_key: v })} />
-            <KeyInput label="MegaMeepo" value={config.megameepo_key} onChange={(v) => set({ megameepo_key: v })} />
+            <KeyInput label="MegaMeepo (removed in 7.42)" value={config.megameepo_key} onChange={(v) => set({ megameepo_key: v })} />
           </div>
         </Card>
 
@@ -137,7 +137,7 @@ export default function MeepoConfig() {
         <Card title="Danger Abilities">
           <Toggle label="Auto-Dig on Danger" checked={config.auto_dig_on_danger} onChange={(v) => set({ auto_dig_on_danger: v })} />
           <Slider label="Dig HP Threshold" value={config.dig_hp_threshold_percent} min={10} max={80} onChange={(v) => set({ dig_hp_threshold_percent: v })} suffix="%" />
-          <Toggle label="Auto-MegaMeepo on Danger" checked={config.auto_megameepo_on_danger} onChange={(v) => set({ auto_megameepo_on_danger: v })} />
+          <Toggle label="Auto-MegaMeepo on Danger (removed in 7.42)" checked={config.auto_megameepo_on_danger} onChange={(v) => set({ auto_megameepo_on_danger: v })} />
           <Slider label="MegaMeepo HP Threshold" value={config.megameepo_hp_threshold_percent} min={10} max={80} onChange={(v) => set({ megameepo_hp_threshold_percent: v })} suffix="%" />
           <NumberInput label="Defensive Cooldown" value={config.defensive_trigger_cooldown_ms} onChange={(v) => set({ defensive_trigger_cooldown_ms: v })} suffix="ms" />
         </Card>

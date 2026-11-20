@@ -41,10 +41,8 @@ fn should_cast_dig(
         return false;
     }
 
-    if !event.hero.aghanims_shard {
-        return false;
-    }
-
+    // No Aghanim's gate: Dig moved from Shard to Scepter in 7.42, and a learned, castable
+    // `meepo_petrify` already proves Meepo has whichever one grants it this patch.
     if event.hero.health_percent > config.dig_hp_threshold_percent {
         return false;
     }
@@ -347,6 +345,17 @@ mod tests {
     }
 
     #[test]
+    fn meepo_should_cast_dig_with_scepter_and_no_shard() {
+        let mut event = meepo_fixture();
+        let config = &Settings::default().heroes.meepo;
+        event.hero.health_percent = config.dig_hp_threshold_percent;
+        event.hero.aghanims_shard = false;
+        event.hero.aghanims_scepter = true;
+
+        assert!(should_cast_dig(&event, config, None, true));
+    }
+
+    #[test]
     fn meepo_should_not_cast_dig_without_danger() {
         let event = meepo_fixture();
         let config = &Settings::default().heroes.meepo;
@@ -357,9 +366,18 @@ mod tests {
     #[test]
     fn meepo_should_cast_megameepo_when_conditions_match() {
         let event = meepo_fixture();
+        let mut config = Settings::default().heroes.meepo;
+        config.auto_megameepo_on_danger = true;
+
+        assert!(should_cast_megameepo(&event, &config, None, true));
+    }
+
+    #[test]
+    fn meepo_megameepo_is_off_by_default_since_7_42() {
+        let event = meepo_fixture();
         let config = &Settings::default().heroes.meepo;
 
-        assert!(should_cast_megameepo(&event, config, None, true));
+        assert!(!should_cast_megameepo(&event, config, None, true));
     }
 
     #[test]

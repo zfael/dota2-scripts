@@ -8,8 +8,8 @@ Learn how the Meepo script executes a standalone burst combo, runs manual farm a
 ## Phase-1 / Phase-2 / Phase-3A Feature Summary
 
 - **Standalone combo trigger** – Press configured key to execute Blink → combo items → Earthbind → Poof
-- **GSI-driven Dig (Petrify)** – Auto-casts Dig when in danger with Aghanim's Shard below HP threshold
-- **GSI-driven MegaMeepo** – Auto-casts MegaMeepo when in danger with Aghanim's Scepter below HP threshold
+- **GSI-driven Dig (Petrify)** – Auto-casts Dig when in danger below HP threshold (Dig comes from Aghanim's Scepter since 7.42; Shard before)
+- **GSI-driven MegaMeepo** – Removed from the game in 7.42. The code stays, off by default, in case it returns
 - **Manual farm assist** – Toggle a cursor-directed Poof farming pulse that suspends on danger or invalid cast conditions
 - **Survivability actions** – Auto-use healing/defensive/neutral items on every GSI event
 - **GSI-based detection** – Auto-enables when `npc_dota_hero_meepo` detected
@@ -44,12 +44,12 @@ earthbind_press_interval_ms = 30
 poof_press_count = 3
 # Delay between Poof presses (ms)
 poof_press_interval_ms = 35
-# Auto-cast Dig when in danger (requires Aghanim's Shard)
+# Auto-cast Dig when in danger (Dig is granted by Aghanim's Scepter since 7.42)
 auto_dig_on_danger = true
 # HP% threshold below which auto-Dig fires
 dig_hp_threshold_percent = 32
-# Auto-cast MegaMeepo when in danger (requires Aghanim's Scepter)
-auto_megameepo_on_danger = true
+# Auto-cast MegaMeepo when in danger. MegaMeepo was removed in 7.42; off in case it returns
+auto_megameepo_on_danger = false
 # HP% threshold below which auto-MegaMeepo fires
 megameepo_hp_threshold_percent = 45
 # Cooldown between defensive-cast triggers (ms)
@@ -92,7 +92,7 @@ poof_press_interval_ms = 35
 | `poof_press_interval_ms` | u64 | `35` | `35` | Delay between Poof presses (ms) |
 | `auto_dig_on_danger` | bool | `true` | `true` | Enable auto-Dig on danger |
 | `dig_hp_threshold_percent` | u32 | `32` | `32` | HP% ceiling for auto-Dig |
-| `auto_megameepo_on_danger` | bool | `true` | `true` | Enable auto-MegaMeepo on danger |
+| `auto_megameepo_on_danger` | bool | `false` | `false` | Enable auto-MegaMeepo on danger (ability removed in 7.42) |
 | `megameepo_hp_threshold_percent` | u32 | `45` | `45` | HP% ceiling for auto-MegaMeepo |
 | `defensive_trigger_cooldown_ms` | u64 | `1500` | `1500` | Minimum gap between any two defensive casts (ms) |
 | `[heroes.meepo.farm_assist].enabled` | bool | `true` | `true` | Master switch for manual farm assist |
@@ -175,14 +175,23 @@ Fires when **all** of the following are true:
 | `auto_dig_on_danger = true` | config |
 | `in_danger == true` | `danger_detector::update()` |
 | Hero is alive, not stunned, not silenced | `hero.alive`, `hero.stunned`, `hero.silenced` |
-| Hero has Aghanim's Shard | `hero.aghanims_shard` |
 | `hero.health_percent <= dig_hp_threshold_percent` (32%) | GSI |
 | `meepo_petrify` is learned and `can_cast` | `abilities` scan |
 | No defensive cast within `defensive_trigger_cooldown_ms` | internal timer |
 
 → Presses `dig_key` ('d').
 
-#### Auto-MegaMeepo
+There is deliberately no Aghanim's check. Dig moved from Shard to Scepter in 7.42, and
+the old Shard gate silently stopped auto-Dig. A learned, castable `meepo_petrify` already
+proves Meepo has whichever item grants it.
+
+#### Auto-MegaMeepo (removed in 7.42)
+
+`meepo_megameepo` no longer exists, so this never fires: the readiness check finds no such
+ability. The code and config stay in case Valve brings it back, with
+`auto_megameepo_on_danger` off by default. The 7.42 Shard (Divided We Stand pick-up,
+`meepo_fling_release`) is not automated: it needs a clone as its target, which GSI can't
+identify.
 
 Fires when **all** of the following are true (evaluated only if Dig did not fire):
 
@@ -302,10 +311,10 @@ All locks are held briefly and released before any `press_key` calls, so there i
 2. **Equip Blink Dagger** (optional; skipped if absent)
 3. **Equip Sheepstick / Disperser** (or override `combo_items`)
 4. **Level Earthbind (Q) and Poof (W)**
-5. **Get Aghanim's Shard** for auto-Dig; **Aghanim's Scepter** for auto-MegaMeepo
+5. **Get Aghanim's Scepter** for auto-Dig
 6. **Position cursor** on enemy or desired location
 7. **Press standalone key** (default: Home) to burst
-8. **Dig / MegaMeepo fire automatically** when danger conditions are met in-game
+8. **Dig fires automatically** when danger conditions are met in-game
 9. **Press farm-assist key** (default: End) to arm/disarm manual farming pulses
 
 ### Tuning

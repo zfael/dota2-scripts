@@ -524,7 +524,7 @@ See `docs/heroes/broodmother.md` and `docs/reference/gsi-schema-and-usage.md`.
 | `poof_press_interval_ms` | `35` | `35` | Delay between Poof presses. |
 | `auto_dig_on_danger` | `true` | `true` | Enables automatic Dig cast when in danger state. |
 | `dig_hp_threshold_percent` | `32` | `32` | HP% threshold for auto-Dig when danger-triggered. |
-| `auto_megameepo_on_danger` | `true` | `true` | Enables automatic Megameepo cast when in danger state. |
+| `auto_megameepo_on_danger` | `false` | `false` | Enables automatic Megameepo cast when in danger state. MegaMeepo was removed in 7.42; kept in case it returns. |
 | `megameepo_hp_threshold_percent` | `45` | `45` | HP% threshold for auto-Megameepo when danger-triggered. |
 | `defensive_trigger_cooldown_ms` | `1500` | `1500` | Local anti-spam cooldown between defensive ability attempts. |
 
