@@ -246,7 +246,7 @@ evidence a feature was built on and the tool for re-measuring after a patch. See
 | `tests/rune_alerts_tests.rs` | Rune alert timing tests |
 | `tests/fixtures/` | Sample GSI JSON payloads |
 | `scripts/generate-voice-pack.ps1` | Generates a spoken voice pack via the Windows speech synthesiser |
-| `scripts/generate-mana-costs.ps1` | Regenerates `src/actions/mana_costs.rs` from odota/dotaconstants; rerun after a gameplay patch |
+| `scripts/generate-mana-costs.ps1` | Regenerates `src/actions/mana_costs.rs` from Valve's datafeed; rerun after a gameplay patch |
 | `scripts/patch-analysis.ps1` | Pulls a patch's notes, measures hero win rates on OpenDota, and scores meta candidates into `docs/patch-analysis/<patch>/` |
 
 Archived design docs and implementation plans for larger efforts live under

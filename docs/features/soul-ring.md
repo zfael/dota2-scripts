@@ -58,7 +58,7 @@ intercept_item_keys = true
 |------|---------|
 | `src/actions/soul_ring.rs` | State tracking and trigger logic |
 | `src/actions/mana_costs.rs` | **Generated** item/ability mana costs — do not hand-edit |
-| `scripts/generate-mana-costs.ps1` | Regenerates the table from odota/dotaconstants |
+| `scripts/generate-mana-costs.ps1` | Regenerates the table from Valve's datafeed (or odota/dotaconstants with `-Source dotaconstants`) |
 | `src/input/keyboard.rs` | Key interception with `grab()` |
 | `src/actions/dispatcher.rs` | GSI event updates to Soul Ring state |
 | `src/actions/danger_detector.rs` | Receives the sacrifice via `note_self_damage(...)` so it is not counted as incoming damage |
@@ -245,9 +245,21 @@ pays health, not mana) are all free.
 pwsh scripts/generate-mana-costs.ps1
 ```
 
-Source is [odota/dotaconstants](https://github.com/odota/dotaconstants), itself generated
-from Valve's game files. Run it after a gameplay patch and review the diff — a mass change
-to zero usually means an upstream schema change, not a balance patch.
+Source is Valve's datafeed (`https://www.dota2.com/datafeed`), the data behind dota2.com's
+hero, item and patch pages. It is live on patch day. `herodata` gives each hero's visible
+kit, `abilitydata` fills in slot-filling sub-abilities the hero page hides (Shadow Fiend's
+second and third Shadowraze, Puck's Ethereal Jaunt), and `itemdata` gives every item. A run
+takes about a minute and needs PowerShell 7 for the parallel download.
+
+`-Source dotaconstants` reads [odota/dotaconstants](https://github.com/odota/dotaconstants)
+instead. It is generated from the game files too, but lagged 7.42 by days.
+
+Run it after a gameplay patch and review the diff — a mass change to zero usually means an
+upstream schema change, not a balance patch. To check the result, compare the "Mana Cost …
+to N" lines in the patch notes against the table; for 7.42 all 29 matched.
+
+Valve keeps removed items in its item list (Khanda, Helm of the Overlord, Javelin), so they
+stay in the table. That is harmless: GSI can never report them.
 
 #### Unknown entries fail safe
 

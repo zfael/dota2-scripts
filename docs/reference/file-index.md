@@ -199,6 +199,7 @@
 | `src/audio/voice_pack.rs` | Voice pack discovery and per-event sound resolution order | `docs/features/objective-alerts.md` |
 | `scripts/generate-voice-pack.ps1` | Generates a spoken voice pack using the Windows speech synthesiser | `docs/features/objective-alerts.md` |
 | `scripts/dota-bug-watch.ps1` | Pulls new ValveSoftware/Dota2-Gameplay issues since a stored cursor and tiers them by relevance to our automation | `.claude/skills/dota-bug-watch/SKILL.md` |
+| `scripts/generate-mana-costs.ps1` | Regenerates `src/actions/mana_costs.rs` from Valve's datafeed; rerun after a gameplay patch | `docs/features/soul-ring.md` |
 | `scripts/patch-analysis.ps1` | Pulls a patch's notes from Valve, measures per-hero win rates on OpenDota, and scores meta candidates | `docs/patch-analysis/README.md` |
 | `src-tauri/src/commands/alerts.rs` | Tauri commands for alert countdowns and test playback | `docs/features/objective-alerts.md` |
 | `src-ui/src/types/alerts.ts` | Alert event keys, catalogue metadata, and countdown formatting | `docs/features/objective-alerts.md` |
