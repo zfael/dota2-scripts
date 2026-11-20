@@ -54,7 +54,7 @@
 |---|---|---|
 | `src/actions/mod.rs` | Module re-exports | — |
 | `src/actions/dispatcher.rs` | Pre-dispatch hooks plus hero/common routing for every GSI event | `docs/architecture/state-and-dispatch.md`, `docs/reference/gsi-schema-and-usage.md` |
-| `src/actions/armlet.rs` | Shared armlet planning, config resolution, cooldown/critical-state handling, and dual-trigger execution | `docs/features/survivability.md`, `docs/heroes/huskar.md`, `docs/reference/configuration.md` |
+| `src/actions/armlet.rs` | Shared Armlet / Sabatons of Mordiggian toggle planning, config resolution, cooldown/critical-state handling, and dual-trigger execution | `docs/features/survivability.md`, `docs/heroes/huskar.md`, `docs/reference/configuration.md` |
 | `src/actions/common.rs` | Shared survivability pipeline: healing, defensive items, neutral items, and armlet job enqueueing | `docs/features/survivability.md`, `docs/features/danger-detection.md`, `docs/reference/gsi-schema-and-usage.md` |
 | `src/actions/danger_detector.rs` | HP-loss heuristic and global danger state | `docs/features/danger-detection.md` |
 | `src/actions/item_automation.rs` | Shared item automation metadata, cast modes, and short lockout state | `docs/features/survivability.md`, `docs/reference/configuration.md` |
@@ -242,6 +242,7 @@ a gameplay patch. See `docs/workflows/probe-first.md`.
 | `examples/largo_song_sync_control.rs` | Simulator proving the Largo song intercept's timing: what is swallowed, what reaches Dota, and on which beat | `docs/heroes/largo.md` |
 | `examples/phantom_lancer_input_probe.rs` | Input probe: sends Ctrl-wrapped clicks and the middle-mouse illusion send into a live game, records the player's verdicts and Ctrl tap timing; re-measure tool after a patch | `docs/heroes/phantom_lancer.md` |
 | `examples/phantom_lancer_control.rs` | Simulator proving the Phantom Lancer Ctrl latch and illusion send never leave Ctrl under a key; `--without <rule>` shows each safeguard is load-bearing | `docs/heroes/phantom_lancer.md` |
+| `examples/sabatons_toggle_probe.rs` | GSI probe for Sabatons of Mordiggian and Armlet toggles: ramp, drain, the off-on trick's HP gain, lethality, and whether any field shows the toggle state | `docs/superpowers/plans/2026-11-18-patch-7-42-update.md` |
 | `examples/neutral_cast_probe.rs` | GSI probe for neutral casts: cast edge and latency, silence dispels, Flicker's blink, double-tap self-casts, cast cost | `docs/features/survivability.md` |
 | `examples/minimap_analyze.rs` | Standalone CLI for running hero detection on PNG captures | `docs/superpowers/specs/2026-03-31-minimap-hero-detection-design.md` |
 

@@ -25,7 +25,14 @@ export default function Armlet() {
 
   return (
     <div className="space-y-6 p-6">
-      <h2 className="text-xl font-semibold">Armlet</h2>
+      <div className="space-y-1">
+        <h2 className="text-xl font-semibold">Armlet</h2>
+        <p className="text-xs text-subtle">
+          Also drives Sabatons of Mordiggian, the same HP-draining toggle. The
+          trick assumes the toggle is on: an off-on press while it is off turns
+          it on and straight back off.
+        </p>
+      </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="space-y-4">

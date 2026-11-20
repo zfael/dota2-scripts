@@ -2,6 +2,7 @@ use crate::config::settings::{ArmletRoshanConfig, EffectiveArmletConfig};
 use crate::config::Settings;
 use crate::input::binding::{KeyBinding, PressableKey};
 use crate::input::simulation::{armlet_chord, ModifierKey};
+use crate::models::gsi_event::Item;
 use crate::models::GsiWebhookEvent;
 use lazy_static::lazy_static;
 use std::collections::VecDeque;
@@ -582,14 +583,26 @@ fn simulate_armlet_replay(
     report
 }
 
-fn find_armlet_slot_key(event: &GsiWebhookEvent, settings: &Settings) -> Option<KeyBinding> {
-    let armlet_slot = event
-        .items
-        .all_slots()
-        .iter()
-        .find(|(_, item)| item.name == "item_armlet")
-        .map(|(slot, _)| *slot)?;
+/// HP-draining Strength toggles this automation drives, in order of preference.
+///
+/// Sabatons of Mordiggian (7.42, built from Armlet) measured the same as Armlet in
+/// every way the decision relies on: a toggle shows only as a `max_health` jump, GSI
+/// reports no on/off state, and switching off at low HP leaves 1 HP instead of
+/// killing. See capture 1 of `examples/sabatons_toggle_probe.rs`. Armlet wins if a
+/// hero somehow carries both.
+const TOGGLE_DRAIN_ITEMS: &[&str] = &["item_armlet", "item_berserkers_sabatons"];
 
+fn find_toggle_drain_slot<'a>(slots: &[(&'a str, &Item)]) -> Option<&'a str> {
+    TOGGLE_DRAIN_ITEMS.iter().find_map(|wanted| {
+        slots
+            .iter()
+            .find(|(_, item)| item.name == *wanted)
+            .map(|(slot, _)| *slot)
+    })
+}
+
+fn find_armlet_slot_key(event: &GsiWebhookEvent, settings: &Settings) -> Option<KeyBinding> {
+    let armlet_slot = find_toggle_drain_slot(&event.items.all_slots())?;
     settings.get_key_for_slot(armlet_slot)
 }
 
@@ -1043,7 +1056,7 @@ mod tests {
     use super::{
         clear_roshan_learning_state, cooldown_ready, cooldown_remaining_ms,
         evaluate_armlet_decision, evaluate_roshan_stun_recovery, evaluate_roshan_trigger,
-        next_critical_retry_health, parse_cast_modifier, plan_dual_trigger_sequence,
+        find_toggle_drain_slot, next_critical_retry_health, parse_cast_modifier, plan_dual_trigger_sequence,
         record_roshan_health_sample, resolve_cast_modifier, should_force_critical_retry,
         should_log_roshan_skip_context, simulate_armlet_replay, ArmletDecision, ArmletReplaySample,
         ArmletRoshanConfig, ArmletRoshanState, ArmletTriggerStep, RoshanArmletTrigger,
@@ -1055,6 +1068,35 @@ mod tests {
     };
     use crate::input::simulation::ModifierKey;
     use std::time::{Duration, Instant};
+
+    fn item(name: &str) -> crate::models::gsi_event::Item {
+        crate::models::gsi_event::Item {
+            name: name.to_string(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn toggle_drain_slot_finds_armlet_or_sabatons() {
+        let empty = item("empty");
+        let armlet = item("item_armlet");
+        let sabatons = item("item_berserkers_sabatons");
+
+        assert_eq!(find_toggle_drain_slot(&[("slot0", &empty), ("slot1", &armlet)]), Some("slot1"));
+        assert_eq!(find_toggle_drain_slot(&[("slot0", &empty), ("slot3", &sabatons)]), Some("slot3"));
+        assert_eq!(find_toggle_drain_slot(&[("slot0", &empty)]), None);
+    }
+
+    #[test]
+    fn toggle_drain_slot_prefers_armlet_when_both_are_held() {
+        let armlet = item("item_armlet");
+        let sabatons = item("item_berserkers_sabatons");
+
+        assert_eq!(
+            find_toggle_drain_slot(&[("slot0", &sabatons), ("slot4", &armlet)]),
+            Some("slot4")
+        );
+    }
 
     fn roshan_test_config() -> ArmletRoshanConfig {
         ArmletRoshanConfig {

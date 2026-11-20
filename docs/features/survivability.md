@@ -93,10 +93,28 @@ This path is shared across heroes and fallback survivability flow. The runtime o
 
 - `[armlet].enabled = true` after per-hero override resolution
 - the hero is alive
-- the hero currently has `item_armlet`
+- the hero currently has `item_armlet` or `item_berserkers_sabatons` (Armlet wins if
+  both are held)
 - the hero is not stunned at the moment a normal toggle would fire
 - current HP is below `toggle_threshold + predictive_offset`
 - the shared cooldown has elapsed
+
+### Sabatons of Mordiggian
+
+7.42's Sabatons (built from Armlet) is driven by the same code. Capture 1 of
+`examples/sabatons_toggle_probe.rs` measured it against Armlet:
+
+| | Armlet | Sabatons |
+|---|---|---|
+| Max HP per toggle | +500 | +600 |
+| Press → `max_health` settled | ~0.75s | ~0.85–1.0s |
+| Toggle state in GSI | none | none |
+| Off at low HP | — | leaves 1–2 HP, never 0 |
+
+Thresholds stay in HP, so nothing about the item is hard-coded in the decision.
+Neither item reports whether it is on, and the dual trigger assumes it is: an off-on
+chord while the toggle is off turns it on and back off, which lost 196 HP in the
+capture. Re-run the probe after a patch that touches either item.
 
 ### Roshan mode
 

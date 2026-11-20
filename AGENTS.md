@@ -125,7 +125,7 @@ broken test build there once went unnoticed.
 | `actions/item_automation.rs` | Item automation helpers |
 | `actions/dispel.rs` | Silence dispel / cleanse logic (Manta, Lotus) |
 | `actions/soul_ring.rs` | Soul Ring shared state, intercept rules, and combo helper |
-| `actions/armlet.rs` | Armlet toggle logic, including Roshan mode |
+| `actions/armlet.rs` | Armlet and Sabatons of Mordiggian toggle logic, including Roshan mode |
 | `actions/executor.rs` | Action queue workers and delayed scheduling |
 | `actions/activity.rs` | Activity feed entries surfaced in the UI |
 | `actions/heroes/earth_spirit.rs` | Earth Spirit remnant combos: grip key remapped to Stone Remnant then Geomagnetic Grip (the silence), roll key to Rolling Boulder then Stone Remnant, dropped into the path during the windup |
@@ -234,6 +234,7 @@ evidence a feature was built on and the tool for re-measuring after a patch. See
 | `examples/largo_song_sync_control.rs` | Plays song presses at chosen offsets against Largo's beat grid; asserts what is swallowed, what reaches Dota, and on which beat |
 | `examples/phantom_lancer_input_probe.rs` | Sends the inputs the Phantom Lancer automation needs into a live game and records whether they worked |
 | `examples/phantom_lancer_control.rs` | Proves the Phantom Lancer Ctrl latch and illusion send never leave Ctrl under a key |
+| `examples/sabatons_toggle_probe.rs` | Records Sabatons of Mordiggian and Armlet toggles: ramp, drain, the off-on trick's HP gain, whether GSI shows the toggle state |
 | `examples/neutral_cast_probe.rs` | Records neutral casts: cast edge, silence dispels, Flicker's blink, whether a double tap self-casts ground-target items |
 | `examples/minimap_capture.rs` | Captures minimap PNGs for offline analysis |
 | `examples/minimap_analyze.rs` | Runs hero detection over captured PNGs |
