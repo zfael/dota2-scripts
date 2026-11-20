@@ -216,16 +216,17 @@ Danger is also used as a gate for neutral item self-cast automation when all of 
 
 - `danger_detection.auto_manta_on_silence`
 - `danger_detection.auto_lotus_on_silence`
+- `danger_detection.auto_neutral_on_silence`
 
 These toggles are **related to the danger feature area**, but they do **not** require `is_in_danger() == true`.
 
 Current behavior:
 
-- forget the silence episode when it ends, the hero dies, or both toggles are off
+- forget the silence episode when it ends, the hero dies, or every toggle is off
 - hold — without spending a press — while invisible, stunned, hexed, or muted,
   then fire on the first tick the cast lock lifts
-- prefer `item_manta` first
-- otherwise try `item_lotus_orb`
+- try `item_manta`, then the neutral slot's `item_flicker`, then
+  `item_minotaur_horn`, then `item_lotus_orb`
 - execute on a short background thread with `30..100ms` random jitter
 - Lotus uses a double-tap for self-cast
 - retry a press that GSI never confirms, and stop once one is confirmed
@@ -257,6 +258,7 @@ Defaults come from `src/config/settings.rs`; checked-in values live in `config/c
 | `auto_shivas_guard` | `bool` | `true` | Yes | Auto-use Shiva's Guard while in danger |
 | `auto_manta_on_silence` | `bool` | `true` | No | Use Manta when silenced |
 | `auto_lotus_on_silence` | `bool` | `true` | No | Use Lotus Orb when silenced |
+| `auto_neutral_on_silence` | `bool` | `true` | No | Use the neutral slot's Flicker or Minotaur Horn when silenced |
 
 ---
 
@@ -269,7 +271,7 @@ are deliberately separate, because they are tuned for different reasons.
 | Page | Source | Owns |
 |---|---|---|
 | **Danger** (`/danger`) | `src-ui/src/pages/DangerDetection.tsx` | `enabled`, `hp_threshold_percent`, `rapid_loss_hp`, `time_window_ms`, `clear_delay_seconds` |
-| **Survivability** (`/survivability`) | `src-ui/src/pages/Survivability.tsx` | `healing_threshold_in_danger`, `max_healing_items_per_danger`, every `auto_*` defensive toggle, `satanic_hp_threshold`, `auto_manta_on_silence`, `auto_lotus_on_silence` |
+| **Survivability** (`/survivability`) | `src-ui/src/pages/Survivability.tsx` | `healing_threshold_in_danger`, `max_healing_items_per_danger`, every `auto_*` defensive toggle, `satanic_hp_threshold`, `auto_manta_on_silence`, `auto_lotus_on_silence`, `auto_neutral_on_silence` |
 
 The two pages cross-link, and both write the same `danger_detection` config
 section through `useConfigStore.updateConfig(...)`. See

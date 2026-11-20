@@ -248,6 +248,10 @@ auto_shivas_guard = true
 auto_manta_on_silence = true
 # Auto-use Lotus Orb when silenced (self-cast, independent of danger detection)
 auto_lotus_on_silence = true
+# Flicker or Minotaur Horn in the neutral slot, both basic dispels. Order:
+# Manta, Flicker, Minotaur Horn, Lotus. Flicker also blinks you ~500 units
+# forward unless a player damaged you in the last 3s.
+auto_neutral_on_silence = true
 
 [neutral_items]
 enabled = true

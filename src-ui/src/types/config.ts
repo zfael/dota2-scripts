@@ -403,6 +403,7 @@ export interface DangerDetectionConfig {
   auto_shivas_guard: boolean;
   auto_manta_on_silence: boolean;
   auto_lotus_on_silence: boolean;
+  auto_neutral_on_silence: boolean;
 }
 
 export interface NeutralItemConfig {

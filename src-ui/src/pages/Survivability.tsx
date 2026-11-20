@@ -181,9 +181,16 @@ export default function Survivability() {
               checked={danger.auto_lotus_on_silence}
               onChange={(v) => updateDanger({ auto_lotus_on_silence: v })}
             />
+            <Toggle
+              label="Neutral Dispel on Silence"
+              checked={danger.auto_neutral_on_silence}
+              onChange={(v) => updateDanger({ auto_neutral_on_silence: v })}
+            />
             <p className="text-xs text-subtle">
               Fires on silence alone — independent of danger state — at most once
-              per silence, Manta first.
+              per silence, in this order: Manta, Flicker, Minotaur Horn, Lotus.
+              The neutral toggle covers Flicker and Minotaur Horn in the neutral
+              slot; Flicker also blinks you a short way forward.
             </p>
           </Card>
         </div>

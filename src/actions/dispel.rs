@@ -1,6 +1,7 @@
 //! Auto-dispel module
 //!
-//! Automatically uses dispel items (Manta Style, Lotus Orb) when silenced.
+//! Automatically uses dispel items (Manta Style, Lotus Orb, and the Flicker or
+//! Minotaur Horn neutrals) when silenced.
 //! Triggers with random jitter for human-like reaction, and keeps watching the
 //! silence until a press actually lands rather than firing once and giving up.
 
@@ -29,18 +30,33 @@ lazy_static! {
     static ref DISPEL_STATE: Mutex<DispelState> = Mutex::new(DispelState::default());
 }
 
-/// The two items this module knows how to dispel with.
+/// The items this module knows how to dispel with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DispelItem {
     Manta,
     Lotus,
+    /// 7.42 tier-4 neutral: no target, basic dispel, short blink.
+    Flicker,
+    /// Tier-4 neutral: no target, basic dispel plus spell immunity.
+    MinotaurHorn,
 }
 
 impl DispelItem {
+    /// Instant casts first. Minotaur Horn's 40s cooldown is worth more than
+    /// Flicker's 8s, and Lotus has a cast point, so it goes last.
+    const PRIORITY: [DispelItem; 4] = [
+        DispelItem::Manta,
+        DispelItem::Flicker,
+        DispelItem::MinotaurHorn,
+        DispelItem::Lotus,
+    ];
+
     fn item_name(self) -> &'static str {
         match self {
             DispelItem::Manta => "item_manta",
             DispelItem::Lotus => "item_lotus_orb",
+            DispelItem::Flicker => "item_flicker",
+            DispelItem::MinotaurHorn => "item_minotaur_horn",
         }
     }
 
@@ -48,6 +64,8 @@ impl DispelItem {
         match self {
             DispelItem::Manta => "manta-dispel",
             DispelItem::Lotus => "lotus-dispel",
+            DispelItem::Flicker => "flicker-dispel",
+            DispelItem::MinotaurHorn => "minotaur-horn-dispel",
         }
     }
 
@@ -55,12 +73,38 @@ impl DispelItem {
         match self {
             DispelItem::Manta => "🌀 Manta Style",
             DispelItem::Lotus => "🪷 Lotus Orb",
+            DispelItem::Flicker => "✨ Flicker",
+            DispelItem::MinotaurHorn => "🐂 Minotaur Horn",
         }
     }
 
-    /// Lotus is a targeted item, so the self-cast is a double tap. Manta is not.
+    /// Lotus is a targeted item, so the self-cast is a double tap. The others
+    /// take no target: capture 1 of `examples/neutral_cast_probe.rs` saw Minotaur
+    /// Horn and Flicker cast from a single tap.
     fn needs_self_cast_tap(self) -> bool {
         matches!(self, DispelItem::Lotus)
+    }
+
+    fn enabled_in(self, enabled: EnabledDispels) -> bool {
+        match self {
+            DispelItem::Manta => enabled.manta,
+            DispelItem::Lotus => enabled.lotus,
+            DispelItem::Flicker | DispelItem::MinotaurHorn => enabled.neutral,
+        }
+    }
+}
+
+/// Which dispels the operator allowed, from `[danger_detection]`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct EnabledDispels {
+    manta: bool,
+    lotus: bool,
+    neutral: bool,
+}
+
+impl EnabledDispels {
+    fn any(self) -> bool {
+        self.manta || self.lotus || self.neutral
     }
 }
 
@@ -86,13 +130,13 @@ struct DispelState {
     unbound_warned: bool,
 }
 
-/// Check and use dispel items (Manta/Lotus) if silenced (called every GSI event)
+/// Check and use dispel items if silenced (called every GSI event)
 pub fn check_and_dispel_silence(
     event: &GsiWebhookEvent,
     settings: &Settings,
     executor: &Arc<ActionExecutor>,
 ) {
-    // Silence does not break invisibility, but Manta and Lotus both would. A
+    // Silence does not break invisibility, but every dispel item would. A
     // silenced hero can still walk away invisible, so the dispel is worth less
     // than the escape it would cost.
     let invisible = crate::actions::invisibility::suppresses_automation(settings);
@@ -103,10 +147,14 @@ pub fn check_and_dispel_silence(
 
     let mut state = DISPEL_STATE.lock().unwrap();
 
+    let enabled = EnabledDispels {
+        manta: settings.danger_detection.auto_manta_on_silence,
+        lotus: settings.danger_detection.auto_lotus_on_silence,
+        neutral: settings.danger_detection.auto_neutral_on_silence,
+    };
     let decision = plan_dispel(
         event,
-        settings.danger_detection.auto_manta_on_silence,
-        settings.danger_detection.auto_lotus_on_silence,
+        enabled,
         invisible,
         berserk,
         &state,
@@ -154,14 +202,13 @@ pub fn check_and_dispel_silence(
 /// touching global state or the clock.
 fn plan_dispel<'a>(
     event: &'a GsiWebhookEvent,
-    manta_enabled: bool,
-    lotus_enabled: bool,
+    enabled: EnabledDispels,
     invisible: bool,
     berserk: bool,
     state: &DispelState,
     now_ms: u64,
 ) -> DispelDecision<'a> {
-    if !manta_enabled && !lotus_enabled {
+    if !enabled.any() {
         return DispelDecision::Idle;
     }
 
@@ -209,13 +256,9 @@ fn plan_dispel<'a>(
         return DispelDecision::Hold;
     }
 
-    // Manta is instant where Lotus has a cast point, so it wins across the whole
-    // inventory rather than only within a slot.
-    for (enabled, item) in [
-        (manta_enabled, DispelItem::Manta),
-        (lotus_enabled, DispelItem::Lotus),
-    ] {
-        if !enabled {
+    // Priority holds across the whole inventory rather than only within a slot.
+    for item in DispelItem::PRIORITY {
+        if !item.enabled_in(enabled) {
             continue;
         }
 
@@ -306,12 +349,133 @@ mod tests {
         }
     }
 
+    const ALL: EnabledDispels = EnabledDispels {
+        manta: true,
+        lotus: true,
+        neutral: true,
+    };
+
+    const NONE: EnabledDispels = EnabledDispels {
+        manta: false,
+        lotus: false,
+        neutral: false,
+    };
+
     fn plan<'a>(
         event: &'a GsiWebhookEvent,
         state: &DispelState,
         now_ms: u64,
     ) -> DispelDecision<'a> {
-        plan_dispel(event, true, true, false, false, state, now_ms)
+        plan_dispel(event, ALL, false, false, state, now_ms)
+    }
+
+    fn with_neutral(neutral: &str, mut items: Items) -> Items {
+        items.neutral0 = ready_item(neutral);
+        items
+    }
+
+    #[test]
+    fn manta_still_beats_a_ready_neutral() {
+        let payload = event(
+            silenced_hero(),
+            with_neutral("item_flicker", both_items_ready()),
+        );
+
+        assert_eq!(
+            plan(&payload, &DispelState::default(), 1_000),
+            DispelDecision::Cast {
+                slot: "slot0",
+                item: DispelItem::Manta,
+            }
+        );
+    }
+
+    #[test]
+    fn a_neutral_dispel_beats_lotus() {
+        for (name, item) in [
+            ("item_flicker", DispelItem::Flicker),
+            ("item_minotaur_horn", DispelItem::MinotaurHorn),
+        ] {
+            let items = Items {
+                slot0: item_on_cooldown("item_manta"),
+                slot1: ready_item("item_lotus_orb"),
+                ..Items::default()
+            };
+            let payload = event(silenced_hero(), with_neutral(name, items));
+
+            assert_eq!(
+                plan(&payload, &DispelState::default(), 1_000),
+                DispelDecision::Cast {
+                    slot: "neutral0",
+                    item,
+                },
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_neutral_dispel_works_alone_with_a_single_press() {
+        let payload = event(
+            silenced_hero(),
+            with_neutral("item_minotaur_horn", Items::default()),
+        );
+
+        assert_eq!(
+            plan(&payload, &DispelState::default(), 1_000),
+            DispelDecision::Cast {
+                slot: "neutral0",
+                item: DispelItem::MinotaurHorn,
+            }
+        );
+        assert!(!DispelItem::MinotaurHorn.needs_self_cast_tap());
+        assert!(!DispelItem::Flicker.needs_self_cast_tap());
+    }
+
+    #[test]
+    fn the_neutral_toggle_gates_only_the_neutrals() {
+        let items = Items {
+            slot1: ready_item("item_lotus_orb"),
+            ..Items::default()
+        };
+        let payload = event(silenced_hero(), with_neutral("item_flicker", items));
+        let no_neutral = EnabledDispels {
+            neutral: false,
+            ..ALL
+        };
+
+        assert_eq!(
+            plan_dispel(&payload, no_neutral, false, false, &DispelState::default(), 1_000),
+            DispelDecision::Cast {
+                slot: "slot1",
+                item: DispelItem::Lotus,
+            }
+        );
+
+        let only_neutral = EnabledDispels {
+            neutral: true,
+            ..NONE
+        };
+        assert_eq!(
+            plan_dispel(&payload, only_neutral, false, false, &DispelState::default(), 1_000),
+            DispelDecision::Cast {
+                slot: "neutral0",
+                item: DispelItem::Flicker,
+            }
+        );
+    }
+
+    #[test]
+    fn other_neutrals_are_not_dispels() {
+        let payload = event(
+            silenced_hero(),
+            with_neutral("item_polliwog_charm", Items::default()),
+        );
+
+        assert_eq!(
+            plan(&payload, &DispelState::default(), 1_000),
+            DispelDecision::Hold
+        );
     }
 
     #[test]
@@ -380,19 +544,14 @@ mod tests {
     }
 
     #[test]
-    fn both_toggles_off_stays_idle() {
-        let payload = event(silenced_hero(), both_items_ready());
+    fn every_toggle_off_stays_idle() {
+        let payload = event(
+            silenced_hero(),
+            with_neutral("item_flicker", both_items_ready()),
+        );
 
         assert_eq!(
-            plan_dispel(
-                &payload,
-                false,
-                false,
-                false,
-                false,
-                &DispelState::default(),
-                1_000
-            ),
+            plan_dispel(&payload, NONE, false, false, &DispelState::default(), 1_000),
             DispelDecision::Idle
         );
     }
@@ -402,7 +561,7 @@ mod tests {
         let payload = event(silenced_hero(), both_items_ready());
 
         assert_eq!(
-            plan_dispel(&payload, true, true, true, false, &DispelState::default(), 1_000),
+            plan_dispel(&payload, ALL, true, false, &DispelState::default(), 1_000),
             DispelDecision::Hold
         );
     }
@@ -412,7 +571,7 @@ mod tests {
         let payload = event(silenced_hero(), both_items_ready());
 
         assert_eq!(
-            plan_dispel(&payload, true, true, false, true, &DispelState::default(), 1_000),
+            plan_dispel(&payload, ALL, false, true, &DispelState::default(), 1_000),
             DispelDecision::Hold
         );
     }
@@ -423,12 +582,12 @@ mod tests {
         let state = DispelState::default();
 
         assert_eq!(
-            plan_dispel(&payload, true, true, false, true, &state, 1_000),
+            plan_dispel(&payload, ALL, false, true, &state, 1_000),
             DispelDecision::Hold
         );
         // Nothing was pressed during Berserk, so the first tick after it casts.
         assert_eq!(
-            plan_dispel(&payload, true, true, false, false, &state, 7_000),
+            plan_dispel(&payload, ALL, false, false, &state, 7_000),
             DispelDecision::Cast {
                 slot: "slot0",
                 item: DispelItem::Manta,

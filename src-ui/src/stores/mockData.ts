@@ -315,6 +315,7 @@ export const mockConfig: Settings = {
     auto_mjollnir: true, auto_glimmer_cape: true,
     auto_ghost_scepter: true, auto_shivas_guard: true,
     auto_manta_on_silence: true, auto_lotus_on_silence: true,
+    auto_neutral_on_silence: true,
   },
   neutral_items: {
     enabled: false, self_cast_key: "0", log_discoveries: false,

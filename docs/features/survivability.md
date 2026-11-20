@@ -12,7 +12,7 @@
 | `src/actions/armlet.rs` | Shared armlet planning, config resolution, cooldown tracking, critical retry handling, and dual-trigger execution |
 | `src/actions/common.rs` | Shared survivability pipeline: armlet job enqueueing, healing items, defensive items, neutral items |
 | `src/actions/danger_detector.rs` | Global `in_danger` heuristic consumed by common and hero code |
-| `src/actions/dispel.rs` | Immediate Manta/Lotus reaction to silence |
+| `src/actions/dispel.rs` | Immediate silence reaction: Manta, Flicker, Minotaur Horn, Lotus |
 | `src/actions/auto_items.rs` | Cached GSI item/ability state and Space+right-click item usage; not the HP-healing loop, but part of the shared item automation surface |
 | `src/config/settings.rs` | `CommonConfig`, shared `ArmletAutomationConfig`, hero armlet overrides, `DangerDetectionConfig`, `NeutralItemConfig` defaults |
 | `config/config.toml` | Checked-in values for `[common]`, `[armlet]`, `[danger_detection]`, `[neutral_items]`, `[mana_automation]`, `[phase_boots_automation]`, and hero armlet overrides |
@@ -425,7 +425,7 @@ shape as Slark's `plan_dark_pact()`, and testable without globals or a clock.
 
 Current rules:
 
-- `Idle` (forget the silence and reset the state) when both toggles are off, the
+- `Idle` (forget the silence and reset the state) when every toggle is off, the
   hero is dead, or the hero is not silenced
 - `Hold` while invisible, and while `stunned`, `hexed`, or `muted` — Dota drops
   item orders issued through those, so a press would be thrown away. The silence
@@ -435,11 +435,15 @@ Current rules:
   cooldown edge): Berserk's silence is self-inflicted and chosen, so Manta or
   Lotus must not answer it. An enemy silence that outlasts Berserk is still
   dispelled on the first tick after the window closes
-- prefer `item_manta` across the whole inventory (it is instant; Lotus has a cast
-  point), then `item_lotus_orb`
+- priority holds across the whole inventory: `item_manta`, then the neutral slot's
+  `item_flicker`, then `item_minotaur_horn`, then `item_lotus_orb`. Instant casts
+  first; Minotaur Horn's 40s cooldown is saved for when Flicker (8s) is down; Lotus
+  has a cast point
 - only cast if `can_cast == true` and cooldown is `0`
 - add random human-like jitter of `30..100ms`
-- Lotus self-casts by double-tapping, through the same one-job, click-holding double tap as the danger kit (`[common].self_cast_tap_gap_ms`)
+- Lotus self-casts by double-tapping, through the same one-job, click-holding double tap as the danger kit (`[common].self_cast_tap_gap_ms`). Flicker and Minotaur Horn take no target and get a single press (both measured casting from one tap in capture 1 of `examples/neutral_cast_probe.rs`)
+- Flicker blinks ~500u forward as it dispels, or stays in place if a player damaged
+  the hero in the last 3s
 - after a press, wait `PRESS_SETTLE_MS` (600ms) for GSI to confirm it. The
   pressed item going on cooldown is the confirmation; if it is still ready after
   the window, the press never reached the game and it is pressed again
@@ -453,6 +457,11 @@ The toggles live under `[danger_detection]`:
 
 - `auto_manta_on_silence`
 - `auto_lotus_on_silence`
+- `auto_neutral_on_silence` (Flicker and Minotaur Horn)
+
+Witchbane (`item_heavy_blade`) also cleared a silence in capture 1, but from a Quick
+Cast tap aimed at the cursor; it only hit the hero because the cursor was close. It
+is not a dispel here until a self-targeted press is measured.
 
 ---
 
@@ -488,7 +497,7 @@ across three config sections rather than mirroring one:
 | Healing Items | `[common]`, `[danger_detection]` | `survivability_hp_threshold`, `healing_threshold_in_danger`, `max_healing_items_per_danger` |
 | Lane Phase | `[common]` | `lane_phase_duration_seconds`, `lane_phase_healing_threshold` |
 | Defensive Items | `[danger_detection]` | `auto_bkb`, `auto_satanic`, `satanic_hp_threshold`, `auto_blade_mail`, `auto_lotus_orb`, `auto_mjollnir`, `auto_glimmer_cape`, `auto_ghost_scepter`, `auto_shivas_guard` |
-| Dispels | `[danger_detection]` | `auto_manta_on_silence`, `auto_lotus_on_silence` |
+| Dispels | `[danger_detection]` | `auto_manta_on_silence`, `auto_lotus_on_silence`, `auto_neutral_on_silence` |
 | Neutral Items | `[neutral_items]` | `enabled`, `use_in_danger`, `hp_threshold`, `self_cast_key`, `allowed_items` |
 | Invisibility | `[invisibility]` | `suppress_automation` |
 
@@ -515,7 +524,7 @@ Deliberately **not** on that page:
 | `[common]` | `survivability_hp_threshold`, `lane_phase_duration_seconds`, `lane_phase_healing_threshold` |
 | `[armlet]` | `enabled`, `cast_modifier`, `toggle_threshold`, `predictive_offset`, `toggle_cooldown_ms` |
 | `[armlet.roshan]` | `enabled`, `toggle_key`, `emergency_margin_hp`, `learning_window_ms`, `min_confidence_hits`, `min_sample_damage`, `stale_reset_ms` |
-| `[danger_detection]` | `enabled`, `healing_threshold_in_danger`, `max_healing_items_per_danger`, `auto_bkb`, `auto_satanic`, `satanic_hp_threshold`, `auto_blade_mail`, `auto_lotus_orb`, `auto_mjollnir`, `auto_glimmer_cape`, `auto_ghost_scepter`, `auto_shivas_guard`, `auto_manta_on_silence`, `auto_lotus_on_silence` |
+| `[danger_detection]` | `enabled`, `healing_threshold_in_danger`, `max_healing_items_per_danger`, `auto_bkb`, `auto_satanic`, `satanic_hp_threshold`, `auto_blade_mail`, `auto_lotus_orb`, `auto_mjollnir`, `auto_glimmer_cape`, `auto_ghost_scepter`, `auto_shivas_guard`, `auto_manta_on_silence`, `auto_lotus_on_silence`, `auto_neutral_on_silence` |
 | `[heroes.<hero>.armlet]` | optional per-hero `enabled`, `toggle_threshold`, `predictive_offset`, `toggle_cooldown_ms` overrides |
 | `[neutral_items]` | `enabled`, `self_cast_key`, `use_in_danger`, `hp_threshold`, `allowed_items` |
 | `[mana_automation]` | `enabled`, `mana_threshold_percent`, `excluded_heroes`, `allowed_items` |

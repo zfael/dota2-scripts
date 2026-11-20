@@ -123,7 +123,7 @@ broken test build there once went unnoticed.
 | `actions/danger_detector.rs` | Global HP tracker; exposes `in_danger` to common and hero code |
 | `actions/auto_items.rs` | Cached GSI item state + Space/right-click item/ability orchestration |
 | `actions/item_automation.rs` | Item automation helpers |
-| `actions/dispel.rs` | Silence dispel / cleanse logic (Manta, Lotus) |
+| `actions/dispel.rs` | Silence dispel / cleanse logic (Manta, Flicker, Minotaur Horn, Lotus) |
 | `actions/soul_ring.rs` | Soul Ring shared state, intercept rules, and combo helper |
 | `actions/armlet.rs` | Armlet and Sabatons of Mordiggian toggle logic, including Roshan mode |
 | `actions/executor.rs` | Action queue workers and delayed scheduling |

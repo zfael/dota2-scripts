@@ -4,7 +4,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import Survivability from "./Survivability";
 import DangerDetection from "./DangerDetection";
 import { useConfigStore } from "../stores/configStore";
-import { mockConfig } from "../stores/mockData";
+import { mockConfig, mockNeutralItems } from "../stores/mockData";
 
 const { invokeMock } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
@@ -120,6 +120,42 @@ describe("Survivability page", () => {
       expect(invokeMock).toHaveBeenCalledWith("update_config", {
         section: "common",
         updates: { lane_phase_duration_seconds: 0 },
+      });
+    });
+  });
+
+  it("persists the neutral dispel toggle to the danger_detection section", async () => {
+    renderSurvivability();
+
+    fireEvent.click(screen.getByRole("switch", { name: "Neutral Dispel on Silence" }));
+
+    await vi.advanceTimersByTimeAsync(300);
+    await vi.waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("update_config", {
+        section: "danger_detection",
+        updates: { auto_neutral_on_silence: false },
+      });
+    });
+  });
+
+  it("persists a ticked neutral to the allowlist", async () => {
+    invokeMock.mockImplementation(async (command: string) =>
+      command === "get_neutral_items" ? mockNeutralItems : undefined,
+    );
+    renderSurvivability();
+
+    const brick = await vi.waitFor(() =>
+      screen.getByRole("checkbox", { name: /Brick/ }),
+    );
+    fireEvent.click(brick);
+
+    await vi.advanceTimersByTimeAsync(300);
+    await vi.waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("update_config", {
+        section: "neutral_items",
+        updates: {
+          allowed_items: [...mockConfig.neutral_items.allowed_items, "item_brick"],
+        },
       });
     });
   });

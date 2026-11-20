@@ -152,6 +152,7 @@ See `docs/features/survivability.md` and `docs/features/keyboard-interception.md
 | `auto_shivas_guard` | `true` | `true` | Shared defensive-item toggle. |
 | `auto_manta_on_silence` | `true` | `true` | Read by `src/actions/dispel.rs`; silence dispels are configured here even though they are not gated on danger. |
 | `auto_lotus_on_silence` | `true` | `true` | Same note as above. |
+| `auto_neutral_on_silence` | `true` | `true` | Same note as above; covers Flicker and Minotaur Horn in the neutral slot. |
 
 See `docs/features/danger-detection.md` and `docs/features/survivability.md`.
 
