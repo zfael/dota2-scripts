@@ -4,7 +4,7 @@ use crate::actions::executor::ActionExecutor;
 use crate::actions::soul_ring::press_ability_with_soul_ring;
 use crate::config::Settings;
 use crate::input::simulation::{press_binding, press_key};
-use crate::models::{GsiWebhookEvent, Hero, Item};
+use crate::models::{GsiWebhookEvent, Hero};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -30,7 +30,7 @@ impl TinyScript {
         let settings = self.settings.lock().unwrap();
         
         // 1. Blink Dagger
-        if let Some(key) = find_item_slot(event, &settings, Item::Blink) {
+        if let Some(key) = find_item_slot(event, &settings, "item_blink") {
             info!("Using Blink ({})", key);
             press_binding(&key);
             thread::sleep(Duration::from_millis(100));

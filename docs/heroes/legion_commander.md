@@ -70,7 +70,7 @@ Execution note: the standalone trigger now enqueues the combo onto `ActionExecut
    - 220ms delay
 
 2. **Blade Mail** (if present) – double-tap
-   - Checks inventory via `find_item_slot(event, &settings, Item::BladeMail)`
+   - Checks inventory via `find_item_slot(event, &settings, "item_blade_mail")`
    - Double-tap: press key → 30ms → press key again
    - 50ms delay
 
@@ -80,12 +80,12 @@ Execution note: the standalone trigger now enqueues the combo onto `ActionExecut
    - 50ms delay
 
 4. **BKB (Black King Bar)** (if present) – double-tap
-   - Checks inventory via `find_item_slot(event, &settings, Item::BlackKingBar)`
+   - Checks inventory via `find_item_slot(event, &settings, "item_black_king_bar")`
    - Double-tap: press key → 30ms → press key again
    - 50ms delay
 
 5. **Blink Dagger** (if present) – single press
-   - Checks inventory via `find_item_slot(event, &settings, Item::Blink)`
+   - Checks inventory via `find_item_slot(event, &settings, "item_blink")`
    - Single press at cursor position
    - 100ms delay
 
@@ -154,7 +154,7 @@ This is crucial against heroes with Linken's Sphere, as a single Orchid cast wou
 ### 📦 GSI Event Requirement
 
 The combo needs the latest GSI event to:
-- Look up item slots via `find_item_slot(event, &settings, item)`
+- Look up item slots via `find_item_slot(event, &settings, "item_name")`
 - Check Soul Ring availability
 
 **Storage:** The script stores the latest GSI event in `last_event` (Arc<Mutex>):

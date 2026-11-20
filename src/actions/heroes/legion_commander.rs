@@ -4,7 +4,7 @@ use crate::actions::executor::ActionExecutor;
 use crate::actions::soul_ring::double_tap_ability_with_soul_ring;
 use crate::config::Settings;
 use crate::input::simulation::{double_tap_binding, press_binding, press_key};
-use crate::models::{GsiWebhookEvent, Hero, Item};
+use crate::models::{GsiWebhookEvent, Hero};
 use std::any::Any;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -45,36 +45,36 @@ impl LegionCommanderScript {
         thread::sleep(Duration::from_millis(220));
         
         // 3. Blade Mail (if present) - double tap
-        if let Some(key) = find_item_slot(event, &settings, Item::BladeMail) {
+        if let Some(key) = find_item_slot(event, &settings, "item_blade_mail") {
             info!("Using Blade Mail ({})", key);
             double_tap_binding(&key, tap_gap_ms);
             thread::sleep(Duration::from_millis(50));
         }
         
         // 4. Mjollnir (if present) - double tap
-        if let Some(key) = find_item_slot(event, &settings, Item::Mjollnir) {
+        if let Some(key) = find_item_slot(event, &settings, "item_mjollnir") {
             info!("Using Mjollnir ({})", key);
             double_tap_binding(&key, tap_gap_ms);
             thread::sleep(Duration::from_millis(50));
         }
         
         // 5. BKB (if present) - double tap
-        if let Some(key) = find_item_slot(event, &settings, Item::BlackKingBar) {
+        if let Some(key) = find_item_slot(event, &settings, "item_black_king_bar") {
             info!("Using BKB ({})", key);
             double_tap_binding(&key, tap_gap_ms);
             thread::sleep(Duration::from_millis(50));
         }
         
         // 6. Blink (single tap)
-        if let Some(key) = find_item_slot(event, &settings, Item::Blink) {
+        if let Some(key) = find_item_slot(event, &settings, "item_blink") {
             info!("Using Blink ({})", key);
             press_binding(&key);
             thread::sleep(Duration::from_millis(100));
         }
         
         // 7. Orchid or Bloodthorn (spam 3-4 times to remove linkens)
-        if let Some(key) = find_item_slot(event, &settings, Item::Orchid)
-            .or_else(|| find_item_slot(event, &settings, Item::Bloodthorn))
+        if let Some(key) = find_item_slot(event, &settings, "item_orchid")
+            .or_else(|| find_item_slot(event, &settings, "item_bloodthorn"))
         {
             info!("Using Orchid/Bloodthorn ({}) - spam for linkens", key);
             for _ in 0..10 {

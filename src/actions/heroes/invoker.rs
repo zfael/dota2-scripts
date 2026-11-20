@@ -1,4 +1,4 @@
-use crate::actions::common::{find_item_slot_by_name, SurvivabilityActions};
+use crate::actions::common::{find_item_slot, SurvivabilityActions};
 use crate::actions::executor::ActionExecutor;
 use crate::actions::heroes::traits::HeroScript;
 use crate::config::settings::{
@@ -639,7 +639,7 @@ fn advance_semi_auto_session(
                 target,
                 delay_after_ms,
             } => {
-                if let Some(key) = find_item_slot_by_name(event, &session.settings, &target) {
+                if let Some(key) = find_item_slot(event, &session.settings, &target) {
                     info!("🔮 Using semi-auto combo item: {}", target);
                     crate::input::simulation::press_binding(&key);
                 } else {
@@ -937,7 +937,7 @@ fn run_profile(
                     continue;
                 }
 
-                if let Some(key) = find_item_slot_by_name(event, settings, &target) {
+                if let Some(key) = find_item_slot(event, settings, &target) {
                     info!("🔮 Using combo item: {}", target);
                     crate::input::simulation::press_binding(&key);
                 } else {

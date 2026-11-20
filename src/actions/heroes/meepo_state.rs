@@ -1,7 +1,7 @@
 use crate::actions::common::find_item_slot;
 use crate::config::Settings;
 use crate::input::binding::KeyBinding;
-use crate::models::{GsiWebhookEvent, Hero, Item};
+use crate::models::{GsiWebhookEvent, Hero};
 use lazy_static::lazy_static;
 use std::sync::Mutex;
 
@@ -80,7 +80,7 @@ pub fn derive_meepo_observed_state(
         megameepo_ready: ability_is_ready(event, MEGAMEEPO_ABILITY_NAME),
         has_shard: event.hero.aghanims_shard,
         has_scepter: event.hero.aghanims_scepter,
-        blink_slot_key: find_item_slot(event, settings, Item::Blink),
+        blink_slot_key: find_item_slot(event, settings, "item_blink"),
         combo_item_keys: settings
             .heroes
             .meepo

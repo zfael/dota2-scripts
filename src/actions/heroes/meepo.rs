@@ -10,7 +10,7 @@ use crate::config::settings::MeepoConfig;
 use crate::config::Settings;
 use crate::input::binding::KeyBinding;
 use crate::input::simulation::{mouse_click, press_binding, press_key};
-use crate::models::{GsiWebhookEvent, Hero, Item};
+use crate::models::{GsiWebhookEvent, Hero};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -144,7 +144,7 @@ impl MeepoScript {
 
         info!("Executing Meepo combo sequence...");
 
-        if let Some(key) = find_item_slot(event, settings, Item::Blink) {
+        if let Some(key) = find_item_slot(event, settings, "item_blink") {
             info!("Using Blink ({})", key);
             press_binding(&key);
             thread::sleep(Duration::from_millis(meepo.post_blink_delay_ms));

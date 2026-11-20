@@ -124,7 +124,7 @@ The delays between presses (30ms) are short enough to feel instant but long enou
 ### 📦 GSI Event Requirement
 
 The combo needs the latest GSI event to:
-- Look up Blink Dagger slot via `find_item_slot(event, &settings, Item::Blink)`
+- Look up Blink Dagger slot via `find_item_slot(event, &settings, "item_blink")`
 - Check Soul Ring availability and conditions
 
 **Storage:** The script stores the latest GSI event in `LAST_GSI_EVENT` (lazy_static Mutex):

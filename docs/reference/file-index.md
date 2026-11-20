@@ -166,7 +166,6 @@
 |---|---|---|
 | `src/models/gsi_event.rs` | `GsiWebhookEvent` plus nested hero/item/ability/map structs | `docs/reference/gsi-schema-and-usage.md` |
 | `src/models/heroes.rs` | Hero enum and internal-name mapping | `docs/workflows/adding-a-hero.md` |
-| `src/models/items.rs` | Item model helpers | `docs/features/survivability.md` |
 | `src/models/mod.rs` | Module re-exports | — |
 
 ## `src/update/`

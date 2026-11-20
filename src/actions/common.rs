@@ -9,7 +9,7 @@ use crate::actions::item_automation::{
 };
 use crate::config::{DangerDetectionConfig, Settings};
 use crate::input::binding::KeyBinding;
-use crate::models::{GsiWebhookEvent, Item};
+use crate::models::GsiWebhookEvent;
 use std::sync::{Arc, Mutex};
 use tracing::{debug, info};
 
@@ -105,14 +105,6 @@ fn execute_key_sequence(sequence: Vec<PlannedKeyPress>) {
 }
 
 /// Find the keybinding for a specific item in the hero's inventory
-pub fn find_item_slot(
-    event: &GsiWebhookEvent,
-    settings: &Settings,
-    item: Item,
-) -> Option<KeyBinding> {
-    find_item_slot_by_name(event, settings, item.to_game_name())
-}
-
 fn item_name_matches_lookup(item_name: &str, lookup_name: &str) -> bool {
     if item_name.contains(lookup_name) {
         return true;
@@ -125,8 +117,9 @@ fn item_name_matches_lookup(item_name: &str, lookup_name: &str) -> bool {
         )
 }
 
-/// Find item slot key by item name string from GSI event (for backward compatibility)
-pub fn find_item_slot_by_name(
+/// Key for the inventory slot holding `item_name` (GSI's internal name, e.g. `"item_blink"`).
+/// `"item_blink"` also finds the three upgraded Blinks.
+pub fn find_item_slot(
     event: &GsiWebhookEvent,
     settings: &Settings,
     item_name: &str,
@@ -1006,7 +999,6 @@ mod tests {
     use crate::models::gsi_event::{
         Abilities, Ability, GsiWebhookEvent, Hero, Item as GsiItem, Items, Map,
     };
-    use crate::models::Item;
 
     fn empty_ability() -> Ability {
         Ability {
@@ -1219,7 +1211,7 @@ mod tests {
         };
 
         assert_eq!(
-            find_item_slot(&base_event(items), &settings, Item::Blink),
+            find_item_slot(&base_event(items), &settings, "item_blink"),
             settings.get_key_for_slot("slot0")
         );
     }
