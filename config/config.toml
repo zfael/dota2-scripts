@@ -255,15 +255,18 @@ self_cast_key = "0"
 log_discoveries = false
 use_in_danger = true
 hp_threshold = 50
+# The 7.42 active neutrals that help when HP drops. Supported but left out:
+# item_brick (offensive) and item_demonicon (Book of the Dead summons).
 allowed_items = [
-    "item_essence_ring",
-    "item_minotaur_horn",
+    "item_ash_legion_shield",
+    "item_kobold_cup",
     "item_metamorphic_mandible",
     "item_jidi_pollen_bag",
-    "item_ash_legion_shield",
+    "item_crippling_crossbow",
     "item_idol_of_screeauk",
-    "item_kobold_cup",
-    "item_crippling_crossbow"
+    "item_minotaur_horn",
+    "item_flicker",
+    "item_riftshadow_prism"
 ]
 
 [mana_automation]

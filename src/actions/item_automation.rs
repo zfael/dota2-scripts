@@ -44,11 +44,13 @@ pub struct ItemAutomationSpec {
 }
 
 pub const ITEM_AUTOMATION_SPECS: &[ItemAutomationSpec] = &[
+    // Cycled out of the neutral pool in 7.42. Kept `Inactive` so the spec is ready if
+    // Valve brings it back.
     ItemAutomationSpec {
         item_name: "item_essence_ring",
         trigger_family: TriggerFamily::Danger,
         cast_mode: CastMode::SelfCast,
-        support: SupportStatus::Supported,
+        support: SupportStatus::Inactive,
         is_neutral: true,
     },
     ItemAutomationSpec {
@@ -128,25 +130,75 @@ pub const ITEM_AUTOMATION_SPECS: &[ItemAutomationSpec] = &[
         support: SupportStatus::KnownUnsupported,
         is_neutral: true,
     },
+    // Ally-targeted heal. Capture 1 of `examples/neutral_cast_probe.rs` saw the double
+    // tap fail to cast it under Quick Cast; only Alt (the self-cast modifier) worked.
+    // Held until the neutral path learns a modifier self-cast.
     ItemAutomationSpec {
         item_name: "item_polliwog_charm",
         trigger_family: TriggerFamily::Danger,
-        cast_mode: CastMode::CursorTargeted,
+        cast_mode: CastMode::SelfCast,
         support: SupportStatus::KnownUnsupported,
         is_neutral: true,
     },
+    // Ground-targeted regen zone. Whether a double tap drops it at the caster's
+    // feet is unmeasured; `examples/neutral_cast_probe.rs` step 9 settles it.
+    ItemAutomationSpec {
+        item_name: "item_seeds_of_serenity",
+        trigger_family: TriggerFamily::Danger,
+        cast_mode: CastMode::SelfCast,
+        support: SupportStatus::KnownUnsupported,
+        is_neutral: true,
+    },
+    // Enemy-targeted, so it only works with an enemy under the cursor. Its value
+    // is offensive, which is why it stays out of the default list.
+    ItemAutomationSpec {
+        item_name: "item_brick",
+        trigger_family: TriggerFamily::Danger,
+        cast_mode: CastMode::CursorTargeted,
+        support: SupportStatus::Supported,
+        is_neutral: true,
+    },
+    // No target: a basic dispel and a short blink, in place if the hero took
+    // player damage in the last 3s.
+    ItemAutomationSpec {
+        item_name: "item_flicker",
+        trigger_family: TriggerFamily::Danger,
+        cast_mode: CastMode::NoTarget,
+        support: SupportStatus::Supported,
+        is_neutral: true,
+    },
+    // Ground-targeted AoE dispel (Witchbane). Whether a double tap lands on the
+    // caster is unmeasured; `examples/neutral_cast_probe.rs` steps 6-7 settle it.
+    ItemAutomationSpec {
+        item_name: "item_heavy_blade",
+        trigger_family: TriggerFamily::Danger,
+        cast_mode: CastMode::SelfCast,
+        support: SupportStatus::KnownUnsupported,
+        is_neutral: true,
+    },
+    // Book of the Dead: summons. Supported, but left out of the default list.
+    ItemAutomationSpec {
+        item_name: "item_demonicon",
+        trigger_family: TriggerFamily::Danger,
+        cast_mode: CastMode::NoTarget,
+        support: SupportStatus::Supported,
+        is_neutral: true,
+    },
+    // Cycled out of the neutral pool in 7.42, like Essence Ring.
     ItemAutomationSpec {
         item_name: "item_flayers_bota",
         trigger_family: TriggerFamily::Danger,
         cast_mode: CastMode::NoTarget,
-        support: SupportStatus::KnownUnsupported,
+        support: SupportStatus::Inactive,
         is_neutral: true,
     },
+    // No-target decoy illusion. It costs 4% of *current* HP, so it is cheap at
+    // exactly the moment danger fires.
     ItemAutomationSpec {
         item_name: "item_riftshadow_prism",
         trigger_family: TriggerFamily::Danger,
-        cast_mode: CastMode::SelfCast,
-        support: SupportStatus::KnownUnsupported,
+        cast_mode: CastMode::NoTarget,
+        support: SupportStatus::Supported,
         is_neutral: true,
     },
     ItemAutomationSpec {
@@ -227,7 +279,7 @@ mod tests {
 
     #[test]
     fn lookup_returns_supported_danger_specs_for_first_pass_neutrals() {
-        let spec = lookup_item_automation("item_essence_ring").unwrap();
+        let spec = lookup_item_automation("item_minotaur_horn").unwrap();
         assert_eq!(spec.trigger_family, TriggerFamily::Danger);
         assert_eq!(spec.cast_mode, CastMode::SelfCast);
         assert_eq!(spec.support, SupportStatus::Supported);
@@ -246,6 +298,38 @@ mod tests {
         assert_eq!(spec.trigger_family, TriggerFamily::Danger);
         assert_eq!(spec.cast_mode, CastMode::CursorTargeted);
         assert_eq!(spec.support, SupportStatus::KnownUnsupported);
+    }
+
+    #[test]
+    fn lookup_supports_the_7_42_danger_neutrals_with_their_cast_modes() {
+        for (name, cast_mode) in [
+            ("item_riftshadow_prism", CastMode::NoTarget),
+            ("item_flicker", CastMode::NoTarget),
+            ("item_demonicon", CastMode::NoTarget),
+            ("item_brick", CastMode::CursorTargeted),
+        ] {
+            let spec = lookup_item_automation(name).unwrap();
+            assert_eq!(spec.trigger_family, TriggerFamily::Danger, "{name}");
+            assert_eq!(spec.cast_mode, cast_mode, "{name}");
+            assert_eq!(spec.support, SupportStatus::Supported, "{name}");
+            assert!(spec.is_neutral, "{name}");
+        }
+    }
+
+    #[test]
+    fn lookup_holds_neutrals_a_double_tap_cannot_self_cast() {
+        for name in ["item_seeds_of_serenity", "item_heavy_blade", "item_polliwog_charm"] {
+            let spec = lookup_item_automation(name).unwrap();
+            assert_eq!(spec.support, SupportStatus::KnownUnsupported, "{name}");
+        }
+    }
+
+    #[test]
+    fn lookup_keeps_cycled_out_neutrals_as_inactive() {
+        for name in ["item_essence_ring", "item_flayers_bota"] {
+            let spec = lookup_item_automation(name).unwrap();
+            assert_eq!(spec.support, SupportStatus::Inactive, "{name}");
+        }
     }
 
     #[test]

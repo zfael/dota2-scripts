@@ -4,7 +4,10 @@ import { Toggle } from "../components/common/Toggle";
 import { Slider } from "../components/common/Slider";
 import { NumberInput } from "../components/common/NumberInput";
 import { KeyInput } from "../components/common/KeyInput";
-import { TagList } from "../components/common/TagList";
+import {
+  NeutralItemChecklist,
+  useNeutralItems,
+} from "../components/survivability/NeutralItemChecklist";
 import { useConfigStore } from "../stores/configStore";
 
 export default function Survivability() {
@@ -12,6 +15,7 @@ export default function Survivability() {
   const danger = useConfigStore((s) => s.config.danger_detection);
   const neutral = useConfigStore((s) => s.config.neutral_items);
   const invisibility = useConfigStore((s) => s.config.invisibility);
+  const neutralPool = useNeutralItems();
   const updateCommon = (updates: Partial<typeof common>) =>
     useConfigStore.getState().updateConfig("common", updates);
   const updateDanger = (updates: Partial<typeof danger>) =>
@@ -265,14 +269,15 @@ export default function Survivability() {
               value={neutral.self_cast_key}
               onChange={(v) => updateNeutral({ self_cast_key: v })}
             />
-            <TagList
-              label="Allowed Items"
-              items={neutral.allowed_items}
+            <NeutralItemChecklist
+              pool={neutralPool}
+              allowed={neutral.allowed_items}
               onChange={(v) => updateNeutral({ allowed_items: v })}
             />
             <p className="text-xs text-subtle">
-              Listed neutrals the runtime has no cast mode for are ignored at
-              runtime.
+              The neutral slot holds one item, so ticking several only covers
+              whichever one you end up with. Self-cast items use the Self-Cast
+              Key; "At cursor" items need an enemy under your mouse.
             </p>
           </Card>
         </div>

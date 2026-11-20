@@ -156,6 +156,7 @@
 | `src-ui/src/components/heroes/configs/invoker/InvokerProfileList.tsx` | Invoker preset library and configured profile list UI | `docs/heroes/invoker.md` |
 | `src-ui/src/components/heroes/configs/invoker/InvokerProfileEditor.tsx` | Invoker profile step editor with reorder, target, and timing controls | `docs/heroes/invoker.md` |
 | `src-ui/src/pages/Survivability.tsx` | Survivability page: healing thresholds, lane phase override, defensive items, dispels, neutral items | `docs/features/survivability.md` |
+| `src-ui/src/components/survivability/NeutralItemChecklist.tsx` | The neutral allowlist as a tiered checklist of the current pool; only supported items can be ticked, and items that left the pool stay removable | `docs/features/survivability.md` |
 | `src-ui/src/pages/Survivability.test.tsx` | Vitest coverage for the Survivability page and its split from the Danger page | `docs/features/survivability.md` |
 | `src-ui/src/pages/DangerDetection.tsx` | Danger page: detection heuristics only, cross-linked to Survivability for responses | `docs/features/danger-detection.md` |
 | `src-ui/src/hooks/useRuneAlert.ts` | Frontend-owned rune alert gating and Web Audio playback | `docs/superpowers/specs/2026-03-31-react-ui-design.md`, `docs/reference/configuration.md` |
@@ -166,6 +167,7 @@
 |---|---|---|
 | `src/models/gsi_event.rs` | `GsiWebhookEvent` plus nested hero/item/ability/map structs | `docs/reference/gsi-schema-and-usage.md` |
 | `src/models/heroes.rs` | Hero enum and internal-name mapping | `docs/workflows/adding-a-hero.md` |
+| `src/models/neutral_catalog.rs` | **Generated** neutral item pool: name, display name, tier, how it is cast; regenerate with `scripts/generate-neutral-catalog.ps1` | `docs/features/survivability.md` |
 | `src/models/mod.rs` | Module re-exports | — |
 
 ## `src/update/`
@@ -199,7 +201,9 @@
 | `scripts/generate-voice-pack.ps1` | Generates a spoken voice pack using the Windows speech synthesiser | `docs/features/objective-alerts.md` |
 | `scripts/dota-bug-watch.ps1` | Pulls new ValveSoftware/Dota2-Gameplay issues since a stored cursor and tiers them by relevance to our automation | `.claude/skills/dota-bug-watch/SKILL.md` |
 | `scripts/generate-mana-costs.ps1` | Regenerates `src/actions/mana_costs.rs` from Valve's datafeed; rerun after a gameplay patch | `docs/features/soul-ring.md` |
+| `scripts/generate-neutral-catalog.ps1` | Regenerates `src/models/neutral_catalog.rs` from Valve's datafeed; rerun after a gameplay patch | `docs/features/survivability.md` |
 | `scripts/patch-analysis.ps1` | Pulls a patch's notes from Valve, measures per-hero win rates on OpenDota, and scores meta candidates | `docs/patch-analysis/README.md` |
+| `src-tauri/src/commands/config.rs` | Config read/write and validation, plus `get_neutral_items` (the pool joined with the automation specs) | `docs/reference/configuration.md`, `docs/features/survivability.md` |
 | `src-tauri/src/commands/alerts.rs` | Tauri commands for alert countdowns and test playback | `docs/features/objective-alerts.md` |
 | `src-ui/src/types/alerts.ts` | Alert event keys, catalogue metadata, and countdown formatting | `docs/features/objective-alerts.md` |
 | `src-ui/src/stores/alertStore.ts` | Alert countdown polling and test playback | `docs/features/objective-alerts.md` |
@@ -238,6 +242,7 @@ a gameplay patch. See `docs/workflows/probe-first.md`.
 | `examples/largo_song_sync_control.rs` | Simulator proving the Largo song intercept's timing: what is swallowed, what reaches Dota, and on which beat | `docs/heroes/largo.md` |
 | `examples/phantom_lancer_input_probe.rs` | Input probe: sends Ctrl-wrapped clicks and the middle-mouse illusion send into a live game, records the player's verdicts and Ctrl tap timing; re-measure tool after a patch | `docs/heroes/phantom_lancer.md` |
 | `examples/phantom_lancer_control.rs` | Simulator proving the Phantom Lancer Ctrl latch and illusion send never leave Ctrl under a key; `--without <rule>` shows each safeguard is load-bearing | `docs/heroes/phantom_lancer.md` |
+| `examples/neutral_cast_probe.rs` | GSI probe for neutral casts: cast edge and latency, silence dispels, Flicker's blink, double-tap self-casts, cast cost | `docs/features/survivability.md` |
 | `examples/minimap_analyze.rs` | Standalone CLI for running hero detection on PNG captures | `docs/superpowers/specs/2026-03-31-minimap-hero-detection-design.md` |
 
 ## `docs/`

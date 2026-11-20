@@ -182,6 +182,7 @@ Situational awareness. No input simulation lives here.
 | `src/config/constants.rs` | Compile-time constants |
 | `src/state/app_state.rs` | `AppState`; wrapped in `Arc<Mutex<AppState>>` |
 | `src/models/gsi_event.rs` | `GsiWebhookEvent` and nested GSI payload structs |
+| `src/models/neutral_catalog.rs` | Generated neutral item pool (tier, cast targeting) behind the Survivability checklist |
 | `src/update/mod.rs` | GitHub Releases update-check, apply, restart |
 | `src/update/msi.rs` | MSI-managed install handling |
 
@@ -213,6 +214,7 @@ manipulate windows must stay sync (main thread) — see `commands/overlay.rs`.
 | `src-ui/src/pages/` | One file per route (`WaveTracker`, `Alerts`, `MinimapIntelligence`, `Settings`, hero pages, …) |
 | `src-ui/src/pages/WaveOverlay.tsx` | Chrome-free view rendered in the overlay window |
 | `src-ui/src/pages/LatchIndicator.tsx` | Phantom Lancer's green/red latch box, rendered in its own overlay window |
+| `src-ui/src/components/survivability/NeutralItemChecklist.tsx` | The neutral allowlist as a tiered checklist of the current pool |
 | `src-ui/src/stores/` | Zustand stores; `mockData.ts` backs non-Tauri browser runs |
 | `src-ui/src/components/common/` | Shared inputs (`Toggle`, `Slider`, `NumberInput`, `Dropdown`, …) |
 | `src-ui/src/components/waves/WaveMap.tsx` | Vector map renderer, shared by the page and the overlay |
@@ -232,6 +234,7 @@ evidence a feature was built on and the tool for re-measuring after a patch. See
 | `examples/largo_song_sync_control.rs` | Plays song presses at chosen offsets against Largo's beat grid; asserts what is swallowed, what reaches Dota, and on which beat |
 | `examples/phantom_lancer_input_probe.rs` | Sends the inputs the Phantom Lancer automation needs into a live game and records whether they worked |
 | `examples/phantom_lancer_control.rs` | Proves the Phantom Lancer Ctrl latch and illusion send never leave Ctrl under a key |
+| `examples/neutral_cast_probe.rs` | Records neutral casts: cast edge, silence dispels, Flicker's blink, whether a double tap self-casts ground-target items |
 | `examples/minimap_capture.rs` | Captures minimap PNGs for offline analysis |
 | `examples/minimap_analyze.rs` | Runs hero detection over captured PNGs |
 | `examples/mouse_test.rs` | Inspects raw `rdev` mouse button events |
@@ -247,6 +250,7 @@ evidence a feature was built on and the tool for re-measuring after a patch. See
 | `tests/fixtures/` | Sample GSI JSON payloads |
 | `scripts/generate-voice-pack.ps1` | Generates a spoken voice pack via the Windows speech synthesiser |
 | `scripts/generate-mana-costs.ps1` | Regenerates `src/actions/mana_costs.rs` from Valve's datafeed; rerun after a gameplay patch |
+| `scripts/generate-neutral-catalog.ps1` | Regenerates `src/models/neutral_catalog.rs` (the neutral pool) from Valve's datafeed; rerun after a gameplay patch |
 | `scripts/patch-analysis.ps1` | Pulls a patch's notes, measures hero win rates on OpenDota, and scores meta candidates into `docs/patch-analysis/<patch>/` |
 
 Archived design docs and implementation plans for larger efforts live under

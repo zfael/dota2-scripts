@@ -209,6 +209,25 @@ pub struct MeepoStateDto {
     pub combo_items: Vec<String>,
 }
 
+/// One neutral in the current pool, with what the danger automation would do with it.
+///
+/// Matches frontend `NeutralItem` in src-ui/src/types/config.ts
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct NeutralItemDto {
+    pub name: String,
+    pub display_name: String,
+    pub tier: u8,
+    /// "passive" | "no_target" | "unit_target" | "point_target": how the game casts it.
+    pub targeting: String,
+    /// "self_cast" | "no_target" | "cursor_targeted" when the runtime has a spec for it.
+    pub cast_mode: Option<String>,
+    /// "supported" | "unsupported" | "inactive" | "other_path" | "passive". Only
+    /// "supported" items ever fire from the danger allowlist; "other_path" ones are
+    /// used by another automation (Mana Draught by low mana).
+    pub support: String,
+}
+
 /// Minimap capture status for frontend display
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

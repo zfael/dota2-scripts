@@ -188,6 +188,7 @@ pub fn run() {
             commands::config::get_config,
             commands::config::update_config,
             commands::config::update_hero_config,
+            commands::config::get_neutral_items,
             commands::hud::capture_hud_portrait,
             commands::hud::test_hud_portrait,
             commands::latch_indicator::get_pl_latch_state,

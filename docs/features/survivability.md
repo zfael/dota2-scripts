@@ -253,11 +253,29 @@ Neutral-item automation now supports three cast modes:
 
 Current danger-supported neutrals:
 
-- Self-cast: `item_essence_ring`, `item_minotaur_horn`, `item_metamorphic_mandible`
-- No-target: `item_jidi_pollen_bag`, `item_ash_legion_shield`, `item_idol_of_screeauk`, `item_kobold_cup`
-- Cursor-targeted: `item_crippling_crossbow`
+- Self-cast: `item_minotaur_horn`, `item_metamorphic_mandible`
+- No-target: `item_jidi_pollen_bag`, `item_ash_legion_shield`, `item_idol_of_screeauk`, `item_kobold_cup`, `item_flicker`, `item_riftshadow_prism`, `item_demonicon`
+- Cursor-targeted: `item_crippling_crossbow`, `item_brick`
+
+`item_brick` (offensive) and `item_demonicon` (Book of the Dead) are supported but left
+out of the checked-in `allowed_items`.
 
 Configured-but-unsupported neutrals are ignored at runtime unless their support status is upgraded in `src/actions/item_automation.rs`.
+Pollywog Charm (ally-target), Seeds of Serenity and Witchbane (`item_heavy_blade`,
+both ground-target) stay `KnownUnsupported`. In capture 1 of
+`examples/neutral_cast_probe.rs`, with item keys on Quick Cast, a double tap did not
+cast Pollywog; only Alt (the self-cast modifier) did. They need a modifier self-cast
+before they can be automated.
+
+The **Survivability** page shows the allowlist as a checklist of the current pool, by
+tier. The pool comes from `src/models/neutral_catalog.rs`, generated from Valve's
+datafeed by `scripts/generate-neutral-catalog.ps1`; rerun it after a gameplay patch.
+Only supported items can be ticked. Anything in `allowed_items` that has left the pool
+is listed under "Not in the current pool" so it can be removed.
+
+Neutrals Valve cycles out of the pool keep their spec as `Inactive` instead of being
+deleted, so they work again if they return. 7.42 retired `item_essence_ring` and
+`item_flayers_bota`.
 
 ---
 

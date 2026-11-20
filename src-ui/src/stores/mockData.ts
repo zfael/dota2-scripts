@@ -1,4 +1,4 @@
-import type { Settings } from "../types/config";
+import type { NeutralItem, Settings } from "../types/config";
 import type { ActivityEntry } from "../types/activity";
 
 export const mockConfig: Settings = {
@@ -319,7 +319,11 @@ export const mockConfig: Settings = {
   neutral_items: {
     enabled: false, self_cast_key: "0", log_discoveries: false,
     use_in_danger: true, hp_threshold: 50,
-    allowed_items: ["essence_ring", "minotaur_horn", "metamorphic_mandible"],
+    allowed_items: [
+      "item_ash_legion_shield", "item_kobold_cup", "item_metamorphic_mandible", "item_jidi_pollen_bag", "item_crippling_crossbow",
+      "item_idol_of_screeauk", "item_minotaur_horn", "item_flicker",
+      "item_riftshadow_prism",
+    ],
   },
   phase_boots_automation: {
     enabled: true,
@@ -391,6 +395,20 @@ export const mockConfig: Settings = {
     green_min_value: 25.0,
   },
 };
+
+/** A slice of the 7.42 pool, enough to exercise every checklist state in a browser run. */
+export const mockNeutralItems: NeutralItem[] = [
+  { name: "item_ash_legion_shield", displayName: "Ash Legion Shield", tier: 1, targeting: "no_target", castMode: "no_target", support: "supported" },
+  { name: "item_polliwog_charm", displayName: "Pollywog Charm", tier: 1, targeting: "unit_target", castMode: "self_cast", support: "unsupported" },
+  { name: "item_seeds_of_serenity", displayName: "Seeds of Serenity", tier: 1, targeting: "point_target", castMode: "self_cast", support: "unsupported" },
+  { name: "item_pogo_stick", displayName: "Tumbler's Toy", tier: 1, targeting: "no_target", castMode: "no_target", support: "inactive" },
+  { name: "item_chipped_vest", displayName: "Chipped Vest", tier: 1, targeting: "passive", castMode: null, support: "passive" },
+  { name: "item_brick", displayName: "Brick", tier: 2, targeting: "unit_target", castMode: "cursor_targeted", support: "supported" },
+  { name: "item_mana_draught", displayName: "Mana Draught", tier: 2, targeting: "no_target", castMode: "no_target", support: "other_path" },
+  { name: "item_idol_of_screeauk", displayName: "Idol of Scree'auk", tier: 3, targeting: "no_target", castMode: "no_target", support: "supported" },
+  { name: "item_flicker", displayName: "Flicker", tier: 4, targeting: "no_target", castMode: "no_target", support: "supported" },
+  { name: "item_minotaur_horn", displayName: "Minotaur Horn", tier: 4, targeting: "no_target", castMode: "self_cast", support: "supported" },
+];
 
 export const mockActivityLog: ActivityEntry[] = [
   { id: "1", timestamp: "14:32:01.234", category: "system", message: "GSI server started on port 3000" },

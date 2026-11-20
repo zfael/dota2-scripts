@@ -164,7 +164,7 @@ See `docs/features/danger-detection.md` and `docs/features/survivability.md`.
 | `log_discoveries` | `false` | `true` | When true, `src/actions/dispatcher.rs` appends discoveries to `logs/neutral_items_discovered.txt`. |
 | `use_in_danger` | `true` | `true` | Additional gate for danger-triggered neutral usage. |
 | `hp_threshold` | `50` | `50` | Only used when danger criteria and feature gates allow it. |
-| `allowed_items` | 8-item allowlist | empty list | Runtime still checks `items.neutral0`, but only supported entries from `src/actions/item_automation.rs` will actually fire. |
+| `allowed_items` | 10-item allowlist (the 7.42 danger neutrals) | empty list | Runtime still checks `items.neutral0`, but only supported entries from `src/actions/item_automation.rs` will actually fire. The UI edits it as a checklist of the pool in `src/models/neutral_catalog.rs`. |
 
 See `docs/features/survivability.md`.
 

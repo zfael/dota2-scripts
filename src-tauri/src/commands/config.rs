@@ -1,5 +1,10 @@
+use crate::ipc_types::NeutralItemDto;
 use crate::TauriAppState;
+use dota2_scripts::actions::item_automation::{
+    lookup_item_automation, CastMode, SupportStatus, TriggerFamily,
+};
 use dota2_scripts::config::Settings;
+use dota2_scripts::models::neutral_catalog::{NeutralTargeting, NEUTRAL_ITEM_CATALOG};
 use dota2_scripts::input::keyboard::KeyboardSnapshot;
 use tauri::{AppHandle, Emitter};
 use tracing::{info, warn};
@@ -54,6 +59,55 @@ fn validate_settings(settings: &Settings) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+/// The neutral pool joined with the automation specs, for the allowlist checklist.
+fn neutral_item_rows() -> Vec<NeutralItemDto> {
+    NEUTRAL_ITEM_CATALOG
+        .iter()
+        .map(|entry| {
+            let spec = lookup_item_automation(entry.name);
+            let support = match spec {
+                Some(spec) if spec.trigger_family != TriggerFamily::Danger => "other_path",
+                Some(spec) => match spec.support {
+                    SupportStatus::Supported => "supported",
+                    SupportStatus::KnownUnsupported => "unsupported",
+                    SupportStatus::Inactive => "inactive",
+                },
+                None if entry.targeting == NeutralTargeting::Passive => "passive",
+                None => "unsupported",
+            };
+            NeutralItemDto {
+                name: entry.name.to_string(),
+                display_name: entry.display_name.to_string(),
+                tier: entry.tier,
+                targeting: match entry.targeting {
+                    NeutralTargeting::Passive => "passive",
+                    NeutralTargeting::NoTarget => "no_target",
+                    NeutralTargeting::UnitTarget => "unit_target",
+                    NeutralTargeting::PointTarget => "point_target",
+                }
+                .to_string(),
+                cast_mode: spec.map(|spec| {
+                    match spec.cast_mode {
+                        CastMode::SelfCast => "self_cast",
+                        CastMode::NoTarget => "no_target",
+                        CastMode::CursorTargeted => "cursor_targeted",
+                    }
+                    .to_string()
+                }),
+                support: support.to_string(),
+            }
+        })
+        .collect()
+}
+
+/// The current neutral pool, for the Survivability page's checklist.
+///
+/// `async` because the UI calls it, and UI-called commands stay off the main thread.
+#[tauri::command]
+pub async fn get_neutral_items() -> Vec<NeutralItemDto> {
+    neutral_item_rows()
 }
 
 /// Returns the full config as JSON (snake_case keys matching config.toml)
@@ -243,6 +297,46 @@ mod tests {
     };
     use dota2_scripts::state::app_state::AppState;
     use std::sync::{Arc, Mutex, RwLock};
+
+    fn neutral_row(name: &str) -> NeutralItemDto {
+        neutral_item_rows()
+            .into_iter()
+            .find(|row| row.name == name)
+            .unwrap_or_else(|| panic!("{name} missing from the neutral catalog"))
+    }
+
+    #[test]
+    fn neutral_rows_mark_what_the_danger_path_can_fire() {
+        let flicker = neutral_row("item_flicker");
+        assert_eq!(flicker.tier, 4);
+        assert_eq!(flicker.support, "supported");
+        assert_eq!(flicker.cast_mode.as_deref(), Some("no_target"));
+
+        let pollywog = neutral_row("item_polliwog_charm");
+        assert_eq!(pollywog.targeting, "unit_target");
+        assert_eq!(pollywog.cast_mode.as_deref(), Some("self_cast"));
+        assert_eq!(pollywog.support, "unsupported");
+
+        assert_eq!(neutral_row("item_seeds_of_serenity").support, "unsupported");
+        assert_eq!(neutral_row("item_mana_draught").support, "other_path");
+        assert_eq!(neutral_row("item_giants_ring").support, "passive");
+        assert_eq!(neutral_row("item_giants_ring").cast_mode, None);
+    }
+
+    #[test]
+    fn every_supported_danger_neutral_is_in_the_pool() {
+        // A supported spec missing from the pool means the catalog went stale or the
+        // item cycled out and should be marked `Inactive`.
+        let pool: Vec<String> = neutral_item_rows().into_iter().map(|row| row.name).collect();
+        for spec in dota2_scripts::actions::item_automation::ITEM_AUTOMATION_SPECS {
+            if spec.is_neutral
+                && spec.support == SupportStatus::Supported
+                && spec.trigger_family == TriggerFamily::Danger
+            {
+                assert!(pool.iter().any(|name| name == spec.item_name), "{}", spec.item_name);
+            }
+        }
+    }
 
     fn make_test_profile(id: &str, enabled: bool, mode: InvokerProfileMode) -> InvokerProfile {
         InvokerProfile {

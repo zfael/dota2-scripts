@@ -414,6 +414,17 @@ export interface NeutralItemConfig {
   allowed_items: string[];
 }
 
+/** One neutral in the current pool. Mirrors `NeutralItemDto` in src-tauri/src/ipc_types.rs. */
+export interface NeutralItem {
+  name: string;
+  displayName: string;
+  tier: number;
+  targeting: "passive" | "no_target" | "unit_target" | "point_target";
+  castMode: "self_cast" | "no_target" | "cursor_targeted" | null;
+  /** Only "supported" items fire from the danger allowlist. */
+  support: "supported" | "unsupported" | "inactive" | "other_path" | "passive";
+}
+
 export interface PhaseBootsAutomationConfig {
   enabled: boolean;
   minimum_distance_units: number;
