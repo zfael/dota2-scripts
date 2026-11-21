@@ -39,12 +39,16 @@ hp_delta       = observed_delta - claim_self_damage(observed_delta)
 ```
 
 A second global, `SELF_DAMAGE`, holds a pending allowance written by
-`note_self_damage(hp, source)`. Two callers today:
+`note_self_damage(hp, source)`. Three callers today:
 
 | Caller | Reports | When |
 |---|---|---|
 | `src/actions/soul_ring.rs` | `SOUL_RING_HEALTH_COST` (170) | `mark_triggered()`, from both the keyboard replay path and the combo helper |
 | `src/actions/heroes/morphling.rs` | The HP an Attribute Shift just cost | Every event where `hero.max_health` fell, before `update(...)` sees it |
+| `src/actions/armlet.rs` | The HP an Armlet / Sabatons switch-off just took | Every event the toggle tracker reads as a switch-off, ours or the player's, from the dispatcher's first hook — before any `update(...)` for that event |
+
+The Armlet case was the loudest of the three: the trick's switch-off floors HP at 1, so
+every trick at 270 HP read as a 269 HP hit and could fire the defensive kit.
 
 The Morphling case is the same bug in a different shape: shifting toward agility
 lowers max HP, current HP follows it down, and a shift back that crosses the low-HP

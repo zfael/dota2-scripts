@@ -9,8 +9,8 @@
 | Path | What it owns |
 |---|---|
 | `src-ui/src/pages/Survivability.tsx` | The operator-facing **Survivability** page — the single place to configure healing, defensive items, dispels, and neutral items |
-| `src/actions/armlet.rs` | Shared armlet planning, config resolution, cooldown tracking, critical retry handling, and dual-trigger execution |
-| `src/actions/common.rs` | Shared survivability pipeline: armlet job enqueueing, healing items, defensive items, neutral items |
+| `src/actions/armlet.rs` | Armlet / Sabatons toggle state read from `max_health`, the press decision and its check, Roshan mode, and the chord |
+| `src/actions/common.rs` | Shared survivability pipeline: healing items, defensive items, neutral items |
 | `src/actions/danger_detector.rs` | Global `in_danger` heuristic consumed by common and hero code |
 | `src/actions/dispel.rs` | Immediate silence reaction: Manta, Flicker, Minotaur Horn, Lotus |
 | `src/actions/auto_items.rs` | Cached GSI item/ability state and Space+right-click item usage; not the HP-healing loop, but part of the shared item automation surface |
@@ -87,17 +87,100 @@ For each inventory slot from `event.items.all_slots()`:
 
 ## Armlet automation
 
-Owned by `src/actions/armlet.rs`.
+Owned by `src/actions/armlet.rs`. The decision loop was proved first in
+`examples/armlet_toggle_control.rs`, against a simulator wired with capture 1 of
+`examples/sabatons_toggle_probe.rs` and beside the loop it replaced.
 
-This path is shared across heroes and fallback survivability flow. The runtime only acts when:
+This path is shared across heroes and fallback survivability flow. It drives Armlet of
+Mordiggian and 7.42's Sabatons of Mordiggian (Armlet wins if both are held), and only
+acts when:
 
 - `[armlet].enabled = true` after per-hero override resolution
-- the hero is alive
-- the hero currently has `item_armlet` or `item_berserkers_sabatons` (Armlet wins if
-  both are held)
-- the hero is not stunned at the moment a normal toggle would fire
-- current HP is below `toggle_threshold + predictive_offset`
-- the shared cooldown has elapsed
+- the hero is alive and holds `item_armlet` or `item_berserkers_sabatons`
+- the hero can use items: not stunned, hexed or muted
+- Dota has the keyboard. With another window in front nothing is pressed; if Dota's
+  window cannot be found at all, this check stands aside rather than block
+- HP is below `toggle_threshold + predictive_offset`, or Roshan mode says the next hit
+  is lethal
+
+### Reading the toggle from max HP
+
+GSI does not say whether the toggle is on: in capture 1 the item JSON is identical
+either way. `max_health` does:
+
+| `max_health` move | Read as |
+|---|---|
+| rising tick over tick: the Strength ramping in, 0.75–1.0s | switched **on** |
+| a one-tick drop the size of a toggle, or one that floors HP at 1–2 | switched **off** |
+| death, respawn, the item just arriving, Armlet swapped for Sabatons | **off** |
+| the app starting with the item already held | **unknown** |
+| a level, a purchase, a one-tick rise, a small drop | not the toggle |
+
+The size of a toggle (+500 Armlet, +600 Sabatons) is learned from the moves themselves,
+never configured. Replaying capture 1 through the tracker reads all 14 of the probe's
+checkpoints correctly, a press the probe never saw included.
+
+### What it presses
+
+| Toggle | Press |
+|---|---|
+| on, HP under the learned bonus | the **trick**: quick-cast, then `cast_modifier` + quick-cast, one chord. HP floors at 1 and the Strength ramps back in on top |
+| on, HP at or over the bonus | nothing: the trick cannot gain anything there |
+| unknown | the trick, as a probe: from off it cancels itself, which also shows it is off |
+| off, while losing HP or in danger | **one press** to turn it on: the whole bonus, with no 1 HP floor at all |
+| off, nothing hitting | nothing: the player switched it off on purpose |
+
+It never presses while one of its presses is in flight or the Strength is still coming
+in. `toggle_cooldown_ms` is only a floor under that.
+
+### Checking every press
+
+Each press is checked against what `max_health` did next:
+
+- **Landed** — the Strength came back in. Logged at INFO with the HP before, at the
+  floor and after, and how long it took.
+- **Second press lost** — the trick switched it off but the press back on had not
+  shown by the next tick. One press turns it back on at once.
+- **Was on** — a single press switched it off, so the belief was wrong. One more press
+  turns it back on.
+- **No effect** — nothing moved within `press_confirm_ms`. After a trick from Unknown:
+  it reads off, since a chord from off switches it on and straight back off. After a
+  trick believed on: on was read from `max_health` rising, and a switch-off would have
+  shown as a drop, so the presses are what is not landing — a taunt or a cyclone stops
+  items and GSI says nothing. One retry at once, then it waits `press_confirm_ms`, and
+  only a third miss reads as off. It never sends a single press there: on a toggle
+  that is on, that switches it off. After a single press: it backs off for another
+  `press_confirm_ms` instead of pressing into nothing.
+- **Died** — the hero died before one of ours landed. Logged at INFO with how long
+  after the press, and the HP before it and at the lowest.
+
+It never presses at 0 HP: GSI can still say alive on the tick the hero dies.
+
+A toggle the automation did not press is the player's. It holds off for
+`press_confirm_ms` after one, so a trick done by hand is never cut in half.
+
+### What the logs showed
+
+The app's own logs from 2026-09-01 to 2026-11-21 (215 episodes, 973 presses) show what
+the loop this replaced — the chord whenever HP was under the trigger and the cooldown
+had passed — did in real games:
+
+| What the next press found | Presses |
+|---|---|
+| the Strength still ramping in: HP pinned at ~240–270 while each chord cancelled the last | 354 |
+| the toggle off: HP creeping up on regen while each chord switched it on and back off | 319 |
+| a chord that half landed | 28 |
+
+37 of the 111 single-press episodes ended in a death within 3s, most on the very next
+tick. In the simulator the new loop dies less often in every fight it was run through —
+a slow bleed under drain 4–25% of runs against 49–95% — and never presses mid-ramp.
+
+### Self-inflicted HP
+
+The HP a switch-off takes — ours or the player's — is declared to
+`danger_detector::note_self_damage` before the detector reads the event, and left out
+of Roshan mode's hit learning. Both used to read every trick as a hit the size of the
+floor.
 
 ### Sabatons of Mordiggian
 
@@ -111,10 +194,8 @@ This path is shared across heroes and fallback survivability flow. The runtime o
 | Toggle state in GSI | none | none |
 | Off at low HP | — | leaves 1–2 HP, never 0 |
 
-Thresholds stay in HP, so nothing about the item is hard-coded in the decision.
-Neither item reports whether it is on, and the dual trigger assumes it is: an off-on
-chord while the toggle is off turns it on and back off, which lost 196 HP in the
-capture. Re-run the probe after a patch that touches either item.
+Nothing about either item is hard-coded in the decision. Re-run the probe and the
+simulator after a patch that touches either item.
 
 ### Roshan mode
 
@@ -125,7 +206,7 @@ Shared Armlet now includes an optional Roshan-specific mode under `[armlet.rosha
 - pressing that hotkey toggles a live armed/disarmed runtime state without sending the key through to Dota 2
 - while armed, the module keeps learning recent HP-loss samples that look like Roshan hits
 
-The Roshan path only runs when the normal Armlet decision would otherwise be `SkipSafe`. It does not bypass the existing cooldown or critical-retry handling.
+The Roshan path only asks for a trick while HP is still over the ordinary trigger, and that trick goes through the same gating as any other: never mid-ramp, only from ON, and not at all once HP reaches the bonus. Its hit learning leaves out whatever the toggle itself took in the same event.
 
 Current trigger ladder:
 
@@ -163,10 +244,10 @@ That means the two casts are still **not** truly simultaneous, but Armlet no lon
 
 Armlet now has two priority advantages over the rest of the survivability stack:
 
-1. `dispatch_gsi_event()` evaluates `src/actions/armlet.rs::maybe_toggle(...)` inline before silence dispel, danger detection, or hero-specific survivability helpers run.
-2. `src/input/simulation.rs` places Armlet chords onto an Armlet-priority backlog that the single `Enigo` worker drains before older normal queued inputs.
+1. `dispatch_gsi_event()` evaluates `src/actions/armlet.rs::maybe_toggle(...)` inline before silence dispel, danger detection, or hero-specific survivability helpers run. That is also what lets it declare a switch-off's HP before the danger detector reads the same event.
+2. `src/input/simulation.rs` places Armlet chords, and the single press that turns it on (`armlet_press`), onto an Armlet-priority backlog that the single `Enigo` worker drains before older normal queued inputs.
 
-The worker still does **not** interrupt an input command that is already mid-execution. Instead, it preserves atomic execution of the current command and then runs the pending Armlet chord next before resuming older normal queue backlog.
+The worker still does **not** interrupt an input command that is already mid-execution. Instead, it preserves atomic execution of the current command and then runs the pending Armlet press next before resuming older normal queue backlog.
 
 Supported modifier strings are:
 
@@ -178,30 +259,41 @@ If the configured modifier is unknown, the runtime logs a warning and falls back
 
 ### Diagnostics and tuning workflow
 
-For offline tuning, `src/actions/armlet.rs` now includes replay-model tests that compare threshold and cooldown behavior against sample HP timelines, plus an ignored matrix test that prints comparison rows for several candidate configs.
+At the default INFO level every press logs why it fired, the HP the last tick lost to
+something other than the toggle, and which way the toggle read
+(`Armlet trick: low HP, toggle on (HP 270/1800, lost 95 last tick, trigger 280, …)`),
+and every outcome logs what it did (`Armlet trick landed: HP 270 → 1 → 495 in 870ms`,
+`Armlet trick cut short: died 450ms after the press (HP 270 → 1)`, or the warnings for
+a lost press). Those lines are the data for tuning the trigger: whether a trick under
+heavy damage per tick saves the hero or leaves it at 1 HP to die.
 
-For live verification, enable:
+The first real game on this code (2026-11-21) showed why that matters. In a practice
+lobby 27 of 32 presses landed, in 865–1093ms. In a real Huskar game at 2–3k max HP,
+6 of 9 tricks ended in a death 0.2–0.7s after the press, with 130–350 HP lost per tick:
+a 280 HP trigger leaves one tick at that rate.
+
+For offline work, `examples/armlet_toggle_control.rs` runs the controller and the old
+loop through scripted scenarios, randomised fights under both drain and press-loss
+models, and a replay of capture 1:
+
+```powershell
+cargo run --release --example armlet_toggle_control
+```
+
+For live verification at the input level, enable:
 
 ```powershell
 $env:RUST_LOG="dota2_scripts::actions::armlet=debug,dota2_scripts::input::simulation=debug"; cargo run --release
 ```
 
-With that filter, the logs show both:
-
-- the armlet module's resolved trigger / cooldown decisions
-- the synthetic-input worker's executed armlet chord order and per-step timing
-
-Use that combination when you need to confirm whether a real toggle emitted the intended `slot-key -> modifier down -> slot-key -> modifier up` sequence or when you are comparing threshold / cooldown settings during gameplay tests.
+With that filter, the logs also show the player's own toggles as the tracker reads
+them and the synthetic-input worker's executed chord order and per-step timing.
 
 ### Shared defaults + hero overrides
 
 The base armlet behavior lives in `[armlet]`.
 
-Supported heroes can override the shared threshold/cooldown values through nested hero config blocks such as `[heroes.huskar.armlet]`. If a hero has no override, the shared defaults apply. Huskar also keeps backward compatibility with its older flat armlet keys if the nested block is absent.
-
-### Critical retry
-
-When a toggle fires at extremely low HP (below half the configured base threshold), the module records a critical retry marker. If a later event shows HP still critically low or lower, the module forces one more dual-trigger toggle even if that suggests the previous toggle likely failed to flip the item state cleanly.
+Supported heroes can override the shared threshold/cooldown values through nested hero config blocks such as `[heroes.huskar.armlet]`. If a hero has no override, the shared defaults apply. Huskar also keeps backward compatibility with its older flat armlet keys if the nested block is absent. `press_confirm_ms` is shared only: it describes the game and the keyboard path, not the hero.
 
 ---
 

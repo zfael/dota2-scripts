@@ -69,8 +69,8 @@ Legacy flat Huskar keys (`armlet_toggle_threshold`, `armlet_predictive_offset`, 
 | File | Purpose |
 |---|---|
 | `src/actions/heroes/huskar.rs` | Huskar Berserker Blood cleanse plus shared armlet-survivability wiring |
-| `src/actions/armlet.rs` | Shared armlet planning, config resolution, cooldown tracking, and dual-trigger execution |
-| `src/actions/common.rs` | Shared survivability helpers that enqueue armlet checks |
+| `src/actions/armlet.rs` | Shared Armlet / Sabatons automation: toggle state read from `max_health`, trick or single press, each press checked |
+| `examples/armlet_toggle_control.rs` | The armlet controller proved offline against the probe's capture and the old loop |
 | `src/config/settings.rs` | Shared `[armlet]` config plus Huskar-specific override fields |
 | `config/config.toml` | User configuration |
 
@@ -86,8 +86,12 @@ Huskar no longer owns a separate armlet implementation. On each GSI event, `src/
 
 1. resolving shared `[armlet]` defaults
 2. applying Huskar overrides from `[heroes.huskar.armlet]`
-3. checking HP, stun state, cooldown, and equipped Armlet
-4. emitting the dual-trigger toggle sequence
+3. reading which way the toggle is from `max_health`, and whether a press of its own
+   is still landing or the Strength is still ramping in
+4. pressing the off-on trick when it is on, or one press when it is off, and checking
+   the result against the next ticks
+
+The whole mechanism is described in "Armlet automation" in `docs/features/survivability.md`.
 
 Because the dispatcher now runs Armlet first and `src/input/simulation.rs` gives Armlet chords their own fast lane, Huskar Armlet toggles can jump ahead of queued normal synthetic inputs after the current atomic input command finishes.
 
@@ -134,11 +138,9 @@ With the checked-in values:
 
 That means Huskar can stop self-damage from Burning Spears before drifting into the Roshan Armlet save window, then restore Spears only after HP has clearly recovered.
 
-#### Cooldown and critical retry
+#### Cooldown and the ramp
 
-The shared `toggle_cooldown_ms` prevents rapid retriggers. Huskar overrides it to `300ms` in the checked-in config.
-
-If a toggle fires at extremely low HP, the shared armlet module also arms a critical retry marker. If later GSI updates show HP still critically low or even lower, the module forces one more dual-trigger attempt to recover from a likely failed or missed toggle.
+The shared `toggle_cooldown_ms` is the minimum gap between two presses. Huskar overrides it to `300ms` in the checked-in config. It is only a floor: the next press always waits for the last one to show in `max_health` and for the Strength to finish ramping in, 0.75–1.0s. Pressing inside that window is what the old loop did — 354 of its 973 logged presses landed mid-ramp, each one throwing away what the ramp had given and parking Huskar at 1 HP again.
 
 ### Berserker Blood Debuff Cleanse
 

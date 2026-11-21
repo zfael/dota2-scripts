@@ -16,7 +16,7 @@ export const mockConfig: Settings = {
   },
   armlet: {
     enabled: true, cast_modifier: "Alt", toggle_threshold: 320,
-    predictive_offset: 30, toggle_cooldown_ms: 250,
+    predictive_offset: 30, toggle_cooldown_ms: 250, press_confirm_ms: 600,
     roshan: {
       enabled: false,
       toggle_key: "Insert",

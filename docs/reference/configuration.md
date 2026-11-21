@@ -111,8 +111,9 @@ same set:
 | `enabled` | `true` | `true` | Master switch for shared armlet automation. The runtime still only acts when the current hero is alive and actually has Armlet equipped. |
 | `cast_modifier` | `"Alt"` | `"Alt"` | Shared cast-side modifier paired with the quick-cast slot key. Supported values are `Alt`, `Ctrl` / `Control`, and `Shift`. Unknown values warn and fall back to `Alt`. |
 | `toggle_threshold` | `320` | `320` | Shared raw-HP base threshold before any hero-specific overrides are applied. |
-| `predictive_offset` | `30` | `30` | Shared extra HP buffer added to the base threshold. |
-| `toggle_cooldown_ms` | `250` | `250` | Shared cooldown between armlet toggle attempts. |
+| `predictive_offset` | `30` | `30` | Shared extra HP buffer added to the base threshold. The trick fires below `toggle_threshold + predictive_offset`. |
+| `toggle_cooldown_ms` | `250` | `250` | Shared minimum gap between two presses. The next press also waits for the last one to show in `max_health` and for the Strength to finish ramping in, which takes longer, so this is only a floor. |
+| `press_confirm_ms` | `600` | `600` | How long a press may take to show in `max_health` before it counts as not having landed. Capture 1 measured 73–287ms to the first move against a ~223ms tick. A trick whose press back on is missing is caught sooner, on the tick after the switch-off. Shared only, no per-hero override. Exposed on the Armlet page. |
 
 See `docs/features/survivability.md`.
 

@@ -28,9 +28,10 @@ export default function Armlet() {
       <div className="space-y-1">
         <h2 className="text-xl font-semibold">Armlet</h2>
         <p className="text-xs text-subtle">
-          Also drives Sabatons of Mordiggian, the same HP-draining toggle. The
-          trick assumes the toggle is on: an off-on press while it is off turns
-          it on and straight back off.
+          Also drives Sabatons of Mordiggian, the same HP-draining toggle. Which
+          way the toggle is gets read from max HP: the off-on trick only while it
+          is on, one press to turn it on while it is off, and nothing while the
+          Strength is still coming in.
         </p>
       </div>
 
@@ -51,6 +52,12 @@ export default function Armlet() {
             <NumberInput label="Toggle Threshold" value={config.toggle_threshold} onChange={(v) => update({ toggle_threshold: v })} suffix="HP" />
             <NumberInput label="Predictive Offset" value={config.predictive_offset} onChange={(v) => update({ predictive_offset: v })} suffix="HP" />
             <NumberInput label="Toggle Cooldown" value={config.toggle_cooldown_ms} onChange={(v) => update({ toggle_cooldown_ms: v })} suffix="ms" />
+            <NumberInput label="Press Confirm" value={config.press_confirm_ms} onChange={(v) => update({ press_confirm_ms: v })} suffix="ms" />
+            <p className="text-xs text-subtle">
+              Press Confirm is how long a press may take to show in max HP before
+              it counts as lost. Toggle Cooldown is only the minimum gap between
+              two presses: the next one waits for the last to finish anyway.
+            </p>
           </Card>
 
           <Card title="Roshan Mode">

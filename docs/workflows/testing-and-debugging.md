@@ -15,8 +15,8 @@ uncertainty is measured away.
 |---|---|
 | `cargo test` | Run the current test suite |
 | `cargo test test_huskar_armlet_detection` | Run one named test by filter |
-| `cargo test armlet --lib` | Run the shared armlet regression + replay-model tests |
-| `cargo test print_armlet_tuning_matrix_for_burst_scenarios --lib -- --ignored --nocapture` | Print the built-in armlet threshold/cooldown comparison matrix |
+| `cargo test armlet --lib` | Run the shared armlet controller and Roshan-mode unit tests |
+| `cargo run --release --example armlet_toggle_control` | Run the armlet controller's scenario suite against the simulator and the old loop, and replay the Sabatons capture through its tracker |
 | `cargo build --release` | Verify the optimized build still succeeds |
 | ``$env:RUST_LOG="debug"; cargo run --release`` | Maximum practical runtime visibility while debugging in PowerShell |
 | ``$env:RUST_LOG="info"; cargo run --release`` | Normal operator-level logs in PowerShell |
@@ -114,28 +114,30 @@ $env:RUST_LOG="dota2_scripts::actions::armlet=debug,dota2_scripts::input::simula
 
 ### Armlet-specific diagnostics
 
-For armlet tuning, the most useful pair is:
+For armlet work, the most useful pair is:
 
 1. `cargo test armlet --lib`
-2. `cargo test print_armlet_tuning_matrix_for_burst_scenarios --lib -- --ignored --nocapture`
+2. `cargo run --release --example armlet_toggle_control`
 
-The first command runs the deterministic replay tests that lock down:
+The first runs the controller's unit tests: reading the toggle from `max_health`
+moves, no press mid-ramp, the checks after each press, and Roshan mode. The second
+runs the same controller and the old loop through scripted scenarios and randomised
+fights in a simulator wired with the Sabatons probe's capture, under two drain rates
+and two press-loss rates, and replays that capture through the tracker. Run it with
+`--verbose` to watch every tick of the scripted scenarios.
 
-- threshold sensitivity
-- cooldown tradeoffs under repeated burst windows
-- critical-retry behavior
-
-The ignored matrix test prints a small built-in comparison table across several threshold / cooldown combinations so you can see how many toggle attempts, cooldown blocks, and critical retries each config would produce on the sample damage timelines.
-
-For live runtime confirmation, run:
+In a real game the default INFO log already has two lines per trick: the press, with
+why it fired, the HP the last tick lost and which way the toggle read, and its
+outcome, with the HP before, at the floor and after, or `cut short` when the hero died
+before it landed. For more, run:
 
 ```powershell
 $env:RUST_LOG="dota2_scripts::actions::armlet=debug,dota2_scripts::input::simulation=debug"; cargo run --release
 ```
 
-That filter shows:
+That filter adds:
 
-- resolved armlet trigger decisions and cooldown blocks from `src/actions/armlet.rs`
+- the player's own toggles as the tracker reads them, and Roshan mode's reasoning
 - the executed synthetic input sequence from `src/input/simulation.rs`
 
 So you can confirm whether a live toggle emitted `slot-key -> modifier down -> slot-key -> modifier up`, and roughly how many milliseconds each step took on the synthetic-input lane.

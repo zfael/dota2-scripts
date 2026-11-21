@@ -247,6 +247,20 @@ pub fn move_cursor_to(x: i32, y: i32) {
     enqueue_command_and_wait(move_cursor_command(x, y), SyntheticInputPriority::Normal);
 }
 
+/// One press of the Armlet slot, on the same fast lane as the chord: turns the
+/// toggle on when it is off.
+pub fn armlet_press(slot_key: &KeyBinding) {
+    let Some(target) = slot_key.pressable() else {
+        warn!(
+            "Skipping armlet press: '{}' is not a key this app can send.",
+            slot_key
+        );
+        return;
+    };
+
+    enqueue_command_and_wait(press_target_command(target), SyntheticInputPriority::Armlet);
+}
+
 pub fn armlet_chord(slot_key: &KeyBinding, modifier: ModifierKey) {
     let Some(target) = slot_key.pressable() else {
         warn!(

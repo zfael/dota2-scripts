@@ -46,6 +46,7 @@ export interface ArmletConfig {
   toggle_threshold: number;
   predictive_offset: number;
   toggle_cooldown_ms: number;
+  press_confirm_ms: number;
   roshan: ArmletRoshanConfig;
 }
 

@@ -54,8 +54,8 @@
 |---|---|---|
 | `src/actions/mod.rs` | Module re-exports | — |
 | `src/actions/dispatcher.rs` | Pre-dispatch hooks plus hero/common routing for every GSI event | `docs/architecture/state-and-dispatch.md`, `docs/reference/gsi-schema-and-usage.md` |
-| `src/actions/armlet.rs` | Shared Armlet / Sabatons of Mordiggian toggle planning, config resolution, cooldown/critical-state handling, and dual-trigger execution | `docs/features/survivability.md`, `docs/heroes/huskar.md`, `docs/reference/configuration.md` |
-| `src/actions/common.rs` | Shared survivability pipeline: healing, defensive items, neutral items, and armlet job enqueueing | `docs/features/survivability.md`, `docs/features/danger-detection.md`, `docs/reference/gsi-schema-and-usage.md` |
+| `src/actions/armlet.rs` | Armlet / Sabatons of Mordiggian: toggle state read from `max_health`, the trick-or-single-press decision and its check against the next ticks, Roshan mode, and the chord | `docs/features/survivability.md`, `docs/heroes/huskar.md`, `docs/reference/configuration.md` |
+| `src/actions/common.rs` | Shared survivability pipeline: healing, defensive items, neutral items | `docs/features/survivability.md`, `docs/features/danger-detection.md`, `docs/reference/gsi-schema-and-usage.md` |
 | `src/actions/danger_detector.rs` | HP-loss heuristic and global danger state | `docs/features/danger-detection.md` |
 | `src/actions/item_automation.rs` | Shared item automation metadata, cast modes, and short lockout state | `docs/features/survivability.md`, `docs/reference/configuration.md` |
 | `src/actions/auto_items.rs` | Cached GSI item state and Broodmother item/ability combo execution | `docs/features/survivability.md`, `docs/reference/gsi-schema-and-usage.md` |
@@ -103,7 +103,7 @@
 | File | Purpose | Linked Doc |
 |---|---|---|
 | `src/input/keyboard.rs` | Global `rdev::grab` hook and the interception decision tree | `docs/features/keyboard-interception.md`, `docs/workflows/troubleshooting.md` |
-| `src/input/simulation.rs` | Synthetic key and mouse emission helpers, including the one-job self-cast double tap | `docs/features/keyboard-interception.md` |
+| `src/input/simulation.rs` | Synthetic key and mouse emission helpers, including the one-job self-cast double tap and the Armlet fast lane (chord and single press) | `docs/features/keyboard-interception.md` |
 | `src/input/click_hold.rs` | Holds and replays the player's left/right clicks while a self-cast double tap is in flight | `docs/features/keyboard-interception.md` |
 | `src/input/mod.rs` | Module re-exports | — |
 
@@ -183,7 +183,7 @@
 |---|---|---|
 | `src/observability/minimap_capture.rs` | Minimap capture worker lifecycle and status publication | `docs/reference/configuration.md` |
 | `src/observability/minimap_capture_state.rs` | Minimap capture status snapshot types | `docs/architecture/state-and-dispatch.md` |
-| `src/observability/minimap_capture_backend.rs` | Win32 window binding and BitBlt screen capture | `docs/reference/configuration.md` |
+| `src/observability/minimap_capture_backend.rs` | Win32 window binding and BitBlt screen capture, plus whether Dota has the keyboard | `docs/reference/configuration.md` |
 | `src/observability/minimap_artifacts.rs` | Artifact metadata and persistence helpers | `docs/reference/configuration.md` |
 | `src/observability/minimap_zones.rs` | Map zone definitions and point-to-zone classification | `docs/superpowers/specs/2026-03-31-minimap-hero-detection-design.md` |
 | `src/observability/minimap_analysis.rs` | HSV color segmentation, BFS clustering, hero detection pipeline | `docs/superpowers/specs/2026-03-31-minimap-hero-detection-design.md` |
@@ -243,6 +243,7 @@ a gameplay patch. See `docs/workflows/probe-first.md`.
 | `examples/phantom_lancer_input_probe.rs` | Input probe: sends Ctrl-wrapped clicks and the middle-mouse illusion send into a live game, records the player's verdicts and Ctrl tap timing; re-measure tool after a patch | `docs/heroes/phantom_lancer.md` |
 | `examples/phantom_lancer_control.rs` | Simulator proving the Phantom Lancer Ctrl latch and illusion send never leave Ctrl under a key; `--without <rule>` shows each safeguard is load-bearing | `docs/heroes/phantom_lancer.md` |
 | `examples/sabatons_toggle_probe.rs` | GSI probe for Sabatons of Mordiggian and Armlet toggles: ramp, drain, the off-on trick's HP gain, lethality, and whether any field shows the toggle state | `docs/superpowers/plans/2026-11-18-patch-7-42-update.md` |
+| `examples/armlet_toggle_control.rs` | The Armlet / Sabatons controller proved offline: scripted scenarios and randomised fights against a simulator wired with the probe's capture, the old loop run beside it, and the capture replayed through the state tracker | `docs/features/survivability.md` |
 | `examples/neutral_cast_probe.rs` | GSI probe for neutral casts: cast edge and latency, silence dispels, Flicker's blink, double-tap self-casts, cast cost | `docs/features/survivability.md` |
 | `examples/minimap_analyze.rs` | Standalone CLI for running hero detection on PNG captures | `docs/superpowers/specs/2026-03-31-minimap-hero-detection-design.md` |
 

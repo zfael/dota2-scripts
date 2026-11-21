@@ -151,6 +151,12 @@ pub struct ArmletAutomationConfig {
     pub predictive_offset: u32,
     #[serde(default = "default_armlet_cooldown")]
     pub toggle_cooldown_ms: u64,
+    /// How long a press may take to show in `max_health` before it counts as
+    /// not having landed (ms). Capture 1 of `examples/sabatons_toggle_probe.rs`
+    /// measured 73–287ms to the first move against a ~223ms tick; this is the
+    /// worst of those plus a tick, rounded up.
+    #[serde(default = "default_armlet_press_confirm_ms")]
+    pub press_confirm_ms: u64,
     #[serde(default)]
     pub roshan: ArmletRoshanConfig,
 }
@@ -183,6 +189,7 @@ pub struct EffectiveArmletConfig {
     pub toggle_threshold: u32,
     pub predictive_offset: u32,
     pub toggle_cooldown_ms: u64,
+    pub press_confirm_ms: u64,
     pub roshan: ArmletRoshanConfig,
 }
 
@@ -1761,6 +1768,9 @@ fn default_armlet_offset() -> u32 {
 fn default_armlet_cooldown() -> u64 {
     250
 }
+fn default_armlet_press_confirm_ms() -> u64 {
+    600
+}
 fn default_armlet_roshan_enabled() -> bool {
     false
 }
@@ -2975,6 +2985,7 @@ impl Default for ArmletAutomationConfig {
             toggle_threshold: default_armlet_threshold(),
             predictive_offset: default_armlet_offset(),
             toggle_cooldown_ms: default_armlet_cooldown(),
+            press_confirm_ms: default_armlet_press_confirm_ms(),
             roshan: ArmletRoshanConfig::default(),
         }
     }
@@ -3679,6 +3690,7 @@ impl Settings {
             toggle_threshold: self.armlet.toggle_threshold,
             predictive_offset: self.armlet.predictive_offset,
             toggle_cooldown_ms: self.armlet.toggle_cooldown_ms,
+            press_confirm_ms: self.armlet.press_confirm_ms,
             roshan: self.armlet.roshan.clone(),
         };
 

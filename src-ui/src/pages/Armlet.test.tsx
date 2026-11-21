@@ -68,6 +68,17 @@ describe("Armlet page Roshan controls", () => {
     expect(screen.getByText("Armed")).toBeInTheDocument();
   });
 
+  it("shows the press confirm window beside the cooldown", () => {
+    render(
+      <MemoryRouter>
+        <Armlet />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Toggle Cooldown")).toBeInTheDocument();
+    expect(screen.getByText("Press Confirm")).toBeInTheDocument();
+  });
+
   it("persists Roshan key changes through the shared armlet config section", async () => {
     invokeMock.mockResolvedValue(undefined);
 

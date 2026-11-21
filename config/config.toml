@@ -155,6 +155,9 @@ cast_modifier = "Alt"
 toggle_threshold = 320
 predictive_offset = 30
 toggle_cooldown_ms = 250
+# A press that has not moved max_health by now did not land (ms): the trick's
+# press back on never showed, or Dota is not taking the keys.
+press_confirm_ms = 600
 
 [armlet.roshan]
 enabled = false
