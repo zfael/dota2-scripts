@@ -137,14 +137,23 @@ Current callback order on key/button input:
     - if `snapshot.snapfire_enabled` and `snapshot.snapfire.enabled`
     - block the configured trigger key (default `Space`)
     - enqueue the `ALT down -> right-click (face cursor) -> wait -> self-cast W -> ALT up` sequence onto the dedicated Snapfire worker
-10. **Magnus directional ultimate intercept**
+10. **Magnus intercepts** (`plan_magnus_key_action`)
     - if `snapshot.magnus_enabled` and `snapshot.magnus.enabled`
+    - with `skewer_only_after_blink` on, every press first goes to
+      `MagnusState::note_key_press`, which stamps the time when it is the Blink
+      slot's key (never blocked)
+    - save key (default `PageDown`), only while `skewer_to_anchor_enabled` is
+      on: emit `HotkeyEvent::CaptureMagnusAnchor` and block it
     - block the configured ultimate key (default `R`) **only** when
       `MagnusState::can_intercept_ultimate()` passes, or when
       `require_ability_ready = false`
     - enqueue the `ALT down -> right-click (face cursor) -> ALT up -> wait -> press R`
       sequence onto the dedicated Magnus worker
-    - on a failed readiness check the branch falls through and `R` reaches Dota
+    - Skewer key (default `E`), only with `skewer_to_anchor_enabled`, a saved
+      point, `MagnusState::can_intercept_skewer()` (unless
+      `require_ability_ready = false`), and — with `skewer_only_after_blink` —
+      `MagnusState::skewer_follows_blink()`: block it and enqueue Skewer-to-point
+    - on a failed check the branch falls through and the key reaches Dota
 11. **Slark directional Pounce intercept**
     - if `snapshot.slark_enabled` and `snapshot.slark.enabled`
     - block the configured Pounce key (default `W`) **only** when
@@ -546,7 +555,7 @@ These are still part of the interception surface even though this page centers o
 - when `center_camera_on_ultimate = true` it then double-taps the configured hero-select key to recentre the camera. This runs **after** the cast, via `simulate_key` rather than the enigo helpers so named keys like `F1` work
 - ALT is held only across the right-click — Reverse Polarity takes no target, so the cast does not need the modifier (this is the one difference from the Snapfire sequence)
 - unlike Snapfire, the intercept is **gated on GSI**: `MagnusState::can_intercept_ultimate()` reads `MAGNUS_LAST_EVENT` and requires `magnataur_reverse_polarity` to have `level > 0 && can_cast`. A failed check leaves the key unblocked
-- Skewer is never intercepted
+- Skewer is intercepted only for the opt-in **saved point** option (needs Quick Cast on Skewer): the worker runs one `SyntheticAction::AtPoint` job — hold clicks, move the cursor to the saved point, press E, move it back, replay clicks. Gated on `magnataur_skewer` the same way, and optionally on a Blink having just been used (`skewer_only_after_blink`: Blink on cooldown in GSI, or its slot key pressed within `blink_press_window_ms`). See `docs/heroes/magnus.md`
 
 ### Slark
 
@@ -617,7 +626,7 @@ These are still part of the interception surface even though this page centers o
 | Soul Ring | `config/config.toml` -> `[soul_ring]` | `enabled`, `min_mana_percent`, `min_health_percent`, `delay_before_ability_ms`, `trigger_cooldown_ms`, `ability_keys`, `intercept_item_keys` |
 | Armlet Roshan | `config/config.toml` -> `[armlet.roshan]` | `enabled`, `toggle_key` |
 | Shadow Fiend | `config/config.toml` -> `[heroes.shadow_fiend]` | `raze_intercept_enabled`, `raze_delay_ms`, `auto_bkb_on_ultimate`, `auto_d_on_ultimate` |
-| Magnus | `config/config.toml` -> `[heroes.magnus]` | `enabled`, `ultimate_key`, `turn_delay_ms`, `require_ability_ready`, `center_camera_on_ultimate`, `camera_center_key`, `camera_center_delay_ms` |
+| Magnus | `config/config.toml` -> `[heroes.magnus]` | `enabled`, `ultimate_key`, `turn_delay_ms`, `require_ability_ready`, `center_camera_on_ultimate`, `camera_center_key`, `camera_center_delay_ms`, `skewer_to_anchor_enabled`, `skewer_key`, `skewer_only_after_blink`, `blink_press_window_ms`, `capture_anchor_key` (blocked from Dota while `skewer_to_anchor_enabled` is on), `anchor_settle_ms`, plus the saved `anchor_*` point |
 | Slark | `config/config.toml` -> `[heroes.slark]` | `enabled`, `pounce_key`, `turn_delay_ms`, `require_ability_ready` |
 | Mirana | `config/config.toml` -> `[heroes.mirana]` | `enabled`, `leap_key`, `turn_delay_ms`, `require_ability_ready` |
 | Earth Spirit | `config/config.toml` -> `[heroes.earth_spirit]` | `enabled`, `remnant_key`, `silence_combo_enabled`, `grip_key`, `silence_remnant_delay_ms`, `require_grip_ready`, `roll_combo_enabled`, `roll_key`, `roll_double_tap`, `roll_to_remnant_delay_ms`, `roll_remnant_alt`, `roll_remnant_double_tap`, `require_roll_ready` (double-tap gap: `[common].self_cast_tap_gap_ms`) |

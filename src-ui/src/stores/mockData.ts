@@ -183,6 +183,11 @@ export const mockConfig: Settings = {
       turn_delay_ms: 60, require_ability_ready: true,
       center_camera_on_ultimate: true, camera_center_key: "1",
       camera_center_delay_ms: 60,
+      skewer_to_anchor_enabled: false, skewer_key: "e",
+      skewer_only_after_blink: false, blink_press_window_ms: 1000,
+      capture_anchor_key: "PageDown",
+      anchor_settle_ms: 30, anchor_set: false,
+      anchor_x_fraction: 0, anchor_y_fraction: 0,
     },
     morphling: {
       enabled: true, strength_key: "f", agility_key: "d",

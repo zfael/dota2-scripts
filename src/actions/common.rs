@@ -104,8 +104,9 @@ fn execute_key_sequence(sequence: Vec<PlannedKeyPress>) {
     }
 }
 
-/// Find the keybinding for a specific item in the hero's inventory
-fn item_name_matches_lookup(item_name: &str, lookup_name: &str) -> bool {
+/// Whether GSI's `item_name` is the item `lookup_name` asks for.
+/// `"item_blink"` also matches the three upgraded Blinks.
+pub(crate) fn item_name_matches_lookup(item_name: &str, lookup_name: &str) -> bool {
     if item_name.contains(lookup_name) {
         return true;
     }

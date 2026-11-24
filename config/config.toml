@@ -436,6 +436,39 @@ center_camera_on_ultimate = true
 camera_center_key = "1"
 # Delay between the ultimate cast and the first camera tap (ms).
 camera_center_delay_ms = 60
+#
+# --- Saved point (anchor) ---
+# Hover a spot -- usually on the minimap, e.g. your base -- and press
+# capture_anchor_key to save it. Press it again anywhere to move the point.
+#
+# Skewer to the saved point: the Skewer key moves the cursor to the point,
+# presses Skewer there, and puts the cursor back. A point past Skewer's range
+# gives a full-length Skewer in that direction.
+# REQUIRES Quick Cast on the Skewer key in Dota: with normal cast the press only
+# arms targeting at the point and the cursor is gone before you can click.
+skewer_to_anchor_enabled = false
+# Skewer ability key. Intercepted only while skewer_to_anchor_enabled is on,
+# a point is saved, and (with require_ability_ready) Skewer is castable.
+skewer_key = "e"
+# Only Skewer to the point right after a Blink (Blink in, Skewer out): Magnus
+# carries a Blink and it is on cooldown, or its slot key was pressed within
+# blink_press_window_ms. Otherwise Skewer casts normally at the cursor.
+skewer_only_after_blink = false
+# How long a Blink key press counts as "just blinked", covering the moment
+# before GSI reports Blink's cooldown (ms).
+blink_press_window_ms = 1000
+# Hotkey that saves the cursor position as the point. Character or named key
+# ("PageDown", "F8"). Blocked from reaching Dota while skewer_to_anchor_enabled
+# is on.
+capture_anchor_key = "PageDown"
+# How long the cursor rests on the point before the press and again before it
+# returns, so Dota reads the press with the cursor on the point (ms).
+anchor_settle_ms = 30
+# The saved point, as fractions of Dota's client area. Set by the capture key;
+# do not edit by hand. Nothing is aimed at the point until anchor_set is true.
+anchor_set = false
+anchor_x_fraction = 0.0
+anchor_y_fraction = 0.0
 
 [heroes.mirana]
 # Press E to face the cursor and then cast Leap, so the leap goes where you are

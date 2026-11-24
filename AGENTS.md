@@ -131,7 +131,7 @@ broken test build there once went unnoticed.
 | `actions/heroes/earth_spirit.rs` | Earth Spirit remnant combos: grip key remapped to Stone Remnant then Geomagnetic Grip (the silence), roll key to Rolling Boulder then Stone Remnant, dropped into the path during the windup |
 | `actions/heroes/ember_spirit.rs` | Ember Spirit remnant chase worker (Fire Remnant then Activate Fire Remnant) and Flame Guard auto-cast on danger |
 | `actions/heroes/largo.rs` | Largo song schedule and beat worker; the keyboard hook swallows song presses while the ultimate is up and lands them on the beat |
-| `actions/heroes/magnus.rs` | Magnus directional Reverse Polarity worker and GSI readiness gate |
+| `actions/heroes/magnus.rs` | Magnus directional Reverse Polarity worker, GSI readiness gates, and the saved point (anchor) Skewer aims at, optionally only right after a Blink |
 | `actions/heroes/mirana.rs` | Mirana directional Leap worker and GSI readiness gate |
 | `actions/heroes/phantom_lancer.rs` | Phantom Lancer Ctrl latch (a Ctrl tap wraps every right-click in an injected Ctrl for unified orders; physical keys wait behind it so nothing levels up) and middle-mouse illusion send; `is_latched` feeds the on-screen indicator |
 | `actions/heroes/morphling.rs` | Morphling Attribute Shift controller: strength on danger, gated shift back, all read from `max_health` |

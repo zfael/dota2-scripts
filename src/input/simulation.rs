@@ -79,6 +79,16 @@ enum SyntheticAction {
     /// Park the cursor somewhere and leave it there. Used by the HUD anchor
     /// Test button, which must never click.
     MoveCursor { x: i32, y: i32 },
+    /// Move the cursor to a point, press `key` there (a quick-cast ability
+    /// resolves at the cursor on the press), and put the cursor back where the
+    /// player had it. One job, with the player's clicks held for its duration,
+    /// so nothing can land while the cursor is away.
+    AtPoint {
+        x: i32,
+        y: i32,
+        settle_ms: u64,
+        key: PressableKey,
+    },
 }
 
 /// Settle time between entering targeting mode and the click that resolves it.
@@ -247,6 +257,18 @@ pub fn move_cursor_to(x: i32, y: i32) {
     enqueue_command_and_wait(move_cursor_command(x, y), SyntheticInputPriority::Normal);
 }
 
+/// Press a key with the cursor on `(x, y)`, then put the cursor back.
+///
+/// For quick-cast abilities aimed at a fixed screen point: the cursor rests
+/// `settle_ms` on the point before the press and again after it, so Dota reads
+/// the press on a frame where the cursor is there.
+pub fn press_key_at_point(key_char: char, x: i32, y: i32, settle_ms: u64) {
+    enqueue_command_and_wait(
+        at_point_command(x, y, settle_ms, normalize_key_char(key_char)),
+        SyntheticInputPriority::Normal,
+    );
+}
+
 /// One press of the Armlet slot, on the same fast lane as the chord: turns the
 /// toggle on when it is off.
 pub fn armlet_press(slot_key: &KeyBinding) {
@@ -363,6 +385,20 @@ fn cast_at_cursor_command(key: char) -> SyntheticInputCommand {
 fn move_cursor_command(x: i32, y: i32) -> SyntheticInputCommand {
     SyntheticInputCommand {
         action: SyntheticAction::MoveCursor { x, y },
+        guard_behavior: GuardBehavior::Pulse {
+            delay_ms: POST_ACTION_GUARD_DELAY_MS,
+        },
+    }
+}
+
+fn at_point_command(x: i32, y: i32, settle_ms: u64, key: PressableKey) -> SyntheticInputCommand {
+    SyntheticInputCommand {
+        action: SyntheticAction::AtPoint {
+            x,
+            y,
+            settle_ms,
+            key,
+        },
         guard_behavior: GuardBehavior::Pulse {
             delay_ms: POST_ACTION_GUARD_DELAY_MS,
         },
@@ -687,6 +723,37 @@ fn perform_action(enigo: &mut Enigo, action: SyntheticAction) {
                 warn!("Failed to move cursor to ({x}, {y}): {e}");
             }
         }
+        SyntheticAction::AtPoint {
+            x,
+            y,
+            settle_ms,
+            key,
+        } => {
+            let _held = crate::input::click_hold::hold_clicks();
+
+            // Without knowing where the player's cursor is, it could not be put
+            // back, so nothing is pressed: a skipped cast beats a stolen cursor.
+            let home = match enigo.location() {
+                Ok(home) => home,
+                Err(e) => {
+                    warn!("Skipping {key:?} at ({x}, {y}): cursor position unavailable: {e}");
+                    return;
+                }
+            };
+            if let Err(e) = enigo.move_mouse(x, y, Coordinate::Abs) {
+                warn!("Skipping {key:?}: could not move the cursor to ({x}, {y}): {e}");
+                return;
+            }
+
+            thread::sleep(Duration::from_millis(settle_ms));
+            perform_single_action(enigo, SyntheticAction::KeyClick(key));
+            thread::sleep(Duration::from_millis(settle_ms));
+
+            if let Err(e) = enigo.move_mouse(home.0, home.1, Coordinate::Abs) {
+                warn!("Could not put the cursor back at {home:?}: {e}");
+            }
+            debug!("{key:?} at ({x}, {y}), cursor returned to {home:?}");
+        }
         SyntheticAction::ArmletChord { slot_key, modifier } => {
             let started = Instant::now();
             let steps = armlet_chord_steps(slot_key, modifier);
@@ -747,7 +814,8 @@ fn perform_single_action(enigo: &mut Enigo, action: SyntheticAction) {
         }
         SyntheticAction::CastAtCursor { .. }
         | SyntheticAction::SelfCastTaps { .. }
-        | SyntheticAction::MoveCursor { .. } => {
+        | SyntheticAction::MoveCursor { .. }
+        | SyntheticAction::AtPoint { .. } => {
             // Composites and cursor moves are handled in perform_action.
             warn!("Composite actions should be expanded before single-action execution");
         }

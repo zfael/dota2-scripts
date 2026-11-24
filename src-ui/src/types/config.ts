@@ -254,6 +254,16 @@ export interface MagnusConfig {
   center_camera_on_ultimate: boolean;
   camera_center_key: string;
   camera_center_delay_ms: number;
+  skewer_to_anchor_enabled: boolean;
+  skewer_key: string;
+  skewer_only_after_blink: boolean;
+  blink_press_window_ms: number;
+  capture_anchor_key: string;
+  anchor_settle_ms: number;
+  /** Set by the capture hotkey; read-only in the UI. */
+  anchor_set: boolean;
+  anchor_x_fraction: number;
+  anchor_y_fraction: number;
 }
 
 export interface EmberSpiritConfig {

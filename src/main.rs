@@ -133,6 +133,7 @@ async fn main() {
     let app_state_clone2 = app_state.clone();
     let dispatcher_clone2 = dispatcher.clone();
     let hotkey_settings = settings.clone();
+    let hotkey_keyboard_snapshot = initial_snapshot.clone();
     std::thread::spawn(move || {
         while let Ok(event) = hotkey_rx.recv() {
             match event {
@@ -256,6 +257,12 @@ async fn main() {
                         ),
                         Err(e) => warn!("HUD portrait capture failed: {}", e.user_message()),
                     }
+                }
+                input::keyboard::HotkeyEvent::CaptureMagnusAnchor => {
+                    crate::actions::heroes::magnus::capture_anchor_from_hotkey(
+                        &hotkey_settings,
+                        &hotkey_keyboard_snapshot,
+                    );
                 }
                 input::keyboard::HotkeyEvent::InvokerCycleComboProfile => {
                     let enabled_combo_profile_ids = hotkey_settings

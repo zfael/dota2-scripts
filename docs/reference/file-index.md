@@ -75,7 +75,7 @@
 | `src/actions/heroes/invoker.rs` | Invoker combo profiles, invoke planning, panic Ghost Walk, and prep sequences | `docs/heroes/invoker.md` |
 | `src/actions/heroes/largo.rs` | Largo ultimate state, beat timing, song schedule the keyboard hook writes into | `docs/heroes/largo.md` |
 | `src/actions/heroes/legion_commander.rs` | Legion Commander combo automation | `docs/heroes/legion_commander.md` |
-| `src/actions/heroes/magnus.rs` | Magnus directional Reverse Polarity automation (ultimate-key intercept + GSI readiness gate) | `docs/heroes/magnus.md`, `docs/features/keyboard-interception.md` |
+| `src/actions/heroes/magnus.rs` | Magnus directional Reverse Polarity automation (ultimate-key intercept + GSI readiness gates) and the saved point Skewer can aim at, optionally only right after a Blink | `docs/heroes/magnus.md`, `docs/features/keyboard-interception.md` |
 | `src/actions/heroes/meepo_macro.rs` | Meepo farm-assist macro state, gating, and pulse decisions | `docs/heroes/meepo.md` |
 | `src/actions/heroes/meepo.rs` | Meepo standalone combo, GSI-driven Dig / MegaMeepo, and survivability wiring | `docs/heroes/meepo.md` |
 | `src/actions/heroes/meepo_state.rs` | Read-only Meepo observed-state derivation and cache | `docs/heroes/meepo.md`, `docs/reference/gsi-schema-and-usage.md` |
@@ -142,7 +142,7 @@
 | `src-ui/src/pages/WaveOverlay.tsx` | Chrome-free overlay view rendered in the click-through overlay window | `docs/features/wave-tracker.md` |
 | `src-ui/src/pages/LatchIndicator.tsx` | Phantom Lancer latch indicator view: a green LATCH ON or red LATCH OFF box, fed by the `pl_latch_update` event | `docs/heroes/phantom_lancer.md` |
 | `src-ui/src/lib/overlay.ts` | Overlay-window detection (`?overlay=1` wave map, `?overlay=latch` latch indicator) and pre-paint body style stripping | `docs/features/wave-tracker.md`, `docs/heroes/phantom_lancer.md` |
-| `src-ui/src/components/heroes/configs/MagnusConfig.tsx` | Magnus directional-ultimate config panel: intercept toggle, ultimate key, turn delay, readiness gate, camera recentre | `docs/heroes/magnus.md` |
+| `src-ui/src/components/heroes/configs/MagnusConfig.tsx` | Magnus config panel: directional ultimate (intercept toggle, key, turn delay, readiness gate, camera recentre) and the Saved Point card (save key, Skewer to saved point, only after Blink) | `docs/heroes/magnus.md` |
 | `src-ui/src/components/heroes/configs/MiranaConfig.tsx` | Mirana directional-leap config panel: intercept toggle, Leap key, turn delay, readiness gate | `docs/heroes/mirana.md` |
 | `src-ui/src/components/heroes/configs/EarthSpiritConfig.tsx` | Earth Spirit config panel: both remnant combos' keys and delays, the roll double-tap toggle, and the two readiness gates | `docs/heroes/earth_spirit.md` |
 | `src-ui/src/components/heroes/configs/PhantomLancerConfig.tsx` | Phantom Lancer config panel: Ctrl latch toggle, tap threshold, Ctrl gap, cue toggle and volume, the illusion send's toggle, trigger, two select keys and step delay, plus the latch indicator's toggle, X/Y offsets and preview | `docs/heroes/phantom_lancer.md` |

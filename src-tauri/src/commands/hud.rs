@@ -6,9 +6,10 @@
 use crate::commands::config::CONFIG_UPDATED_EVENT;
 use crate::TauriAppState;
 use dota2_scripts::config::Settings;
+use dota2_scripts::input::keyboard::KeyboardSnapshot;
 use dota2_scripts::observability::hud_anchors::{apply_portrait_capture, resolve_portrait_point};
 use serde::Serialize;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use tauri::{AppHandle, Emitter};
 use tracing::{info, warn};
 
@@ -71,6 +72,20 @@ pub fn capture_from_hotkey(settings: &Arc<Mutex<Settings>>) {
             portrait.x_fraction, portrait.y_fraction
         ),
         Err(message) => warn!("HUD portrait capture failed: {}", message),
+    }
+}
+
+/// Save Magnus's anchor from the hotkey and push the new config to the UI, so
+/// the Magnus panel shows the point as saved without a restart.
+pub fn capture_magnus_anchor_from_hotkey(
+    settings: &Arc<Mutex<Settings>>,
+    keyboard_snapshot: &Arc<RwLock<KeyboardSnapshot>>,
+) {
+    if dota2_scripts::actions::heroes::magnus::capture_anchor_from_hotkey(settings, keyboard_snapshot)
+        .is_some()
+    {
+        let snapshot = settings.lock().unwrap().clone();
+        broadcast(&snapshot);
     }
 }
 

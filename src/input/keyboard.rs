@@ -39,6 +39,8 @@ pub enum HotkeyEvent {
     WaveOverlayToggle,
     /// Record the cursor's current position as the HUD hero portrait.
     CaptureHudPortrait,
+    /// Record the cursor's current position as Magnus's saved point.
+    CaptureMagnusAnchor,
     InvokerCycleComboProfile,
     InvokerProfile(String),
 }
@@ -536,34 +538,54 @@ pub fn start_keyboard_listener(config: KeyboardListenerConfig) -> Receiver<Hotke
                     }
                 }
 
-                // Handle Magnus directional Reverse Polarity.
+                // Handle Magnus: the anchor capture key, directional Reverse
+                // Polarity, and Skewer to the saved point.
                 // Reverse Polarity drags enemies to the arc in front of Magnus,
                 // so face the cursor first and the pull lands where the Skewer
                 // that follows is aimed.
-                if snapshot.magnus_enabled && snapshot.magnus.enabled {
-                    if let Some(ultimate_key) = snapshot.magnus.ultimate_key {
-                        if key == ultimate_key {
-                            // Falling through leaves the key unblocked, so a
-                            // cooldown press never issues the facing right-click
-                            // and never walks Magnus toward the cursor.
-                            if !snapshot.magnus.require_ability_ready
-                                || MagnusState::can_intercept_ultimate()
-                            {
-                                info!("🦏 Magnus ultimate pressed - directional Reverse Polarity");
-                                MagnusState::execute_directional_ultimate(
-                                    snapshot.magnus.ultimate_char,
-                                    snapshot.magnus.turn_delay_ms,
-                                    crate::actions::heroes::magnus::plan_camera_center(
-                                        snapshot.magnus.center_camera_on_ultimate,
-                                        snapshot.magnus.camera_center_key,
-                                        snapshot.magnus.camera_center_delay_ms,
-                                    ),
-                                );
-                                // Block original key (combo re-presses it).
-                                return None;
-                            }
+                // A key that plans nothing falls through unblocked, so a
+                // cooldown press never moves the cursor or issues the facing
+                // right-click.
+                if snapshot.magnus_enabled && snapshot.magnus.blink_gate_in_use() {
+                    // Seen before GSI reports Blink's cooldown; never blocked.
+                    MagnusState::note_key_press(key, &snapshot.magnus.slot_keys);
+                }
+                if let Some(action) = plan_magnus_key_action(
+                    key,
+                    snapshot.magnus_enabled,
+                    &snapshot.magnus,
+                    MagnusState::can_intercept_ultimate,
+                    MagnusState::can_intercept_skewer,
+                    || MagnusState::skewer_follows_blink(snapshot.magnus.blink_press_window_ms),
+                ) {
+                    match action {
+                        MagnusKeyAction::CaptureAnchor => {
+                            info!("🦏 Magnus anchor key pressed - saving the cursor position");
+                            let _ = event_tx.send(HotkeyEvent::CaptureMagnusAnchor);
+                        }
+                        MagnusKeyAction::Ultimate => {
+                            info!("🦏 Magnus ultimate pressed - directional Reverse Polarity");
+                            MagnusState::execute_directional_ultimate(
+                                snapshot.magnus.ultimate_char,
+                                snapshot.magnus.turn_delay_ms,
+                                crate::actions::heroes::magnus::plan_camera_center(
+                                    snapshot.magnus.center_camera_on_ultimate,
+                                    snapshot.magnus.camera_center_key,
+                                    snapshot.magnus.camera_center_delay_ms,
+                                ),
+                            );
+                        }
+                        MagnusKeyAction::SkewerToAnchor(aim) => {
+                            info!("🦏 Magnus Skewer pressed - Skewer to the saved point");
+                            MagnusState::execute_skewer_to_anchor(
+                                snapshot.magnus.skewer_char,
+                                aim,
+                            );
                         }
                     }
+                    // Block original key (the worker re-presses it, or it was
+                    // the capture key, which is ours).
+                    return None;
                 }
 
                 // Handle Slark directional Pounce.
@@ -1021,6 +1043,90 @@ pub struct MagnusKeyboardSnapshot {
     /// Pre-parsed hero-select key double-tapped to recentre the camera.
     pub camera_center_key: Option<Key>,
     pub camera_center_delay_ms: u64,
+    pub skewer_to_anchor_enabled: bool,
+    /// Pre-parsed Skewer key, used to match the intercepted press.
+    pub skewer_key: Option<Key>,
+    /// The same key as a char, pressed on the saved point.
+    pub skewer_char: char,
+    /// Only Skewer to the point right after a Blink.
+    pub skewer_only_after_blink: bool,
+    pub blink_press_window_ms: u64,
+    /// Inventory slot bindings `[slot0..slot5]`, to spot a Blink key press.
+    pub slot_keys: [KeyBinding; 6],
+    /// Pre-parsed hotkey that saves the cursor as the anchor.
+    pub capture_anchor_key: Option<Key>,
+    pub anchor_settle_ms: u64,
+    /// The saved point as a fraction of Dota's client area, `None` until one
+    /// is captured. Patched in place by the capture hotkey.
+    pub anchor: Option<(f32, f32)>,
+}
+
+impl MagnusKeyboardSnapshot {
+    /// Whether Blink key presses need recording for the "only after Blink"
+    /// gate.
+    pub fn blink_gate_in_use(&self) -> bool {
+        self.enabled && self.skewer_to_anchor_enabled && self.skewer_only_after_blink
+    }
+}
+
+/// What a key press means for Magnus. Every variant blocks the original key.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MagnusKeyAction {
+    /// Save the cursor position as the anchor.
+    CaptureAnchor,
+    /// Directional Reverse Polarity, facing the cursor.
+    Ultimate,
+    /// Skewer at the saved point.
+    SkewerToAnchor(crate::actions::heroes::magnus::AnchorAim),
+}
+
+/// Decide what a press means for Magnus, or `None` to let it through.
+///
+/// The checks are passed in so they run only for the key they guard — each
+/// reads shared state under a lock and logs a skip.
+pub fn plan_magnus_key_action(
+    key: Key,
+    magnus_active: bool,
+    magnus: &MagnusKeyboardSnapshot,
+    ultimate_ready: impl FnOnce() -> bool,
+    skewer_ready: impl FnOnce() -> bool,
+    skewer_follows_blink: impl FnOnce() -> bool,
+) -> Option<MagnusKeyAction> {
+    use crate::actions::heroes::magnus::plan_anchor_aim;
+
+    if !magnus_active || !magnus.enabled {
+        return None;
+    }
+
+    if magnus.skewer_to_anchor_enabled && magnus.capture_anchor_key == Some(key) {
+        return Some(MagnusKeyAction::CaptureAnchor);
+    }
+
+    if magnus.ultimate_key == Some(key) {
+        if magnus.require_ability_ready && !ultimate_ready() {
+            return None;
+        }
+        return Some(MagnusKeyAction::Ultimate);
+    }
+
+    if magnus.skewer_key == Some(key) {
+        // No saved point yet: Skewer stays a normal cast at the cursor.
+        let aim = plan_anchor_aim(
+            magnus.skewer_to_anchor_enabled,
+            magnus.anchor,
+            magnus.anchor_settle_ms,
+        )?;
+        if magnus.require_ability_ready && !skewer_ready() {
+            return None;
+        }
+        // Not right after a Blink: a normal cast at the cursor.
+        if magnus.skewer_only_after_blink && !skewer_follows_blink() {
+            return None;
+        }
+        return Some(MagnusKeyAction::SkewerToAnchor(aim));
+    }
+
+    None
 }
 
 #[derive(Debug, Clone)]
@@ -1316,6 +1422,15 @@ impl KeyboardSnapshot {
                 center_camera_on_ultimate: mg.center_camera_on_ultimate,
                 camera_center_key: parse_key_string(&mg.camera_center_key),
                 camera_center_delay_ms: mg.camera_center_delay_ms,
+                skewer_to_anchor_enabled: mg.skewer_to_anchor_enabled,
+                skewer_key: char_to_key(mg.skewer_key),
+                skewer_char: mg.skewer_key,
+                skewer_only_after_blink: mg.skewer_only_after_blink,
+                blink_press_window_ms: mg.blink_press_window_ms,
+                slot_keys: settings.keybindings.item_slots().map(Clone::clone),
+                capture_anchor_key: parse_key_string(&mg.capture_anchor_key),
+                anchor_settle_ms: mg.anchor_settle_ms,
+                anchor: mg.anchor_fraction(),
             },
             slark_enabled: state.selected_hero == Some(crate::state::HeroType::Slark),
             slark: SlarkKeyboardSnapshot {
@@ -1441,6 +1556,15 @@ impl Default for KeyboardSnapshot {
                 center_camera_on_ultimate: false,
                 camera_center_key: None,
                 camera_center_delay_ms: 0,
+                skewer_to_anchor_enabled: false,
+                skewer_key: None,
+                skewer_char: 'e',
+                skewer_only_after_blink: false,
+                blink_press_window_ms: 0,
+                slot_keys: ['a', 's', 'd', 'f', 'g', 'h'].map(KeyBinding::Char),
+                capture_anchor_key: None,
+                anchor_settle_ms: 0,
+                anchor: None,
             },
             slark_enabled: false,
             slark: SlarkKeyboardSnapshot {
@@ -1842,6 +1966,15 @@ mod tests {
                 center_camera_on_ultimate: false,
                 camera_center_key: None,
                 camera_center_delay_ms: 0,
+                skewer_to_anchor_enabled: false,
+                skewer_key: None,
+                skewer_char: 'e',
+                skewer_only_after_blink: false,
+                blink_press_window_ms: 0,
+                slot_keys: ['a', 's', 'd', 'f', 'g', 'h'].map(KeyBinding::Char),
+                capture_anchor_key: None,
+                anchor_settle_ms: 0,
+                anchor: None,
             },
             slark_enabled: false,
             slark: SlarkKeyboardSnapshot {
@@ -2015,6 +2148,217 @@ mod tests {
 
         let other = KeyboardSnapshot::from_runtime(&Settings::default(), &AppState::default());
         assert!(!other.magnus_enabled);
+    }
+
+    fn magnus_anchor_snapshot() -> MagnusKeyboardSnapshot {
+        let mut settings = Settings::default();
+        settings.heroes.magnus.skewer_to_anchor_enabled = true;
+        settings.heroes.magnus.anchor_set = true;
+        settings.heroes.magnus.anchor_x_fraction = 0.05;
+        settings.heroes.magnus.anchor_y_fraction = 0.95;
+        let mut state = AppState::default();
+        state.selected_hero = Some(HeroType::Magnus);
+        KeyboardSnapshot::from_runtime(&settings, &state).magnus
+    }
+
+    fn never_called() -> bool {
+        panic!("a check ran for a key it does not guard")
+    }
+
+    #[test]
+    fn keyboard_snapshot_carries_the_magnus_anchor_fields() {
+        let magnus = magnus_anchor_snapshot();
+        assert_eq!(magnus.skewer_key, Some(Key::KeyE));
+        assert_eq!(magnus.skewer_char, 'e');
+        assert_eq!(magnus.capture_anchor_key, Some(Key::PageDown));
+        assert_eq!(magnus.anchor_settle_ms, 30);
+        assert_eq!(magnus.anchor, Some((0.05, 0.95)));
+        assert!(!magnus.skewer_only_after_blink);
+        assert_eq!(magnus.blink_press_window_ms, 1000);
+        assert_eq!(
+            magnus.slot_keys,
+            Settings::default().keybindings.item_slots().map(Clone::clone)
+        );
+    }
+
+    fn saved_point_aim() -> Option<MagnusKeyAction> {
+        Some(MagnusKeyAction::SkewerToAnchor(
+            crate::actions::heroes::magnus::AnchorAim {
+                fraction: (0.05, 0.95),
+                settle_ms: 30,
+            },
+        ))
+    }
+
+    #[test]
+    fn magnus_skewer_goes_to_the_saved_point_when_ready() {
+        let magnus = magnus_anchor_snapshot();
+        let action =
+            plan_magnus_key_action(Key::KeyE, true, &magnus, never_called, || true, never_called);
+
+        assert_eq!(action, saved_point_aim());
+    }
+
+    #[test]
+    fn magnus_skewer_on_cooldown_reaches_dota_unchanged() {
+        let magnus = magnus_anchor_snapshot();
+        assert_eq!(
+            plan_magnus_key_action(Key::KeyE, true, &magnus, never_called, || false, never_called),
+            None
+        );
+    }
+
+    #[test]
+    fn magnus_skewer_is_untouched_until_a_point_is_saved() {
+        let mut magnus = magnus_anchor_snapshot();
+        magnus.anchor = None;
+        assert_eq!(
+            plan_magnus_key_action(
+                Key::KeyE,
+                true,
+                &magnus,
+                never_called,
+                never_called,
+                never_called
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn magnus_skewer_is_untouched_with_the_option_off() {
+        let mut magnus = magnus_anchor_snapshot();
+        magnus.skewer_to_anchor_enabled = false;
+        magnus.skewer_only_after_blink = true;
+        assert_eq!(
+            plan_magnus_key_action(
+                Key::KeyE,
+                true,
+                &magnus,
+                never_called,
+                never_called,
+                never_called
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn magnus_skewer_after_a_blink_goes_to_the_saved_point() {
+        let mut magnus = magnus_anchor_snapshot();
+        magnus.skewer_only_after_blink = true;
+        assert_eq!(
+            plan_magnus_key_action(Key::KeyE, true, &magnus, never_called, || true, || true),
+            saved_point_aim()
+        );
+    }
+
+    #[test]
+    fn magnus_skewer_without_a_blink_stays_at_the_cursor() {
+        let mut magnus = magnus_anchor_snapshot();
+        magnus.skewer_only_after_blink = true;
+        assert_eq!(
+            plan_magnus_key_action(Key::KeyE, true, &magnus, never_called, || true, || false),
+            None
+        );
+    }
+
+    #[test]
+    fn magnus_blink_gate_is_only_consulted_with_its_option_on() {
+        let magnus = magnus_anchor_snapshot();
+        assert!(!magnus.skewer_only_after_blink);
+        // never_called panics if the gate is checked.
+        assert_eq!(
+            plan_magnus_key_action(Key::KeyE, true, &magnus, never_called, || true, never_called),
+            saved_point_aim()
+        );
+    }
+
+    #[test]
+    fn magnus_blink_presses_are_recorded_only_while_the_gate_is_in_use() {
+        let mut magnus = magnus_anchor_snapshot();
+        assert!(!magnus.blink_gate_in_use());
+
+        magnus.skewer_only_after_blink = true;
+        assert!(magnus.blink_gate_in_use());
+
+        magnus.skewer_to_anchor_enabled = false;
+        assert!(!magnus.blink_gate_in_use());
+    }
+
+    #[test]
+    fn magnus_keys_are_untouched_on_another_hero() {
+        let magnus = magnus_anchor_snapshot();
+        for key in [Key::KeyE, Key::KeyR, Key::PageDown] {
+            assert_eq!(
+                plan_magnus_key_action(key, false, &magnus, never_called, never_called, never_called),
+                None
+            );
+        }
+    }
+
+    #[test]
+    fn magnus_capture_key_is_ours_only_while_skewer_to_point_is_on() {
+        let mut magnus = magnus_anchor_snapshot();
+        assert_eq!(
+            plan_magnus_key_action(
+                Key::PageDown,
+                true,
+                &magnus,
+                never_called,
+                never_called,
+                never_called
+            ),
+            Some(MagnusKeyAction::CaptureAnchor)
+        );
+
+        magnus.skewer_to_anchor_enabled = false;
+        assert_eq!(
+            plan_magnus_key_action(
+                Key::PageDown,
+                true,
+                &magnus,
+                never_called,
+                never_called,
+                never_called
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn magnus_capture_key_works_before_any_point_is_saved() {
+        let mut magnus = magnus_anchor_snapshot();
+        magnus.anchor = None;
+        assert_eq!(
+            plan_magnus_key_action(
+                Key::PageDown,
+                true,
+                &magnus,
+                never_called,
+                never_called,
+                never_called
+            ),
+            Some(MagnusKeyAction::CaptureAnchor)
+        );
+    }
+
+    #[test]
+    fn magnus_ultimate_still_faces_the_cursor() {
+        let magnus = magnus_anchor_snapshot();
+        assert_eq!(
+            plan_magnus_key_action(Key::KeyR, true, &magnus, || true, never_called, never_called),
+            Some(MagnusKeyAction::Ultimate)
+        );
+    }
+
+    #[test]
+    fn magnus_ultimate_on_cooldown_reaches_dota_unchanged() {
+        let magnus = magnus_anchor_snapshot();
+        assert_eq!(
+            plan_magnus_key_action(Key::KeyR, true, &magnus, || false, never_called, never_called),
+            None
+        );
     }
 
     #[test]

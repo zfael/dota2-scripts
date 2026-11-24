@@ -399,6 +399,49 @@ pub struct MagnusConfig {
     /// Delay between the ultimate cast and the first camera tap (ms).
     #[serde(default = "default_magnus_camera_center_delay_ms")]
     pub camera_center_delay_ms: u64,
+    /// Cast Skewer at the saved point: the Skewer key moves the cursor to the
+    /// point, presses the key, and puts the cursor back. Needs Quick Cast on
+    /// the Skewer key in Dota, so it defaults off.
+    #[serde(default)]
+    pub skewer_to_anchor_enabled: bool,
+    /// Skewer ability key. Intercepted while `skewer_to_anchor_enabled` is on.
+    #[serde(default = "default_magnus_skewer_key")]
+    pub skewer_key: char,
+    /// Only Skewer to the saved point right after a Blink: Magnus carries a
+    /// Blink and it is on cooldown, or its key was pressed within
+    /// `blink_press_window_ms`. Otherwise Skewer is a normal cast at the cursor.
+    #[serde(default)]
+    pub skewer_only_after_blink: bool,
+    /// How long a Blink key press counts as "just blinked" (ms), covering the
+    /// gap before GSI reports Blink's cooldown.
+    #[serde(default = "default_magnus_blink_press_window_ms")]
+    pub blink_press_window_ms: u64,
+    /// Hotkey that saves the cursor position as the point. Character or named
+    /// key (`"PageDown"`). Blocked from reaching Dota while Skewer to the
+    /// saved point is on.
+    #[serde(default = "default_magnus_capture_anchor_key")]
+    pub capture_anchor_key: String,
+    /// How long the cursor rests on the point before the press, and again
+    /// before it is moved back, so Dota reads it on a frame (ms).
+    #[serde(default = "default_magnus_anchor_settle_ms")]
+    pub anchor_settle_ms: u64,
+    /// Whether a point has been saved. Until it has, the anchor options do
+    /// nothing and the keys reach Dota unchanged.
+    #[serde(default)]
+    pub anchor_set: bool,
+    /// The saved point as a fraction of Dota's client area (0..1).
+    #[serde(default)]
+    pub anchor_x_fraction: f32,
+    #[serde(default)]
+    pub anchor_y_fraction: f32,
+}
+
+impl MagnusConfig {
+    /// The saved point, or `None` before one has been captured.
+    pub fn anchor_fraction(&self) -> Option<(f32, f32)> {
+        self.anchor_set
+            .then_some((self.anchor_x_fraction, self.anchor_y_fraction))
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1885,6 +1928,18 @@ fn default_magnus_camera_center_key() -> String {
 fn default_magnus_camera_center_delay_ms() -> u64 {
     60
 }
+fn default_magnus_skewer_key() -> char {
+    'e'
+}
+fn default_magnus_capture_anchor_key() -> String {
+    "PageDown".to_string()
+}
+fn default_magnus_anchor_settle_ms() -> u64 {
+    30
+}
+fn default_magnus_blink_press_window_ms() -> u64 {
+    1000
+}
 fn default_ember_spirit_enabled() -> bool {
     true
 }
@@ -3092,6 +3147,15 @@ impl Default for MagnusConfig {
             center_camera_on_ultimate: default_magnus_center_camera_on_ultimate(),
             camera_center_key: default_magnus_camera_center_key(),
             camera_center_delay_ms: default_magnus_camera_center_delay_ms(),
+            skewer_to_anchor_enabled: false,
+            skewer_key: default_magnus_skewer_key(),
+            skewer_only_after_blink: false,
+            blink_press_window_ms: default_magnus_blink_press_window_ms(),
+            capture_anchor_key: default_magnus_capture_anchor_key(),
+            anchor_settle_ms: default_magnus_anchor_settle_ms(),
+            anchor_set: false,
+            anchor_x_fraction: 0.0,
+            anchor_y_fraction: 0.0,
         }
     }
 }

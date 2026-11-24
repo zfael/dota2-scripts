@@ -135,12 +135,14 @@ pub fn run() {
     let hotkey_app_state = app_state.clone();
     let hotkey_dispatcher = dispatcher.clone();
     let hotkey_settings = settings.clone();
+    let hotkey_keyboard_snapshot = initial_snapshot.clone();
     std::thread::spawn(move || {
         handle_hotkey_events(
             hotkey_rx,
             hotkey_app_state,
             hotkey_dispatcher,
             hotkey_settings,
+            hotkey_keyboard_snapshot,
         );
     });
 
@@ -276,6 +278,7 @@ fn handle_hotkey_events(
     app_state: Arc<Mutex<AppState>>,
     dispatcher: Arc<ActionDispatcher>,
     settings: Arc<Mutex<Settings>>,
+    keyboard_snapshot: Arc<RwLock<KeyboardSnapshot>>,
 ) {
     while let Ok(event) = hotkey_rx.recv() {
         match event {
@@ -367,6 +370,9 @@ fn handle_hotkey_events(
             }
             HotkeyEvent::CaptureHudPortrait => {
                 commands::hud::capture_from_hotkey(&settings);
+            }
+            HotkeyEvent::CaptureMagnusAnchor => {
+                commands::hud::capture_magnus_anchor_from_hotkey(&settings, &keyboard_snapshot);
             }
             HotkeyEvent::InvokerCycleComboProfile => {
                 let settings = settings.lock().unwrap();

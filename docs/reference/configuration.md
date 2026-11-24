@@ -595,12 +595,21 @@ See `docs/heroes/morphling.md` and `docs/features/danger-detection.md`.
 | `enabled` | `true` | `true` | Master toggle for the directional Reverse Polarity intercept. |
 | `ultimate_key` | `"r"` | `"r"` | Reverse Polarity ability key. This is also the key intercepted. Intercept is gated on Magnus being the active hero. |
 | `turn_delay_ms` | `60` | `60` | Delay after the facing right-click before the ultimate cast. Increase if Reverse Polarity fires before Magnus finishes turning. |
-| `require_ability_ready` | `true` | `true` | Only intercept when `magnataur_reverse_polarity` is levelled and castable. Prevents a cooldown press from issuing the facing right-click. |
+| `require_ability_ready` | `true` | `true` | Only intercept when the ability the key casts is levelled and castable: `magnataur_reverse_polarity` for R, `magnataur_skewer` for Skewer-to-point. Prevents a cooldown press from issuing the facing right-click or moving the cursor. |
 | `center_camera_on_ultimate` | `true` | `true` | Double-tap the hero-select key after the cast so the camera snaps back to Magnus for the Skewer follow-up. |
 | `camera_center_key` | `"1"` | `"1"` | Hero-select key to double-tap. Accepts a character (`"1"`) or a named key (`"F1"`). Must match the in-game binding. |
 | `camera_center_delay_ms` | `60` | `60` | Delay between the ultimate cast and the first camera tap. |
+| `skewer_to_anchor_enabled` | `false` | `false` | Skewer key casts at the saved point (cursor moved there and back). **Requires Quick Cast on Skewer in Dota.** |
+| `skewer_key` | `"e"` | `"e"` | Skewer ability key; intercepted only while the option above is on and a point is saved. |
+| `skewer_only_after_blink` | `false` | `false` | Only Skewer to the point when a carried Blink is on cooldown or its slot key was pressed within `blink_press_window_ms`; otherwise Skewer casts normally at the cursor. |
+| `blink_press_window_ms` | `1000` | `1000` | How long a Blink key press counts as "just blinked", covering the moment before GSI reports the cooldown. |
+| `capture_anchor_key` | `"PageDown"` | `"PageDown"` | Saves the cursor as the point. Blocked from Dota only while Magnus is active and `skewer_to_anchor_enabled` is on. |
+| `anchor_settle_ms` | `30` | `30` | Cursor rest on the point before the press and again before it returns. |
+| `anchor_set` | `false` | `false` | Whether a point has been saved. Set by the save key. |
+| `anchor_x_fraction` / `anchor_y_fraction` | `0.0` | `0.0` | The point as a fraction of Dota's client area. Set by the save key; do not edit by hand. |
 
-All seven fields are exposed in the React UI under **Heroes → Magnus**.
+All fields are exposed in the React UI under **Heroes → Magnus**; the three
+anchor fields only as a read-only "saved / not saved yet" status.
 
 See `docs/heroes/magnus.md` and `docs/features/keyboard-interception.md`.
 

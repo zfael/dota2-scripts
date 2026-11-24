@@ -22,15 +22,62 @@ export default function MagnusConfig() {
             fires before Magnus finishes turning.
           </p>
         </Card>
+
+        <Card title="Saved Point">
+          <KeyInput label="Save Point Key" value={config.capture_anchor_key} onChange={(v) => set({ capture_anchor_key: v })} />
+          <p className="text-xs text-muted">
+            Status:{" "}
+            {config.anchor_set ? (
+              <span className="text-terminal">
+                saved at {(config.anchor_x_fraction * 100).toFixed(1)}%,{" "}
+                {(config.anchor_y_fraction * 100).toFixed(1)}% of Dota's window
+              </span>
+            ) : (
+              <span className="text-warning">not saved yet</span>
+            )}
+          </p>
+          <p className="text-xs text-muted">
+            In game, hover a spot on the minimap (your base, say) and press{" "}
+            <code>{config.capture_anchor_key}</code>. Press it again anywhere to
+            move the point. The key only works while playing Magnus with Skewer
+            To Saved Point on, and never reaches Dota then.
+          </p>
+          <Toggle label="Skewer To Saved Point" checked={config.skewer_to_anchor_enabled} onChange={(v) => set({ skewer_to_anchor_enabled: v })} />
+          <KeyInput label="Skewer Key" value={config.skewer_key} onChange={(v) => set({ skewer_key: v })} />
+          <p className="text-xs text-warning">
+            Requires Quick Cast on the Skewer key in Dota's settings. With normal
+            cast the press only arms targeting, and the cursor is already back
+            before you can click.
+          </p>
+          <p className="text-xs text-muted">
+            Moves the cursor to the saved point, presses Skewer there, and puts
+            the cursor back. A point past Skewer's range gives a full-length
+            Skewer toward it. Until a point is saved, Skewer casts normally.
+          </p>
+          <Toggle label="Only After Blink" checked={config.skewer_only_after_blink} onChange={(v) => set({ skewer_only_after_blink: v })} />
+          <NumberInput label="Blink Press Window" value={config.blink_press_window_ms} onChange={(v) => set({ blink_press_window_ms: v })} suffix="ms" />
+          <p className="text-xs text-muted">
+            For the Blink-in, Skewer-out play: Skewer goes to the saved point
+            only when you carry a Blink and it is on cooldown, or you pressed its
+            key within the window above (GSI reports the cooldown a moment
+            late). Otherwise Skewer casts normally at your cursor. Off, every
+            Skewer goes to the point.
+          </p>
+          <NumberInput label="Cursor Settle" value={config.anchor_settle_ms} onChange={(v) => set({ anchor_settle_ms: v })} suffix="ms" />
+          <p className="text-xs text-muted">
+            How long the cursor rests on the point before and after the press.
+            Raise it if the cast lands at your cursor instead of the point.
+          </p>
+        </Card>
       </div>
 
       <div className="space-y-4">
         <Card title="Safety">
           <Toggle label="Only Intercept When Ready" checked={config.require_ability_ready} onChange={(v) => set({ require_ability_ready: v })} />
           <p className="text-xs text-muted">
-            Passes the key straight through when Reverse Polarity is unlevelled
-            or on cooldown, so a wasted press never turns Magnus toward the
-            cursor.
+            Passes the key straight through when Reverse Polarity (or Skewer,
+            for the saved-point option) is unlevelled or on cooldown, so a
+            wasted press never turns Magnus or moves the cursor.
           </p>
         </Card>
 

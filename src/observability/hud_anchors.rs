@@ -132,10 +132,10 @@ pub fn point_from_fraction(fraction: (f32, f32), rect: &WindowRect) -> ScreenPoi
     }
 }
 
-/// Read the cursor's current position as a portrait anchor.
+/// Read the cursor's current position as a fraction of Dota's client area.
 ///
-/// The caller is expected to be hovering Dota's hero portrait when this runs.
-pub fn capture_portrait_fraction() -> Result<(f32, f32), HudAnchorError> {
+/// Shared by every anchor that is saved by hovering a spot and pressing a key.
+pub fn capture_cursor_fraction() -> Result<(f32, f32), HudAnchorError> {
     let rect = find_dota2_client_screen_rect().ok_or(HudAnchorError::DotaNotFound)?;
     if rect.width == 0 || rect.height == 0 {
         return Err(HudAnchorError::EmptyClientRect);
@@ -144,6 +144,25 @@ pub fn capture_portrait_fraction() -> Result<(f32, f32), HudAnchorError> {
     let cursor = cursor_screen_position().ok_or(HudAnchorError::CursorUnavailable)?;
 
     fraction_from_point(cursor, &rect).ok_or(HudAnchorError::CursorOutsideDota)
+}
+
+/// Read the cursor's current position as a portrait anchor.
+///
+/// The caller is expected to be hovering Dota's hero portrait when this runs.
+pub fn capture_portrait_fraction() -> Result<(f32, f32), HudAnchorError> {
+    capture_cursor_fraction()
+}
+
+/// Where a stored fraction of Dota's client area is right now, in screen pixels.
+///
+/// `None` when Dota is not on screen — callers must not aim anything then.
+pub fn resolve_fraction_point(fraction: (f32, f32)) -> Option<ScreenPoint> {
+    let rect = find_dota2_client_screen_rect()?;
+    if rect.width == 0 || rect.height == 0 {
+        return None;
+    }
+
+    Some(point_from_fraction(fraction, &rect))
 }
 
 /// Where the hero portrait is right now, in screen pixels.
@@ -155,15 +174,7 @@ pub fn resolve_portrait_point(config: &HudConfig) -> Option<ScreenPoint> {
         return None;
     }
 
-    let rect = find_dota2_client_screen_rect()?;
-    if rect.width == 0 || rect.height == 0 {
-        return None;
-    }
-
-    Some(point_from_fraction(
-        (config.portrait_x_fraction, config.portrait_y_fraction),
-        &rect,
-    ))
+    resolve_fraction_point((config.portrait_x_fraction, config.portrait_y_fraction))
 }
 
 /// Capture the portrait anchor and persist it.
